@@ -60,8 +60,8 @@ $env:FIREBASE_APP_ID="your_firebase_app_id"
 4. Run migrations and start the app:
 
 ```powershell
-mvn flyway:migrate
-mvn spring-boot:run
+.\mvnw.cmd flyway:migrate
+.\mvnw.cmd spring-boot:run
 ```
 
 5. Open the app:
@@ -159,7 +159,7 @@ $env:FIREBASE_APP_ID="your_firebase_app_id"
 ## Run Migrations
 
 ```powershell
-mvn flyway:migrate
+.\mvnw.cmd flyway:migrate
 ```
 
 Current migrations:
@@ -170,7 +170,7 @@ Current migrations:
 ## Run The App
 
 ```powershell
-mvn spring-boot:run
+.\mvnw.cmd spring-boot:run
 ```
 
 Open:
@@ -198,7 +198,7 @@ Main routes:
 ## Test
 
 ```powershell
-mvn test
+.\mvnw.cmd test
 ```
 
 ## Notes
