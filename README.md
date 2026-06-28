@@ -207,6 +207,42 @@ Main routes:
 - `/ai/writing`: writing feedback jobs
 - `/teacher/cms`: teacher content management
 
+## Troubleshooting
+
+### Unknown database `englishwebapp`
+
+This means MySQL is running and the username/password are accepted, but the database has not been created yet.
+
+Open MySQL and create it:
+
+```powershell
+mysql -u root -p
+```
+
+Enter your MySQL password, then run:
+
+```sql
+CREATE DATABASE englishwebapp CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
+SHOW DATABASES;
+EXIT;
+```
+
+Then start the app again:
+
+```powershell
+.\mvnw.cmd spring-boot:run
+```
+
+Spring Boot will run the Flyway migrations automatically after the database exists.
+
+### `mvn` is not recognized
+
+Use the Maven Wrapper included in this project:
+
+```powershell
+.\mvnw.cmd spring-boot:run
+```
+
 ## Test
 
 ```powershell
