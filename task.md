@@ -19,7 +19,7 @@
 ## GIAI ĐOẠN 1 - MVP
 
 ### 1A. Database schema
-- [ ] **T1.1** Viết Flyway migration (`V1__init.sql`) + JPA entity cho: `users` (có `firebase_uid`, KHÔNG có password), `tests`, `question_groups`, `questions`,
+- [x] **T1.1** Viết Flyway migration (`V1__init.sql`) + JPA entity cho: `users` (có `firebase_uid`, KHÔNG có password), `tests`, `question_groups`, `questions`,
       `answer_options`, `accepted_answers`, `user_attempts`, `user_answers`, `draft_answers`.
       Tuân thủ quy ước DB trong `skill.md` (soft delete qua `@SQLDelete`/`@Where`, grouping, text_response).
 - [ ] **T1.2** Viết Flyway seed (`V2__seed.sql`) dữ liệu mẫu (1 đề TOEIC mini: vài câu trắc nghiệm + 1 nhóm câu hỏi có audio).
