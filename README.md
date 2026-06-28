@@ -57,12 +57,13 @@ $env:FIREBASE_PROJECT_ID="your_project_id"
 $env:FIREBASE_APP_ID="your_firebase_app_id"
 ```
 
-4. Run migrations and start the app:
+4. Start the app:
 
 ```powershell
-.\mvnw.cmd flyway:migrate
 .\mvnw.cmd spring-boot:run
 ```
+
+Spring Boot runs Flyway migrations automatically on startup.
 
 5. Open the app:
 
@@ -158,8 +159,19 @@ $env:FIREBASE_APP_ID="your_firebase_app_id"
 
 ## Run Migrations
 
+The usual local workflow is to let Spring Boot run Flyway automatically:
+
 ```powershell
-.\mvnw.cmd flyway:migrate
+.\mvnw.cmd spring-boot:run
+```
+
+If you want to run Flyway manually from Maven, pass the database settings explicitly because the Flyway Maven plugin does not read `application-dev.yml`:
+
+```powershell
+.\mvnw.cmd flyway:migrate `
+  "-Dflyway.url=jdbc:mysql://localhost:3306/englishwebapp?useSSL=false&serverTimezone=UTC&allowPublicKeyRetrieval=true" `
+  "-Dflyway.user=root" `
+  "-Dflyway.password=your_mysql_password"
 ```
 
 Current migrations:
