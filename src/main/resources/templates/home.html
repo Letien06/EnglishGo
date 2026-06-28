@@ -38,6 +38,39 @@
             border: 1px solid #d9e1ec;
             border-radius: 8px;
             padding: 24px;
+            margin-bottom: 18px;
+        }
+
+        .stats {
+            display: grid;
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+            gap: 16px;
+        }
+
+        @media (max-width: 680px) {
+            .stats {
+                grid-template-columns: 1fr;
+            }
+        }
+
+        .stat {
+            border: 1px solid #d9e1ec;
+            border-radius: 8px;
+            padding: 18px;
+            background: #f8fbff;
+        }
+
+        .stat span {
+            display: block;
+            color: #5f6f86;
+            font-size: 0.92rem;
+        }
+
+        .stat strong {
+            display: block;
+            margin-top: 8px;
+            font-size: 2rem;
+            line-height: 1;
         }
 
         dl {
@@ -88,6 +121,20 @@
 </header>
 
 <main>
+    <section>
+        <h2>Dashboard</h2>
+        <div class="stats">
+            <div class="stat">
+                <span>Completed tests</span>
+                <strong th:text="${dashboard.completedTests()}">0</strong>
+            </div>
+            <div class="stat">
+                <span>Average score</span>
+                <strong th:text="${dashboard.averageScore()}">0.00</strong>
+            </div>
+        </div>
+    </section>
+
     <section>
         <dl>
             <dt>Email</dt>

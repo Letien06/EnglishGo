@@ -40,8 +40,8 @@
 - [x] **T1.11** Controller + trang lịch sử làm bài của user (điểm, thời gian, link xem lại).
 
 ### 1E. Hoàn thiện MVP
-- [ ] **T1.12** Dashboard đơn giản: số đề đã làm, điểm trung bình.
-- [ ] **T1.13** Viết README hướng dẫn chạy dự án (yêu cầu Java/MySQL, cấu hình `application.yml`, Firebase service account, `mvn flyway:migrate`, `mvn spring-boot:run`).
+- [x] **T1.12** Dashboard đơn giản: số đề đã làm, điểm trung bình.
+- [x] **T1.13** Viết README hướng dẫn chạy dự án (yêu cầu Java/MySQL, cấu hình `application.yml`, Firebase service account, `mvn flyway:migrate`, `mvn spring-boot:run`).
 
 ---
 
