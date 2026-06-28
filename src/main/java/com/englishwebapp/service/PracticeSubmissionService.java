@@ -46,6 +46,7 @@ public class PracticeSubmissionService {
     private final UserAnswerRepository userAnswerRepository;
     private final DraftAnswerRepository draftAnswerRepository;
     private final AnswerGradingService answerGradingService;
+    private final CommunityService communityService;
 
     @Transactional
     public DraftAnswerResponse saveDraft(Long userId, Long testId, String payload) {
@@ -119,6 +120,7 @@ public class PracticeSubmissionService {
         savedAttempt.setScore(score);
         userAttemptRepository.save(savedAttempt);
         draftAnswerRepository.deleteByUserIdAndTestId(userId, testId);
+        communityService.addScore(user, score);
 
         return new PracticeSubmissionResponse(savedAttempt.getId(), score, correctCount, questions.size());
     }

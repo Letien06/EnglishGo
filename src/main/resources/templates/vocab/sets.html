@@ -1,0 +1,35 @@
+<!DOCTYPE html>
+<html lang="en" xmlns:th="http://www.thymeleaf.org">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Vocabulary</title>
+    <style>
+        body { margin: 0; font-family: Inter, ui-sans-serif, system-ui, sans-serif; background: #f5f7fb; color: #172033; }
+        header { display: flex; justify-content: space-between; padding: 18px 28px; background: #fff; border-bottom: 1px solid #d9e1ec; }
+        main { width: min(94vw, 1040px); margin: 32px auto; }
+        a { color: #2563eb; font-weight: 700; text-decoration: none; }
+        form, article { background: #fff; border: 1px solid #d9e1ec; border-radius: 8px; padding: 18px; }
+        form { display: flex; gap: 10px; margin-bottom: 18px; }
+        input { border: 1px solid #c8d3e1; border-radius: 6px; padding: 10px; font: inherit; }
+        button { border: 0; border-radius: 6px; padding: 10px 14px; background: #172033; color: #fff; font-weight: 700; }
+        .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 14px; }
+    </style>
+</head>
+<body>
+<header><strong>Vocabulary</strong><a href="/">Home</a></header>
+<main>
+    <form method="get" action="/vocab">
+        <input name="topic" th:value="${topic}" placeholder="Topic">
+        <button type="submit">Filter</button>
+    </form>
+    <section class="grid">
+        <article th:each="set : ${sets.content}">
+            <h2 th:text="${set.title}">Set</h2>
+            <p><span th:text="${set.topic}">Topic</span> / <span th:text="${set.level} ?: 'Any'">Level</span></p>
+            <a th:href="@{/vocab/sets/{id}/flashcards(id=${set.id})}">Study flashcards</a>
+        </article>
+    </section>
+</main>
+</body>
+</html>

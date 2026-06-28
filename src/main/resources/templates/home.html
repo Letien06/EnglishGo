@@ -4,6 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>EnglishWebApp</title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <style>
         body {
             margin: 0;
@@ -43,7 +44,7 @@
 
         .stats {
             display: grid;
-            grid-template-columns: repeat(2, minmax(0, 1fr));
+            grid-template-columns: repeat(4, minmax(0, 1fr));
             gap: 16px;
         }
 
@@ -112,6 +113,11 @@
             flex-wrap: wrap;
             margin-top: 20px;
         }
+
+        canvas {
+            margin-top: 20px;
+            max-height: 260px;
+        }
     </style>
 </head>
 <body>
@@ -132,7 +138,16 @@
                 <span>Average score</span>
                 <strong th:text="${dashboard.averageScore()}">0.00</strong>
             </div>
+            <div class="stat">
+                <span>Mastered words</span>
+                <strong th:text="${dashboard.masteredWords()}">0</strong>
+            </div>
+            <div class="stat">
+                <span>Learning streak</span>
+                <strong><span th:text="${dashboard.streakDays()}">0</span>d</strong>
+            </div>
         </div>
+        <canvas id="scoreChart" aria-label="Recent score chart"></canvas>
     </section>
 
     <section>
@@ -147,11 +162,37 @@
         <div class="actions">
             <a href="/tests">Practice tests</a>
             <a href="/history">Attempt history</a>
+            <a href="/vocab">Vocabulary</a>
+            <a href="/lessons">Lessons</a>
+            <a href="/billing">Billing</a>
+            <a href="/community">Community</a>
+            <a href="/ai/writing">AI writing</a>
+            <a href="/teacher/cms" th:if="${user.role().name() == 'TEACHER' or user.role().name() == 'ADMIN'}">Teacher CMS</a>
         </div>
     </section>
 </main>
 
-<script>
+<script th:inline="javascript">
+    const scoreLabels = [[${dashboard.scoreLabels()}]];
+    const scoreValues = [[${dashboard.scoreValues()}]];
+    if (scoreLabels.length > 0) {
+        new Chart(document.getElementById("scoreChart"), {
+            type: "line",
+            data: {
+                labels: scoreLabels,
+                datasets: [{
+                    label: "Recent scores",
+                    data: scoreValues,
+                    borderColor: "#2563eb",
+                    backgroundColor: "rgba(37, 99, 235, 0.12)",
+                    tension: 0.25,
+                    fill: true
+                }]
+            },
+            options: {responsive: true, scales: {y: {beginAtZero: true, max: 100}}}
+        });
+    }
+
     document.getElementById("logout-button").addEventListener("click", async () => {
         await fetch("/auth/logout", {method: "POST"});
         window.location.href = "/login";

@@ -1,6 +1,7 @@
 package com.englishwebapp.repository;
 
 import com.englishwebapp.entity.UserAttempt;
+import java.util.List;
 import java.util.Optional;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
@@ -27,4 +28,6 @@ public interface UserAttemptRepository extends JpaRepository<UserAttempt, Long> 
               and attempt.score is not null
             """)
     Double findAverageScoreByUserId(@Param("userId") Long userId);
+
+    List<UserAttempt> findTop7ByUserIdAndSubmittedAtIsNotNullOrderBySubmittedAtDesc(Long userId);
 }

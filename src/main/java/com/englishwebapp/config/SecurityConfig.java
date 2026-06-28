@@ -22,7 +22,15 @@ public class SecurityConfig {
     @Bean
     public SecurityFilterChain securityFilterChain(HttpSecurity http) throws Exception {
         http
-                .csrf(csrf -> csrf.ignoringRequestMatchers("/auth/session", "/auth/logout", "/api/practice/**"))
+                .csrf(csrf -> csrf.ignoringRequestMatchers(
+                        "/auth/session",
+                        "/auth/logout",
+                        "/api/practice/**",
+                        "/api/vocab/**",
+                        "/billing/**",
+                        "/community/**",
+                        "/ai/**",
+                        "/teacher/cms/**"))
                 .formLogin(AbstractHttpConfigurer::disable)
                 .httpBasic(AbstractHttpConfigurer::disable)
                 .logout(AbstractHttpConfigurer::disable)

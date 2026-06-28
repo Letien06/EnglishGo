@@ -118,6 +118,13 @@ Main routes:
 - `/tests/{id}/practice`: take a test
 - `/history`: attempt history
 - `/attempts/{id}/review`: review answers
+- `/vocab`: vocabulary sets
+- `/vocab/sets/{id}/flashcards`: flashcard review with SM-2 progress
+- `/lessons`: grammar and lesson list
+- `/billing`: subscription and payment transaction flow
+- `/community`: comments and leaderboard
+- `/ai/writing`: writing feedback jobs
+- `/teacher/cms`: teacher content management
 
 ## Test
 
@@ -131,3 +138,5 @@ mvn test
 - MySQL remains the main database for users, tests, questions, attempts, answers, and drafts.
 - Schema changes must be added through new Flyway migration files.
 - Do not edit old migrations after they have been applied to a shared database.
+- Payment providers are represented in normalized transaction records. Real VNPay/MoMo/PayPal merchant API calls require provider credentials and callback verification.
+- AI writing feedback currently uses an internal deterministic evaluator and persists jobs in MySQL. A provider-backed worker can replace this service later without changing the UI routes.

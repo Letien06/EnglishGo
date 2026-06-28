@@ -1,0 +1,73 @@
+<!DOCTYPE html>
+<html lang="en" xmlns:th="http://www.thymeleaf.org">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title th:text="${session.set.title}">Flashcards</title>
+    <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"></script>
+    <style>
+        body { margin: 0; font-family: Inter, ui-sans-serif, system-ui, sans-serif; background: #f5f7fb; color: #172033; }
+        header { display: flex; justify-content: space-between; padding: 18px 28px; background: #fff; border-bottom: 1px solid #d9e1ec; }
+        main { width: min(94vw, 760px); margin: 32px auto; }
+        a { color: #2563eb; font-weight: 700; text-decoration: none; }
+        .card { min-height: 280px; display: grid; place-items: center; text-align: center; background: #fff; border: 1px solid #d9e1ec; border-radius: 8px; padding: 26px; cursor: pointer; }
+        .word { font-size: 2.4rem; font-weight: 800; }
+        .controls { display: flex; gap: 10px; flex-wrap: wrap; margin-top: 18px; }
+        button { border: 0; border-radius: 6px; padding: 10px 14px; background: #172033; color: #fff; font-weight: 700; cursor: pointer; }
+    </style>
+</head>
+<body th:attr="data-set-id=${session.set.id}">
+<header><strong th:text="${session.set.title}">Flashcards</strong><a href="/vocab">Vocabulary</a></header>
+<main x-data="flashcards()">
+    <template x-if="words.length === 0"><p>No words in this set.</p></template>
+    <template x-if="words.length > 0">
+        <section>
+            <div class="card" @click="flipped = !flipped">
+                <div x-show="!flipped">
+                    <div class="word" x-text="current.word"></div>
+                    <p x-text="current.phonetic || ''"></p>
+                </div>
+                <div x-show="flipped">
+                    <h2 x-text="current.meaning"></h2>
+                    <p x-text="current.example || ''"></p>
+                </div>
+            </div>
+            <div class="controls">
+                <button type="button" @click="review(2)">Again</button>
+                <button type="button" @click="review(3)">Hard</button>
+                <button type="button" @click="review(4)">Good</button>
+                <button type="button" @click="review(5)">Easy</button>
+                <button type="button" @click="next()">Skip</button>
+            </div>
+            <p x-text="status"></p>
+        </section>
+    </template>
+</main>
+<script th:inline="javascript">
+    const seededWords = [[${session.words}]];
+    function flashcards() {
+        return {
+            words: seededWords,
+            index: 0,
+            flipped: false,
+            status: "",
+            get current() { return this.words[this.index]; },
+            next() {
+                this.index = (this.index + 1) % this.words.length;
+                this.flipped = false;
+            },
+            async review(quality) {
+                const response = await fetch(`/api/vocab/words/${this.current.id}/review`, {
+                    method: "POST",
+                    headers: {"Content-Type": "application/json"},
+                    body: JSON.stringify({quality})
+                });
+                const result = await response.json();
+                this.status = result.success ? `Next review: ${result.data.nextReviewAt}` : result.error;
+                this.next();
+            }
+        };
+    }
+</script>
+</body>
+</html>

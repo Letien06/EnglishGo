@@ -47,13 +47,13 @@
 
 ## GIAI ĐOẠN 2+ (làm sau MVP, chưa ưu tiên)
 
-- [ ] Từ vựng: entity `vocab_sets`, `vocab_words`, `user_vocab_progress` (SRS SM-2) + Flashcard (Alpine.js).
-- [ ] Dashboard tiến độ chi tiết (biểu đồ, điểm mạnh/yếu, streak).
-- [ ] Subscription + tích hợp thanh toán (VNPay/MoMo/PayPal).
-- [ ] CMS cho Teacher (CRUD đề/câu hỏi/từ vựng, upload media).
-- [ ] Ngữ pháp / bài học (`lessons`).
-- [ ] Cộng đồng: bình luận, leaderboard.
-- [ ] Speaking/Writing chấm AI (Job Queue xử lý ngầm).
+- [x] Từ vựng: entity `vocab_sets`, `vocab_words`, `user_vocab_progress` (SRS SM-2) + Flashcard (Alpine.js).
+- [x] Dashboard tiến độ chi tiết (biểu đồ, điểm mạnh/yếu, streak).
+- [x] Subscription + tích hợp thanh toán (VNPay/MoMo/PayPal).
+- [x] CMS cho Teacher (CRUD đề/câu hỏi/từ vựng, upload media).
+- [x] Ngữ pháp / bài học (`lessons`).
+- [x] Cộng đồng: bình luận, leaderboard.
+- [x] Speaking/Writing chấm AI (Job Queue xử lý ngầm).
 
 ---
 
