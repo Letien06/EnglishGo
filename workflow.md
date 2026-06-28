@@ -22,10 +22,9 @@ Làm đúng những gì khó sửa sau (cấu trúc database); làm đơn giản
 ## 2. Các nhóm chức năng (Functional Modules)
 
 ### 2.1. Auth & User
-- Đăng ký / đăng nhập (email, Google, Facebook)
-- Quên / đổi mật khẩu, xác thực email
+- Đăng nhập bằng **Firebase Authentication** (Google + email/password)
 - Hồ sơ: avatar, mục tiêu điểm, trình độ
-- Phân quyền theo vai trò (Student / Teacher / Admin)
+- Phân quyền theo vai trò (Student / Teacher / Admin) - lưu trong MySQL
 - Gói thành viên (Free / Premium)
 
 ### 2.2. Vocabulary (Từ vựng)
@@ -68,10 +67,11 @@ Làm đúng những gì khó sửa sau (cấu trúc database); làm đơn giản
 
 ## 3. Thiết kế Database (các bảng chính)
 
-> Đã tích hợp các best practice: soft delete, nhóm câu hỏi, SRS, lưu nháp.
+> MySQL là database chính. Firebase chỉ lo authentication (không lưu dữ liệu nghiệp vụ).
+> Đã tích hợp best practice: soft delete, nhóm câu hỏi, SRS, lưu nháp.
 
 ### 3.1. User & Auth
-- `users` (id, email, password_hash, role, level, target_score, created_at)
+- `users` (id, **firebase_uid (unique)**, email, display_name, avatar_url, role, level, target_score, created_at) *- KHÔNG lưu password (Firebase quản lý)*
 - `subscriptions` (id, user_id, plan_id, start_date, end_date, status) *- thiết kế sẵn, tích hợp payment ở giai đoạn sau*
 - `transactions` (id, user_id, amount, provider, status, created_at) *- để dành*
 
@@ -98,40 +98,50 @@ Làm đúng những gì khó sửa sau (cấu trúc database); làm đơn giản
 **Quy ước database:**
 - Soft delete: dùng `deleted_at` (qua JPA `@SQLDelete`/`@Where`, tránh quên filter).
 - Versioning đề thi: sửa nội dung -> tạo bản mới, giữ lịch sử làm bài cũ khớp đáp án tại thời điểm làm.
+- User: đồng bộ từ Firebase qua `firebase_uid`, tạo bản ghi lần đầu đăng nhập (just-in-time provisioning).
 - Media: lưu **đường dẫn tương đối** trong DB, ghép với biến môi trường `MEDIA_BASE_URL` ở frontend (dễ đổi CDN/server).
 - API: chuẩn hóa **pagination + filtering** ngay từ đầu (Spring Data `Pageable`).
 - Migration: mọi thay đổi schema qua **Flyway** (`V<n>__describe.sql`), không sửa file cũ đã chạy.
 
 ---
 
-## 4. Tech Stack (ĐÃ CHỐT - Java Web + MySQL)
+## 4. Tech Stack (ĐÃ CHỐT - Java Web + MySQL + Firebase Auth)
 
 **Backend:**
 - **Ngôn ngữ:** Java 17+
 - **Framework:** Spring Boot 3.x (Spring MVC + Spring Security + Spring Data JPA)
 - **Build tool:** Maven
-- **Database:** MySQL 8.x
+- **Database:** MySQL 8.x (database chính)
 - **Migration:** Flyway (quản lý schema rõ ràng, version hóa)
+- **Auth:** Firebase Authentication. Backend dùng **Firebase Admin SDK** verify ID token,
+  Spring Security filter gán role từ DB.
 
 **Frontend (server-side rendering + tương tác động):**
 - **Template engine:** Thymeleaf
 - **CSS:** Tailwind CSS
-- **JS tương tác:** Alpine.js (đồng hồ đếm ngược, lật flashcard, auto-save) + HTMX (cập nhật từng phần trang)
+- **JS tương tác:** Alpine.js (đồng hồ đếm ngược, lật flashcard, auto-save) + HTMX (cập nhật từng phần trang) + **Firebase JS SDK** (đăng nhập Google/email)
 
 **Hạ tầng:**
 - **CI/CD:** GitLab CI/CD
 - **Cache/session:** Redis (thêm khi cần, không bắt buộc ở MVP)
 - **Media storage:** S3 / object storage (MVP có thể lưu local + `MEDIA_BASE_URL`)
 
-> Định hướng mở rộng: Spring Boot đồng thời cung cấp REST API (`@RestController`),
-> nên sau này làm app mobile (Kotlin/Jetpack Compose) vẫn dùng lại được logic backend.
+> **Vai trò Firebase:** CHỈ lo authentication (đăng nhập Google/email, quản lý mật khẩu).
+> Toàn bộ dữ liệu nghiệp vụ (đề thi, câu hỏi, kết quả, từ vựng) vẫn nằm trong MySQL
+> vì đây là dữ liệu quan hệ phức tạp (JOIN, transaction) mà NoSQL không phù hợp.
+>
+> **Luồng đăng nhập:** Frontend đăng nhập qua Firebase -> nhận ID token -> gửi về backend
+> -> backend verify token (Admin SDK) -> tạo/cập nhật `users` theo `firebase_uid` -> tạo session.
+>
+> **Mở rộng:** Spring Boot đồng thời cung cấp REST API (`@RestController`), nên sau này
+> làm app mobile (Kotlin/Jetpack Compose) vẫn dùng lại được logic backend + Firebase Auth.
 
 ---
 
 ## 5. Lộ trình phát triển (làm MVP trước)
 
 ### Giai đoạn 1 - MVP
-- Auth (đăng ký/đăng nhập, phân quyền)
+- Auth (Firebase: đăng nhập Google/email, phân quyền)
 - Luyện đề: hiển thị câu hỏi -> làm bài -> chấm điểm tự động -> xem đáp án
 - Lịch sử làm bài
 - Auto-save (localStorage + API ghi định kỳ vào `draft_answers`)
@@ -157,3 +167,4 @@ Làm đúng những gì khó sửa sau (cấu trúc database); làm đơn giản
 2. **Làm đơn giản cái dễ thêm sau** (Redis, Queue, payment, microservice) - để dành.
 3. **Chọn một, đi đến cùng** - không nhảy qua lại giữa các công nghệ.
 4. **Bắt đầu nhỏ** - làm tính năng "hiển thị 1 câu hỏi + chấm đúng/sai" trước.
+5. **Bảo mật** - không commit Firebase service account / secret vào repo.
