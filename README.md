@@ -25,6 +25,75 @@ EnglishWebApp is a Spring Boot web app for English practice tests. The MVP uses 
 
 Do not commit Firebase service account files or real secrets.
 
+## Quick Start To View The Project
+
+Run these steps from the project folder:
+
+```powershell
+cd D:\EnglishWebApp
+```
+
+1. Start MySQL and create the database:
+
+```sql
+CREATE DATABASE englishwebapp CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
+```
+
+2. Create local Spring config:
+
+```powershell
+Copy-Item src/main/resources/application-example.yml src/main/resources/application-dev.yml
+```
+
+Edit `src/main/resources/application-dev.yml` and set your MySQL username/password.
+
+3. Set Firebase environment variables in the same PowerShell window:
+
+```powershell
+$env:FIREBASE_SERVICE_ACCOUNT_PATH="C:\secrets\englishwebapp-firebase-service-account.json"
+$env:FIREBASE_WEB_API_KEY="your_web_api_key"
+$env:FIREBASE_AUTH_DOMAIN="your_project.firebaseapp.com"
+$env:FIREBASE_PROJECT_ID="your_project_id"
+$env:FIREBASE_APP_ID="your_firebase_app_id"
+```
+
+4. Run migrations and start the app:
+
+```powershell
+mvn flyway:migrate
+mvn spring-boot:run
+```
+
+5. Open the app:
+
+```text
+http://localhost:8080
+```
+
+The app redirects to `/login`. Use a Firebase Authentication user from your Firebase project. For the easiest first run, enable **Email/password** in Firebase and create a test user in Firebase Console.
+
+After login, use these pages:
+
+- `http://localhost:8080/` - dashboard
+- `http://localhost:8080/tests` - TOEIC mini test seeded by Flyway
+- `http://localhost:8080/vocab` - vocabulary flashcards
+- `http://localhost:8080/lessons` - lessons
+- `http://localhost:8080/community` - comments and leaderboard
+- `http://localhost:8080/billing` - subscription demo
+- `http://localhost:8080/ai/writing` - writing feedback demo
+
+Teacher CMS requires the logged-in user role to be `TEACHER` or `ADMIN`. You can update it in MySQL after first login:
+
+```sql
+UPDATE users SET role = 'TEACHER' WHERE email = 'your_email@example.com';
+```
+
+Then open:
+
+```text
+http://localhost:8080/teacher/cms
+```
+
 ## Database Setup
 
 Create a local MySQL database:
