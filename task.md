@@ -30,14 +30,14 @@
 - [x] **T1.5** Phân quyền role (Student / Teacher / Admin) lưu trong DB, gán vào security context; bảo vệ route qua `@PreAuthorize` / `authorizeHttpRequests`.
 
 ### 1C. Luyện đề (lõi)
-- [ ] **T1.6** Controller + trang Thymeleaf danh sách đề thi (pagination qua `Pageable` + filter theo type/difficulty).
-- [ ] **T1.7** Trang làm bài: hiển thị câu hỏi theo part, hỗ trợ nhóm passage/audio, đồng hồ đếm ngược (Alpine.js).
-- [ ] **T1.8** Auto-save: localStorage + REST endpoint ghi định kỳ (debounce ~15-30s) vào `draft_answers`.
-- [ ] **T1.9** Nộp bài + chấm điểm tự động ở tầng `service` (`@Transactional`), hỗ trợ trắc nghiệm + điền từ (accepted_answers). Có JUnit test cho logic chấm.
-- [ ] **T1.10** Trang xem lại kết quả: đáp án đúng/sai + giải thích + transcript.
+- [x] **T1.6** Controller + trang Thymeleaf danh sách đề thi (pagination qua `Pageable` + filter theo type/difficulty).
+- [x] **T1.7** Trang làm bài: hiển thị câu hỏi theo part, hỗ trợ nhóm passage/audio, đồng hồ đếm ngược (Alpine.js).
+- [x] **T1.8** Auto-save: localStorage + REST endpoint ghi định kỳ (debounce ~15-30s) vào `draft_answers`.
+- [x] **T1.9** Nộp bài + chấm điểm tự động ở tầng `service` (`@Transactional`), hỗ trợ trắc nghiệm + điền từ (accepted_answers). Có JUnit test cho logic chấm.
+- [x] **T1.10** Trang xem lại kết quả: đáp án đúng/sai + giải thích + transcript.
 
 ### 1D. Lịch sử
-- [ ] **T1.11** Controller + trang lịch sử làm bài của user (điểm, thời gian, link xem lại).
+- [x] **T1.11** Controller + trang lịch sử làm bài của user (điểm, thời gian, link xem lại).
 
 ### 1E. Hoàn thiện MVP
 - [ ] **T1.12** Dashboard đơn giản: số đề đã làm, điểm trung bình.

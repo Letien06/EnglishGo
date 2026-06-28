@@ -1,0 +1,194 @@
+<!DOCTYPE html>
+<html lang="en" xmlns:th="http://www.thymeleaf.org">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title th:text="${session.test.title} + ' - Practice'">Practice</title>
+    <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"></script>
+    <style>
+        body { margin: 0; font-family: Inter, ui-sans-serif, system-ui, sans-serif; background: #f5f7fb; color: #172033; }
+        header { position: sticky; top: 0; z-index: 5; display: flex; justify-content: space-between; align-items: center; gap: 16px; padding: 16px 28px; background: #fff; border-bottom: 1px solid #d9e1ec; }
+        main { width: min(94vw, 1100px); margin: 28px auto; display: grid; grid-template-columns: minmax(0, 1fr) 260px; gap: 22px; }
+        @media (max-width: 820px) { main { grid-template-columns: 1fr; } aside { position: static !important; } }
+        a { color: #2563eb; text-decoration: none; font-weight: 700; }
+        button { border: 0; border-radius: 6px; padding: 11px 14px; font: inherit; font-weight: 700; cursor: pointer; background: #2563eb; color: #fff; }
+        button.secondary { background: #172033; }
+        .meta, .question, .group, aside { background: #fff; border: 1px solid #d9e1ec; border-radius: 8px; padding: 18px; }
+        .meta { margin-bottom: 16px; display: flex; flex-wrap: wrap; gap: 12px 24px; }
+        .question { margin-bottom: 16px; }
+        .group { margin: 12px 0; color: #42526a; }
+        .group audio { width: 100%; margin-top: 10px; }
+        .options { display: grid; gap: 10px; margin-top: 12px; }
+        .option { display: flex; gap: 10px; align-items: flex-start; border: 1px solid #d9e1ec; border-radius: 6px; padding: 10px; }
+        textarea { width: 100%; min-height: 86px; resize: vertical; border: 1px solid #c8d3e1; border-radius: 6px; padding: 10px; font: inherit; box-sizing: border-box; }
+        aside { position: sticky; top: 78px; height: max-content; }
+        .nav-grid { display: grid; grid-template-columns: repeat(5, 1fr); gap: 8px; margin: 12px 0 18px; }
+        .nav-grid a { display: grid; place-items: center; height: 36px; border-radius: 6px; background: #e8eef8; color: #172033; }
+        .status { color: #5f6f86; min-height: 20px; }
+        .timer { font-weight: 800; font-size: 1.2rem; }
+    </style>
+</head>
+<body th:attr="data-test-id=${session.test.id},data-duration=${session.test.duration},data-draft=${session.draftPayload}">
+<header>
+    <div>
+        <a href="/tests">Tests</a>
+        <span> / </span>
+        <strong th:text="${session.test.title}">Practice</strong>
+    </div>
+    <div class="timer" x-data="timer(Number(document.body.dataset.duration) * 60)" x-init="start()" x-text="label"></div>
+</header>
+
+<main x-data="practicePage()" x-init="init()">
+    <section>
+        <div class="meta">
+            <div><strong>Type:</strong> <span th:text="${session.test.type}">TOEIC</span></div>
+            <div><strong>Difficulty:</strong> <span th:text="${session.test.difficulty} ?: 'Any'">EASY</span></div>
+            <div><strong>Questions:</strong> <span th:text="${session.questions.size()}">4</span></div>
+        </div>
+
+        <article class="question" th:each="question, iter : ${session.questions}" th:id="'q-' + ${question.id}" th:attr="data-question-id=${question.id}">
+            <h2>Question <span th:text="${iter.index + 1}">1</span> <small>(Part <span th:text="${question.part}">3</span>)</small></h2>
+            <div class="group" th:if="${question.group != null}">
+                <p th:text="${question.group.passageText}">Passage</p>
+                <audio th:if="${question.group.audioUrl != null}" controls th:src="@{'/media/' + ${question.group.audioUrl}}"></audio>
+                <img th:if="${question.group.imageUrl != null}" th:src="@{'/media/' + ${question.group.imageUrl}}" alt="Question group image" loading="lazy">
+            </div>
+            <p th:text="${question.content}">Question content</p>
+            <audio th:if="${question.audioUrl != null}" controls th:src="@{'/media/' + ${question.audioUrl}}"></audio>
+            <img th:if="${question.imageUrl != null}" th:src="@{'/media/' + ${question.imageUrl}}" alt="Question image" loading="lazy">
+
+            <div class="options" th:if="${session.optionsByQuestionId[question.id] != null and !session.optionsByQuestionId[question.id].empty}">
+                <label class="option" th:each="option : ${session.optionsByQuestionId[question.id]}">
+                    <input type="radio" th:name="'question-' + ${question.id}" th:value="${option.id}" @change="changed()">
+                    <span th:text="${option.content}">Option</span>
+                </label>
+            </div>
+
+            <div th:unless="${session.optionsByQuestionId[question.id] != null and !session.optionsByQuestionId[question.id].empty}">
+                <label>
+                    <span>Answer</span>
+                    <textarea th:attr="data-text-question-id=${question.id}" @input="changed()"></textarea>
+                </label>
+            </div>
+        </article>
+    </section>
+
+    <aside>
+        <strong>Questions</strong>
+        <div class="nav-grid">
+            <a th:each="question, iter : ${session.questions}" th:href="'#q-' + ${question.id}" th:text="${iter.index + 1}">1</a>
+        </div>
+        <p class="status" x-text="status"></p>
+        <button type="button" @click="saveNow()">Save now</button>
+        <button class="secondary" type="button" @click="submit()" style="margin-top:10px;width:100%">Submit test</button>
+    </aside>
+</main>
+
+<script>
+    function timer(seconds) {
+        return {
+            remaining: seconds,
+            label: "",
+            start() {
+                this.render();
+                setInterval(() => {
+                    if (this.remaining > 0) {
+                        this.remaining -= 1;
+                        this.render();
+                    }
+                }, 1000);
+            },
+            render() {
+                const minutes = Math.floor(this.remaining / 60).toString().padStart(2, "0");
+                const seconds = (this.remaining % 60).toString().padStart(2, "0");
+                this.label = `${minutes}:${seconds}`;
+            }
+        };
+    }
+
+    function practicePage() {
+        return {
+            testId: document.body.dataset.testId,
+            status: "Draft not saved yet",
+            timeoutId: null,
+            init() {
+                this.restore();
+                window.addEventListener("beforeunload", () => localStorage.setItem(this.key(), JSON.stringify(this.collect())));
+            },
+            key() {
+                return `practice:${this.testId}:answers`;
+            },
+            restore() {
+                const localDraft = localStorage.getItem(this.key());
+                const serverDraft = document.body.dataset.draft || "{}";
+                const draft = JSON.parse(localDraft || serverDraft || "{}");
+                Object.entries(draft.answers || {}).forEach(([questionId, answer]) => {
+                    if (answer.selectedOptionId) {
+                        const radio = document.querySelector(`input[name="question-${questionId}"][value="${answer.selectedOptionId}"]`);
+                        if (radio) radio.checked = true;
+                    }
+                    if (answer.textResponse) {
+                        const textarea = document.querySelector(`textarea[data-text-question-id="${questionId}"]`);
+                        if (textarea) textarea.value = answer.textResponse;
+                    }
+                });
+            },
+            collect() {
+                const answers = {};
+                document.querySelectorAll("[data-question-id]").forEach((card) => {
+                    const questionId = card.dataset.questionId;
+                    const checked = card.querySelector(`input[name="question-${questionId}"]:checked`);
+                    const textarea = card.querySelector(`textarea[data-text-question-id="${questionId}"]`);
+                    answers[questionId] = {
+                        selectedOptionId: checked ? Number(checked.value) : null,
+                        textResponse: textarea ? textarea.value : null
+                    };
+                });
+                return {answers};
+            },
+            changed() {
+                localStorage.setItem(this.key(), JSON.stringify(this.collect()));
+                this.status = "Changes pending";
+                clearTimeout(this.timeoutId);
+                this.timeoutId = setTimeout(() => this.saveNow(), 15000);
+            },
+            async saveNow() {
+                const payload = JSON.stringify(this.collect());
+                localStorage.setItem(this.key(), payload);
+                const response = await fetch(`/api/practice/tests/${this.testId}/draft`, {
+                    method: "POST",
+                    headers: {"Content-Type": "application/json"},
+                    body: JSON.stringify({payload})
+                });
+                const result = await response.json();
+                if (!response.ok || !result.success) {
+                    this.status = result.error || "Save failed";
+                    return;
+                }
+                this.status = `Saved at ${new Date().toLocaleTimeString()}`;
+            },
+            async submit() {
+                await this.saveNow();
+                const answers = Object.entries(this.collect().answers).map(([questionId, answer]) => ({
+                    questionId: Number(questionId),
+                    selectedOptionId: answer.selectedOptionId,
+                    textResponse: answer.textResponse
+                }));
+                const response = await fetch(`/api/practice/tests/${this.testId}/submit`, {
+                    method: "POST",
+                    headers: {"Content-Type": "application/json"},
+                    body: JSON.stringify({answers})
+                });
+                const result = await response.json();
+                if (!response.ok || !result.success) {
+                    this.status = result.error || "Submit failed";
+                    return;
+                }
+                localStorage.removeItem(this.key());
+                window.location.href = `/attempts/${result.data.attemptId}/review`;
+            }
+        };
+    }
+</script>
+</body>
+</html>

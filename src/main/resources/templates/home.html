@@ -66,6 +66,19 @@
             background: #172033;
             color: #ffffff;
         }
+
+        a {
+            color: #2563eb;
+            font-weight: 700;
+            text-decoration: none;
+        }
+
+        .actions {
+            display: flex;
+            gap: 14px;
+            flex-wrap: wrap;
+            margin-top: 20px;
+        }
     </style>
 </head>
 <body>
@@ -84,6 +97,10 @@
             <dt>Role</dt>
             <dd th:text="${user.role()}">STUDENT</dd>
         </dl>
+        <div class="actions">
+            <a href="/tests">Practice tests</a>
+            <a href="/history">Attempt history</a>
+        </div>
     </section>
 </main>
 

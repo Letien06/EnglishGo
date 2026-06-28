@@ -22,7 +22,7 @@ public class SecurityConfig {
     @Bean
     public SecurityFilterChain securityFilterChain(HttpSecurity http) throws Exception {
         http
-                .csrf(csrf -> csrf.ignoringRequestMatchers("/auth/session", "/auth/logout"))
+                .csrf(csrf -> csrf.ignoringRequestMatchers("/auth/session", "/auth/logout", "/api/practice/**"))
                 .formLogin(AbstractHttpConfigurer::disable)
                 .httpBasic(AbstractHttpConfigurer::disable)
                 .logout(AbstractHttpConfigurer::disable)
@@ -36,6 +36,7 @@ public class SecurityConfig {
                                 "/images/**",
                                 "/favicon.ico")
                         .permitAll()
+                        .requestMatchers("/api/practice/**").authenticated()
                         .requestMatchers("/admin/**").hasRole("ADMIN")
                         .requestMatchers("/teacher/**").hasAnyRole("TEACHER", "ADMIN")
                         .anyRequest().authenticated())
