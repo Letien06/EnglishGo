@@ -47,7 +47,20 @@ Copy-Item src/main/resources/application-example.yml src/main/resources/applicat
 
 Edit `src/main/resources/application-dev.yml` and set your MySQL username/password.
 
-3. Set Firebase environment variables in the same PowerShell window:
+3. Create `.env` from `.env.example` and fill in your Firebase values:
+
+```powershell
+Copy-Item .env.example .env
+notepad .env
+```
+
+Load `.env` into the same PowerShell window:
+
+```powershell
+.\scripts\load-env.ps1
+```
+
+This sets the same environment variables as:
 
 ```powershell
 $env:FIREBASE_SERVICE_ACCOUNT_PATH="C:\secrets\englishwebapp-firebase-service-account.json"
@@ -148,6 +161,14 @@ C:\secrets\englishwebapp-firebase-service-account.json
 ```
 
 Set environment variables for backend verification and frontend Firebase JS SDK config:
+
+```powershell
+Copy-Item .env.example .env
+notepad .env
+.\scripts\load-env.ps1
+```
+
+Or set them manually:
 
 ```powershell
 $env:FIREBASE_SERVICE_ACCOUNT_PATH="C:\secrets\englishwebapp-firebase-service-account.json"
