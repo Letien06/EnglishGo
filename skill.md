@@ -10,23 +10,30 @@
 Nền tảng web học tiếng Anh (tương tự luyentu.com): luyện đề TOEIC/IELTS, học từ vựng (flashcard + SRS), theo dõi tiến độ.
 Xem chi tiết thiết kế trong `workflow.md`.
 
-**Ưu tiên MVP:** Auth -> Luyện đề (làm bài, chấm điểm, xem đáp án) -> Lịch sử làm bài.
+**Ưu tiên MVP:** Auth (Firebase) -> Luyện đề (làm bài, chấm điểm, xem đáp án) -> Lịch sử làm bài.
 
 ---
 
-## 2. Tech Stack (ĐÃ CHỐT - Java Web + MySQL)
+## 2. Tech Stack (ĐÃ CHỐT - Java Web + MySQL + Firebase Auth)
 
 - **Ngôn ngữ:** Java 17+
 - **Framework:** Spring Boot 3.x (Spring MVC + Spring Security + Spring Data JPA)
 - **Build:** Maven
-- **Database:** MySQL 8.x
+- **Database:** MySQL 8.x (database chính, lưu toàn bộ dữ liệu nghiệp vụ)
 - **Migration:** Flyway (bắt buộc, mọi thay đổi schema qua file migration có version)
-- **Auth:** Spring Security (form login + session; có thể thêm OAuth2 sau)
+- **Auth:** **Firebase Authentication** (đăng nhập Google + email/password).
+  - Frontend dùng Firebase JS SDK để đăng nhập, lấy **Firebase ID token**.
+  - Backend dùng **Firebase Admin SDK** verify ID token, rồi đồng bộ user vào bảng `users` (theo `firebase_uid`).
+  - Spring Security dùng filter kiểm tra token + gán role (Student/Teacher/Admin) từ DB.
 - **Template:** Thymeleaf
 - **CSS:** Tailwind CSS
-- **JS tương tác:** Alpine.js + HTMX
+- **JS tương tác:** Alpine.js + HTMX + Firebase JS SDK (auth)
 - **CI/CD:** GitLab CI/CD
 - **Media:** S3 / object storage, lưu đường dẫn tương đối + `MEDIA_BASE_URL`
+
+> Lưu ý kiến trúc: Firebase CHỈ lo authentication. Toàn bộ dữ liệu (đề thi, câu hỏi,
+> kết quả, từ vựng...) vẫn lưu trong MySQL vì đây là dữ liệu quan hệ phức tạp
+> (JOIN, transaction, foreign key) mà NoSQL không phù hợp.
 
 ---
 
@@ -40,14 +47,15 @@ Xem chi tiết thiết kế trong `workflow.md`.
   - `repository/` - Spring Data JPA repository
   - `entity/` - JPA entity (map tới bảng MySQL)
   - `dto/` - object truyền dữ liệu (không expose entity ra ngoài)
-  - `config/` - cấu hình (Security, Web...)
+  - `config/` - cấu hình (Security, Firebase, Web...)
+  - `security/` - filter verify Firebase token, phân quyền
   - `resources/templates/` - file Thymeleaf
   - `resources/static/` - CSS/JS/ảnh
   - `resources/db/migration/` - file Flyway
 - **Error handling:** dùng `@ControllerAdvice` + `@ExceptionHandler` xử lý lỗi tập trung; API trả format thống nhất `{ success, data, error }`.
 - **Validation:** dùng `@Valid` + Bean Validation (`jakarta.validation`) trên DTO.
 - **Transaction:** dùng `@Transactional` ở tầng service cho thao tác ghi nhiều bảng (ví dụ: nộp bài + chấm điểm).
-- **Không hardcode secret:** dùng `application.yml` + biến môi trường / Spring profiles (`dev`, `prod`).
+- **Không hardcode secret:** dùng `application.yml` + biến môi trường / Spring profiles (`dev`, `prod`). File service account của Firebase KHÔNG commit vào repo (đưa vào `.gitignore`, nạp qua biến môi trường).
 
 ---
 
@@ -61,6 +69,7 @@ Xem chi tiết thiết kế trong `workflow.md`.
 6. **Pagination + filtering:** dùng `Pageable` của Spring Data cho mọi danh sách.
 7. **Versioning đề thi:** sửa nội dung -> tạo bản mới, không sửa đè (giữ lịch sử làm bài khớp đáp án).
 8. **Mọi thay đổi schema** phải qua file Flyway mới (`V<n>__describe.sql`), không sửa file migration cũ đã chạy.
+9. **User & Firebase:** bảng `users` có cột `firebase_uid` (unique). KHÔNG lưu password trong DB (Firebase quản lý). Khi user đăng nhập lần đầu -> tạo bản ghi `users` tương ứng (just-in-time provisioning).
 
 ---
 
@@ -74,9 +83,10 @@ Xem chi tiết thiết kế trong `workflow.md`.
 - **Component tái sử dụng:** tách fragment Thymeleaf (`th:fragment`) cho header, footer, card câu hỏi, nút...
 - **Trạng thái UI đầy đủ:** loading, empty state, error state, disabled - không để trang trống.
 - **Accessibility cơ bản:** dùng thẻ semantic (`<button>`, `<label>`), `alt` cho ảnh, contrast màu đủ đọc.
-- **Feedback người dùng:** toast/thông báo khi lưu, nộp bài, lỗi.
+- **Feedback người dùng:** toast/thông báo khi lưu, nộp bài, lỗi, đăng nhập.
 
-### 5.2. Tương tác động (Alpine.js / HTMX)
+### 5.2. Tương tác động (Alpine.js / HTMX / Firebase SDK)
+- **Đăng nhập Google:** dùng Firebase JS SDK (`signInWithPopup` hoặc redirect), sau khi thành công gửi ID token về backend để tạo session.
 - **Đồng hồ đếm ngược** khi làm bài: hiển thị thời gian còn lại, tự nộp khi hết giờ.
 - **Flashcard:** hiệu ứng lật thẻ (CSS transform/transition).
 - **Auto-save UI:** hiển thị trạng thái "Đã lưu lúc HH:mm" sau mỗi lần save.
@@ -99,3 +109,4 @@ Xem chi tiết thiết kế trong `workflow.md`.
 5. **Viết test** cho logic nghiệp vụ quan trọng (chấm điểm, SRS) bằng JUnit.
 6. **Commit nhỏ, rõ ràng**, theo conventional commits (`feat:`, `fix:`, `docs:`...).
 7. Mỗi task xong -> tạo **merge request** về `main`.
+8. **KHÔNG commit** file service account Firebase, API key nhạy cảm hay secret vào repo.

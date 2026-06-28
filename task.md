@@ -2,31 +2,32 @@
 
 > Danh sách task cho AI coding agent (Codex 5.5) thực hiện theo thứ tự.
 > Đọc `workflow.md` + `skill.md` trước khi bắt đầu.
-> Stack: **Java 17 + Spring Boot 3.x + MySQL + Thymeleaf + Tailwind + Alpine.js/HTMX**.
+> Stack: **Java 17 + Spring Boot 3.x + MySQL + Firebase Auth + Thymeleaf + Tailwind + Alpine.js/HTMX**.
 > Trạng thái: [ ] chưa làm | [~] đang làm | [x] xong
 
 ---
 
 ## GIAI ĐOẠN 0 - Khởi tạo dự án (Setup)
 
-- [ ] **T0.1** Khởi tạo project Spring Boot 3.x (Maven) với dependencies: Spring Web, Spring Data JPA, Spring Security, Thymeleaf, MySQL Driver, Flyway, Lombok, Validation.
-- [ ] **T0.2** Cấu hình kết nối MySQL trong `application.yml` (profile `dev`), tạo `application-example.yml`.
-- [ ] **T0.3** Dựng cấu trúc package layered (`controller`, `service`, `repository`, `entity`, `dto`, `config`) + thư mục `templates/`, `static/`, `db/migration/`.
+- [x] **T0.1** Khởi tạo project Spring Boot 3.x (Maven) với dependencies: Spring Web, Spring Data JPA, Spring Security, Thymeleaf, MySQL Driver, Flyway, Lombok, Validation.
+- [x] **T0.2** Cấu hình kết nối MySQL trong `application.yml` (profile `dev`), tạo `application-example.yml`.
+- [x] **T0.3** Dựng cấu trúc package layered (`controller`, `service`, `repository`, `entity`, `dto`, `config`) + thư mục `templates/`, `static/`, `db/migration/`.
 - [ ] **T0.4** Tích hợp Tailwind CSS + Alpine.js + HTMX vào `resources/static` (build pipeline cho Tailwind).
-- [ ] **T0.5** Tạo file `.gitlab-ci.yml` cơ bản (`mvn verify`: build + test + kiểm tra).
+- [x] **T0.5** Tạo file `.gitlab-ci.yml` cơ bản (`mvn verify`: build + test + kiểm tra).
+- [ ] **T0.6** Thêm dependency Firebase Admin SDK vào `pom.xml`; tạo cấu hình nạp service account qua biến môi trường (KHÔNG commit file key).
 
 ## GIAI ĐOẠN 1 - MVP
 
 ### 1A. Database schema
-- [ ] **T1.1** Viết Flyway migration (`V1__init.sql`) + JPA entity cho: `users`, `tests`, `question_groups`, `questions`,
+- [ ] **T1.1** Viết Flyway migration (`V1__init.sql`) + JPA entity cho: `users` (có `firebase_uid`, KHÔNG có password), `tests`, `question_groups`, `questions`,
       `answer_options`, `accepted_answers`, `user_attempts`, `user_answers`, `draft_answers`.
       Tuân thủ quy ước DB trong `skill.md` (soft delete qua `@SQLDelete`/`@Where`, grouping, text_response).
 - [ ] **T1.2** Viết Flyway seed (`V2__seed.sql`) dữ liệu mẫu (1 đề TOEIC mini: vài câu trắc nghiệm + 1 nhóm câu hỏi có audio).
 
-### 1B. Auth (Spring Security)
-- [ ] **T1.3** Đăng ký / đăng nhập bằng email + password (hash BCrypt qua `PasswordEncoder`).
-- [ ] **T1.4** Cấu hình Spring Security: form login + session, bảo vệ các route cần đăng nhập.
-- [ ] **T1.5** Phân quyền role (Student / Teacher / Admin) qua `@PreAuthorize` / `authorizeHttpRequests`.
+### 1B. Auth (Firebase Authentication)
+- [ ] **T1.3** Frontend: trang đăng nhập dùng Firebase JS SDK (đăng nhập Google + email/password), lấy Firebase ID token.
+- [ ] **T1.4** Backend: Spring Security filter verify Firebase ID token (Firebase Admin SDK), tạo session; just-in-time provisioning user vào bảng `users` theo `firebase_uid`.
+- [ ] **T1.5** Phân quyền role (Student / Teacher / Admin) lưu trong DB, gán vào security context; bảo vệ route qua `@PreAuthorize` / `authorizeHttpRequests`.
 
 ### 1C. Luyện đề (lõi)
 - [ ] **T1.6** Controller + trang Thymeleaf danh sách đề thi (pagination qua `Pageable` + filter theo type/difficulty).
@@ -40,7 +41,7 @@
 
 ### 1E. Hoàn thiện MVP
 - [ ] **T1.12** Dashboard đơn giản: số đề đã làm, điểm trung bình.
-- [ ] **T1.13** Viết README hướng dẫn chạy dự án (yêu cầu Java/MySQL, cấu hình `application.yml`, `mvn flyway:migrate`, `mvn spring-boot:run`).
+- [ ] **T1.13** Viết README hướng dẫn chạy dự án (yêu cầu Java/MySQL, cấu hình `application.yml`, Firebase service account, `mvn flyway:migrate`, `mvn spring-boot:run`).
 
 ---
 
