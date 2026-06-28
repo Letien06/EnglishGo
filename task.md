@@ -14,7 +14,7 @@
 - [x] **T0.3** Dựng cấu trúc package layered (`controller`, `service`, `repository`, `entity`, `dto`, `config`) + thư mục `templates/`, `static/`, `db/migration/`.
 - [ ] **T0.4** Tích hợp Tailwind CSS + Alpine.js + HTMX vào `resources/static` (build pipeline cho Tailwind).
 - [x] **T0.5** Tạo file `.gitlab-ci.yml` cơ bản (`mvn verify`: build + test + kiểm tra).
-- [ ] **T0.6** Thêm dependency Firebase Admin SDK vào `pom.xml`; tạo cấu hình nạp service account qua biến môi trường (KHÔNG commit file key).
+- [x] **T0.6** Thêm dependency Firebase Admin SDK vào `pom.xml`; tạo cấu hình nạp service account qua biến môi trường (KHÔNG commit file key).
 
 ## GIAI ĐOẠN 1 - MVP
 
@@ -22,12 +22,12 @@
 - [x] **T1.1** Viết Flyway migration (`V1__init.sql`) + JPA entity cho: `users` (có `firebase_uid`, KHÔNG có password), `tests`, `question_groups`, `questions`,
       `answer_options`, `accepted_answers`, `user_attempts`, `user_answers`, `draft_answers`.
       Tuân thủ quy ước DB trong `skill.md` (soft delete qua `@SQLDelete`/`@Where`, grouping, text_response).
-- [ ] **T1.2** Viết Flyway seed (`V2__seed.sql`) dữ liệu mẫu (1 đề TOEIC mini: vài câu trắc nghiệm + 1 nhóm câu hỏi có audio).
+- [x] **T1.2** Viết Flyway seed (`V2__seed.sql`) dữ liệu mẫu (1 đề TOEIC mini: vài câu trắc nghiệm + 1 nhóm câu hỏi có audio).
 
 ### 1B. Auth (Firebase Authentication)
-- [ ] **T1.3** Frontend: trang đăng nhập dùng Firebase JS SDK (đăng nhập Google + email/password), lấy Firebase ID token.
-- [ ] **T1.4** Backend: Spring Security filter verify Firebase ID token (Firebase Admin SDK), tạo session; just-in-time provisioning user vào bảng `users` theo `firebase_uid`.
-- [ ] **T1.5** Phân quyền role (Student / Teacher / Admin) lưu trong DB, gán vào security context; bảo vệ route qua `@PreAuthorize` / `authorizeHttpRequests`.
+- [x] **T1.3** Frontend: trang đăng nhập dùng Firebase JS SDK (đăng nhập Google + email/password), lấy Firebase ID token.
+- [x] **T1.4** Backend: Spring Security filter verify Firebase ID token (Firebase Admin SDK), tạo session; just-in-time provisioning user vào bảng `users` theo `firebase_uid`.
+- [x] **T1.5** Phân quyền role (Student / Teacher / Admin) lưu trong DB, gán vào security context; bảo vệ route qua `@PreAuthorize` / `authorizeHttpRequests`.
 
 ### 1C. Luyện đề (lõi)
 - [ ] **T1.6** Controller + trang Thymeleaf danh sách đề thi (pagination qua `Pageable` + filter theo type/difficulty).

@@ -20,5 +20,14 @@ spring:
 server:
   port: 8080
 
+app:
+  media-base-url: ${MEDIA_BASE_URL:http://localhost:8080/media}
+  firebase:
+    service-account-path: ${FIREBASE_SERVICE_ACCOUNT_PATH:}
+    web-api-key: ${FIREBASE_WEB_API_KEY:}
+    auth-domain: ${FIREBASE_AUTH_DOMAIN:}
+    project-id: ${FIREBASE_PROJECT_ID:}
+    app-id: ${FIREBASE_APP_ID:}
+
 # Profile-specific config (datasource) is in application-dev.yml.
 # Copy application-example.yml to application-dev.yml and fill in your values.

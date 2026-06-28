@@ -1,0 +1,186 @@
+<!DOCTYPE html>
+<html lang="en" xmlns:th="http://www.thymeleaf.org">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Login - EnglishWebApp</title>
+    <style>
+        :root {
+            color-scheme: light;
+            font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+        }
+
+        body {
+            min-height: 100vh;
+            margin: 0;
+            display: grid;
+            place-items: center;
+            background: #f5f7fb;
+            color: #172033;
+        }
+
+        main {
+            width: min(92vw, 420px);
+            background: #ffffff;
+            border: 1px solid #d9e1ec;
+            border-radius: 8px;
+            padding: 28px;
+            box-shadow: 0 18px 45px rgba(30, 41, 59, 0.12);
+        }
+
+        h1 {
+            margin: 0 0 6px;
+            font-size: 1.75rem;
+            line-height: 1.2;
+        }
+
+        p {
+            margin: 0 0 22px;
+            color: #5f6f86;
+        }
+
+        label {
+            display: block;
+            margin: 14px 0 6px;
+            font-weight: 600;
+        }
+
+        input {
+            width: 100%;
+            box-sizing: border-box;
+            border: 1px solid #c8d3e1;
+            border-radius: 6px;
+            padding: 12px;
+            font: inherit;
+        }
+
+        button {
+            width: 100%;
+            border: 0;
+            border-radius: 6px;
+            padding: 12px 14px;
+            font: inherit;
+            font-weight: 700;
+            cursor: pointer;
+        }
+
+        button:disabled {
+            cursor: not-allowed;
+            opacity: 0.65;
+        }
+
+        .primary {
+            margin-top: 18px;
+            background: #2563eb;
+            color: #ffffff;
+        }
+
+        .secondary {
+            margin-top: 12px;
+            background: #172033;
+            color: #ffffff;
+        }
+
+        .error {
+            min-height: 20px;
+            margin-top: 14px;
+            color: #b42318;
+            font-weight: 600;
+        }
+    </style>
+</head>
+<body>
+<main>
+    <h1>EnglishWebApp</h1>
+    <p>Sign in to continue.</p>
+
+    <form id="email-form">
+        <label for="email">Email</label>
+        <input id="email" name="email" type="email" autocomplete="email" required>
+
+        <label for="password">Password</label>
+        <input id="password" name="password" type="password" autocomplete="current-password" required>
+
+        <button class="primary" id="email-button" type="submit">Sign in</button>
+    </form>
+
+    <button class="secondary" id="google-button" type="button">Continue with Google</button>
+    <div class="error" id="auth-error" role="alert"></div>
+</main>
+
+<script type="module" th:inline="javascript">
+    import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.4/firebase-app.js";
+    import {
+        getAuth,
+        GoogleAuthProvider,
+        signInWithEmailAndPassword,
+        signInWithPopup
+    } from "https://www.gstatic.com/firebasejs/10.12.4/firebase-auth.js";
+
+    const firebaseConfig = {
+        apiKey: /*[[${firebase.webApiKey}]]*/ "",
+        authDomain: /*[[${firebase.authDomain}]]*/ "",
+        projectId: /*[[${firebase.projectId}]]*/ "",
+        appId: /*[[${firebase.appId}]]*/ ""
+    };
+
+    const errorBox = document.getElementById("auth-error");
+    const emailButton = document.getElementById("email-button");
+    const googleButton = document.getElementById("google-button");
+    const firebaseReady = firebaseConfig.apiKey && firebaseConfig.authDomain && firebaseConfig.projectId && firebaseConfig.appId;
+
+    if (!firebaseReady) {
+        emailButton.disabled = true;
+        googleButton.disabled = true;
+        errorBox.textContent = "Firebase web config is missing.";
+    }
+
+    const app = firebaseReady ? initializeApp(firebaseConfig) : null;
+    const auth = firebaseReady ? getAuth(app) : null;
+    const provider = firebaseReady ? new GoogleAuthProvider() : null;
+
+    async function createBackendSession(firebaseUser) {
+        const idToken = await firebaseUser.getIdToken();
+        const response = await fetch("/auth/session", {
+            method: "POST",
+            headers: {"Content-Type": "application/json"},
+            body: JSON.stringify({idToken})
+        });
+        const result = await response.json();
+        if (!response.ok || !result.success) {
+            throw new Error(result.error || "Sign in failed");
+        }
+        window.location.href = "/";
+    }
+
+    async function runAuth(button, callback) {
+        errorBox.textContent = "";
+        button.disabled = true;
+        try {
+            await callback();
+        } catch (error) {
+            errorBox.textContent = error.message;
+        } finally {
+            button.disabled = false;
+        }
+    }
+
+    document.getElementById("email-form").addEventListener("submit", (event) => {
+        event.preventDefault();
+        runAuth(emailButton, async () => {
+            const email = document.getElementById("email").value;
+            const password = document.getElementById("password").value;
+            const credential = await signInWithEmailAndPassword(auth, email, password);
+            await createBackendSession(credential.user);
+        });
+    });
+
+    googleButton.addEventListener("click", () => {
+        runAuth(googleButton, async () => {
+            const credential = await signInWithPopup(auth, provider);
+            await createBackendSession(credential.user);
+        });
+    });
+</script>
+</body>
+</html>

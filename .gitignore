@@ -13,6 +13,9 @@ target/
 # Spring profiles with secrets
 src/main/resources/application-dev.yml
 src/main/resources/application-prod.yml
+firebase-service-account*.json
+serviceAccountKey.json
+*.service-account.json
 
 # Node (Tailwind build)
 node_modules/

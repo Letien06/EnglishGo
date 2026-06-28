@@ -13,3 +13,9 @@ spring:
 # App-specific
 app:
   media-base-url: http://localhost:8080/media
+  firebase:
+    service-account-path: ${FIREBASE_SERVICE_ACCOUNT_PATH:}
+    web-api-key: ${FIREBASE_WEB_API_KEY:}
+    auth-domain: ${FIREBASE_AUTH_DOMAIN:}
+    project-id: ${FIREBASE_PROJECT_ID:}
+    app-id: ${FIREBASE_APP_ID:}
