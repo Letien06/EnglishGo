@@ -96,25 +96,35 @@ Làm đúng những gì khó sửa sau (cấu trúc database); làm đơn giản
 - `lessons` (id, title, topic, content, video_url, deleted_at)
 
 **Quy ước database:**
-- Soft delete: dùng `deleted_at` (qua cơ chế ORM, tránh quên filter).
+- Soft delete: dùng `deleted_at` (qua JPA `@SQLDelete`/`@Where`, tránh quên filter).
 - Versioning đề thi: sửa nội dung -> tạo bản mới, giữ lịch sử làm bài cũ khớp đáp án tại thời điểm làm.
 - Media: lưu **đường dẫn tương đối** trong DB, ghép với biến môi trường `MEDIA_BASE_URL` ở frontend (dễ đổi CDN/server).
-- API: chuẩn hóa **pagination + filtering** ngay từ đầu.
+- API: chuẩn hóa **pagination + filtering** ngay từ đầu (Spring Data `Pageable`).
+- Migration: mọi thay đổi schema qua **Flyway** (`V<n>__describe.sql`), không sửa file cũ đã chạy.
 
 ---
 
-## 4. Tech Stack
+## 4. Tech Stack (ĐÃ CHỐT - Java Web + MySQL)
 
-> Chốt sau khi xác nhận trình độ lập trình của developer:
-> - Người mới từ 0 -> **Next.js full-stack + PostgreSQL + Prisma** (học 1 ngôn ngữ, ra MVP nhanh; vẫn xuất REST API dùng lại được cho mobile sau này).
-> - Đã vững Java/Java Web -> **Spring Boot** (backend) + Thymeleaf/React.
-> - Đã vững C# -> **ASP.NET Core** (backend) + Razor/Blazor/React.
+**Backend:**
+- **Ngôn ngữ:** Java 17+
+- **Framework:** Spring Boot 3.x (Spring MVC + Spring Security + Spring Data JPA)
+- **Build tool:** Maven
+- **Database:** MySQL 8.x
+- **Migration:** Flyway (quản lý schema rõ ràng, version hóa)
 
+**Frontend (server-side rendering + tương tác động):**
+- **Template engine:** Thymeleaf
+- **CSS:** Tailwind CSS
+- **JS tương tác:** Alpine.js (đồng hồ đếm ngược, lật flashcard, auto-save) + HTMX (cập nhật từng phần trang)
+
+**Hạ tầng:**
 - **CI/CD:** GitLab CI/CD
-- **Database:** PostgreSQL (+ Redis cache/session khi cần)
-- **Media storage:** S3 / object storage
+- **Cache/session:** Redis (thêm khi cần, không bắt buộc ở MVP)
+- **Media storage:** S3 / object storage (MVP có thể lưu local + `MEDIA_BASE_URL`)
 
-*(Cập nhật stack chính thức tại đây khi đã chốt.)*
+> Định hướng mở rộng: Spring Boot đồng thời cung cấp REST API (`@RestController`),
+> nên sau này làm app mobile (Kotlin/Jetpack Compose) vẫn dùng lại được logic backend.
 
 ---
 
