@@ -1,0 +1,24 @@
+spring:
+  application:
+    name: englishwebapp
+  profiles:
+    active: dev
+
+  jpa:
+    hibernate:
+      ddl-auto: validate
+    open-in-view: false
+    properties:
+      hibernate:
+        format_sql: true
+
+  flyway:
+    enabled: true
+    locations: classpath:db/migration
+    baseline-on-migrate: true
+
+server:
+  port: 8080
+
+# Profile-specific config (datasource) is in application-dev.yml.
+# Copy application-example.yml to application-dev.yml and fill in your values.

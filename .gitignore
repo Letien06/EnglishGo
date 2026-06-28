@@ -1,0 +1,21 @@
+# Maven
+target/
+.m2/
+
+# IDE
+.idea/
+*.iml
+.vscode/
+.settings/
+.project
+.classpath
+
+# Spring profiles with secrets
+src/main/resources/application-dev.yml
+src/main/resources/application-prod.yml
+
+# Node (Tailwind build)
+node_modules/
+
+# OS
+.DS_Store
