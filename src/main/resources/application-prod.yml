@@ -1,4 +1,7 @@
 spring:
+  main:
+    lazy-initialization: true
+
   datasource:
     url: ${DATABASE_URL}
     username: ${DATABASE_USERNAME}
@@ -6,13 +9,21 @@ spring:
     driver-class-name: org.postgresql.Driver
     hikari:
       maximum-pool-size: ${DATABASE_POOL_SIZE:5}
+      minimum-idle: ${DATABASE_MIN_IDLE:0}
+      connection-timeout: ${DATABASE_CONNECTION_TIMEOUT:3000}
+      initialization-fail-timeout: ${DATABASE_INITIALIZATION_FAIL_TIMEOUT:0}
 
   jpa:
     database-platform: org.hibernate.dialect.PostgreSQLDialect
     hibernate:
-      ddl-auto: validate
+      ddl-auto: ${HIBERNATE_DDL_AUTO:none}
+    properties:
+      hibernate:
+        boot:
+          allow_jdbc_metadata_access: false
 
   flyway:
+    enabled: ${FLYWAY_ENABLED:false}
     locations: classpath:db/migration/postgresql
 
 server:
