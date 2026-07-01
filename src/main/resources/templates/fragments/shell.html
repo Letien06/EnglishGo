@@ -33,7 +33,13 @@
         <p th:if="${pageSubtitle != null}" th:text="${pageSubtitle}">Track your progress</p>
     </div>
     <div class="app-topbar-actions">
-        <span class="ew-badge" th:if="${shellUser != null}" th:text="${shellUser.role}">STUDENT</span>
+        <a class="ew-badge"
+           th:if="${shellUser != null}"
+           href="/account?tab=profile"
+           aria-label="Account profile"
+           th:text="${shellUser.displayName != null && !#strings.isEmpty(shellUser.displayName) ? shellUser.displayName : shellUser.email}">
+            Account
+        </a>
         <button class="ew-button secondary compact" type="button" data-logout-button>Sign out</button>
     </div>
 </header>
