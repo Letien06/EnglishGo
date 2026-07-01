@@ -2,6 +2,7 @@ package com.englishwebapp.controller;
 
 import com.englishwebapp.dto.ListenPartView;
 import com.englishwebapp.entity.SkillType;
+import com.englishwebapp.service.DauToeicClientService;
 import com.englishwebapp.service.LearnerContentService;
 import java.util.List;
 import lombok.RequiredArgsConstructor;
@@ -17,9 +18,13 @@ import org.springframework.web.bind.annotation.RequestParam;
 public class ListenController {
 
     private final LearnerContentService learnerContentService;
+    private final DauToeicClientService dauToeicClientService;
 
     @GetMapping("/listen")
-    public String listen(@RequestParam(defaultValue = "1") String part, Model model) {
+    public String listen(
+            @RequestParam(defaultValue = "1") String part,
+            @RequestParam(required = false) String dautoeicTestId,
+            Model model) {
         String activeId = normalizePart(part);
         List<ListenPartView> parts = parts(activeId);
         ListenPartView activePart = parts.stream()
@@ -36,6 +41,7 @@ public class ListenController {
                 pageable);
         model.addAttribute("questions", questions);
         model.addAttribute("optionsByQuestionId", learnerContentService.findOptionsByQuestionId(questions));
+        addDauToeicListeningPart(activeId, dautoeicTestId, model);
         return "listen/index";
     }
 
@@ -63,5 +69,25 @@ public class ListenController {
             case "dictation" -> List.of(1, 2, 3, 4);
             default -> List.of(1);
         };
+    }
+
+    private void addDauToeicListeningPart(String activeId, String testId, Model model) {
+        if ("dictation".equals(activeId)) {
+            return;
+        }
+        try {
+            List<com.englishwebapp.dto.DauToeicTestResponse> tests = dauToeicClientService.listTests(null);
+            if (tests.isEmpty()) {
+                return;
+            }
+            String selectedTestId = (testId == null || testId.isBlank()) ? tests.get(0).id() : testId.trim();
+            model.addAttribute("dauToeicTests", tests);
+            model.addAttribute("dauToeicSelectedTestId", selectedTestId);
+            model.addAttribute("dauToeicPart", dauToeicClientService.getListeningPart(
+                    selectedTestId,
+                    Integer.parseInt(activeId)));
+        } catch (RuntimeException exception) {
+            model.addAttribute("dauToeicError", "Không tải được dữ liệu nghe từ Đậu TOEIC.");
+        }
     }
 }

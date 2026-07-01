@@ -47,6 +47,10 @@ app:
     api-key: ${GEMINI_API_KEY:}
     model: ${GEMINI_MODEL:gemini-2.5-flash}
     base-url: ${GEMINI_BASE_URL:https://generativelanguage.googleapis.com/v1beta}
+  dautoeic:
+    supabase-url: ${DAUTOEIC_SUPABASE_URL:https://qfhmnlvgweznzcsoijyr.supabase.co}
+    anon-key: ${DAUTOEIC_ANON_KEY:eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InFmaG1ubHZnd2V6bnpjc29panlyIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Njg4MDYyMzQsImV4cCI6MjA4NDM4MjIzNH0.mNJAoc-uJVilLr03PT3luXsekfwJ4sICOIsOIRQu-N0}
+    media-base-url: ${DAUTOEIC_MEDIA_BASE_URL:https://qfhmnlvgweznzcsoijyr.supabase.co/storage/v1/object/public/mock-test-media}
 
 # Profile-specific config (datasource) is in application-dev.yml.
 # Copy application-example.yml to application-dev.yml and fill in your values.

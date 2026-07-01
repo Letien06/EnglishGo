@@ -31,6 +31,7 @@ public class SecurityConfig {
                         "/auth/session",
                                 "/auth/logout",
                                 "/api/questions/**",
+                                "/api/dautoeic/**",
                                 "/api/practice/**",
                         "/api/vocab/**",
                         "/admin/**",
@@ -72,6 +73,7 @@ public class SecurityConfig {
                                 "/favicon.ico")
                         .permitAll()
                         .requestMatchers("/api/questions/**").permitAll()
+                        .requestMatchers("/api/dautoeic/**").permitAll()
                         .requestMatchers("/api/vocab/**").permitAll()
                         .requestMatchers("/api/practice/**").authenticated()
                         .requestMatchers("/admin/**").hasRole("ADMIN")

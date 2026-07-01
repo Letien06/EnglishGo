@@ -8,8 +8,10 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.view;
 
 import com.englishwebapp.security.AuthSessionService;
+import com.englishwebapp.service.DauToeicClientService;
 import com.englishwebapp.service.FirebaseAuthenticationService;
 import com.englishwebapp.service.LearnerContentService;
+import com.englishwebapp.service.VocabService;
 import java.util.List;
 import java.util.Map;
 import org.hamcrest.Matchers;
@@ -33,10 +35,16 @@ class ListenControllerTest {
     private LearnerContentService learnerContentService;
 
     @MockBean
+    private DauToeicClientService dauToeicClientService;
+
+    @MockBean
     private FirebaseAuthenticationService firebaseAuthenticationService;
 
     @MockBean
     private AuthSessionService authSessionService;
+
+    @MockBean
+    private VocabService vocabService;
 
     @BeforeEach
     void setUp() {
@@ -46,11 +54,11 @@ class ListenControllerTest {
     }
 
     @Test
-    void listenPageRendersPublishedContentEmptyState() throws Exception {
+    void listenPageRendersDauToeicFallbackEmptyState() throws Exception {
         mockMvc.perform(get("/listen").param("part", "2"))
                 .andExpect(status().isOk())
                 .andExpect(view().name("listen/index"))
                 .andExpect(content().string(Matchers.containsString("listen-page")))
-                .andExpect(content().string(Matchers.containsString("Chưa có dữ liệu đã duyệt")));
+                .andExpect(content().string(Matchers.containsString("Không tải được dữ liệu")));
     }
 }

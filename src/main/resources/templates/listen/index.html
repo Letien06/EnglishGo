@@ -12,7 +12,7 @@
 <main class="listen-page">
     <aside class="listen-sidebar">
         <header class="listen-sidebar-head">
-            <span class="listen-main-icon">♬</span>
+            <span class="listen-main-icon">♪</span>
             <span>
                 <strong>Kỹ năng Nghe</strong>
                 <small>Listening · Parts 1 → 4 + Dictation</small>
@@ -46,6 +46,62 @@
                 <span th:text="${activePart.icon()}">▧</span>
             </div>
         </article>
+
+        <section class="learning-question-panel" th:if="${dauToeicPart != null}">
+            <div class="learning-section-head">
+                <div>
+                    <span>Đậu TOEIC API</span>
+                    <h2 th:text="${dauToeicPart.test().setName() + ' - ' + dauToeicPart.test().name() + ' / Part ' + dauToeicPart.part()}">Dau TOEIC listening part</h2>
+                    <p th:text="${'Hiển thị ' + dauToeicPart.questions().size() + ' câu nghe từ API công khai.'}">Hiển thị câu hỏi từ API.</p>
+                </div>
+                <a href="/api/dautoeic/sets" target="_blank" rel="noopener">Xem API</a>
+            </div>
+
+            <form class="dautoeic-picker" method="get" action="/listen" th:if="${dauToeicTests != null and !dauToeicTests.empty}">
+                <input type="hidden" name="part" th:value="${activePart.id()}">
+                <label>
+                    <span>Chọn đề</span>
+                    <select name="dautoeicTestId" onchange="this.form.submit()">
+                        <option th:each="test : ${dauToeicTests}"
+                                th:value="${test.id()}"
+                                th:selected="${test.id() == dauToeicSelectedTestId}"
+                                th:text="${test.setName() + ' - ' + test.name()}">ETS 2024 - Test 1</option>
+                    </select>
+                </label>
+            </form>
+
+            <div class="learning-question-grid">
+                <article class="learning-question-card"
+                         th:each="question : ${dauToeicPart.questions()}">
+                    <header>
+                        <span th:text="${'Part ' + question.part()}">Part 1</span>
+                        <strong th:text="${dauToeicPart.test().setName() + ' - ' + dauToeicPart.test().name()}">Dau TOEIC</strong>
+                    </header>
+                    <div class="learning-media" th:if="${question.audioUrl() != null or question.imageUrl() != null}">
+                        <audio controls th:if="${question.audioUrl() != null}" th:src="${question.audioUrl()}"></audio>
+                        <img th:if="${question.imageUrl() != null}" th:src="${question.imageUrl()}" alt="Listening question image">
+                    </div>
+                    <div class="learning-passage" th:if="${question.passageText() != null}">
+                        <pre th:text="${question.passageText()}">Passage text</pre>
+                    </div>
+                    <h2 th:text="${question.questionText() != null ? question.questionText() : 'Question ' + question.questionNumber()}">Question content</h2>
+                    <ol>
+                        <li th:if="${question.optionA() != null}" th:text="${'A. ' + question.optionA()}">A</li>
+                        <li th:if="${question.optionB() != null}" th:text="${'B. ' + question.optionB()}">B</li>
+                        <li th:if="${question.optionC() != null}" th:text="${'C. ' + question.optionC()}">C</li>
+                        <li th:if="${question.optionD() != null}" th:text="${'D. ' + question.optionD()}">D</li>
+                    </ol>
+                    <footer>
+                        <span th:text="${'#' + question.questionNumber()}">#1</span>
+                        <a th:href="@{/api/dautoeic/tests/{id}/listening(id=${dauToeicPart.test().id()},part=${dauToeicPart.part()})}" target="_blank" rel="noopener">JSON</a>
+                    </footer>
+                </article>
+            </div>
+        </section>
+
+        <section class="learning-empty" th:if="${dauToeicError != null}">
+            <p th:text="${dauToeicError}">Không tải được dữ liệu Đậu TOEIC.</p>
+        </section>
 
         <section class="learning-question-panel" th:unless="${questions.empty}">
             <div class="learning-section-head">
@@ -82,10 +138,10 @@
             </div>
         </section>
 
-        <section class="listen-login-required" th:if="${questions.empty}">
+        <section class="listen-login-required" th:if="${questions.empty and dauToeicPart == null}">
             <span>!</span>
-            <h2>Chưa có dữ liệu đã duyệt</h2>
-            <p>Admin cần publish câu hỏi nghe trước khi người học thấy ở đây.</p>
+            <h2>Chưa có dữ liệu nghe</h2>
+            <p>Không tải được dữ liệu nội bộ hoặc dữ liệu Đậu TOEIC cho phần này.</p>
         </section>
     </section>
 </main>
