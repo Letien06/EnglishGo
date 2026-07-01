@@ -12,12 +12,13 @@ FROM eclipse-temurin:17-jdk
 
 WORKDIR /app
 ENV SPRING_PROFILES_ACTIVE=prod
-ENV PORT=80
+ENV PORT=8080
 ENV JAVA_HOME=/opt/java/openjdk
 ENV PATH="${JAVA_HOME}/bin:${PATH}"
 
 COPY --from=build /workspace/target/englishwebapp-0.0.1-SNAPSHOT.jar /app/app.jar
 COPY scripts/vercel-start.sh /app/vercel-start.sh
 RUN chmod +x /app/vercel-start.sh && ln -sf /opt/java/openjdk/bin/java /usr/local/bin/java
+EXPOSE 8080
 
 CMD ["/app/vercel-start.sh"]
