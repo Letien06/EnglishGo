@@ -144,9 +144,17 @@
         const idToken = await firebaseUser.getIdToken();
         const response = await fetch("/auth/session", {
             method: "POST",
-            headers: {"Content-Type": "application/json"},
+            headers: {
+                "Accept": "application/json",
+                "Content-Type": "application/json"
+            },
             body: JSON.stringify({idToken})
         });
+        const contentType = response.headers.get("content-type") || "";
+        if (!contentType.includes("application/json")) {
+            const body = await response.text();
+            throw new Error(`Backend returned ${response.status}: ${body.slice(0, 120)}`);
+        }
         const result = await response.json();
         if (!response.ok || !result.success) {
             throw new Error(result.error || "Sign in failed");
