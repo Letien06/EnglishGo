@@ -32,7 +32,7 @@ public class AuthController {
     @GetMapping("/login")
     public String login(@AuthenticationPrincipal AppUserPrincipal user, Model model) {
         if (user != null) {
-            return "redirect:/";
+            return "redirect:/vocab";
         }
         model.addAttribute("firebase", appProperties.getFirebase());
         model.addAttribute("mode", "login");
@@ -42,7 +42,7 @@ public class AuthController {
     @GetMapping({"/signup", "/register"})
     public String signup(@AuthenticationPrincipal AppUserPrincipal user, Model model) {
         if (user != null) {
-            return "redirect:/";
+            return "redirect:/vocab";
         }
         model.addAttribute("firebase", appProperties.getFirebase());
         model.addAttribute("mode", "signup");

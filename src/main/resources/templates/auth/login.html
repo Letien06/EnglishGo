@@ -133,7 +133,7 @@
             });
             const result = await response.json();
             if (result.success && result.data) {
-                window.location.replace("/");
+                window.location.replace("/vocab");
             }
         } catch (error) {
             console.debug("Auth status check skipped", error);
@@ -159,7 +159,7 @@
         if (!response.ok || !result.success) {
             throw new Error(result.error || "Sign in failed");
         }
-        window.location.href = "/";
+        window.location.href = "/vocab";
     }
 
     async function runAuth(button, callback) {

@@ -1,9 +1,11 @@
 package com.englishwebapp.config;
 
 import com.google.auth.oauth2.GoogleCredentials;
+import com.google.cloud.firestore.Firestore;
 import com.google.firebase.FirebaseApp;
 import com.google.firebase.FirebaseOptions;
 import com.google.firebase.auth.FirebaseAuth;
+import com.google.firebase.cloud.FirestoreClient;
 import java.io.ByteArrayInputStream;
 import java.io.FileInputStream;
 import java.io.IOException;
@@ -43,6 +45,12 @@ public class FirebaseConfig {
     @ConditionalOnBean(FirebaseApp.class)
     public FirebaseAuth firebaseAuth(FirebaseApp firebaseApp) {
         return FirebaseAuth.getInstance(firebaseApp);
+    }
+
+    @Bean
+    @ConditionalOnBean(FirebaseApp.class)
+    public Firestore firestore(FirebaseApp firebaseApp) {
+        return FirestoreClient.getFirestore(firebaseApp);
     }
 
     private InputStream openServiceAccount(AppProperties appProperties) throws IOException {
