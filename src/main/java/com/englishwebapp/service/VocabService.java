@@ -438,11 +438,6 @@ public class VocabService {
         return saveCandidates(setId, candidates, sourceType, "Imported from " + (StringUtils.hasText(filename) ? filename : "uploaded file") + ".", 500);
     }
 
-    public int generateOwnedWordsWithAi(Long userId, Long setId, String mode, String input, int count) {
-        requireOwnedSet(userId, setId);
-        return saveAiWords(setId, previewAiWords(setId, mode, input, count, null));
-    }
-
     public VocabSetDetail getSetDetail(Long setId, Long userId) {
         VocabSet set = requirePublishedSet(setId);
         assertSetAccessible(set, userId);

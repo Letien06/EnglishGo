@@ -159,7 +159,7 @@
         <section class="vocab-import-toolbar">
             <div>
                 <h2>Thêm vào bộ từ</h2>
-                <p>Nhập thủ công, dán nhanh, upload CSV/Excel/PDF hoặc để GPT/Gemini tạo từ theo yêu cầu.</p>
+                <p>Nhập thủ công, dán nhanh hoặc upload CSV/Excel/PDF vào bộ từ cá nhân.</p>
             </div>
             <div class="vocab-import-actions">
                 <button class="vocab-import-primary" type="button" data-open-add-words th:disabled="${#lists.isEmpty(mySets)}">+ Thêm từ</button>
@@ -297,7 +297,6 @@
                     <button class="is-active" type="button" data-add-tab="manual">Nhập thủ công</button>
                     <button type="button" data-add-tab="file">File CSV/Excel/PDF</button>
                     <button type="button" data-add-tab="paste">Thêm nhanh</button>
-                    <button type="button" data-add-tab="gpt">GPT tạo</button>
                 </nav>
 
                 <form class="vocab-add-pane is-active" data-add-pane="manual" method="post" action="/vocab/my-sets/words/manual">
@@ -357,37 +356,13 @@
                     <input type="hidden" th:if="${_csrf != null}" th:name="${_csrf.parameterName}" th:value="${_csrf.token}">
                     <input type="hidden" name="targetSetId" data-add-target-input>
                     <details class="vocab-paste-guide" open>
-                        <summary>Hướng dẫn: dùng GPT tạo từ nhanh</summary>
+                        <summary>Hướng dẫn thêm nhanh</summary>
                         <p>Mỗi dòng một từ, cột cách bằng dấu <b>|</b>: từ vựng | /phiên âm/ | loại từ | nghĩa | ví dụ | ghi chú</p>
                     </details>
                     <textarea name="rowsText" rows="9" placeholder="abandon | /əˈbæn.dən/ | verb | từ bỏ | She abandoned her car. | thường dùng trong văn viết&#10;ability | /əˈbɪl.ə.ti/ | noun | khả năng | He has great ability. |"></textarea>
                     <footer>
                         <button type="button" data-close-add-words>Hủy</button>
                         <button type="submit">Xem trước và lưu</button>
-                    </footer>
-                </form>
-
-                <form class="vocab-add-pane" data-add-pane="gpt" method="post" action="/vocab/my-sets/words/generate">
-                    <input type="hidden" th:if="${_csrf != null}" th:name="${_csrf.parameterName}" th:value="${_csrf.token}">
-                    <input type="hidden" name="targetSetId" data-add-target-input>
-                    <label>
-                        <span>Kiểu tạo</span>
-                        <select name="mode">
-                            <option value="topic">Theo chủ đề</option>
-                            <option value="reading">Từ đoạn đọc</option>
-                        </select>
-                    </label>
-                    <label>
-                        <span>Yêu cầu cho GPT/Gemini</span>
-                        <textarea name="input" rows="6" maxlength="2000" placeholder="VD: tạo 20 từ TOEIC chủ đề workplace communication, có nghĩa tiếng Việt và ví dụ đơn giản."></textarea>
-                    </label>
-                    <label class="vocab-ai-count">
-                        Số từ muốn tạo
-                        <input type="number" name="count" min="1" max="50" value="10">
-                    </label>
-                    <footer>
-                        <button type="button" data-close-add-words>Hủy</button>
-                        <button type="submit">GPT tạo và lưu</button>
                     </footer>
                 </form>
             </div>

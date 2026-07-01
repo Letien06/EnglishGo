@@ -240,26 +240,6 @@ public class VocabularyController {
         return "redirect:/vocab/sets/" + targetSetId;
     }
 
-    @PostMapping("/vocab/my-sets/words/generate")
-    public String generateMyWords(
-            @RequestParam Long targetSetId,
-            @RequestParam(defaultValue = "topic") String mode,
-            @RequestParam(required = false) String input,
-            @RequestParam(defaultValue = "10") Integer count,
-            @AuthenticationPrincipal AppUserPrincipal user,
-            RedirectAttributes redirectAttributes) {
-        if (user == null) {
-            return "redirect:/login?redirect=/vocab%3Ftab%3Dmy";
-        }
-        try {
-            int created = vocabService.generateOwnedWordsWithAi(user.id(), targetSetId, mode, input, count);
-            redirectAttributes.addFlashAttribute("notice", "Đã tạo " + created + " từ bằng GPT/Gemini.");
-        } catch (RuntimeException exception) {
-            redirectAttributes.addFlashAttribute("error", errorMessage(exception));
-        }
-        return "redirect:/vocab/sets/" + targetSetId;
-    }
-
     @PostMapping("/vocab/my-folders")
     public String createMyFolder(
             @RequestParam String name,
