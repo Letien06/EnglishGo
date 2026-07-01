@@ -1,0 +1,98 @@
+<!DOCTYPE html>
+<html lang="vi" xmlns:th="http://www.thymeleaf.org">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Ghép đề thi - ENGLISHGO</title>
+    <link rel="stylesheet" th:href="@{/css/app.css}">
+</head>
+<body>
+<div class="app-shell">
+    <div th:replace="~{fragments/admin-shell :: sidebar}"></div>
+    <div class="app-main">
+        <div th:replace="~{fragments/admin-shell :: topbar('Ghép đề thi', 'Tạo đề TOEIC từ câu hỏi đã publish trong Question Bank')}"></div>
+        <main class="app-content wide admin-page">
+            <p class="admin-notice" th:if="${adminNotice}" th:text="${adminNotice}">Đã ghép đề.</p>
+            <p class="admin-notice danger" th:if="${adminError}" th:text="${adminError}">Có lỗi.</p>
+
+            <section class="ew-card admin-next-card">
+                <header class="admin-section-head">
+                    <div>
+                        <span>Test builder</span>
+                        <h2>Tạo đề từ Question Bank</h2>
+                        <p>Chỉ lấy câu hỏi `PUBLISHED`. Câu hỏi được link qua bảng `test_questions`, không bị copy và không mất tính độc lập.</p>
+                    </div>
+                </header>
+                <form class="admin-form" method="post" action="/admin/test-assembly">
+                    <div class="admin-form-grid">
+                        <label>Tiêu đề
+                            <input name="title" value="ENGLISHGO TOEIC Practice Test" required>
+                        </label>
+                        <label>Thời lượng
+                            <input name="duration" type="number" min="5" value="120">
+                        </label>
+                        <label>Độ khó / bộ
+                            <input name="difficulty" value="Question Bank">
+                        </label>
+                        <label>Trạng thái
+                            <select name="status">
+                                <option value="DRAFT" selected>DRAFT</option>
+                                <option value="PUBLISHED">PUBLISHED</option>
+                            </select>
+                        </label>
+                        <label>Số câu nghe
+                            <input name="listeningCount" type="number" min="0" max="100" value="100">
+                        </label>
+                        <label>Số câu đọc
+                            <input name="readingCount" type="number" min="0" max="100" value="100">
+                        </label>
+                    </div>
+                    <div class="admin-form-actions">
+                        <button class="admin-action-button publish" type="submit">Ghép đề</button>
+                    </div>
+                </form>
+            </section>
+
+            <section class="ew-card">
+                <header class="admin-section-head">
+                    <div>
+                        <span>Tests</span>
+                        <h2>Đề gần đây</h2>
+                    </div>
+                </header>
+                <div class="admin-table-wrap">
+                    <table class="data-table">
+                        <thead>
+                        <tr>
+                            <th>ID</th>
+                            <th>Tiêu đề</th>
+                            <th>Duration</th>
+                            <th>Status</th>
+                            <th>Câu hỏi link</th>
+                            <th>Actions</th>
+                        </tr>
+                        </thead>
+                        <tbody>
+                        <tr th:each="test : ${tests.content}">
+                            <td th:text="${test.id}">1</td>
+                            <td th:text="${test.title}">Test</td>
+                            <td th:text="${test.duration + ' phút'}">120 phút</td>
+                            <td><span class="ew-badge" th:text="${test.status}">DRAFT</span></td>
+                            <td th:text="${questionCounts[test.id]}">0</td>
+                            <td>
+                                <a class="admin-action-link edit" th:if="${test.status.name() == 'PUBLISHED'}" th:href="@{/tests/{id}/practice(id=${test.id})}">Mở đề</a>
+                            </td>
+                        </tr>
+                        <tr th:if="${tests.empty}">
+                            <td colspan="6">Chưa có đề nào.</td>
+                        </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </section>
+        </main>
+    </div>
+</div>
+<script th:src="@{/js/app-shell.js}"></script>
+</body>
+</html>

@@ -4,27 +4,36 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Lessons</title>
-    <style>
-        body { margin: 0; font-family: Inter, ui-sans-serif, system-ui, sans-serif; background: #f5f7fb; color: #172033; }
-        header { display: flex; justify-content: space-between; padding: 18px 28px; background: #fff; border-bottom: 1px solid #d9e1ec; }
-        main { width: min(94vw, 960px); margin: 32px auto; }
-        a { color: #2563eb; font-weight: 700; text-decoration: none; }
-        form, article { background: #fff; border: 1px solid #d9e1ec; border-radius: 8px; padding: 18px; margin-bottom: 14px; }
-        input { border: 1px solid #c8d3e1; border-radius: 6px; padding: 10px; font: inherit; }
-        button { border: 0; border-radius: 6px; padding: 10px 14px; background: #172033; color: #fff; font-weight: 700; }
-    </style>
+    <link rel="stylesheet" th:href="@{/css/app.css}">
 </head>
 <body>
-<header><strong>Lessons</strong><a href="/">Home</a></header>
-<main>
-    <form method="get" action="/lessons">
-        <input name="topic" th:value="${topic}" placeholder="Topic">
-        <button type="submit">Filter</button>
-    </form>
-    <article th:each="lesson : ${lessons.content}">
-        <h2><a th:href="@{/lessons/{id}(id=${lesson.id})}" th:text="${lesson.title}">Lesson</a></h2>
-        <p th:text="${lesson.topic}">Topic</p>
-    </article>
-</main>
+<div class="app-shell">
+    <div th:replace="~{fragments/shell :: sidebar}"></div>
+    <div class="app-main">
+        <div th:replace="~{fragments/shell :: topbar('Lessons', 'Short reading notes for TOEIC skills')}"></div>
+        <main class="app-content">
+            <form class="toolbar ew-card" method="get" action="/lessons">
+                <label class="form-field">Topic
+                    <input name="topic" th:value="${topic}" placeholder="Listening, grammar, reading">
+                </label>
+                <button type="submit">Filter</button>
+                <a class="ew-button secondary" href="/lessons">Clear</a>
+            </form>
+
+            <section class="ew-empty" th:if="${lessons.empty}">
+                No lessons found.
+            </section>
+
+            <section class="card-grid" th:unless="${lessons.empty}">
+                <article class="ew-card" th:each="lesson : ${lessons.content}">
+                    <span class="ew-badge" th:text="${lesson.topic}">Topic</span>
+                    <h2><a th:href="@{/lessons/{id}(id=${lesson.id})}" th:text="${lesson.title}">Lesson</a></h2>
+                </article>
+            </section>
+        </main>
+    </div>
+    <div th:replace="~{fragments/shell :: mobileNav}"></div>
+</div>
+<script th:src="@{/js/app-shell.js}"></script>
 </body>
 </html>

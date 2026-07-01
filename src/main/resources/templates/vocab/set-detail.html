@@ -1,0 +1,524 @@
+<!DOCTYPE html>
+<html lang="vi" xmlns:th="http://www.thymeleaf.org">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title th:text="${detail.set.title} + ' - ENGLISHGO'">Bộ từ vựng - ENGLISHGO</title>
+    <link rel="stylesheet" th:href="@{/css/app.css}">
+</head>
+<body class="landing-body vocab-body">
+<header th:replace="~{fragments/public-header :: main('vocab')}"></header>
+
+<main class="vocab-detail-page">
+    <nav class="vocab-detail-nav">
+        <a href="/vocab">‹ Từ vựng</a>
+        <a th:href="@{/vocab/sets/{id}/flashcards(id=${detail.set.id})}">Học flashcard</a>
+    </nav>
+
+    <section class="vocab-detail-heading">
+        <div>
+            <span class="vocab-set-label" th:text="${detail.set.topic}">TOEIC</span>
+            <h1 th:text="${detail.set.title}">Contracts</h1>
+            <p th:text="${detail.set.level} ?: 'Bộ từ vựng học TOEIC'">Bộ từ vựng học TOEIC</p>
+        </div>
+        <button class="vocab-ai-open" type="button" data-open-ai>⚡ Thêm từ với AI</button>
+    </section>
+
+    <section class="vocab-detail-alert success" th:if="${notice}" th:text="${notice}">Đã lưu</section>
+    <section class="vocab-detail-alert error" th:if="${error}" th:text="${error}">Có lỗi</section>
+
+    <section class="vocab-detail-stats">
+        <article class="total">
+            <span>▥</span>
+            <small>Tổng</small>
+            <strong th:text="${detail.totalWords}">0</strong>
+        </article>
+        <article class="mastered">
+            <span>✓</span>
+            <small>Thuộc</small>
+            <strong th:text="${detail.masteredWords}">0</strong>
+        </article>
+        <article class="learning">
+            <span>◷</span>
+            <small>Chưa</small>
+            <strong th:text="${detail.totalWords - detail.masteredWords}">0</strong>
+        </article>
+        <article class="percent">
+            <span>%</span>
+            <small>%</small>
+            <strong th:text="${detail.progressPercent + '%'}">0%</strong>
+        </article>
+    </section>
+
+    <section class="vocab-detail-toolbar">
+        <label>
+            <span>⌕</span>
+            <input id="vocabSearch" type="search" placeholder="Tìm từ...">
+        </label>
+        <select id="vocabFilter">
+            <option value="all">Tất cả</option>
+            <option value="mastered">Đã thuộc</option>
+            <option value="learning">Chưa thuộc</option>
+        </select>
+        <div>
+            <a th:href="@{/vocab/sets/{id}/flashcards(id=${detail.set.id},mode='quiz')}">Quiz</a>
+            <a th:href="@{/vocab/sets/{id}/flashcards(id=${detail.set.id},mode='mixed')}">Tổng hợp</a>
+            <button type="button" data-open-ai>⚡ Thêm từ với AI</button>
+        </div>
+    </section>
+
+    <section class="vocab-word-table-wrap">
+        <table class="vocab-word-table">
+            <thead>
+            <tr>
+                <th>Từ vựng</th>
+                <th>Nghĩa</th>
+                <th>Loại từ</th>
+                <th>Ví dụ</th>
+                <th>Thuộc</th>
+            </tr>
+            </thead>
+            <tbody id="vocabRows">
+            <tr th:each="word : ${detail.words}" th:attr="data-mastered=${word.mastered},data-keyword=${(word.word + ' ' + word.meaning).toLowerCase()}">
+                <td>
+                    <button class="vocab-sound" type="button" th:attr="data-word=${word.word},data-audio=${word.audioUrl}">♬</button>
+                    <strong th:text="${word.word}">word</strong>
+                    <small th:text="${word.phonetic}">/wɜːd/</small>
+                </td>
+                <td th:text="${word.meaning}">nghĩa</td>
+                <td><span class="vocab-pos" th:text="${word.partOfSpeech} ?: 'OTHER'">NOUN</span></td>
+                <td th:text="${word.example}">Example sentence.</td>
+                <td>
+                    <button class="vocab-master-toggle"
+                            type="button"
+                            th:classappend="${word.mastered} ? ' is-on'"
+                            th:attr="data-word-id=${word.id}"
+                            aria-label="Đánh dấu thuộc">
+                        <span></span>
+                    </button>
+                </td>
+            </tr>
+            </tbody>
+        </table>
+
+        <section class="vocab-empty-panel" th:if="${detail.words.empty}">
+            <span>▥</span>
+            <h2>Chưa có từ nào trong bộ này</h2>
+            <p>Dùng AI để tạo từ theo chủ đề, đoạn đọc hoặc hình ảnh.</p>
+            <button type="button" data-open-ai>⚡ Tạo từ với AI</button>
+        </section>
+    </section>
+</main>
+
+<section class="vocab-ai-modal" id="vocabAiModal" aria-hidden="true">
+    <div class="vocab-ai-backdrop" data-close-ai></div>
+    <form class="vocab-ai-dialog"
+          id="vocabAiForm"
+          th:attr="data-set-id=${detail.set.id}"
+          enctype="multipart/form-data">
+        <header>
+            <div>
+                <h2>⚡ Tạo từ vựng với AI</h2>
+                <p><b>Gemini</b> tạo từ theo chủ đề, đoạn đọc hoặc ảnh. Tối đa 50 từ/lần.</p>
+            </div>
+            <button type="button" data-close-ai>×</button>
+        </header>
+
+        <input type="hidden" name="mode" id="aiMode" value="topic">
+        <div class="vocab-ai-tabs">
+            <button class="is-active" type="button" data-ai-mode="topic">T Nhập chủ đề</button>
+            <button type="button" data-ai-mode="reading">▥ Đọc hiểu</button>
+            <button type="button" data-ai-mode="image">▧ Hình ảnh <small>BETA</small></button>
+        </div>
+
+        <div class="vocab-ai-pane" data-pane="text">
+            <textarea name="input"
+                      maxlength="2000"
+                      placeholder="Nhập chủ đề, ví dụ: workplace communication, technology, business planning..."></textarea>
+            <p id="aiHint">Nhập tên chủ đề hoặc ghi chú để Gemini tạo từ vựng phù hợp.</p>
+        </div>
+
+        <div class="vocab-ai-pane is-hidden" data-pane="image">
+            <label class="vocab-ai-drop">
+                <input id="aiImageInput" type="file" name="image" accept="image/png,image/jpeg,image/webp">
+                <span class="vocab-ai-drop-empty">⇧</span>
+                <strong class="vocab-ai-drop-empty">Kéo thả hoặc click để chọn ảnh</strong>
+                <small class="vocab-ai-drop-empty">JPG, PNG, WEBP - tối đa 5MB</small>
+                <img id="aiImagePreview" alt="Ảnh đã chọn" hidden>
+                <button id="aiImageRemove" type="button" hidden>Xóa ảnh</button>
+            </label>
+            <p>🖼️ AI sẽ nhận diện nội dung, chữ tiếng Anh và gợi ý từ vựng phù hợp từ hình ảnh.</p>
+        </div>
+
+        <label class="vocab-ai-count">
+            Số từ muốn tạo
+            <input type="number" name="count" min="1" max="50" value="10">
+        </label>
+
+        <section class="vocab-ai-progress is-hidden" id="aiProgress" aria-live="polite">
+            <div class="vocab-ai-dots">
+                <span></span><span></span><span></span><span></span><span></span>
+            </div>
+            <strong id="aiStatusText">AI đang suy nghĩ...</strong>
+            <div class="vocab-ai-bar"><span></span></div>
+        </section>
+
+        <section class="vocab-ai-results is-hidden" id="aiResults">
+            <header>
+                <h3 id="aiResultsTitle">Từ vựng đã tạo</h3>
+                <button type="button" id="aiSelectAll">Bỏ chọn tất cả</button>
+            </header>
+            <div class="vocab-ai-result-list" id="aiResultList"></div>
+        </section>
+
+        <button class="vocab-ai-submit" type="submit">⚡ Tạo từ vựng với AI</button>
+        <footer>
+            <button class="vocab-ai-save" id="aiSaveButton" type="button" disabled>Lưu từ đã chọn</button>
+            <button type="button" data-close-ai>Hủy</button>
+        </footer>
+    </form>
+</section>
+
+<script>
+    const modal = document.getElementById("vocabAiModal");
+    const aiForm = document.getElementById("vocabAiForm");
+    const aiProgress = document.getElementById("aiProgress");
+    const aiStatusText = document.getElementById("aiStatusText");
+    const aiGenerateButton = document.querySelector(".vocab-ai-submit");
+    const aiResults = document.getElementById("aiResults");
+    const aiResultsTitle = document.getElementById("aiResultsTitle");
+    const aiResultList = document.getElementById("aiResultList");
+    const aiSelectAll = document.getElementById("aiSelectAll");
+    const aiSaveButton = document.getElementById("aiSaveButton");
+    const aiImageInput = document.getElementById("aiImageInput");
+    const aiImagePreview = document.getElementById("aiImagePreview");
+    const aiImageRemove = document.getElementById("aiImageRemove");
+    const aiImageDrop = document.querySelector(".vocab-ai-drop");
+    const aiImageEmpty = document.querySelectorAll(".vocab-ai-drop-empty");
+    let aiCandidates = [];
+    let aiStatusTimer = null;
+    let aiImagePreviewUrl = null;
+
+    aiResults.before(aiGenerateButton);
+
+    const savedNotice = sessionStorage.getItem("vocabAiNotice");
+    if (savedNotice) {
+        sessionStorage.removeItem("vocabAiNotice");
+        const alert = document.createElement("section");
+        alert.className = "vocab-detail-alert success";
+        alert.textContent = savedNotice;
+        document.querySelector(".vocab-detail-heading").after(alert);
+    }
+
+    aiForm.addEventListener("submit", async event => {
+        event.preventDefault();
+        if (modeInput.value === "image" && !aiImageInput.files.length) {
+            stopAiProgress("Vui lòng chọn ảnh để AI quét và gợi ý từ.");
+            aiProgress.classList.add("is-error");
+            return;
+        }
+        startAiProgress();
+        aiCandidates = [];
+        renderAiCandidates();
+        aiGenerateButton.disabled = true;
+        aiGenerateButton.textContent = "Đang tạo...";
+        try {
+            const response = await fetch(`/api/vocab/sets/${aiForm.dataset.setId}/ai-words/preview`, {
+                method: "POST",
+                body: new FormData(aiForm)
+            });
+            const payload = await readJson(response);
+            if (!response.ok || !payload.success) {
+                throw new Error(payload.error || "Không thể tạo danh sách từ.");
+            }
+            aiCandidates = payload.data || [];
+            stopAiProgress("Đã tra từ điển xong. Hãy kiểm tra rồi chọn từ cần lưu.");
+            renderAiCandidates();
+        } catch (error) {
+            stopAiProgress(error.message || "Không thể tạo từ với AI.");
+            aiProgress.classList.add("is-error");
+        } finally {
+            aiGenerateButton.disabled = false;
+            aiGenerateButton.textContent = "Tạo danh sách kiểm tra";
+        }
+    });
+
+    aiSaveButton.addEventListener("click", async () => {
+        const selectedWords = selectedAiCandidates();
+        if (!selectedWords.length) {
+            return;
+        }
+        aiSaveButton.disabled = true;
+        aiSaveButton.textContent = "Đang lưu...";
+        try {
+            const response = await fetch(`/api/vocab/sets/${aiForm.dataset.setId}/ai-words/save`, {
+                method: "POST",
+                headers: {"Content-Type": "application/json"},
+                body: JSON.stringify({words: selectedWords})
+            });
+            const payload = await readJson(response);
+            if (!response.ok || !payload.success) {
+                throw new Error(payload.error || "Không thể lưu từ đã chọn.");
+            }
+            sessionStorage.setItem("vocabAiNotice", `Đã lưu ${payload.data} từ đã kiểm tra.`);
+            window.location.reload();
+        } catch (error) {
+            aiSaveButton.disabled = false;
+            aiSaveButton.textContent = `Lưu ${selectedWords.length} từ`;
+            stopAiProgress(error.message || "Không thể lưu từ đã chọn.");
+            aiProgress.classList.add("is-error");
+        }
+    });
+
+    aiSelectAll.addEventListener("click", () => {
+        const checkboxes = [...document.querySelectorAll(".vocab-ai-check")];
+        const shouldSelect = checkboxes.some(checkbox => !checkbox.checked);
+        checkboxes.forEach(checkbox => checkbox.checked = shouldSelect);
+        updateAiSelection();
+    });
+
+    function startAiProgress() {
+        aiProgress.classList.remove("is-hidden", "is-error");
+        const statuses = modeInput.value === "image"
+            ? [
+                "AI đang quét hình ảnh...",
+                "Đang nhận diện chữ và nội dung...",
+                "Đang chọn từ tiếng Anh phù hợp...",
+                "Đang tra cứu từ điển...",
+                "Đang hoàn thiện kết quả...",
+                "Sắp xong rồi..."
+            ]
+            : [
+                "AI đang suy nghĩ...",
+                "Đang chọn headword phù hợp...",
+                "Đang tra cứu từ điển...",
+                "Đang dịch nghĩa từ định nghĩa từ điển...",
+                "Đang hoàn thiện kết quả...",
+                "Sắp xong rồi..."
+            ];
+        let index = 0;
+        aiStatusText.textContent = statuses[index];
+        clearInterval(aiStatusTimer);
+        aiStatusTimer = setInterval(() => {
+            index = (index + 1) % statuses.length;
+            aiStatusText.textContent = statuses[index];
+        }, 1300);
+    }
+
+    function stopAiProgress(message) {
+        clearInterval(aiStatusTimer);
+        aiStatusText.textContent = message;
+        aiProgress.classList.remove("is-hidden");
+    }
+
+    async function readJson(response) {
+        try {
+            return await response.json();
+        } catch (error) {
+            return {success: false, error: "Server không trả về JSON hợp lệ."};
+        }
+    }
+
+    function renderAiCandidates() {
+        aiResults.classList.toggle("is-hidden", aiCandidates.length === 0);
+        aiResultList.innerHTML = aiCandidates.map((candidate, index) => `
+            <article class="vocab-ai-card">
+                <label>
+                    <input class="vocab-ai-check" type="checkbox" data-index="${index}" checked>
+                    <span></span>
+                </label>
+                <div>
+                    <h4>
+                        ${escapeHtml(candidate.word)}
+                        ${candidate.phonetic ? `<small>${escapeHtml(candidate.phonetic)}</small>` : ""}
+                        <b>${escapeHtml(candidate.partOfSpeech || "OTHER")}</b>
+                    </h4>
+                    <p>${escapeHtml(candidate.meaning)}</p>
+                    ${candidate.example ? `<em>"${escapeHtml(candidate.example)}"</em>` : ""}
+                    <details>
+                        <summary>Nguồn từ điển</summary>
+                        <span>${escapeHtml(candidate.dictionaryDefinition || "")}</span>
+                    </details>
+                </div>
+                <button type="button" data-speak="${escapeHtml(candidate.word)}">Âm</button>
+            </article>
+        `).join("");
+        document.querySelectorAll(".vocab-ai-check").forEach(checkbox => checkbox.addEventListener("change", updateAiSelection));
+        document.querySelectorAll("[data-speak]").forEach(button => button.addEventListener("click", () => speak(button.dataset.speak)));
+        updateAiSelection();
+        if (aiCandidates.length) {
+            aiResults.scrollIntoView({block: "center", behavior: "smooth"});
+        }
+    }
+
+    function selectedAiCandidates() {
+        return [...document.querySelectorAll(".vocab-ai-check:checked")]
+            .map(checkbox => aiCandidates[Number(checkbox.dataset.index)])
+            .filter(Boolean);
+    }
+
+    function updateAiSelection() {
+        const selectedCount = selectedAiCandidates().length;
+        const totalCount = aiCandidates.length;
+        aiResultsTitle.textContent = `Từ vựng đã tạo (${selectedCount}/${totalCount})`;
+        aiSaveButton.disabled = selectedCount === 0;
+        aiSaveButton.textContent = selectedCount ? `Lưu ${selectedCount} từ` : "Chưa chọn từ";
+        aiSelectAll.textContent = selectedCount === totalCount ? "Bỏ chọn tất cả" : "Chọn tất cả";
+    }
+
+    function escapeHtml(value) {
+        return String(value || "")
+            .replaceAll("&", "&amp;")
+            .replaceAll("<", "&lt;")
+            .replaceAll(">", "&gt;")
+            .replaceAll('"', "&quot;")
+            .replaceAll("'", "&#039;");
+    }
+
+    function speak(word) {
+        if ("speechSynthesis" in window) {
+            window.speechSynthesis.speak(new SpeechSynthesisUtterance(word));
+        }
+    }
+
+    aiImageInput.addEventListener("change", () => {
+        showImagePreview(aiImageInput.files[0]);
+    });
+    aiImageRemove.addEventListener("click", event => {
+        event.preventDefault();
+        event.stopPropagation();
+        aiImageInput.value = "";
+        clearImagePreview();
+    });
+    ["dragenter", "dragover"].forEach(type => aiImageDrop.addEventListener(type, event => {
+        event.preventDefault();
+        aiImageDrop.classList.add("is-dragging");
+    }));
+    ["dragleave", "drop"].forEach(type => aiImageDrop.addEventListener(type, event => {
+        event.preventDefault();
+        aiImageDrop.classList.remove("is-dragging");
+    }));
+    aiImageDrop.addEventListener("drop", event => {
+        const file = event.dataTransfer.files[0];
+        if (!file) return;
+        const transfer = new DataTransfer();
+        transfer.items.add(file);
+        aiImageInput.files = transfer.files;
+        showImagePreview(file);
+    });
+
+    function showImagePreview(file) {
+        if (!file) {
+            clearImagePreview();
+            return;
+        }
+        if (!["image/jpeg", "image/png", "image/webp"].includes(file.type)) {
+            aiImageInput.value = "";
+            clearImagePreview();
+            stopAiProgress("Chỉ hỗ trợ ảnh JPG, PNG hoặc WEBP.");
+            aiProgress.classList.add("is-error");
+            return;
+        }
+        if (file.size > 5 * 1024 * 1024) {
+            aiImageInput.value = "";
+            clearImagePreview();
+            stopAiProgress("Ảnh tối đa 5MB.");
+            aiProgress.classList.add("is-error");
+            return;
+        }
+        if (aiImagePreviewUrl) {
+            URL.revokeObjectURL(aiImagePreviewUrl);
+        }
+        aiImagePreviewUrl = URL.createObjectURL(file);
+        aiImagePreview.src = aiImagePreviewUrl;
+        aiImagePreview.hidden = false;
+        aiImageRemove.hidden = false;
+        aiImageDrop.classList.add("has-image");
+        aiImageEmpty.forEach(item => item.hidden = true);
+    }
+
+    function clearImagePreview() {
+        if (aiImagePreviewUrl) {
+            URL.revokeObjectURL(aiImagePreviewUrl);
+            aiImagePreviewUrl = null;
+        }
+        aiImagePreview.removeAttribute("src");
+        aiImagePreview.hidden = true;
+        aiImageRemove.hidden = true;
+        aiImageDrop.classList.remove("has-image");
+        aiImageEmpty.forEach(item => item.hidden = false);
+    }
+
+    document.querySelectorAll("[data-open-ai]").forEach(button => button.addEventListener("click", () => {
+        modal.classList.add("is-open");
+        modal.setAttribute("aria-hidden", "false");
+    }));
+    document.querySelectorAll("[data-close-ai]").forEach(button => button.addEventListener("click", () => {
+        modal.classList.remove("is-open");
+        modal.setAttribute("aria-hidden", "true");
+    }));
+
+    const modeInput = document.getElementById("aiMode");
+    const hint = document.getElementById("aiHint");
+    const textPane = document.querySelector('[data-pane="text"]');
+    const imagePane = document.querySelector('[data-pane="image"]');
+    document.querySelectorAll("[data-ai-mode]").forEach(button => button.addEventListener("click", () => {
+        document.querySelectorAll("[data-ai-mode]").forEach(item => item.classList.remove("is-active"));
+        button.classList.add("is-active");
+        const mode = button.dataset.aiMode;
+        modeInput.value = mode;
+        imagePane.classList.toggle("is-hidden", mode !== "image");
+        textPane.classList.toggle("is-hidden", mode === "image");
+        const textarea = textPane.querySelector("textarea");
+        if (mode === "reading") {
+            textarea.placeholder = "Paste đoạn văn tiếng Anh vào đây để Gemini trích xuất từ vựng...";
+            hint.textContent = "Dán đoạn đọc tiếng Anh; Gemini sẽ chọn các từ/cụm từ quan trọng.";
+        } else {
+            textarea.placeholder = "Nhập chủ đề, ví dụ: workplace communication, technology, business planning...";
+            hint.textContent = "Nhập tên chủ đề hoặc ghi chú để Gemini tạo từ vựng phù hợp.";
+        }
+    }));
+
+    const search = document.getElementById("vocabSearch");
+    const filter = document.getElementById("vocabFilter");
+    function filterRows() {
+        const query = search.value.trim().toLowerCase();
+        const mode = filter.value;
+        document.querySelectorAll("#vocabRows tr").forEach(row => {
+            const matchesText = !query || row.dataset.keyword.includes(query);
+            const mastered = row.dataset.mastered === "true";
+            const matchesFilter = mode === "all" || (mode === "mastered" && mastered) || (mode === "learning" && !mastered);
+            row.hidden = !(matchesText && matchesFilter);
+        });
+    }
+    search.addEventListener("input", filterRows);
+    filter.addEventListener("change", filterRows);
+
+    document.querySelectorAll(".vocab-sound").forEach(button => button.addEventListener("click", () => {
+        const audio = button.dataset.audio;
+        if (audio) {
+            new Audio(audio).play();
+            return;
+        }
+        if ("speechSynthesis" in window) {
+            window.speechSynthesis.speak(new SpeechSynthesisUtterance(button.dataset.word));
+        }
+    }));
+
+    document.querySelectorAll(".vocab-master-toggle").forEach(button => button.addEventListener("click", async () => {
+        const response = await fetch(`/api/vocab/words/${button.dataset.wordId}/review`, {
+            method: "POST",
+            headers: {"Content-Type": "application/json"},
+            body: JSON.stringify({quality: 5})
+        });
+        if (response.status === 401 || response.status === 403) {
+            window.location.href = "/login?redirect=" + encodeURIComponent(window.location.pathname);
+            return;
+        }
+        button.classList.add("is-on");
+        button.closest("tr").dataset.mastered = "true";
+        filterRows();
+    }));
+</script>
+</body>
+</html>

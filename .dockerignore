@@ -1,0 +1,12 @@
+.git
+.agents
+.mvn/wrapper/maven-wrapper.jar
+target
+logs
+node_modules
+.env
+.env.local
+src/main/resources/application-dev.yml
+firebase-service-account*.json
+serviceAccountKey.json
+*.service-account.json

@@ -7,7 +7,8 @@
 
 ## 1. Bối cảnh dự án
 
-Nền tảng web học tiếng Anh (tương tự luyentu.com): luyện đề TOEIC/IELTS, học từ vựng (flashcard + SRS), theo dõi tiến độ.
+Nền tảng web học TOEIC Dautoeic-style cho mục đích học cá nhân: hub học tập, luyện Listening/Reading/Grammar/Vocabulary/Mock Test, luyện lại câu sai/câu đã đánh dấu, theo dõi tiến độ. Tất cả tính năng học là free; không thiết kế paywall, bán gói, checkout hay Premium.
+Nguồn nội dung đi theo 2 luồng hợp pháp: AI generate câu hỏi TOEIC-style mới và CMS/community/import do admin/teacher/contributor nhập. Không copy đề/câu hỏi/audio từ Dautoeic, Study4, sách/PDF thương mại hay web khác khi không có quyền. Nội dung AI/import phải ở trạng thái draft/pending review trước, admin duyệt mới publish vào question bank.
 Xem chi tiết thiết kế trong `workflow.md`.
 
 **Ưu tiên MVP:** Auth (Firebase) -> Luyện đề (làm bài, chấm điểm, xem đáp án) -> Lịch sử làm bài.
@@ -97,6 +98,39 @@ Xem chi tiết thiết kế trong `workflow.md`.
 - Tối ưu ảnh (lazy-load ảnh câu hỏi), preload audio khi vào part nghe.
 - Tránh layout shift (đặt kích thước ảnh/khung cố định).
 - Gộp + minify CSS/JS qua build (Tailwind purge unused classes).
+
+### 5.4. Form & Validation UX
+- **Validate 2 lớp:** client-side (HTML5 + Alpine, feedback ngay khi blur/submit) **và** server-side (Bean Validation) — không tin client.
+- **Hiển thị lỗi inline** ngay dưới field bị lỗi (không alert tổng), giữ giá trị người dùng đã nhập khi reload form lỗi (Thymeleaf `th:field` + `BindingResult`).
+- **Disable nút submit** + hiện spinner khi đang gửi, tránh double-submit (đặc biệt quan trọng cho nút "Nộp bài").
+
+### 5.5. Luồng làm bài thi (đặc thù nghiệp vụ)
+- **Cảnh báo rời trang:** dùng `beforeunload` để confirm khi người dùng đang làm bài mà bấm back/đóng tab.
+- **Chống mất dữ liệu khi mất mạng:** auto-save retry khi mất kết nối, hiện trạng thái "Đang lưu / Lỗi mạng, sẽ lưu lại" (không chỉ happy-path).
+- **Phím tắt điều hướng:** mũi tên trái/phải hoặc số 1-4 để chọn đáp án nhanh, đặc biệt hữu ích khi luyện TOEIC tốc độ cao.
+- **Đồng bộ thời gian với server:** không chỉ dùng `setInterval` phía client cho đếm giờ — tính lệch giờ so với server để tránh gian lận / lệch giờ máy người dùng.
+- **Audio Listening part:** custom player (không dùng control mặc định của browser) để chặn tua/replay nếu đề yêu cầu nghe 1 lần, hoặc cho phép replay có giới hạn theo rule đề.
+
+### 5.6. Component bổ sung cụ thể
+- **Modal/Dialog** dùng Alpine (`x-show` + `x-transition`) cho xác nhận nộp bài, xem giải thích đáp án.
+- **Tabs** cho trang xem kết quả (Tổng quan / Theo Part / Theo dạng câu).
+- **Progress bar** hiển thị số câu đã làm / tổng số câu, tách màu theo trạng thái (đã làm, đánh dấu review, chưa làm).
+- **Biểu đồ thống kê** (điểm theo thời gian, % đúng theo kỹ năng) — dùng Chart.js, load qua CDN, chỉ render khi có dữ liệu thật.
+- **Skeleton loading** cụ thể cho từng loại nội dung (câu hỏi, danh sách đề, flashcard) thay vì chỉ spinner chung.
+
+### 5.7. Bảo mật & dữ liệu phía FE
+- **CSRF token:** Spring Security tạo CSRF token, nhúng vào meta tag, HTMX tự đọc và gửi kèm header trong mọi request ghi (`hx-headers` hoặc cấu hình global).
+- **Chống XSS khi render nội dung do giáo viên/admin nhập** (đề bài, giải thích đáp án): escape mặc định của Thymeleaf (`th:text` không phải `th:utext`) trừ khi đã sanitize.
+- **Không lưu dữ liệu nhạy cảm ở localStorage** (token Firebase chỉ giữ session ngắn hạn, không cache câu trả lời đề thi ở client lâu dài).
+
+### 5.8. Đa ngôn ngữ & Accessibility nâng cao
+- **i18n cơ bản:** dùng Thymeleaf `messages.properties` (vi/en) nếu app phục vụ cả người Việt học tiếng Anh và có thể mở rộng ngôn ngữ khác.
+- **Focus management:** khi mở modal, focus tự nhảy vào modal; đóng modal trả focus về nút đã mở (quan trọng cho keyboard/screen reader user).
+- **ARIA cho component động:** `aria-live` cho vùng thông báo toast/đồng hồ đếm ngược, `aria-expanded` cho dropdown/accordion.
+
+### 5.9. PWA & hiệu năng nâng cao (optional, không bắt buộc MVP)
+- Cân nhắc **Service Worker** cache static asset (Tailwind CSS, JS) để load nhanh lần sau — chỉ làm nếu task yêu cầu, tránh over-engineer ở MVP.
+- **Preconnect/dns-prefetch** tới domain S3/object storage chứa ảnh/audio để giảm latency tải media câu hỏi nghe.
 
 ---
 

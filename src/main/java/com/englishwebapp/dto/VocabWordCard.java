@@ -4,6 +4,7 @@ public record VocabWordCard(
         Long id,
         String word,
         String meaning,
+        String partOfSpeech,
         String phonetic,
         String example,
         String audioUrl) {

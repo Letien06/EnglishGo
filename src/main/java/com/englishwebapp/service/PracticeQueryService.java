@@ -5,9 +5,11 @@ import com.englishwebapp.dto.PracticeSessionView;
 import com.englishwebapp.dto.ReviewAnswerView;
 import com.englishwebapp.entity.AcceptedAnswer;
 import com.englishwebapp.entity.AnswerOption;
+import com.englishwebapp.entity.ContentStatus;
 import com.englishwebapp.entity.DraftAnswer;
 import com.englishwebapp.entity.Question;
 import com.englishwebapp.entity.Test;
+import com.englishwebapp.entity.TestQuestion;
 import com.englishwebapp.entity.UserAnswer;
 import com.englishwebapp.entity.UserAttempt;
 import com.englishwebapp.repository.AcceptedAnswerRepository;
@@ -16,6 +18,7 @@ import com.englishwebapp.repository.DraftAnswerRepository;
 import com.englishwebapp.repository.QuestionGroupRepository;
 import com.englishwebapp.repository.QuestionRepository;
 import com.englishwebapp.repository.TestRepository;
+import com.englishwebapp.repository.TestQuestionRepository;
 import com.englishwebapp.repository.UserAnswerRepository;
 import com.englishwebapp.repository.UserAttemptRepository;
 import jakarta.persistence.criteria.Predicate;
@@ -38,6 +41,7 @@ import org.springframework.web.server.ResponseStatusException;
 public class PracticeQueryService {
 
     private final TestRepository testRepository;
+    private final TestQuestionRepository testQuestionRepository;
     private final QuestionRepository questionRepository;
     private final QuestionGroupRepository questionGroupRepository;
     private final AnswerOptionRepository answerOptionRepository;
@@ -53,9 +57,16 @@ public class PracticeQueryService {
 
     @Transactional(readOnly = true)
     public PracticeSessionView getPracticeSession(Long testId, Long userId) {
-        Test test = testRepository.findById(testId)
+        Test test = testRepository.findByIdAndStatus(testId, ContentStatus.PUBLISHED)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Test not found"));
-        List<Question> questions = questionRepository.findByTestIdOrderByPartAscIdAsc(testId);
+        List<Question> questions = testQuestionRepository.findByTestIdOrderByDisplayOrderAscIdAsc(testId)
+                .stream()
+                .map(TestQuestion::getQuestion)
+                .filter(question -> question.getStatus() == ContentStatus.PUBLISHED)
+                .toList();
+        if (questions.isEmpty()) {
+            questions = questionRepository.findByTestIdAndStatusOrderByPartAscIdAsc(testId, ContentStatus.PUBLISHED);
+        }
         List<Long> questionIds = questions.stream().map(Question::getId).toList();
         Map<Long, List<AnswerOption>> optionsByQuestionId = answerOptionRepository
                 .findByQuestionIdInOrderByIdAsc(questionIds)
@@ -114,6 +125,7 @@ public class PracticeQueryService {
             if (StringUtils.hasText(difficulty)) {
                 predicates.add(criteriaBuilder.equal(root.get("difficulty"), difficulty));
             }
+            predicates.add(criteriaBuilder.equal(root.get("status"), ContentStatus.PUBLISHED));
             return criteriaBuilder.and(predicates.toArray(Predicate[]::new));
         };
     }

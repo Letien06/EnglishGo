@@ -1,111 +1,95 @@
 <!DOCTYPE html>
-<html lang="en" xmlns:th="http://www.thymeleaf.org">
+<html lang="vi" xmlns:th="http://www.thymeleaf.org">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Login - EnglishWebApp</title>
-    <style>
-        :root {
-            color-scheme: light;
-            font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
-        }
-
-        body {
-            min-height: 100vh;
-            margin: 0;
-            display: grid;
-            place-items: center;
-            background: #f5f7fb;
-            color: #172033;
-        }
-
-        main {
-            width: min(92vw, 420px);
-            background: #ffffff;
-            border: 1px solid #d9e1ec;
-            border-radius: 8px;
-            padding: 28px;
-            box-shadow: 0 18px 45px rgba(30, 41, 59, 0.12);
-        }
-
-        h1 {
-            margin: 0 0 6px;
-            font-size: 1.75rem;
-            line-height: 1.2;
-        }
-
-        p {
-            margin: 0 0 22px;
-            color: #5f6f86;
-        }
-
-        label {
-            display: block;
-            margin: 14px 0 6px;
-            font-weight: 600;
-        }
-
-        input {
-            width: 100%;
-            box-sizing: border-box;
-            border: 1px solid #c8d3e1;
-            border-radius: 6px;
-            padding: 12px;
-            font: inherit;
-        }
-
-        button {
-            width: 100%;
-            border: 0;
-            border-radius: 6px;
-            padding: 12px 14px;
-            font: inherit;
-            font-weight: 700;
-            cursor: pointer;
-        }
-
-        button:disabled {
-            cursor: not-allowed;
-            opacity: 0.65;
-        }
-
-        .primary {
-            margin-top: 18px;
-            background: #2563eb;
-            color: #ffffff;
-        }
-
-        .secondary {
-            margin-top: 12px;
-            background: #172033;
-            color: #ffffff;
-        }
-
-        .error {
-            min-height: 20px;
-            margin-top: 14px;
-            color: #b42318;
-            font-weight: 600;
-        }
-    </style>
+    <title th:text="${mode == 'signup'} ? 'Đăng ký - ENGLISHGO' : 'Đăng nhập - ENGLISHGO'">Đăng nhập - ENGLISHGO</title>
+    <link rel="stylesheet" th:href="@{/css/app.css}">
 </head>
-<body>
-<main>
-    <h1>EnglishWebApp</h1>
-    <p>Sign in to continue.</p>
+<body class="auth-page">
+<main class="auth-layout">
+    <section class="auth-form-panel">
+        <a class="auth-brand" href="/">
+            <span class="landing-logo">E</span>
+            <strong>ENGLISHGO</strong>
+        </a>
 
-    <form id="email-form">
-        <label for="email">Email</label>
-        <input id="email" name="email" type="email" autocomplete="email" required>
+        <section class="auth-card">
+            <h1 th:text="${mode == 'signup'} ? 'Tạo tài khoản' : 'Chào mừng trở lại'">Chào mừng trở lại</h1>
+            <p th:text="${mode == 'signup'} ? 'Đăng ký nhanh chóng và an toàn bằng tài khoản Google của bạn.' : 'Đăng nhập nhanh bằng Google để tiếp tục học.'">
+                Đăng nhập nhanh bằng Google để tiếp tục học.
+            </p>
 
-        <label for="password">Password</label>
-        <input id="password" name="password" type="password" autocomplete="current-password" required>
+            <button class="auth-google-button" id="google-button" type="button">
+                <span>G</span>
+                <strong th:text="${mode == 'signup'} ? 'Đăng ký với Google' : 'Đăng nhập với Google'">Đăng nhập với Google</strong>
+            </button>
 
-        <button class="primary" id="email-button" type="submit">Sign in</button>
-    </form>
+            <button class="auth-toggle-email" id="email-toggle" type="button" th:if="${mode == 'login'}">
+                Đã có tài khoản email? Đăng nhập bằng email/mật khẩu⌄
+            </button>
 
-    <button class="secondary" id="google-button" type="button">Continue with Google</button>
-    <div class="error" id="auth-error" role="alert"></div>
+            <form id="email-form" class="auth-email-form" th:if="${mode == 'login'}" hidden>
+                <label for="email">Email</label>
+                <input id="email" name="email" type="email" autocomplete="email" required>
+
+                <label for="password">Mật khẩu</label>
+                <input id="password" name="password" type="password" autocomplete="current-password" required>
+
+                <button class="auth-submit-button" id="email-button" type="submit">Đăng nhập</button>
+            </form>
+
+            <p class="auth-note" th:if="${mode == 'signup'}">Bằng việc đăng ký, bạn đồng ý với điều khoản sử dụng của chúng tôi.</p>
+
+            <p class="auth-switch" th:if="${mode == 'login'}">
+                Chưa có tài khoản? <a href="/signup">Đăng ký</a>
+            </p>
+            <p class="auth-switch" th:if="${mode == 'signup'}">
+                Đã có tài khoản? <a href="/login">Đăng nhập</a>
+            </p>
+
+            <div class="auth-error" id="auth-error" role="alert"></div>
+        </section>
+    </section>
+
+    <section class="auth-marketing">
+        <div class="auth-mini-logo">E</div>
+        <h2 th:text="${mode == 'signup'} ? 'Bắt Đầu Hành Trình TOEIC' : 'Chinh Phục TOEIC cùng ENGLISHGO'">
+            Chinh Phục TOEIC cùng ENGLISHGO
+        </h2>
+        <p th:if="${mode == 'login'}">Nền tảng luyện thi TOEIC toàn diện: luyện nghe, ngữ pháp, từ vựng, đề thi thử và đọc hiểu</p>
+        <p th:if="${mode == 'signup'}">Nền tảng luyện thi TOEIC toàn diện với đầy đủ kỹ năng Nghe - Đọc - Ngữ pháp - Từ vựng</p>
+
+        <ul class="auth-benefits" th:if="${mode == 'signup'}">
+            <li>Luyện nghe 4 chế độ thông minh</li>
+            <li>Luyện đề thi thử TOEIC</li>
+            <li>Học ngữ pháp & từ vựng</li>
+            <li>Theo dõi tiến độ học tập</li>
+        </ul>
+
+        <div class="auth-stats">
+            <article>
+                <span>♬</span>
+                <strong>7773+</strong>
+                <small>Bài nghe</small>
+            </article>
+            <article>
+                <span>▥</span>
+                <strong>997+</strong>
+                <small>Câu hỏi</small>
+            </article>
+            <article>
+                <span>▧</span>
+                <strong>75+</strong>
+                <small>Đề thi</small>
+            </article>
+            <article>
+                <span>▤</span>
+                <strong>37659+</strong>
+                <small>Học viên</small>
+            </article>
+        </div>
+    </section>
 </main>
 
 <script type="module" th:inline="javascript">
@@ -127,10 +111,12 @@
     const errorBox = document.getElementById("auth-error");
     const emailButton = document.getElementById("email-button");
     const googleButton = document.getElementById("google-button");
+    const emailForm = document.getElementById("email-form");
+    const emailToggle = document.getElementById("email-toggle");
     const firebaseReady = firebaseConfig.apiKey && firebaseConfig.authDomain && firebaseConfig.projectId && firebaseConfig.appId;
 
     if (!firebaseReady) {
-        emailButton.disabled = true;
+        if (emailButton) emailButton.disabled = true;
         googleButton.disabled = true;
         errorBox.textContent = "Firebase web config is missing.";
     }
@@ -138,6 +124,21 @@
     const app = firebaseReady ? initializeApp(firebaseConfig) : null;
     const auth = firebaseReady ? getAuth(app) : null;
     const provider = firebaseReady ? new GoogleAuthProvider() : null;
+
+    async function redirectIfAlreadySignedIn() {
+        try {
+            const response = await fetch("/auth/status", {
+                headers: {"Accept": "application/json"},
+                cache: "no-store"
+            });
+            const result = await response.json();
+            if (result.success && result.data) {
+                window.location.replace("/");
+            }
+        } catch (error) {
+            console.debug("Auth status check skipped", error);
+        }
+    }
 
     async function createBackendSession(firebaseUser) {
         const idToken = await firebaseUser.getIdToken();
@@ -165,15 +166,23 @@
         }
     }
 
-    document.getElementById("email-form").addEventListener("submit", (event) => {
-        event.preventDefault();
-        runAuth(emailButton, async () => {
-            const email = document.getElementById("email").value;
-            const password = document.getElementById("password").value;
-            const credential = await signInWithEmailAndPassword(auth, email, password);
-            await createBackendSession(credential.user);
+    if (emailToggle && emailForm) {
+        emailToggle.addEventListener("click", () => {
+            emailForm.hidden = !emailForm.hidden;
         });
-    });
+    }
+
+    if (emailForm) {
+        emailForm.addEventListener("submit", (event) => {
+            event.preventDefault();
+            runAuth(emailButton, async () => {
+                const email = document.getElementById("email").value;
+                const password = document.getElementById("password").value;
+                const credential = await signInWithEmailAndPassword(auth, email, password);
+                await createBackendSession(credential.user);
+            });
+        });
+    }
 
     googleButton.addEventListener("click", () => {
         runAuth(googleButton, async () => {
@@ -181,6 +190,8 @@
             await createBackendSession(credential.user);
         });
     });
+
+    window.addEventListener("pageshow", redirectIfAlreadySignedIn);
 </script>
 </body>
 </html>

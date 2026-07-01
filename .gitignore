@@ -1,6 +1,7 @@
 # Maven
 target/
 .m2/
+logs/
 
 # IDE
 .idea/
@@ -14,7 +15,6 @@ target/
 .env
 .env.local
 src/main/resources/application-dev.yml
-src/main/resources/application-prod.yml
 firebase-service-account*.json
 serviceAccountKey.json
 *.service-account.json

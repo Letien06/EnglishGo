@@ -1,0 +1,284 @@
+<!DOCTYPE html>
+<html lang="vi" xmlns:th="http://www.thymeleaf.org">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Admin Content - ENGLISHGO</title>
+    <link rel="stylesheet" th:href="@{/css/app.css}">
+</head>
+<body>
+<div class="app-shell">
+    <div th:replace="~{fragments/shell :: sidebar}"></div>
+    <div class="app-main">
+        <div th:replace="~{fragments/shell :: topbar('Content CMS', 'Quản lý nội dung theo module giống trang học của user')}"></div>
+        <main class="app-content wide admin-page">
+            <nav th:replace="~{fragments/shell :: adminTabs}"></nav>
+
+            <p class="admin-notice" th:if="${adminNotice}" th:text="${adminNotice}">Đã lưu.</p>
+
+            <section class="admin-two-col">
+                <article class="ew-card" th:if="${#strings.contains(currentPath, 'mock-test')}">
+                    <h2>Tạo đề thi</h2>
+                    <form class="admin-form" method="post" action="/admin/tests">
+                        <label>Tiêu đề <input name="title" required placeholder="ETS 2026 - Test 1"></label>
+                        <label>Loại <input name="type" value="TOEIC" required></label>
+                        <label>Thời lượng <input name="duration" type="number" value="120" min="1" required></label>
+                        <label>Nhãn nguồn <input name="difficulty" value="ETS 2026"></label>
+                        <label>Trạng thái
+                            <select name="status">
+                                <option th:each="status : ${statuses}" th:value="${status}" th:text="${status}">DRAFT</option>
+                            </select>
+                        </label>
+                        <label>Nguồn
+                            <select name="sourceType">
+                                <option th:each="sourceType : ${sourceTypes}" th:value="${sourceType}" th:text="${sourceType}">MANUAL</option>
+                            </select>
+                        </label>
+                        <label>Ghi chú nguồn <textarea name="sourceNote"></textarea></label>
+                        <label>Ghi chú bản quyền <textarea name="licenseNote" placeholder="Tôi có quyền sử dụng nội dung này"></textarea></label>
+                        <button type="submit">Lưu đề thi</button>
+                    </form>
+                </article>
+
+                <article class="ew-card" th:if="${#strings.contains(currentPath, 'reading')}">
+                    <h2>Tạo bài đọc / bài học</h2>
+                    <form class="admin-form" method="post" action="/admin/lessons">
+                        <label>Tiêu đề <input name="title" required placeholder="Business email basics"></label>
+                        <label>Chủ đề <input name="topic" required placeholder="Reading Part 7"></label>
+                        <label>Nội dung <textarea name="content" required></textarea></label>
+                        <label>Video URL <input name="videoUrl"></label>
+                        <label>Trạng thái
+                            <select name="status">
+                                <option th:each="status : ${statuses}" th:value="${status}" th:text="${status}">DRAFT</option>
+                            </select>
+                        </label>
+                        <label>Nguồn
+                            <select name="sourceType">
+                                <option th:each="sourceType : ${sourceTypes}" th:value="${sourceType}" th:text="${sourceType}">MANUAL</option>
+                            </select>
+                        </label>
+                        <label>Ghi chú nguồn <textarea name="sourceNote"></textarea></label>
+                        <label>Ghi chú bản quyền <textarea name="licenseNote"></textarea></label>
+                        <button type="submit">Lưu bài đọc</button>
+                    </form>
+                </article>
+
+                <article class="ew-card" th:if="${#strings.contains(currentPath, 'listening') or #strings.contains(currentPath, 'reading') or #strings.contains(currentPath, 'mock-test')}">
+                    <h2 th:text="${#strings.contains(currentPath, 'listening')} ? 'Tạo câu hỏi nghe' : (${#strings.contains(currentPath, 'reading')} ? 'Tạo câu hỏi đọc' : 'Tạo câu hỏi đề thi')">Tạo câu hỏi</h2>
+                    <form class="admin-form" method="post" action="/admin/questions">
+                        <input type="hidden" name="redirectTo" th:value="${currentPath}">
+                        <label>Đề thi / ngân hàng
+                            <select name="testId" required>
+                                <option th:each="test : ${tests}" th:value="${test.id}" th:text="${test.title}">Test</option>
+                            </select>
+                        </label>
+                        <label>Part <input name="part" type="number" th:value="${#strings.contains(currentPath, 'listening')} ? 1 : 5" min="1" max="7" required></label>
+                        <label>Type <input name="type" value="MULTIPLE_CHOICE" required></label>
+                        <label>Nội dung <textarea name="content" required></textarea></label>
+                        <label>Audio URL <input name="audioUrl" placeholder="/media/audio.mp3"></label>
+                        <label>Image URL <input name="imageUrl" placeholder="/media/image.png"></label>
+                        <label>Giải thích <textarea name="explanation"></textarea></label>
+                        <label>Option A <input name="optionA"></label>
+                        <label>Option B <input name="optionB"></label>
+                        <label>Option C <input name="optionC"></label>
+                        <label>Option D <input name="optionD"></label>
+                        <label>Đáp án đúng <input name="correctOption" value="A"></label>
+                        <label>Accepted answer cho text/dictation <input name="acceptedAnswer"></label>
+                        <label>Trạng thái
+                            <select name="status">
+                                <option th:each="status : ${statuses}" th:value="${status}" th:text="${status}">DRAFT</option>
+                            </select>
+                        </label>
+                        <label>Nguồn
+                            <select name="sourceType">
+                                <option th:each="sourceType : ${sourceTypes}" th:value="${sourceType}" th:text="${sourceType}">MANUAL</option>
+                            </select>
+                        </label>
+                        <label>Ghi chú nguồn <textarea name="sourceNote"></textarea></label>
+                        <label>Ghi chú bản quyền <textarea name="licenseNote"></textarea></label>
+                        <button type="submit">Lưu câu hỏi</button>
+                    </form>
+                </article>
+
+                <article class="ew-card" th:if="${#strings.contains(currentPath, 'vocabulary')}">
+                    <h2>Tạo bộ từ vựng</h2>
+                    <form class="admin-form" method="post" action="/admin/vocab-sets">
+                        <label>Tiêu đề <input name="title" required></label>
+                        <label>Topic <input name="topic" required></label>
+                        <label>Level <input name="level"></label>
+                        <label>Trạng thái
+                            <select name="status">
+                                <option th:each="status : ${statuses}" th:value="${status}" th:text="${status}">DRAFT</option>
+                            </select>
+                        </label>
+                        <label>Nguồn
+                            <select name="sourceType">
+                                <option th:each="sourceType : ${sourceTypes}" th:value="${sourceType}" th:text="${sourceType}">MANUAL</option>
+                            </select>
+                        </label>
+                        <label>Ghi chú nguồn <textarea name="sourceNote"></textarea></label>
+                        <label>Ghi chú bản quyền <textarea name="licenseNote"></textarea></label>
+                        <button type="submit">Lưu bộ từ</button>
+                    </form>
+                </article>
+
+                <article class="ew-card" th:if="${#strings.contains(currentPath, 'vocabulary')}">
+                    <h2>Thêm từ</h2>
+                    <form class="admin-form" method="post" action="/admin/vocab-words">
+                        <label>Bộ từ
+                            <select name="setId" required>
+                                <option th:each="set : ${vocabSets}" th:value="${set.id}" th:text="${set.title}">Set</option>
+                            </select>
+                        </label>
+                        <label>Word <input name="word" required></label>
+                        <label>Meaning <textarea name="meaning" required></textarea></label>
+                        <label>Phonetic <input name="phonetic"></label>
+                        <label>Example <textarea name="example"></textarea></label>
+                        <label>Audio URL <input name="audioUrl"></label>
+                        <label>Trạng thái
+                            <select name="status">
+                                <option th:each="status : ${statuses}" th:value="${status}" th:text="${status}">DRAFT</option>
+                            </select>
+                        </label>
+                        <label>Nguồn
+                            <select name="sourceType">
+                                <option th:each="sourceType : ${sourceTypes}" th:value="${sourceType}" th:text="${sourceType}">MANUAL</option>
+                            </select>
+                        </label>
+                        <label>Ghi chú nguồn <textarea name="sourceNote"></textarea></label>
+                        <label>Ghi chú bản quyền <textarea name="licenseNote"></textarea></label>
+                        <button type="submit">Lưu từ</button>
+                    </form>
+                </article>
+            </section>
+
+            <section class="ew-card" th:if="${#strings.contains(currentPath, 'mock-test')}">
+                <h2>Đề thi gần đây</h2>
+                <div class="admin-table-wrap">
+                    <table class="data-table">
+                        <thead><tr><th>ID</th><th>Title</th><th>Status</th><th>Source</th><th>Actions</th></tr></thead>
+                        <tbody>
+                        <tr th:each="test : ${tests}">
+                            <td th:text="${test.id}">1</td>
+                            <td th:text="${test.title}">Test</td>
+                            <td><span class="ew-badge" th:text="${test.status}">DRAFT</span></td>
+                            <td th:text="${test.sourceType}">MANUAL</td>
+                            <td class="admin-actions">
+                                <a class="admin-action-link edit" th:href="@{/admin/tests/{id}/edit(id=${test.id})}">Sửa</a>
+                                <form method="post" th:if="${test.status.name() != 'PUBLISHED'}" th:action="@{/admin/tests/{id}/publish(id=${test.id})}"><button class="admin-action-button publish" type="submit">Publish</button></form>
+                                <form method="post" th:if="${test.status.name() != 'ARCHIVED'}" th:action="@{/admin/tests/{id}/archive(id=${test.id})}"><button class="admin-action-button archive" type="submit">Archive</button></form>
+                                <form method="post" th:action="@{/admin/tests/{id}/delete(id=${test.id})}"><button class="admin-action-button danger" type="submit">Xóa</button></form>
+                            </td>
+                        </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </section>
+
+            <section class="ew-card" th:if="${#strings.contains(currentPath, 'reading')}">
+                <h2>Bài đọc / bài học gần đây</h2>
+                <div class="admin-table-wrap">
+                    <table class="data-table">
+                        <thead><tr><th>ID</th><th>Title</th><th>Topic</th><th>Status</th><th>Actions</th></tr></thead>
+                        <tbody>
+                        <tr th:each="lesson : ${lessons}">
+                            <td th:text="${lesson.id}">1</td>
+                            <td th:text="${lesson.title}">Lesson</td>
+                            <td th:text="${lesson.topic}">Topic</td>
+                            <td><span class="ew-badge" th:text="${lesson.status}">DRAFT</span></td>
+                            <td class="admin-actions">
+                                <a class="admin-action-link edit" th:href="@{/admin/lessons/{id}/edit(id=${lesson.id})}">Sửa</a>
+                                <form method="post" th:if="${lesson.status.name() != 'PUBLISHED'}" th:action="@{/admin/lessons/{id}/publish(id=${lesson.id})}"><button class="admin-action-button publish" type="submit">Publish</button></form>
+                                <form method="post" th:if="${lesson.status.name() != 'ARCHIVED'}" th:action="@{/admin/lessons/{id}/archive(id=${lesson.id})}"><button class="admin-action-button archive" type="submit">Archive</button></form>
+                                <form method="post" th:action="@{/admin/lessons/{id}/delete(id=${lesson.id})}"><button class="admin-action-button danger" type="submit">Xóa</button></form>
+                            </td>
+                        </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </section>
+
+            <section class="ew-card" th:if="${#strings.contains(currentPath, 'listening') or #strings.contains(currentPath, 'reading') or #strings.contains(currentPath, 'mock-test')}">
+                <h2>Câu hỏi gần đây</h2>
+                <div class="admin-table-wrap">
+                    <table class="data-table">
+                        <thead><tr><th>ID</th><th>Part</th><th>Content</th><th>Status</th><th>Actions</th></tr></thead>
+                        <tbody>
+                        <tr th:each="question : ${questions}">
+                            <td th:text="${question.id}">1</td>
+                            <td th:text="${question.part}">5</td>
+                            <td class="admin-truncate" th:text="${question.content}">Question</td>
+                            <td><span class="ew-badge" th:text="${question.status}">DRAFT</span></td>
+                            <td class="admin-actions">
+                                <a class="admin-action-link edit" th:href="@{/admin/questions/{id}/edit(id=${question.id})}">Sửa</a>
+                                <form method="post" th:if="${question.status.name() != 'PUBLISHED'}" th:action="@{/admin/questions/{id}/publish(id=${question.id})}">
+                                    <input type="hidden" name="redirectTo" th:value="${currentPath}">
+                                    <button class="admin-action-button publish" type="submit">Publish</button>
+                                </form>
+                                <form method="post" th:if="${question.status.name() != 'ARCHIVED'}" th:action="@{/admin/questions/{id}/archive(id=${question.id})}">
+                                    <input type="hidden" name="redirectTo" th:value="${currentPath}">
+                                    <button class="admin-action-button archive" type="submit">Archive</button>
+                                </form>
+                                <form method="post" th:action="@{/admin/questions/{id}/delete(id=${question.id})}">
+                                    <input type="hidden" name="redirectTo" th:value="${currentPath}">
+                                    <button class="admin-action-button danger" type="submit">Xóa</button>
+                                </form>
+                            </td>
+                        </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </section>
+
+            <section class="ew-card" th:if="${#strings.contains(currentPath, 'vocabulary')}">
+                <h2>Bộ từ vựng</h2>
+                <div class="admin-table-wrap">
+                    <table class="data-table">
+                        <thead><tr><th>ID</th><th>Title</th><th>Topic</th><th>Status</th><th>Actions</th></tr></thead>
+                        <tbody>
+                        <tr th:each="set : ${vocabSets}">
+                            <td th:text="${set.id}">1</td>
+                            <td th:text="${set.title}">Set</td>
+                            <td th:text="${set.topic}">Topic</td>
+                            <td><span class="ew-badge" th:text="${set.status}">DRAFT</span></td>
+                            <td class="admin-actions">
+                                <a class="admin-action-link edit" th:href="@{/admin/vocab-sets/{id}/edit(id=${set.id})}">Sửa</a>
+                                <form method="post" th:if="${set.status.name() != 'PUBLISHED'}" th:action="@{/admin/vocab-sets/{id}/publish(id=${set.id})}"><button class="admin-action-button publish" type="submit">Publish</button></form>
+                                <form method="post" th:if="${set.status.name() != 'ARCHIVED'}" th:action="@{/admin/vocab-sets/{id}/archive(id=${set.id})}"><button class="admin-action-button archive" type="submit">Archive</button></form>
+                                <form method="post" th:action="@{/admin/vocab-sets/{id}/delete(id=${set.id})}"><button class="admin-action-button danger" type="submit">Xóa</button></form>
+                            </td>
+                        </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </section>
+
+            <section class="ew-card" th:if="${#strings.contains(currentPath, 'vocabulary')}">
+                <h2>Từ vựng gần đây</h2>
+                <div class="admin-table-wrap">
+                    <table class="data-table">
+                        <thead><tr><th>ID</th><th>Word</th><th>Meaning</th><th>Status</th><th>Actions</th></tr></thead>
+                        <tbody>
+                        <tr th:each="word : ${vocabWords}">
+                            <td th:text="${word.id}">1</td>
+                            <td th:text="${word.word}">contract</td>
+                            <td class="admin-truncate" th:text="${word.meaning}">meaning</td>
+                            <td><span class="ew-badge" th:text="${word.status}">DRAFT</span></td>
+                            <td class="admin-actions">
+                                <a class="admin-action-link edit" th:href="@{/admin/vocab-words/{id}/edit(id=${word.id})}">Sửa</a>
+                                <form method="post" th:if="${word.status.name() != 'PUBLISHED'}" th:action="@{/admin/vocab-words/{id}/publish(id=${word.id})}"><button class="admin-action-button publish" type="submit">Publish</button></form>
+                                <form method="post" th:if="${word.status.name() != 'ARCHIVED'}" th:action="@{/admin/vocab-words/{id}/archive(id=${word.id})}"><button class="admin-action-button archive" type="submit">Archive</button></form>
+                                <form method="post" th:action="@{/admin/vocab-words/{id}/delete(id=${word.id})}"><button class="admin-action-button danger" type="submit">Xóa</button></form>
+                            </td>
+                        </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </section>
+        </main>
+    </div>
+    <div th:replace="~{fragments/shell :: mobileNav}"></div>
+</div>
+<script th:src="@{/js/app-shell.js}"></script>
+</body>
+</html>

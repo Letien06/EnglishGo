@@ -6,6 +6,7 @@ import com.englishwebapp.dto.PracticeSubmissionRequest;
 import com.englishwebapp.dto.PracticeSubmissionResponse;
 import com.englishwebapp.entity.AcceptedAnswer;
 import com.englishwebapp.entity.AnswerOption;
+import com.englishwebapp.entity.ContentStatus;
 import com.englishwebapp.entity.DraftAnswer;
 import com.englishwebapp.entity.Question;
 import com.englishwebapp.entity.Test;
@@ -65,7 +66,7 @@ public class PracticeSubmissionService {
     public PracticeSubmissionResponse submit(Long userId, Long testId, PracticeSubmissionRequest request) {
         User user = findUser(userId);
         Test test = findTest(testId);
-        List<Question> questions = questionRepository.findByTestIdOrderByPartAscIdAsc(testId);
+        List<Question> questions = questionRepository.findByTestIdAndStatusOrderByPartAscIdAsc(testId, ContentStatus.PUBLISHED);
         if (questions.isEmpty()) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Test has no questions");
         }
@@ -151,7 +152,7 @@ public class PracticeSubmissionService {
     }
 
     private Test findTest(Long testId) {
-        return testRepository.findById(testId)
+        return testRepository.findByIdAndStatus(testId, ContentStatus.PUBLISHED)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Test not found"));
     }
 }

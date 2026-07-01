@@ -4,21 +4,22 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title th:text="${lesson.title}">Lesson</title>
-    <style>
-        body { margin: 0; font-family: Inter, ui-sans-serif, system-ui, sans-serif; background: #f5f7fb; color: #172033; }
-        header { display: flex; justify-content: space-between; padding: 18px 28px; background: #fff; border-bottom: 1px solid #d9e1ec; }
-        main { width: min(94vw, 860px); margin: 32px auto; background: #fff; border: 1px solid #d9e1ec; border-radius: 8px; padding: 24px; }
-        a { color: #2563eb; font-weight: 700; text-decoration: none; }
-        .content { white-space: pre-wrap; line-height: 1.7; }
-    </style>
+    <link rel="stylesheet" th:href="@{/css/app.css}">
 </head>
 <body>
-<header><strong>Lesson</strong><a href="/lessons">Lessons</a></header>
-<main>
-    <h1 th:text="${lesson.title}">Lesson</h1>
-    <p th:text="${lesson.topic}">Topic</p>
-    <p class="content" th:text="${lesson.content}">Content</p>
-    <a th:if="${lesson.videoUrl != null}" th:href="${lesson.videoUrl}">Video</a>
-</main>
+<div class="app-shell">
+    <div th:replace="~{fragments/shell :: sidebar}"></div>
+    <div class="app-main">
+        <div th:replace="~{fragments/shell :: topbar(${lesson.title}, ${lesson.topic})}"></div>
+        <main class="app-content narrow">
+            <article class="ew-card">
+                <p class="lesson-content" th:text="${lesson.content}">Content</p>
+                <a class="ew-button" th:if="${lesson.videoUrl != null}" th:href="${lesson.videoUrl}">Open video</a>
+            </article>
+        </main>
+    </div>
+    <div th:replace="~{fragments/shell :: mobileNav}"></div>
+</div>
+<script th:src="@{/js/app-shell.js}"></script>
 </body>
 </html>

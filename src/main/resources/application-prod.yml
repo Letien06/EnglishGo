@@ -1,0 +1,23 @@
+spring:
+  datasource:
+    url: ${DATABASE_URL}
+    username: ${DATABASE_USERNAME}
+    password: ${DATABASE_PASSWORD}
+    driver-class-name: org.postgresql.Driver
+    hikari:
+      maximum-pool-size: ${DATABASE_POOL_SIZE:5}
+
+  jpa:
+    database-platform: org.hibernate.dialect.PostgreSQLDialect
+    hibernate:
+      ddl-auto: validate
+
+  flyway:
+    locations: classpath:db/migration/postgresql
+
+server:
+  port: ${PORT:8080}
+
+app:
+  media-base-url: ${MEDIA_BASE_URL:}
+  upload-dir: ${UPLOAD_DIR:/tmp/englishwebapp-uploads}

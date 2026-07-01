@@ -1,0 +1,22 @@
+package com.englishwebapp.controller;
+
+import com.englishwebapp.security.AppUserPrincipal;
+import com.englishwebapp.service.HubService;
+import lombok.RequiredArgsConstructor;
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
+import org.springframework.stereotype.Controller;
+import org.springframework.ui.Model;
+import org.springframework.web.bind.annotation.GetMapping;
+
+@Controller
+@RequiredArgsConstructor
+public class HubController {
+
+    private final HubService hubService;
+
+    @GetMapping("/hub")
+    public String hub(@AuthenticationPrincipal AppUserPrincipal user, Model model) {
+        model.addAttribute("hub", hubService.getHub(user));
+        return "hub/index";
+    }
+}

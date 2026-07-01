@@ -1,0 +1,159 @@
+<!DOCTYPE html>
+<html lang="vi" xmlns:th="http://www.thymeleaf.org">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Nhóm câu hỏi - ENGLISHGO</title>
+    <link rel="stylesheet" th:href="@{/css/app.css}">
+</head>
+<body>
+<div class="app-shell">
+    <div th:replace="~{fragments/admin-shell :: sidebar}"></div>
+    <div class="app-main">
+        <div th:replace="~{fragments/admin-shell :: topbar('Nhóm câu hỏi', 'Audio chung cho Part 3/4 và passage cho Part 6/7')}"></div>
+        <main class="app-content wide admin-page">
+            <p class="admin-notice" th:if="${adminNotice}" th:text="${adminNotice}">Đã lưu.</p>
+            <p class="admin-notice danger" th:if="${adminError}" th:text="${adminError}">Có lỗi.</p>
+
+            <section class="ew-card admin-next-card">
+                <header class="admin-section-head">
+                    <div>
+                        <span>Create group</span>
+                        <h2>Tạo nhóm câu hỏi</h2>
+                        <p>Listening Part 3/4 cần audio chung. Reading Part 6/7 cần passage HTML.</p>
+                    </div>
+                </header>
+                <form class="admin-form" method="post" action="/admin/question-groups">
+                    <div class="admin-form-grid">
+                        <label>Kỹ năng
+                            <select name="skillType" required>
+                                <option th:each="skill : ${skillTypes}" th:value="${skill}" th:text="${skill}">LISTENING</option>
+                            </select>
+                        </label>
+                        <label>Part
+                            <select name="part" required>
+                                <option value="PART_3">PART_3</option>
+                                <option value="PART_4">PART_4</option>
+                                <option value="PART_6">PART_6</option>
+                                <option value="PART_7">PART_7</option>
+                            </select>
+                        </label>
+                        <label>Độ khó
+                            <select name="difficultyLevel">
+                                <option value="">Không đặt</option>
+                                <option th:each="level : ${#numbers.sequence(1,5)}" th:value="${level}" th:text="${'Level ' + level}">Level 1</option>
+                            </select>
+                        </label>
+                        <label>Tiêu đề
+                            <input name="title" required placeholder="ETS 2026 - Part 3 - Conversation 01">
+                        </label>
+                    </div>
+                    <label>Passage HTML
+                        <textarea name="passageHtml" rows="5" placeholder="<p>Reading passage...</p>"></textarea>
+                    </label>
+                    <div class="admin-upload-grid">
+                        <label>Audio URL
+                            <input name="audioUrl" id="groupAudioUrl" placeholder="/media/audio/file.mp3">
+                            <input type="file" id="groupAudioUpload" accept="audio/mpeg,audio/mp3">
+                        </label>
+                        <div class="admin-preview-box">
+                            <audio id="groupAudioPreview" controls></audio>
+                        </div>
+                        <label>Image URL
+                            <input name="imageUrl" id="groupImageUrl" placeholder="/media/images/file.png">
+                            <input type="file" id="groupImageUpload" accept="image/png,image/jpeg">
+                        </label>
+                        <div class="admin-preview-box">
+                            <img id="groupImagePreview" alt="Preview ảnh">
+                        </div>
+                    </div>
+                    <div class="admin-form-actions">
+                        <button class="admin-action-button publish" type="submit">Tạo draft</button>
+                    </div>
+                </form>
+            </section>
+
+            <section class="ew-card">
+                <header class="admin-section-head">
+                    <div>
+                        <span>Groups</span>
+                        <h2>Danh sách nhóm</h2>
+                    </div>
+                </header>
+                <div class="admin-table-wrap">
+                    <table class="data-table">
+                        <thead>
+                        <tr>
+                            <th>ID</th>
+                            <th>Kỹ năng</th>
+                            <th>Part</th>
+                            <th>Tiêu đề</th>
+                            <th>Media / Passage</th>
+                            <th>Câu hỏi</th>
+                            <th>Status</th>
+                            <th>Actions</th>
+                        </tr>
+                        </thead>
+                        <tbody>
+                        <tr th:each="group : ${groups.content}">
+                            <td th:text="${group.id}">1</td>
+                            <td th:text="${group.skillType}">LISTENING</td>
+                            <td th:text="${'PART_' + group.part}">PART_3</td>
+                            <td th:text="${group.title}">Title</td>
+                            <td>
+                                <span th:if="${group.audioUrl != null}">Audio</span>
+                                <span th:if="${group.passageHtml != null}">Passage</span>
+                                <span th:if="${group.audioUrl == null && group.passageHtml == null}">Chưa có</span>
+                            </td>
+                            <td th:text="${questionCounts[group.id]}">0</td>
+                            <td><span class="ew-badge" th:text="${group.status}">DRAFT</span></td>
+                            <td>
+                                <div class="admin-actions">
+                                    <form method="post" th:if="${group.status.name() != 'PUBLISHED'}" th:action="@{/admin/question-groups/{id}/publish(id=${group.id})}">
+                                        <button class="admin-action-button publish" type="submit">Publish</button>
+                                    </form>
+                                    <form method="post" th:if="${group.status.name() == 'PUBLISHED'}" th:action="@{/admin/question-groups/{id}/draft(id=${group.id})}">
+                                        <button class="admin-action-button archive" type="submit">Draft</button>
+                                    </form>
+                                    <form method="post" th:action="@{/admin/question-groups/{id}/delete(id=${group.id})}">
+                                        <button class="admin-action-button danger" type="submit">Xóa</button>
+                                    </form>
+                                </div>
+                            </td>
+                        </tr>
+                        <tr th:if="${groups.empty}">
+                            <td colspan="8">Chưa có nhóm câu hỏi nào.</td>
+                        </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </section>
+        </main>
+    </div>
+</div>
+<script th:src="@{/js/app-shell.js}"></script>
+<script>
+const uploadAdminMedia = async (fileInput, mediaType, urlInput, preview) => {
+    const file = fileInput.files && fileInput.files[0];
+    if (!file) return;
+    const body = new FormData();
+    body.append('mediaType', mediaType);
+    body.append('file', file);
+    const response = await fetch('/admin/api/media/upload', { method: 'POST', body });
+    if (!response.ok) {
+        alert('Upload không thành công.');
+        return;
+    }
+    const data = await response.json();
+    urlInput.value = data.publicUrl;
+    preview.src = data.publicUrl;
+};
+document.getElementById('groupAudioUpload')?.addEventListener('change', (event) => {
+    uploadAdminMedia(event.currentTarget, 'AUDIO', document.getElementById('groupAudioUrl'), document.getElementById('groupAudioPreview'));
+});
+document.getElementById('groupImageUpload')?.addEventListener('change', (event) => {
+    uploadAdminMedia(event.currentTarget, 'IMAGE', document.getElementById('groupImageUrl'), document.getElementById('groupImagePreview'));
+});
+</script>
+</body>
+</html>

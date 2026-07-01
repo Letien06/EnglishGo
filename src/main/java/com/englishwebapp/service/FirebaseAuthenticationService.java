@@ -1,5 +1,6 @@
 package com.englishwebapp.service;
 
+import com.englishwebapp.config.AppProperties;
 import com.englishwebapp.entity.User;
 import com.englishwebapp.entity.UserRole;
 import com.englishwebapp.repository.UserRepository;
@@ -20,6 +21,7 @@ public class FirebaseAuthenticationService {
 
     private final ObjectProvider<FirebaseAuth> firebaseAuthProvider;
     private final UserRepository userRepository;
+    private final AppProperties appProperties;
 
     @Transactional
     public User verifyAndProvisionUser(String idToken) {
@@ -48,14 +50,21 @@ public class FirebaseAuthenticationService {
         user.setEmail(resolveEmail(decodedToken));
         user.setDisplayName(decodedToken.getName());
         user.setAvatarUrl(decodedToken.getPicture());
-        user.setRole(UserRole.STUDENT);
+        user.setRole(resolveProvisionedRole(user.getEmail()));
         return userRepository.save(user);
     }
 
     private User updateUserProfile(User user, FirebaseToken decodedToken) {
         user.setEmail(resolveEmail(decodedToken));
-        user.setDisplayName(decodedToken.getName());
-        user.setAvatarUrl(decodedToken.getPicture());
+        if (!StringUtils.hasText(user.getDisplayName())) {
+            user.setDisplayName(decodedToken.getName());
+        }
+        if (!StringUtils.hasText(user.getAvatarUrl())) {
+            user.setAvatarUrl(decodedToken.getPicture());
+        }
+        if (resolveProvisionedRole(user.getEmail()) == UserRole.ADMIN) {
+            user.setRole(UserRole.ADMIN);
+        }
         return userRepository.save(user);
     }
 
@@ -64,5 +73,16 @@ public class FirebaseAuthenticationService {
             return decodedToken.getEmail();
         }
         return decodedToken.getUid() + "@firebase.local";
+    }
+
+    private UserRole resolveProvisionedRole(String email) {
+        if (!StringUtils.hasText(email)) {
+            return UserRole.STUDENT;
+        }
+        boolean isAdmin = appProperties.getAdminEmails().stream()
+                .filter(StringUtils::hasText)
+                .map(String::trim)
+                .anyMatch(adminEmail -> adminEmail.equalsIgnoreCase(email));
+        return isAdmin ? UserRole.ADMIN : UserRole.STUDENT;
     }
 }

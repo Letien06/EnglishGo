@@ -1,0 +1,35 @@
+<!DOCTYPE html>
+<html lang="vi" xmlns:th="http://www.thymeleaf.org">
+<body>
+<header th:fragment="main(active)" class="landing-header dash-header">
+    <a class="landing-brand" href="/">
+        <span class="landing-logo">E</span>
+        <strong>ENGLISHGO</strong>
+    </a>
+
+    <nav class="landing-nav" aria-label="Main navigation">
+        <a th:classappend="${active == 'listen'} ? ' is-active'" href="/listen"><span class="nav-purple">♫</span> Nghe</a>
+        <a th:classappend="${active == 'read'} ? ' is-active'" href="/read"><span class="nav-blue">▥</span> Đọc</a>
+        <a th:classappend="${active == 'vocab'} ? ' is-active'" href="/vocab"><span class="nav-green">A</span> Từ vựng</a>
+        <a th:classappend="${active == 'tests'} ? ' is-active'" href="/mock-test"><span class="nav-orange">▧</span> Đề thi</a>
+    </nav>
+
+    <div class="landing-actions" th:if="${shellUser == null}">
+        <button class="theme-button" type="button" aria-label="Đổi giao diện">☾</button>
+        <a class="login-link" href="/login">Đăng nhập</a>
+        <a class="register-button" href="/signup">Đăng ký</a>
+    </div>
+    <div class="dash-actions" th:if="${shellUser != null}">
+        <span class="streak-pill"><span>♨</span> 2</span>
+        <button class="theme-button" type="button" aria-label="Đổi giao diện">☾</button>
+        <button class="dash-icon-button" type="button" aria-label="Thông báo">
+            ♢
+            <span class="notice-badge">5</span>
+        </button>
+        <a class="dash-avatar" href="/account" aria-label="Tài khoản">
+            <span th:text="${#strings.substring(shellUser.displayName() ?: shellUser.email(), 0, 1)}">E</span>
+        </a>
+    </div>
+</header>
+</body>
+</html>

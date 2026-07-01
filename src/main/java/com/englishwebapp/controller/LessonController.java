@@ -1,5 +1,6 @@
 package com.englishwebapp.controller;
 
+import com.englishwebapp.entity.ContentStatus;
 import com.englishwebapp.repository.LessonRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Pageable;
@@ -25,15 +26,15 @@ public class LessonController {
             @PageableDefault(size = 12) Pageable pageable,
             Model model) {
         model.addAttribute("lessons", StringUtils.hasText(topic)
-                ? lessonRepository.findByTopicContainingIgnoreCase(topic, pageable)
-                : lessonRepository.findAll(pageable));
+                ? lessonRepository.findByTopicContainingIgnoreCaseAndStatus(topic, ContentStatus.PUBLISHED, pageable)
+                : lessonRepository.findByStatus(ContentStatus.PUBLISHED, pageable));
         model.addAttribute("topic", topic);
         return "lessons/list";
     }
 
     @GetMapping("/lessons/{lessonId}")
     public String lesson(@PathVariable Long lessonId, Model model) {
-        model.addAttribute("lesson", lessonRepository.findById(lessonId)
+        model.addAttribute("lesson", lessonRepository.findByIdAndStatus(lessonId, ContentStatus.PUBLISHED)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Lesson not found")));
         return "lessons/detail";
     }

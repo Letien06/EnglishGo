@@ -3,56 +3,29 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Billing</title>
-    <style>
-        body { margin: 0; font-family: Inter, ui-sans-serif, system-ui, sans-serif; background: #f5f7fb; color: #172033; }
-        header { display: flex; justify-content: space-between; padding: 18px 28px; background: #fff; border-bottom: 1px solid #d9e1ec; }
-        main { width: min(94vw, 960px); margin: 32px auto; }
-        a { color: #2563eb; font-weight: 700; text-decoration: none; }
-        .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 14px; }
-        article, section { background: #fff; border: 1px solid #d9e1ec; border-radius: 8px; padding: 18px; margin-bottom: 18px; }
-        button { border: 0; border-radius: 6px; padding: 10px 14px; background: #172033; color: #fff; font-weight: 700; }
-        select { border: 1px solid #c8d3e1; border-radius: 6px; padding: 10px; font: inherit; }
-    </style>
+    <title>Free Access</title>
+    <link rel="stylesheet" th:href="@{/css/app.css}">
 </head>
 <body>
-<header><strong>Billing</strong><a href="/">Home</a></header>
-<main>
-    <p th:if="${message}" th:text="${message}">Message</p>
-    <section>
-        <h1>Current subscription</h1>
-        <p th:if="${subscription == null}">No active subscription.</p>
-        <p th:if="${subscription != null}">
-            <strong th:text="${subscription.planId}">PLAN</strong>
-            until <span th:text="${subscription.endDate}">date</span>
-        </p>
-    </section>
-    <div class="grid">
-        <article th:each="plan : ${plans}">
-            <h2 th:text="${plan.key}">PLAN</h2>
-            <p><strong th:text="${plan.value}">0</strong> VND</p>
-            <form method="post" action="/billing/checkout">
-                <input type="hidden" name="planId" th:value="${plan.key}">
-                <select name="provider">
-                    <option value="VNPAY">VNPay</option>
-                    <option value="MOMO">MoMo</option>
-                    <option value="PAYPAL">PayPal</option>
-                </select>
-                <button type="submit">Activate</button>
-            </form>
-        </article>
+<div class="app-shell">
+    <div th:replace="~{fragments/shell :: sidebar}"></div>
+    <div class="app-main">
+        <div th:replace="~{fragments/shell :: topbar('Free access', 'All learning features are free for students')}"></div>
+        <main class="app-content narrow">
+            <section class="ew-card">
+                <span class="ew-badge">FREE</span>
+                <h2>No paid plans</h2>
+                <p>This project is for learning, so practice tests, vocabulary, lessons, community, and AI-assisted study flows stay free.</p>
+                <div class="button-row">
+                    <a class="ew-button" href="/tests">Practice tests</a>
+                    <a class="ew-button secondary" href="/vocab">Vocabulary</a>
+                </div>
+            </section>
+            <section class="ew-alert" th:if="${message}" th:text="${message}">Message</section>
+        </main>
     </div>
-    <section>
-        <h2>Recent transactions</h2>
-        <p th:if="${transactions.empty}">No transactions yet.</p>
-        <ul>
-            <li th:each="transaction : ${transactions}">
-                <span th:text="${transaction.provider}">Provider</span>
-                <span th:text="${transaction.amount}">0</span>
-                <span th:text="${transaction.status}">PAID</span>
-            </li>
-        </ul>
-    </section>
-</main>
+    <div th:replace="~{fragments/shell :: mobileNav}"></div>
+</div>
+<script th:src="@{/js/app-shell.js}"></script>
 </body>
 </html>

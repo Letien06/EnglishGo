@@ -1,0 +1,62 @@
+<!DOCTYPE html>
+<html lang="en" xmlns:th="http://www.thymeleaf.org">
+<body>
+<aside th:fragment="sidebar" class="app-sidebar">
+    <a class="app-brand" href="/">
+        <span class="app-brand-mark">E</span>
+        <span>
+            <strong>ENGLISHGO</strong>
+            <small>Free TOEIC practice</small>
+        </span>
+    </a>
+
+    <nav class="app-nav" aria-label="Primary navigation">
+        <a th:each="item : ${navItems}"
+           th:href="@{${item.href}}"
+           class="app-nav-link"
+           th:classappend="${item.href == '/' ? currentPath == '/' : #strings.startsWith(currentPath, item.href)} ? ' is-active'">
+            <span class="app-nav-icon" th:text="${item.shortLabel}">D</span>
+            <span th:text="${item.label}">Dashboard</span>
+        </a>
+    </nav>
+
+    <div class="app-sidebar-note">
+        <strong>Free-first content</strong>
+        <span>AI generated practice and teacher/community imports are tracked in the roadmap.</span>
+    </div>
+</aside>
+
+<header th:fragment="topbar(pageTitle, pageSubtitle)" class="app-topbar">
+    <div>
+        <p class="app-eyebrow">Learning workspace</p>
+        <h1 th:text="${pageTitle}">Dashboard</h1>
+        <p th:if="${pageSubtitle != null}" th:text="${pageSubtitle}">Track your progress</p>
+    </div>
+    <div class="app-topbar-actions">
+        <span class="ew-badge" th:if="${shellUser != null}" th:text="${shellUser.role}">STUDENT</span>
+        <button class="ew-button secondary compact" type="button" data-logout-button>Sign out</button>
+    </div>
+</header>
+
+<nav th:fragment="mobileNav" class="app-mobile-nav" aria-label="Mobile navigation">
+    <a th:each="item : ${navItems}"
+       th:href="@{${item.href}}"
+       th:classappend="${item.href == '/' ? currentPath == '/' : #strings.startsWith(currentPath, item.href)} ? ' is-active'">
+        <span th:text="${item.shortLabel}">D</span>
+        <small th:text="${item.label}">Dashboard</small>
+    </a>
+</nav>
+
+<nav th:fragment="adminTabs" class="admin-module-tabs">
+    <a th:classappend="${currentPath == '/admin'} ? ' is-active'" href="/admin">Tổng quan</a>
+    <a th:classappend="${#strings.contains(currentPath, 'listening')} ? ' is-active'" href="/admin/listening">Nghe</a>
+    <a th:classappend="${#strings.contains(currentPath, 'reading')} ? ' is-active'" href="/admin/reading">Đọc</a>
+    <a th:classappend="${#strings.contains(currentPath, 'vocabulary')} ? ' is-active'" href="/admin/vocabulary">Từ vựng</a>
+    <a th:classappend="${#strings.contains(currentPath, 'mock-test')} ? ' is-active'" href="/admin/mock-test">Đề thi</a>
+    <a th:classappend="${#strings.contains(currentPath, 'import')} ? ' is-active'" href="/admin/import">Import</a>
+    <a th:classappend="${#strings.contains(currentPath, 'generate')} ? ' is-active'" href="/admin/generate">AI Generate</a>
+    <a th:classappend="${#strings.contains(currentPath, 'content-review')} ? ' is-active'" href="/admin/content-review">Review Queue</a>
+    <a th:classappend="${#strings.contains(currentPath, 'users')} ? ' is-active'" href="/admin/users">Người dùng</a>
+</nav>
+</body>
+</html>

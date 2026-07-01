@@ -3,54 +3,47 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>History - EnglishWebApp</title>
-    <style>
-        body { margin: 0; font-family: Inter, ui-sans-serif, system-ui, sans-serif; background: #f5f7fb; color: #172033; }
-        header { display: flex; justify-content: space-between; align-items: center; padding: 18px 28px; background: #fff; border-bottom: 1px solid #d9e1ec; }
-        main { width: min(94vw, 980px); margin: 32px auto; }
-        a { color: #2563eb; text-decoration: none; font-weight: 700; }
-        table { width: 100%; border-collapse: collapse; background: #fff; border: 1px solid #d9e1ec; border-radius: 8px; overflow: hidden; }
-        th, td { padding: 14px 16px; border-bottom: 1px solid #e7edf5; text-align: left; }
-        th { color: #42526a; font-size: 0.9rem; }
-        tr:last-child td { border-bottom: 0; }
-        .empty { background: #fff; border: 1px solid #d9e1ec; border-radius: 8px; padding: 28px; color: #5f6f86; }
-        .pagination { display: flex; gap: 10px; margin-top: 18px; align-items: center; }
-        .muted { color: #5f6f86; }
-    </style>
+    <title>History - ENGLISHGO</title>
+    <link rel="stylesheet" th:href="@{/css/app.css}">
 </head>
 <body>
-<header>
-    <strong>EnglishWebApp</strong>
-    <nav><a href="/">Home</a> <span class="muted">/</span> <a href="/tests">Tests</a></nav>
-</header>
-<main>
-    <h1>Attempt History</h1>
-    <section class="empty" th:if="${attempts.empty}">No submitted attempts yet.</section>
+<div class="app-shell">
+    <div th:replace="~{fragments/shell :: sidebar}"></div>
+    <div class="app-main">
+        <div th:replace="~{fragments/shell :: topbar('Attempt history', 'Review submitted answers and explanations')}"></div>
+        <main class="app-content">
+            <section class="ew-empty" th:if="${attempts.empty}">No submitted attempts yet.</section>
 
-    <table th:unless="${attempts.empty}">
-        <thead>
-        <tr>
-            <th>Test</th>
-            <th>Score</th>
-            <th>Submitted</th>
-            <th></th>
-        </tr>
-        </thead>
-        <tbody>
-        <tr th:each="attempt : ${attempts.content}">
-            <td th:text="${attempt.test.title}">TOEIC Mini</td>
-            <td th:text="${attempt.score}">100</td>
-            <td th:text="${attempt.submittedAt}">time</td>
-            <td><a th:href="@{/attempts/{id}/review(id=${attempt.id})}">Review</a></td>
-        </tr>
-        </tbody>
-    </table>
+            <section class="ew-card" th:unless="${attempts.empty}">
+                <table class="data-table">
+                    <thead>
+                    <tr>
+                        <th>Test</th>
+                        <th>Score</th>
+                        <th>Submitted</th>
+                        <th></th>
+                    </tr>
+                    </thead>
+                    <tbody>
+                    <tr th:each="attempt : ${attempts.content}">
+                        <td th:text="${attempt.test.title}">TOEIC Mini</td>
+                        <td><strong th:text="${attempt.score}">100</strong></td>
+                        <td th:text="${attempt.submittedAt}">time</td>
+                        <td><a th:href="@{/attempts/{id}/review(id=${attempt.id})}">Review</a></td>
+                    </tr>
+                    </tbody>
+                </table>
+            </section>
 
-    <nav class="pagination" th:if="${attempts.totalPages > 1}">
-        <a th:if="${attempts.hasPrevious()}" th:href="@{/history(page=${attempts.number - 1},size=${attempts.size})}">Previous</a>
-        <span>Page <strong th:text="${attempts.number + 1}">1</strong> of <strong th:text="${attempts.totalPages}">1</strong></span>
-        <a th:if="${attempts.hasNext()}" th:href="@{/history(page=${attempts.number + 1},size=${attempts.size})}">Next</a>
-    </nav>
-</main>
+            <nav class="pagination" th:if="${attempts.totalPages > 1}">
+                <a th:if="${attempts.hasPrevious()}" th:href="@{/history(page=${attempts.number - 1},size=${attempts.size})}">Previous</a>
+                <span>Page <strong th:text="${attempts.number + 1}">1</strong> of <strong th:text="${attempts.totalPages}">1</strong></span>
+                <a th:if="${attempts.hasNext()}" th:href="@{/history(page=${attempts.number + 1},size=${attempts.size})}">Next</a>
+            </nav>
+        </main>
+    </div>
+    <div th:replace="~{fragments/shell :: mobileNav}"></div>
+</div>
+<script th:src="@{/js/app-shell.js}"></script>
 </body>
 </html>

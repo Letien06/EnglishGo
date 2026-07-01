@@ -4,43 +4,47 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Community</title>
-    <style>
-        body { margin: 0; font-family: Inter, ui-sans-serif, system-ui, sans-serif; background: #f5f7fb; color: #172033; }
-        header { display: flex; justify-content: space-between; padding: 18px 28px; background: #fff; border-bottom: 1px solid #d9e1ec; }
-        main { width: min(94vw, 1040px); margin: 32px auto; display: grid; grid-template-columns: 1fr 320px; gap: 18px; }
-        @media (max-width: 820px) { main { grid-template-columns: 1fr; } }
-        a { color: #2563eb; font-weight: 700; text-decoration: none; }
-        section, article { background: #fff; border: 1px solid #d9e1ec; border-radius: 8px; padding: 18px; margin-bottom: 14px; }
-        textarea { width: 100%; min-height: 90px; box-sizing: border-box; border: 1px solid #c8d3e1; border-radius: 6px; padding: 10px; font: inherit; }
-        button { border: 0; border-radius: 6px; padding: 10px 14px; background: #172033; color: #fff; font-weight: 700; margin-top: 8px; }
-    </style>
+    <link rel="stylesheet" th:href="@{/css/app.css}">
 </head>
 <body>
-<header><strong>Community</strong><a href="/">Home</a></header>
-<main>
-    <section>
-        <h1>Discussion</h1>
-        <form method="post" action="/community/comments">
-            <textarea name="content" required placeholder="Ask a question or share a learning tip"></textarea>
-            <button type="submit">Post</button>
-        </form>
-        <article th:each="comment : ${comments}">
-            <strong th:text="${comment.user.displayName} ?: ${comment.user.email}">User</strong>
-            <p th:text="${comment.content}">Comment</p>
-        </article>
-    </section>
-    <aside>
-        <section>
-            <h2>Leaderboard</h2>
-            <p th:if="${leaderboard.empty}">No scores yet.</p>
-            <ol>
-                <li th:each="entry : ${leaderboard}">
-                    <span th:text="${entry.user.displayName} ?: ${entry.user.email}">User</span>
-                    <strong th:text="${entry.score}">0</strong>
-                </li>
-            </ol>
-        </section>
-    </aside>
-</main>
+<div class="app-shell">
+    <div th:replace="~{fragments/shell :: sidebar}"></div>
+    <div class="app-main">
+        <div th:replace="~{fragments/shell :: topbar('Community', 'Ask questions and compare free learning progress')}"></div>
+        <main class="app-content">
+            <div class="page-grid">
+                <section>
+                    <div class="ew-card">
+                        <h2>Discussion</h2>
+                        <form method="post" action="/community/comments">
+                            <label class="form-field">Message
+                                <textarea name="content" required placeholder="Ask a question or share a learning tip"></textarea>
+                            </label>
+                            <button type="submit">Post</button>
+                        </form>
+                    </div>
+                    <article class="ew-card" th:each="comment : ${comments}">
+                        <strong th:text="${comment.user.displayName} ?: ${comment.user.email}">User</strong>
+                        <p th:text="${comment.content}">Comment</p>
+                    </article>
+                    <section class="ew-empty" th:if="${comments.empty}">No comments yet.</section>
+                </section>
+
+                <aside class="ew-card sticky-panel">
+                    <h2>Leaderboard</h2>
+                    <p class="muted" th:if="${leaderboard.empty}">No scores yet.</p>
+                    <ol>
+                        <li th:each="entry : ${leaderboard}">
+                            <span th:text="${entry.user.displayName} ?: ${entry.user.email}">User</span>
+                            <strong th:text="${entry.score}">0</strong>
+                        </li>
+                    </ol>
+                </aside>
+            </div>
+        </main>
+    </div>
+    <div th:replace="~{fragments/shell :: mobileNav}"></div>
+</div>
+<script th:src="@{/js/app-shell.js}"></script>
 </body>
 </html>

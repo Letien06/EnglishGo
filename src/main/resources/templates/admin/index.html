@@ -1,0 +1,66 @@
+<!DOCTYPE html>
+<html lang="vi" xmlns:th="http://www.thymeleaf.org">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Admin - ENGLISHGO</title>
+    <link rel="stylesheet" th:href="@{/css/app.css}">
+</head>
+<body>
+<div class="app-shell">
+    <div th:replace="~{fragments/admin-shell :: sidebar}"></div>
+    <div class="app-main">
+        <div th:replace="~{fragments/admin-shell :: topbar('Tổng quan Admin', 'Quản lý ngân hàng câu hỏi Nghe/Đọc, media và phân quyền')}"></div>
+        <main class="app-content wide admin-page">
+            <section class="admin-stat-grid">
+                <article class="ew-card">
+                    <small>Câu hỏi published</small>
+                    <strong th:text="${publishedQuestions}">0</strong>
+                    <span>Được phép hiển thị cho user</span>
+                </article>
+                <article class="ew-card">
+                    <small>Câu hỏi draft</small>
+                    <strong th:text="${draftQuestions}">0</strong>
+                    <span>Chờ hoàn thiện hoặc publish</span>
+                </article>
+                <article class="ew-card">
+                    <small>Nhóm câu hỏi</small>
+                    <strong th:text="${publishedGroups} + '/' + ${totalGroups}">0/0</strong>
+                    <span>Audio chung hoặc passage</span>
+                </article>
+                <article class="ew-card">
+                    <small>Media</small>
+                    <strong th:text="${totalMedia}">0</strong>
+                    <span>Audio và hình đã upload</span>
+                </article>
+                <article class="ew-card">
+                    <small>Admin</small>
+                    <strong th:text="${adminUsers} + '/' + ${totalUsers}">0/0</strong>
+                    <span>Tài khoản quản trị / tổng user</span>
+                </article>
+            </section>
+
+            <section class="ew-card admin-next-card">
+                <h2>Luồng Question Bank mới</h2>
+                <p>Admin tạo câu hỏi ở trạng thái <strong>DRAFT</strong>. Chỉ câu hỏi đủ điều kiện và chuyển sang <strong>PUBLISHED</strong> mới xuất hiện ở trang Nghe/Đọc của user.</p>
+                <div class="admin-workflow-line">
+                    <span>Upload media</span>
+                    <span>Tạo group</span>
+                    <span>Tạo câu hỏi</span>
+                    <span>Publish</span>
+                    <span>User học</span>
+                </div>
+                <div class="admin-form-actions">
+                    <a href="/admin/question-bank/new">Tạo câu hỏi</a>
+                    <a href="/admin/question-groups">Tạo nhóm</a>
+                    <a href="/admin/media">Upload media</a>
+                    <a href="/admin/ai-import">AI & Import</a>
+                    <a href="/admin/test-assembly">Ghép đề thi</a>
+                </div>
+            </section>
+        </main>
+    </div>
+</div>
+<script th:src="@{/js/app-shell.js}"></script>
+</body>
+</html>

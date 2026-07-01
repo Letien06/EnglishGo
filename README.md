@@ -63,7 +63,7 @@ Load `.env` into the same PowerShell window:
 This sets the same environment variables as:
 
 ```powershell
-$env:FIREBASE_SERVICE_ACCOUNT_PATH="C:\secrets\englishwebapp-firebase-service-account.json"
+$env:FIREBASE_SERVICE_ACCOUNT_PATH="C:/secrets/englishwebapp-firebase-service-account.json"
 $env:FIREBASE_WEB_API_KEY="your_web_api_key"
 $env:FIREBASE_AUTH_DOMAIN="your_project.firebaseapp.com"
 $env:FIREBASE_PROJECT_ID="your_project_id"
@@ -93,7 +93,7 @@ After login, use these pages:
 - `http://localhost:8080/vocab` - vocabulary flashcards
 - `http://localhost:8080/lessons` - lessons
 - `http://localhost:8080/community` - comments and leaderboard
-- `http://localhost:8080/billing` - subscription demo
+- `http://localhost:8080/billing` - legacy billing page; learning features are planned to remain free
 - `http://localhost:8080/ai/writing` - writing feedback demo
 
 Teacher CMS requires the logged-in user role to be `TEACHER` or `ADMIN`. You can update it in MySQL after first login:
@@ -157,7 +157,7 @@ Enable these Firebase Authentication providers:
 Create a Firebase Admin SDK service account JSON file and store it outside this repo, for example:
 
 ```text
-C:\secrets\englishwebapp-firebase-service-account.json
+C:/secrets/englishwebapp-firebase-service-account.json
 ```
 
 Set environment variables for backend verification and frontend Firebase JS SDK config:
@@ -171,7 +171,7 @@ notepad .env
 Or set them manually:
 
 ```powershell
-$env:FIREBASE_SERVICE_ACCOUNT_PATH="C:\secrets\englishwebapp-firebase-service-account.json"
+$env:FIREBASE_SERVICE_ACCOUNT_PATH="C:/secrets/englishwebapp-firebase-service-account.json"
 $env:FIREBASE_WEB_API_KEY="your_web_api_key"
 $env:FIREBASE_AUTH_DOMAIN="your_project.firebaseapp.com"
 $env:FIREBASE_PROJECT_ID="your_project_id"
@@ -223,7 +223,7 @@ Main routes:
 - `/vocab`: vocabulary sets
 - `/vocab/sets/{id}/flashcards`: flashcard review with SM-2 progress
 - `/lessons`: grammar and lesson list
-- `/billing`: subscription and payment transaction flow
+- `/billing`: legacy billing route; learning features should not be locked behind payment
 - `/community`: comments and leaderboard
 - `/ai/writing`: writing feedback jobs
 - `/teacher/cms`: teacher content management
@@ -276,5 +276,5 @@ Use the Maven Wrapper included in this project:
 - MySQL remains the main database for users, tests, questions, attempts, answers, and drafts.
 - Schema changes must be added through new Flyway migration files.
 - Do not edit old migrations after they have been applied to a shared database.
-- Payment providers are represented in normalized transaction records. Real VNPay/MoMo/PayPal merchant API calls require provider credentials and callback verification.
+- Billing/subscription records are legacy/demo data only. The product plan is free-first: no learner feature should require payment.
 - AI writing feedback currently uses an internal deterministic evaluator and persists jobs in MySQL. A provider-backed worker can replace this service later without changing the UI routes.

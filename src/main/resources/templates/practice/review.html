@@ -3,59 +3,52 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Review - EnglishWebApp</title>
-    <style>
-        body { margin: 0; font-family: Inter, ui-sans-serif, system-ui, sans-serif; background: #f5f7fb; color: #172033; }
-        header { display: flex; justify-content: space-between; align-items: center; padding: 18px 28px; background: #fff; border-bottom: 1px solid #d9e1ec; }
-        main { width: min(94vw, 980px); margin: 32px auto; }
-        a { color: #2563eb; text-decoration: none; font-weight: 700; }
-        .summary, .answer { background: #fff; border: 1px solid #d9e1ec; border-radius: 8px; padding: 18px; margin-bottom: 16px; }
-        .correct { color: #087443; font-weight: 800; }
-        .wrong { color: #b42318; font-weight: 800; }
-        .option { padding: 8px 0; border-bottom: 1px solid #e7edf5; }
-        .option:last-child { border-bottom: 0; }
-        .selected { font-weight: 800; }
-        .muted { color: #5f6f86; }
-    </style>
+    <title>Review - ENGLISHGO</title>
+    <link rel="stylesheet" th:href="@{/css/app.css}">
 </head>
 <body>
-<header>
-    <strong>EnglishWebApp</strong>
-    <nav><a href="/tests">Tests</a> <span class="muted">/</span> <a href="/history">History</a></nav>
-</header>
-<main>
-    <section class="summary">
-        <h1 th:text="${review.attempt.test.title}">Test title</h1>
-        <p>Score: <strong th:text="${review.attempt.score}">0</strong></p>
-        <p class="muted">Submitted at <span th:text="${review.attempt.submittedAt}">time</span></p>
-    </section>
+<div class="app-shell">
+    <div th:replace="~{fragments/shell :: sidebar}"></div>
+    <div class="app-main">
+        <div th:replace="~{fragments/shell :: topbar('Review answers', ${review.attempt.test.title})}"></div>
+        <main class="app-content">
+            <section class="ew-card">
+                <span class="ew-badge">Score</span>
+                <h2><strong th:text="${review.attempt.score}">0</strong></h2>
+                <p class="muted">Submitted at <span th:text="${review.attempt.submittedAt}">time</span></p>
+                <a href="/history">Back to history</a>
+            </section>
 
-    <article class="answer" th:each="item, iter : ${review.answers}">
-        <h2>Question <span th:text="${iter.index + 1}">1</span></h2>
-        <p th:text="${item.question.content}">Question</p>
-        <p th:class="${item.userAnswer.correct} ? 'correct' : 'wrong'"
-           th:text="${item.userAnswer.correct} ? 'Correct' : 'Incorrect'">Correct</p>
+            <article class="review-answer" th:each="item, iter : ${review.answers}">
+                <h2>Question <span th:text="${iter.index + 1}">1</span></h2>
+                <p th:text="${item.question.content}">Question</p>
+                <p th:class="${item.userAnswer.correct} ? 'correct' : 'wrong'"
+                   th:text="${item.userAnswer.correct} ? 'Correct' : 'Incorrect'">Correct</p>
 
-        <div th:if="${!item.options.empty}">
-            <div class="option" th:each="option : ${item.options}"
-                 th:classappend="${item.userAnswer.selectedOption != null and item.userAnswer.selectedOption.id == option.id} ? ' selected'">
-                <span th:text="${option.content}">Option</span>
-                <span th:if="${option.correct}" class="correct"> - correct answer</span>
-                <span th:if="${item.userAnswer.selectedOption != null and item.userAnswer.selectedOption.id == option.id}" class="muted"> - your choice</span>
-            </div>
-        </div>
+                <div th:if="${!item.options.empty}">
+                    <div class="option" th:each="option : ${item.options}"
+                         th:classappend="${item.userAnswer.selectedOption != null and item.userAnswer.selectedOption.id == option.id} ? ' selected'">
+                        <span th:text="${option.content}">Option</span>
+                        <span th:if="${option.correct}" class="correct"> - correct answer</span>
+                        <span th:if="${item.userAnswer.selectedOption != null and item.userAnswer.selectedOption.id == option.id}" class="muted"> - your choice</span>
+                    </div>
+                </div>
 
-        <div th:if="${item.options.empty}">
-            <p>Your answer: <strong th:text="${item.userAnswer.textResponse} ?: 'Blank'">Blank</strong></p>
-            <p>Accepted:
-                <span th:each="accepted, stat : ${item.acceptedAnswers}">
-                    <strong th:text="${accepted.answerText}">answer</strong><span th:if="${!stat.last}">, </span>
-                </span>
-            </p>
-        </div>
+                <div th:if="${item.options.empty}">
+                    <p>Your answer: <strong th:text="${item.userAnswer.textResponse} ?: 'Blank'">Blank</strong></p>
+                    <p>Accepted:
+                        <span th:each="accepted, stat : ${item.acceptedAnswers}">
+                            <strong th:text="${accepted.answerText}">answer</strong><span th:if="${!stat.last}">, </span>
+                        </span>
+                    </p>
+                </div>
 
-        <p class="muted" th:if="${item.question.explanation != null}" th:text="${item.question.explanation}">Explanation</p>
-    </article>
-</main>
+                <p class="muted" th:if="${item.question.explanation != null}" th:text="${item.question.explanation}">Explanation</p>
+            </article>
+        </main>
+    </div>
+    <div th:replace="~{fragments/shell :: mobileNav}"></div>
+</div>
+<script th:src="@{/js/app-shell.js}"></script>
 </body>
 </html>

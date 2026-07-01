@@ -1,0 +1,105 @@
+<!DOCTYPE html>
+<html lang="vi" xmlns:th="http://www.thymeleaf.org">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AI & Import - ENGLISHGO</title>
+    <link rel="stylesheet" th:href="@{/css/app.css}">
+</head>
+<body>
+<div class="app-shell">
+    <div th:replace="~{fragments/admin-shell :: sidebar}"></div>
+    <div class="app-main">
+        <div th:replace="~{fragments/admin-shell :: topbar('AI & Import', 'Tạo draft TOEIC-style và nhập dữ liệu vào Question Bank')}"></div>
+        <main class="app-content wide admin-page">
+            <p class="admin-notice" th:if="${adminNotice}" th:text="${adminNotice}">Đã xử lý.</p>
+            <p class="admin-notice danger" th:if="${adminError}" th:text="${adminError}">Có lỗi.</p>
+
+            <section class="admin-two-col">
+                <article class="ew-card">
+                    <header class="admin-section-head">
+                        <div>
+                            <span>AI-style drafts</span>
+                            <h2>Tạo câu hỏi tương tự format</h2>
+                            <p>Nội dung tạo ra là synthetic TOEIC-style, không copy đề thật. Tất cả lưu ở DRAFT.</p>
+                        </div>
+                    </header>
+                    <form class="admin-form" method="post" action="/admin/ai-import/generate">
+                        <div class="admin-form-grid">
+                            <label>Kỹ năng
+                                <select name="module">
+                                    <option value="listening">Listening</option>
+                                    <option value="reading" selected>Reading</option>
+                                </select>
+                            </label>
+                            <label>Part
+                                <select name="part">
+                                    <option value="1">Part 1</option>
+                                    <option value="2">Part 2</option>
+                                    <option value="3">Part 3</option>
+                                    <option value="4">Part 4</option>
+                                    <option value="5" selected>Part 5</option>
+                                    <option value="6">Part 6</option>
+                                    <option value="7">Part 7</option>
+                                </select>
+                            </label>
+                            <label>Số câu
+                                <input name="count" type="number" min="1" max="20" value="5">
+                            </label>
+                            <label>Topic
+                                <input name="topic" placeholder="workplace communication">
+                            </label>
+                        </div>
+                        <label>License note
+                            <textarea name="licenseNote" rows="3" placeholder="Synthetic content for free learning use."></textarea>
+                        </label>
+                        <div class="admin-form-actions">
+                            <button class="admin-action-button publish" type="submit">Tạo draft</button>
+                        </div>
+                    </form>
+                </article>
+
+                <article class="ew-card">
+                    <header class="admin-section-head">
+                        <div>
+                            <span>PDF / CSV</span>
+                            <h2>Import dữ liệu</h2>
+                            <p>CSV tạo câu hỏi draft. PDF/TXT Reading tạo passage group draft để admin tách câu hỏi sau.</p>
+                        </div>
+                    </header>
+                    <form class="admin-form" method="post" action="/admin/ai-import/import" enctype="multipart/form-data">
+                        <div class="admin-form-grid">
+                            <label>Module
+                                <select name="module">
+                                    <option value="reading" selected>Reading Question Bank</option>
+                                    <option value="listening">Listening Question Bank</option>
+                                    <option value="vocabulary">Vocabulary</option>
+                                </select>
+                            </label>
+                            <label>Topic
+                                <input name="topic" placeholder="ETS 2026 / Business / Email">
+                            </label>
+                        </div>
+                        <label>File
+                            <input name="file" type="file" accept=".csv,.txt,.pdf" required>
+                        </label>
+                        <label>License note
+                            <textarea name="licenseNote" rows="3" placeholder="Tôi có quyền sử dụng hoặc đây là dữ liệu tự tạo."></textarea>
+                        </label>
+                        <div class="admin-form-actions">
+                            <button class="admin-action-button publish" type="submit">Import draft</button>
+                        </div>
+                    </form>
+                </article>
+            </section>
+
+            <section class="ew-card admin-next-card">
+                <h2>CSV format khuyến nghị</h2>
+                <p>Dùng header: `skill_type,part,difficulty_level,content,option_a,option_b,option_c,option_d,correct_option,audio_url,image_url,explanation`.</p>
+            </section>
+        </main>
+    </div>
+</div>
+<script th:src="@{/js/app-shell.js}"></script>
+</body>
+</html>

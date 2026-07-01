@@ -1,65 +1,218 @@
-# Task Board - English Learning Web App
+# Task Board - EnglishWebApp Dautoeic-style Free Clone
 
-> Danh sách task cho AI coding agent (Codex 5.5) thực hiện theo thứ tự.
-> Đọc `workflow.md` + `skill.md` trước khi bắt đầu.
-> Stack: **Java 17 + Spring Boot 3.x + MySQL + Firebase Auth + Thymeleaf + Tailwind + Alpine.js/HTMX**.
-> Trạng thái: [ ] chưa làm | [~] đang làm | [x] xong
+> Trang thai: `[ ]` chua lam, `[~]` dang lam, `[x]` xong.
+> Nguyen tac: moi task phai ra duoc san pham nhin thay tren browser, gom FE + BE + database/seed neu can + kiem thu co ban.
+> Muc tieu: bam sat luong hoc, bo cuc chuc nang va trai nghiem hoc TOEIC cua Dautoeic nhat co the trong stack hien tai.
+> Gioi han phap ly/ky thuat: khong copy logo, asset, noi dung, cau hoi, text marketing hoac file source cua Dautoeic. Tat ca noi dung trong app la noi dung tu tao/seed rieng.
+> Chinh sach san pham: tat ca tinh nang hoc deu FREE. Khong co goi ban, khong Premium, khong paywall, khong checkout, khong upsell.
 
----
+## Phase 0 - Nen tang va dinh huong
 
-## GIAI ĐOẠN 0 - Khởi tạo dự án (Setup)
+- [x] **P0.1 Fix local run**: app doc `.env`, Firebase config render duoc, browser vao `/` redirect `/login` thay vi 403.
+- [x] **P0.2 Research Dautoeic**: lap route map, module map, gap analysis trong `docs/dautoeic-research.md`.
+- [x] **P0.3 UI shell Dautoeic-style**
+  - FE: header, sidebar/mobile bottom nav, card, button, badge, tabs, empty/error/loading states.
+  - BE: `LayoutControllerAdvice` nap user/current route/nav state.
+  - Scope: tao cam giac app hoc tap dashboard, khong copy asset/logo/mau y chang.
+  - Files du kien: `templates/fragments/*`, `static/css/app.css`, cac template hien co.
 
-- [x] **T0.1** Khởi tạo project Spring Boot 3.x (Maven) với dependencies: Spring Web, Spring Data JPA, Spring Security, Thymeleaf, MySQL Driver, Flyway, Lombok, Validation.
-- [x] **T0.2** Cấu hình kết nối MySQL trong `application.yml` (profile `dev`), tạo `application-example.yml`.
-- [x] **T0.3** Dựng cấu trúc package layered (`controller`, `service`, `repository`, `entity`, `dto`, `config`) + thư mục `templates/`, `static/`, `db/migration/`.
-- [ ] **T0.4** Tích hợp Tailwind CSS + Alpine.js + HTMX vào `resources/static` (build pipeline cho Tailwind).
-- [x] **T0.5** Tạo file `.gitlab-ci.yml` cơ bản (`mvn verify`: build + test + kiểm tra).
-- [x] **T0.6** Thêm dependency Firebase Admin SDK vào `pom.xml`; tạo cấu hình nạp service account qua biến môi trường (KHÔNG commit file key).
+## Phase 1 - Learner Hub va dashboard
 
-## GIAI ĐOẠN 1 - MVP
+- [x] **P1.1 Route `/hub` thay dashboard cu**
+  - FE: hub co greeting, daily goal, streak, quick actions: Listen, Read, Vocabulary, Mock Test, Wrong, Starred.
+  - BE: `HubController`, `HubService`, DTO tong hop tien do.
+  - DB: bo sung bang hoac cot neu can cho daily goal/streak.
+  - Done: login xong vao `/hub`, co so lieu seed/thuc tu attempts/vocab.
 
-### 1A. Database schema
-- [x] **T1.1** Viết Flyway migration (`V1__init.sql`) + JPA entity cho: `users` (có `firebase_uid`, KHÔNG có password), `tests`, `question_groups`, `questions`,
-      `answer_options`, `accepted_answers`, `user_attempts`, `user_answers`, `draft_answers`.
-      Tuân thủ quy ước DB trong `skill.md` (soft delete qua `@SQLDelete`/`@Where`, grouping, text_response).
-- [x] **T1.2** Viết Flyway seed (`V2__seed.sql`) dữ liệu mẫu (1 đề TOEIC mini: vài câu trắc nghiệm + 1 nhóm câu hỏi có audio).
+- [x] **P1.2 Account settings**
+  - FE: `/account` cho avatar, display name, target score, level.
+  - BE: endpoint update profile co validation.
+  - DB: dung `users` hien co, bo sung audit fields neu can.
+  - Done: user sua muc tieu diem va thay doi hien tren hub.
 
-### 1B. Auth (Firebase Authentication)
-- [x] **T1.3** Frontend: trang đăng nhập dùng Firebase JS SDK (đăng nhập Google + email/password), lấy Firebase ID token.
-- [x] **T1.4** Backend: Spring Security filter verify Firebase ID token (Firebase Admin SDK), tạo session; just-in-time provisioning user vào bảng `users` theo `firebase_uid`.
-- [x] **T1.5** Phân quyền role (Student / Teacher / Admin) lưu trong DB, gán vào security context; bảo vệ route qua `@PreAuthorize` / `authorizeHttpRequests`.
+- [ ] **P1.3 Leaderboard learner**
+  - FE: `/leaderboard` co top users, filter weekly/all-time.
+  - BE: query rank tu attempts/streak, fallback seed.
+  - DB: xem lai `leaderboard_entries`, them period neu can.
+  - Done: co bang xep hang that, khong chi static.
 
-### 1C. Luyện đề (lõi)
-- [x] **T1.6** Controller + trang Thymeleaf danh sách đề thi (pagination qua `Pageable` + filter theo type/difficulty).
-- [x] **T1.7** Trang làm bài: hiển thị câu hỏi theo part, hỗ trợ nhóm passage/audio, đồng hồ đếm ngược (Alpine.js).
-- [x] **T1.8** Auto-save: localStorage + REST endpoint ghi định kỳ (debounce ~15-30s) vào `draft_answers`.
-- [x] **T1.9** Nộp bài + chấm điểm tự động ở tầng `service` (`@Transactional`), hỗ trợ trắc nghiệm + điền từ (accepted_answers). Có JUnit test cho logic chấm.
-- [x] **T1.10** Trang xem lại kết quả: đáp án đúng/sai + giải thích + transcript.
+## Phase 2 - Skill hubs: Listen / Read / Grammar
 
-### 1D. Lịch sử
-- [x] **T1.11** Controller + trang lịch sử làm bài của user (điểm, thời gian, link xem lại).
+- [ ] **P2.1 Listen hub `/listen`**
+  - FE: trang hub Listening co TOEIC Part 1-4, progress, CTA luyen nhanh.
+  - BE: service dem so cau/bai theo part, lay next recommended item.
+  - DB: dung `questions.part`, can chuan hoa type/audio group.
+  - Done: click Part 1-4 mo practice co audio neu seed co.
 
-### 1E. Hoàn thiện MVP
-- [x] **T1.12** Dashboard đơn giản: số đề đã làm, điểm trung bình.
-- [x] **T1.13** Viết README hướng dẫn chạy dự án (yêu cầu Java/MySQL, cấu hình `application.yml`, Firebase service account, `mvn flyway:migrate`, `mvn spring-boot:run`).
+- [ ] **P2.2 Read hub `/read`**
+  - FE: trang hub Reading co Part 5-7 va tab Grammar/Bilingual neu phu hop.
+  - BE: query bai doc/cau hoi theo part, weak areas.
+  - DB: bo sung metadata topic/tag cho questions neu can.
+  - Done: click Part 5-7 mo practice dung nhom passage/question.
 
----
+- [ ] **P2.3 Grammar module `/grammar`**
+  - FE: danh sach topic/subtopic, lesson card, nut practice.
+  - BE: `GrammarController`, `GrammarService`; co the reuse `lessons` truoc, sau do tach `grammar_topics`.
+  - DB: migration cho grammar topic/subtopic/exercises neu can.
+  - Done: hoc 1 topic, lam 1 set bai tap, luu ket qua.
 
-## GIAI ĐOẠN 2+ (làm sau MVP, chưa ưu tiên)
+## Phase 3 - Practice engine Dautoeic-style
 
-- [x] Từ vựng: entity `vocab_sets`, `vocab_words`, `user_vocab_progress` (SRS SM-2) + Flashcard (Alpine.js).
-- [x] Dashboard tiến độ chi tiết (biểu đồ, điểm mạnh/yếu, streak).
-- [x] Subscription + tích hợp thanh toán (VNPay/MoMo/PayPal).
-- [x] CMS cho Teacher (CRUD đề/câu hỏi/từ vựng, upload media).
-- [x] Ngữ pháp / bài học (`lessons`).
-- [x] Cộng đồng: bình luận, leaderboard.
-- [x] Speaking/Writing chấm AI (Job Queue xử lý ngầm).
+- [ ] **P3.1 Unified practice route**
+  - FE: thay `/tests/{id}/practice` bang shell co route moi: `/practice/session/{sessionId}` hoac route module.
+  - BE: tao `PracticeSession` abstraction: source = test, part, grammar, wrong, starred, random.
+  - DB: migration cho sessions neu can; giu `user_attempts` cho submitted result.
+  - Done: practice bat dau tu hub va route cu van redirect/hoat dong.
 
----
+- [ ] **P3.2 Practice UX nang cao**
+  - FE: timer, question navigator, answered/flagged states, keyboard 1-4, previous/next, pause, submit confirm.
+  - BE: autosave payload gom current index, answers, flagged IDs, elapsed time.
+  - DB: dung `draft_answers` hoac tach `practice_drafts`.
+  - Done: reload trang khong mat bai, UI hien da luu.
 
-## Hướng dẫn cho Agent
+- [ ] **P3.3 Review result theo part**
+  - FE: review co overview, per-part accuracy, wrong list, explanation/transcript.
+  - BE: DTO review gom grouped questions, skill stats.
+  - DB: dung `user_answers`, bo sung selected answer snapshot neu can.
+  - Done: nop bai xong thay diem, cau sai, giai thich.
 
-- Thực hiện tuần tự từ T0 -> T1.
-- Mỗi task = một nhánh + một merge request về `main`.
-- Cập nhật trạng thái checkbox khi hoàn thành.
-- Không nhảy sang Giai đoạn 2 khi MVP chưa xong.
+## Phase 4 - Wrong / Starred / Random loops
+
+- [ ] **P4.1 Starred questions**
+  - FE: nut star trong practice/review, route `/starred-practice`.
+  - BE: CRUD starred question per user.
+  - DB: `user_starred_questions(user_id, question_id, created_at)`.
+  - Done: star cau trong review, vao `/starred-practice` luyen lai.
+
+- [ ] **P4.2 Wrong answers queue**
+  - FE: `/wrong-practice` hien queue cau sai, filter by part.
+  - BE: query cau sai tu `user_answers`, tao session luyen lai.
+  - DB: co the them `wrong_answer_reviews` de theo doi da on/chua on.
+  - Done: nop sai cau nao thi cau do xuat hien trong queue.
+
+- [ ] **P4.3 Random practice**
+  - FE: `/random-practice` chon skill, part, so cau, timed mode.
+  - BE: query random questions co seed de reproducible.
+  - DB: index theo part/type/topic.
+  - Done: tao bai random va cham nhu practice thuong.
+
+## Phase 5 - Vocabulary Dautoeic-style
+
+- [ ] **P5.1 Rename/route vocabulary**
+  - FE: route moi `/vocabulary`, giu `/vocab` redirect.
+  - BE: controller route moi, DTO progress.
+  - DB: dung `vocab_sets`, `vocab_words`, `user_vocab_progress`.
+  - Done: trang vocab home co sets, due today, mastered/difficult counts.
+
+- [ ] **P5.2 Difficult/mastered pages**
+  - FE: `/vocabulary/difficult`, `/vocabulary/mastered`.
+  - BE: query theo `user_vocab_progress.status`.
+  - DB: chuan hoa enum status neu can.
+  - Done: danh dau kho/thuoc va thay doi queue.
+
+- [ ] **P5.3 Vocabulary test/shared**
+  - FE: practice tu vung dang multiple choice/fill blank, trang shared set.
+  - BE: endpoint tao vocab test va cham.
+  - DB: bang `vocab_tests` neu can.
+  - Done: user lam test tu vung va luu ket qua.
+
+## Phase 6 - Mock test roadmap
+
+- [ ] **P6.1 Mock test home `/mock-test`**
+  - FE: danh sach full tests, mini tests, roadmap Part 1-7.
+  - BE: filter tests by type/difficulty/part.
+  - DB: chuan hoa `tests.type` = MOCK, MINI, PART_PRACTICE.
+  - Done: user thay mock test va vao lam.
+
+- [ ] **P6.2 Mock test settings**
+  - FE: choose mode: full timed, practice, review.
+  - BE: tao session voi rule time/audio.
+  - DB: them `test_settings` neu can.
+  - Done: full test co timer tong va result theo part.
+
+## Phase 7 - Free access cleanup
+
+- [ ] **P7.1 Remove paywall thinking**
+  - FE: khong co pricing, locked feature, upgrade CTA, premium badge.
+  - BE: khong check entitlement cho learner features.
+  - DB: `subscriptions`/`transactions` chi de legacy/demo, khong dung de khoa tinh nang.
+  - Done: moi learner dang nhap deu vao duoc tat ca module hoc.
+
+- [ ] **P7.2 Route cleanup for old billing**
+  - FE: `/billing` hien thong bao "all features are free" hoac redirect ve `/hub`.
+  - BE: vo hieu hoa checkout demo neu khong can.
+  - Done: khong con luong thanh toan trong san pham hoc.
+
+## Phase 8 - Admin CMS theo module
+
+- [ ] **P8.1 Admin dashboard `/admin`**
+  - FE: metrics users, attempts, content counts, issue reports.
+  - BE: `AdminDashboardService`, role ADMIN.
+  - DB: query aggregate.
+  - Done: admin login thay dashboard rieng, khong co revenue/sales widget.
+
+- [ ] **P8.2 Admin content modules**
+  - FE: tach menu `/admin/listening`, `/admin/reading`, `/admin/vocabulary`, `/admin/mock-test`.
+  - BE: CRUD service rieng cho content, validation.
+  - DB: migration cho tags/topics/media neu can.
+  - Done: admin tao/sua cau hoi va learner thay trong hub.
+
+- [ ] **P8.3 Import media/CSV**
+  - FE: upload CSV/Excel/audio/image, preview before import.
+  - BE: parser/import service, report loi theo dong.
+  - DB: media table neu can.
+  - Done: import 1 bo cau hoi Part 5 tu CSV.
+
+## Phase 9 - AI generator va content review
+
+- [ ] **P9.1 AI question generator `/admin/generate`**
+  - FE: form chon TOEIC part, skill, difficulty, topic, so cau; preview JSON/result.
+  - BE: `ContentGenerationService` goi AI provider de tao TOEIC-style questions, khong copy de that.
+  - DB: `content_generation_jobs`, `generated_questions`.
+  - Guardrail: output phai validate schema, co 4 options neu multiple choice, co correct answer, explanation, transcript/passage neu can.
+  - Done: admin tao draft 5 cau Part 5/Part 7, nhung chua publish thang vao learner bank.
+
+- [ ] **P9.2 Generated content review `/admin/content-review`**
+  - FE: queue draft AI, editor sua cau hoi/options/explanation, approve/reject.
+  - BE: review service publish draft vao `tests/questions/question_groups/answer_options`.
+  - DB: `content_audit_logs`, reviewed_by/reviewed_at/status.
+  - Done: chi cau duoc approve moi xuat hien trong `/read`, `/listen`, `/mock-test`.
+
+- [ ] **P9.3 AI prompt library**
+  - FE: admin chon template: Part 1 image prompt, Part 2 question-response, Part 5 grammar, Part 6 passage, Part 7 reading.
+  - BE: prompt templates versioned, JSON schema per TOEIC part.
+  - DB: co the them `ai_prompt_templates`.
+  - Done: prompt co version, co the rollback/cai tien ma khong pha generated history.
+
+## Phase 10 - Community submit va import workflow
+
+- [ ] **P10.1 Community/teacher submit `/contribute`**
+  - FE: form gui cau hoi/passages/options/explanation/source note.
+  - BE: save vao `content_submissions` status `PENDING_REVIEW`.
+  - DB: `content_submissions`.
+  - Guardrail: bat buoc checkbox "toi co quyen su dung noi dung nay".
+  - Done: contributor gui cau hoi, admin thay trong review queue.
+
+- [ ] **P10.2 CSV/Excel import to review queue**
+  - FE: upload CSV/Excel, map columns, preview validation errors.
+  - BE: import parser tao `content_submissions` hang loat, khong publish truc tiep.
+  - DB: `content_submissions`, import batch id neu can.
+  - Done: import 1 file Part 5 mau, approve moi vao bank chinh.
+
+- [ ] **P10.3 Source/license tracking**
+  - FE: hien source type/note tren admin review.
+  - BE: enforce source metadata cho AI/community/import.
+  - DB: source_type, source_note, license_note, attribution.
+  - Done: moi cau hoi publish co metadata nguon noi dung.
+
+## Phase 11 - PWA polish va chat luong
+
+- [ ] **P11.1 PWA manifest/version**
+  - FE: manifest, app icons, theme color, version banner.
+  - BE: `/version.json`, static cache headers.
+  - Done: cai duoc PWA va update khong ket cache.
+
+- [ ] **P11.2 Test coverage**
+  - FE: smoke test cac route chinh bang Playwright neu them toolchain.
+  - BE: service tests cho grading, SRS, practice session, content generation validation, import parser.
+  - Done: `mvn test` pass va co test cho logic moi.

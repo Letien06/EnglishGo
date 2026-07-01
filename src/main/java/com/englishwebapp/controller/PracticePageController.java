@@ -18,7 +18,7 @@ public class PracticePageController {
 
     private final PracticeQueryService practiceQueryService;
 
-    @GetMapping("/tests")
+    @GetMapping({"/tests", "/mock-test"})
     public String tests(
             @RequestParam(required = false) String type,
             @RequestParam(required = false) String difficulty,

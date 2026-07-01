@@ -1,8 +1,10 @@
 package com.englishwebapp.controller;
 
 import com.englishwebapp.entity.AnswerOption;
+import com.englishwebapp.entity.ContentStatus;
 import com.englishwebapp.entity.Lesson;
 import com.englishwebapp.entity.Question;
+import com.englishwebapp.entity.SourceType;
 import com.englishwebapp.entity.Test;
 import com.englishwebapp.entity.User;
 import com.englishwebapp.entity.VocabSet;
@@ -62,6 +64,9 @@ public class TeacherCmsController {
         test.setDuration(duration);
         test.setDifficulty(difficulty);
         test.setCreatedBy(user);
+        test.setStatus(ContentStatus.PENDING_REVIEW);
+        test.setSourceType(SourceType.COMMUNITY);
+        test.setSourceNote("Submitted from teacher CMS.");
         testRepository.save(test);
         return "redirect:/teacher/cms";
     }
@@ -90,6 +95,9 @@ public class TeacherCmsController {
         question.setAudioUrl(audioUrl);
         question.setImageUrl(imageUrl);
         question.setExplanation(explanation);
+        question.setStatus(ContentStatus.PENDING_REVIEW);
+        question.setSourceType(SourceType.COMMUNITY);
+        question.setSourceNote("Submitted from teacher CMS.");
         Question savedQuestion = questionRepository.save(question);
         saveOption(savedQuestion, optionA, "A".equalsIgnoreCase(correctOption));
         saveOption(savedQuestion, optionB, "B".equalsIgnoreCase(correctOption));
@@ -107,6 +115,9 @@ public class TeacherCmsController {
         set.setTitle(title);
         set.setTopic(topic);
         set.setLevel(level);
+        set.setStatus(ContentStatus.PENDING_REVIEW);
+        set.setSourceType(SourceType.COMMUNITY);
+        set.setSourceNote("Submitted from teacher CMS.");
         vocabSetRepository.save(set);
         return "redirect:/teacher/cms";
     }
@@ -128,6 +139,9 @@ public class TeacherCmsController {
         vocabWord.setPhonetic(phonetic);
         vocabWord.setExample(example);
         vocabWord.setAudioUrl(audioUrl);
+        vocabWord.setStatus(ContentStatus.PENDING_REVIEW);
+        vocabWord.setSourceType(SourceType.COMMUNITY);
+        vocabWord.setSourceNote("Submitted from teacher CMS.");
         vocabWordRepository.save(vocabWord);
         return "redirect:/teacher/cms";
     }
@@ -143,6 +157,9 @@ public class TeacherCmsController {
         lesson.setTopic(topic);
         lesson.setContent(content);
         lesson.setVideoUrl(videoUrl);
+        lesson.setStatus(ContentStatus.PENDING_REVIEW);
+        lesson.setSourceType(SourceType.COMMUNITY);
+        lesson.setSourceNote("Submitted from teacher CMS.");
         lessonRepository.save(lesson);
         return "redirect:/teacher/cms";
     }

@@ -1,83 +1,108 @@
 <!DOCTYPE html>
-<html lang="en" xmlns:th="http://www.thymeleaf.org">
+<html lang="vi" xmlns:th="http://www.thymeleaf.org">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Practice Tests - EnglishWebApp</title>
-    <style>
-        body { margin: 0; font-family: Inter, ui-sans-serif, system-ui, sans-serif; background: #f5f7fb; color: #172033; }
-        header { display: flex; justify-content: space-between; align-items: center; padding: 18px 28px; background: #fff; border-bottom: 1px solid #d9e1ec; }
-        main { width: min(94vw, 1040px); margin: 32px auto; }
-        a { color: #2563eb; text-decoration: none; font-weight: 700; }
-        .toolbar { display: flex; gap: 12px; flex-wrap: wrap; align-items: end; margin-bottom: 18px; background: #fff; border: 1px solid #d9e1ec; border-radius: 8px; padding: 18px; }
-        label { display: grid; gap: 6px; font-weight: 700; color: #42526a; }
-        input { border: 1px solid #c8d3e1; border-radius: 6px; padding: 10px 12px; font: inherit; min-width: 160px; }
-        button, .button { border: 0; border-radius: 6px; padding: 10px 14px; background: #172033; color: #fff; font: inherit; font-weight: 700; cursor: pointer; }
-        table { width: 100%; border-collapse: collapse; background: #fff; border: 1px solid #d9e1ec; border-radius: 8px; overflow: hidden; }
-        th, td { padding: 14px 16px; border-bottom: 1px solid #e7edf5; text-align: left; }
-        th { color: #42526a; font-size: 0.9rem; }
-        tr:last-child td { border-bottom: 0; }
-        .empty { background: #fff; border: 1px solid #d9e1ec; border-radius: 8px; padding: 28px; color: #5f6f86; }
-        .pagination { display: flex; gap: 10px; margin-top: 18px; align-items: center; }
-        .muted { color: #5f6f86; }
-    </style>
+    <title>Đề thi TOEIC - ENGLISHGO</title>
+    <link rel="stylesheet" th:href="@{/css/app.css}">
 </head>
-<body>
-<header>
-    <strong>EnglishWebApp</strong>
-    <nav>
-        <a href="/">Home</a>
-        <span class="muted"> / </span>
-        <a href="/history">History</a>
-    </nav>
-</header>
-<main>
-    <h1>Practice Tests</h1>
-    <form class="toolbar" method="get" action="/tests">
-        <label>Type
-            <input name="type" th:value="${type}" placeholder="TOEIC">
-        </label>
-        <label>Difficulty
-            <input name="difficulty" th:value="${difficulty}" placeholder="EASY">
-        </label>
-        <button type="submit">Filter</button>
-        <a class="button" href="/tests">Clear</a>
-    </form>
+<body class="landing-body mock-body">
+<header th:replace="~{fragments/public-header :: main('tests')}"></header>
 
-    <section class="empty" th:if="${tests.empty}">
-        No tests found.
+<main class="mock-page">
+    <section class="mock-hero">
+        <div>
+            <span class="mock-pill">✦ Đề thi TOEIC chuẩn ETS</span>
+            <h1>Luyện đề thi <strong>TOEIC thực tế</strong></h1>
+            <p>Nghe chép chính tả, đọc song ngữ Anh-Việt, một chạm thêm từ vào giỏ từ vựng, xem dẫn chứng đáp án và giải thích chi tiết từng câu.</p>
+        </div>
+        <div class="mock-hero-icon">▣</div>
     </section>
 
-    <table th:unless="${tests.empty}">
-        <thead>
-        <tr>
-            <th>Title</th>
-            <th>Type</th>
-            <th>Difficulty</th>
-            <th>Duration</th>
-            <th>Version</th>
-            <th></th>
-        </tr>
-        </thead>
-        <tbody>
-        <tr th:each="test : ${tests.content}">
-            <td th:text="${test.title}">TOEIC Mini</td>
-            <td th:text="${test.type}">TOEIC</td>
-            <td th:text="${test.difficulty} ?: 'Any'">EASY</td>
-            <td><span th:text="${test.duration}">20</span> min</td>
-            <td th:text="${test.version}">1</td>
-            <td><a th:href="@{/tests/{id}/practice(id=${test.id})}">Start</a></td>
-        </tr>
-        </tbody>
-    </table>
-
-    <nav class="pagination" th:if="${tests.totalPages > 1}">
-        <a th:if="${tests.hasPrevious()}"
-           th:href="@{/tests(page=${tests.number - 1},size=${tests.size},type=${type},difficulty=${difficulty})}">Previous</a>
-        <span>Page <strong th:text="${tests.number + 1}">1</strong> of <strong th:text="${tests.totalPages}">1</strong></span>
-        <a th:if="${tests.hasNext()}"
-           th:href="@{/tests(page=${tests.number + 1},size=${tests.size},type=${type},difficulty=${difficulty})}">Next</a>
+    <nav class="mock-tabs" aria-label="Mock test sections">
+        <a class="is-active" href="/mock-test"><span>▥</span> Học</a>
+        <a href="/mock-test?tab=progress"><span>▥</span> Tiến độ</a>
     </nav>
+
+    <section class="mock-filters" aria-label="Test sources">
+        <a class="is-active" href="/mock-test">ETS 2026 (10)</a>
+        <a href="/mock-test?type=YBM 2025">YBM 2025 (10)</a>
+        <a href="/mock-test?type=ETS 2024">ETS 2024 (10)</a>
+        <a href="/mock-test?type=ETS 2023">ETS 2023 (10)</a>
+        <a href="/mock-test?type=ETS 2022">ETS 2022 (10)</a>
+        <a href="/mock-test?type=ETS 2021">ETS 2021 (5)</a>
+        <a href="/mock-test?type=ETS 2020">ETS 2020 (10)</a>
+        <a href="/mock-test?type=ETS 2019">ETS 2019 (10)</a>
+    </section>
+
+    <section class="mock-grid" th:unless="${tests.empty}">
+        <article class="mock-card" th:each="test, iter : ${tests.content}">
+            <header>
+                <h2 th:text="${test.title}">Test 1</h2>
+                <div class="mock-card-icons" aria-hidden="true">
+                    <span>♧</span>
+                    <span>◷</span>
+                    <span>↻</span>
+                    <span>□</span>
+                    <span>A</span>
+                </div>
+            </header>
+            <p class="mock-meta">
+                <span>▧ 200 câu</span>
+                <span>◷ <b th:text="${test.duration}">120</b> phút</span>
+            </p>
+            <p class="mock-status">Chưa luyện tập</p>
+            <div class="mock-card-actions">
+                <a class="mock-trial" th:href="@{/tests/{id}/practice(id=${test.id})}">▷ Thi thử</a>
+                <a class="mock-practice" th:href="@{/tests/{id}/practice(id=${test.id})}">▥ Luyện tập</a>
+            </div>
+        </article>
+        <article class="mock-card" th:if="${tests.content.size() < 4}" th:each="idx : ${#numbers.sequence(tests.content.size() + 1,4)}">
+            <header>
+                <h2 th:text="'Test ' + ${idx}">Test 4</h2>
+                <div class="mock-card-icons" aria-hidden="true">
+                    <span>♧</span>
+                    <span>◷</span>
+                    <span>↻</span>
+                    <span>□</span>
+                    <span>A</span>
+                </div>
+            </header>
+            <p class="mock-meta">
+                <span>▧ 200 câu</span>
+                <span>◷ 120 phút</span>
+            </p>
+            <p class="mock-status">Chưa luyện tập</p>
+            <div class="mock-card-actions">
+                <a class="mock-trial" href="/login">▷ Thi thử</a>
+                <a class="mock-practice" href="/login">▥ Luyện tập</a>
+            </div>
+        </article>
+    </section>
+
+    <section class="mock-grid" th:if="${tests.empty}">
+        <article class="mock-card" th:each="idx : ${#numbers.sequence(1,4)}">
+            <header>
+                <h2 th:text="'Test ' + ${idx}">Test 1</h2>
+                <div class="mock-card-icons" aria-hidden="true">
+                    <span>♧</span>
+                    <span>◷</span>
+                    <span>↻</span>
+                    <span>□</span>
+                    <span>A</span>
+                </div>
+            </header>
+            <p class="mock-meta">
+                <span>▧ 200 câu</span>
+                <span>◷ 120 phút</span>
+            </p>
+            <p class="mock-status">Chưa luyện tập</p>
+            <div class="mock-card-actions">
+                <a class="mock-trial" href="/login">▷ Thi thử</a>
+                <a class="mock-practice" href="/login">▥ Luyện tập</a>
+            </div>
+        </article>
+    </section>
 </main>
 </body>
 </html>

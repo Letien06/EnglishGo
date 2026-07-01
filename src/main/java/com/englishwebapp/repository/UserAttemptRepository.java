@@ -1,6 +1,7 @@
 package com.englishwebapp.repository;
 
 import com.englishwebapp.entity.UserAttempt;
+import java.time.Instant;
 import java.util.List;
 import java.util.Optional;
 import org.springframework.data.domain.Page;
@@ -19,6 +20,8 @@ public interface UserAttemptRepository extends JpaRepository<UserAttempt, Long> 
     Optional<UserAttempt> findByIdAndUserId(Long id, Long userId);
 
     long countByUserIdAndSubmittedAtIsNotNull(Long userId);
+
+    long countByUserIdAndSubmittedAtBetween(Long userId, Instant start, Instant end);
 
     @Query("""
             select coalesce(avg(attempt.score), 0)
