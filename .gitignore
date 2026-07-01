@@ -15,6 +15,7 @@ logs/
 .env
 .env.local
 .env.vercel
+.env.railway
 src/main/resources/application-dev.yml
 firebase-service-account*.json
 serviceAccountKey.json

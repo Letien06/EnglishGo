@@ -70,3 +70,17 @@ To test the Vercel container locally, start Docker Desktop first:
 docker build -f Dockerfile.vercel -t englishwebapp-vercel .
 docker run --rm -p 8080:80 --env-file .env englishwebapp-vercel
 ```
+
+## Railway
+
+Use Railway or Render for the Spring Boot application because it is a long-running JVM web server. This repo includes a standard `Dockerfile` for those platforms.
+
+For Railway:
+
+1. Create a Railway project.
+2. Choose **Deploy from GitHub repo** and select `Letien06/EnglishGo`.
+3. Railway should build the root `Dockerfile`.
+4. Add variables from `.env.railway`.
+5. Deploy.
+
+Keep Supabase as the PostgreSQL database. Use the Supabase pooler JDBC URL in `DATABASE_URL`.
