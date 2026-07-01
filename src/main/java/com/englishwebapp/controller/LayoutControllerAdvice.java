@@ -32,8 +32,6 @@ public class LayoutControllerAdvice {
         items.add(new NavItem("History", "/history", "Review", "H"));
         items.add(new NavItem("Community", "/community", "Review", "C"));
         items.add(new NavItem("Writing", "/ai/writing", "Review", "W"));
-        items.add(new NavItem("Account", "/account", "Review", "A"));
-
         if (user != null && user.role() == UserRole.ADMIN) {
             items.add(new NavItem("Admin CMS", "/admin", "Build", "A"));
         } else if (user != null && user.role() == UserRole.TEACHER) {

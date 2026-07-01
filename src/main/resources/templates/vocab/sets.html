@@ -156,6 +156,27 @@
         <div class="vocab-detail-alert success" th:if="${notice}" th:text="${notice}">Đã lưu.</div>
         <div class="vocab-detail-alert error" th:if="${error}" th:text="${error}">Có lỗi.</div>
 
+        <section class="vocab-import-toolbar">
+            <div>
+                <h2>Thêm vào bộ từ</h2>
+                <p>Nhập thủ công, dán nhanh, upload CSV/Excel/PDF hoặc để GPT/Gemini tạo từ theo yêu cầu.</p>
+            </div>
+            <div class="vocab-import-actions">
+                <button class="vocab-import-primary" type="button" data-open-add-words th:disabled="${#lists.isEmpty(mySets)}">+ Thêm từ</button>
+                <details class="vocab-import-menu" th:if="${!#lists.isEmpty(mySets)}">
+                    <summary>Nhập file</summary>
+                    <form method="post" action="/vocab/my-sets/words/import" enctype="multipart/form-data">
+                        <input type="hidden" th:if="${_csrf != null}" th:name="${_csrf.parameterName}" th:value="${_csrf.token}">
+                        <select name="targetSetId" required>
+                            <option th:each="set : ${mySets}" th:value="${set.id()}" th:text="${set.title()}">Bộ từ của tôi</option>
+                        </select>
+                        <input type="file" name="file" accept=".csv,.xlsx,.xls,.pdf,text/csv,application/pdf" required>
+                        <button type="submit">Tải lên</button>
+                    </form>
+                </details>
+            </div>
+        </section>
+
         <section class="vocab-my-create">
             <div>
                 <h2>Tạo bộ từ mới</h2>
@@ -241,6 +262,7 @@
                 </form>
                 <footer>
                     <a class="vocab-my-view" th:href="@{/vocab/sets/{id}(id=${set.id()})}">Xem</a>
+                    <button class="vocab-my-icon" type="button" title="Thêm từ" data-open-add-words th:data-target-set="${set.id()}">+</button>
                     <a class="vocab-my-icon" title="Học" th:href="@{/vocab/sets/{id}/flashcards(id=${set.id()},mode='menu',mastery='learning',order='random',amount='20')}">▷</a>
                     <form method="post" th:action="@{/vocab/my-sets/{id}/delete(id=${set.id()})}" onsubmit="return confirm('Xóa bộ từ này?');">
                         <input type="hidden" th:if="${_csrf != null}" th:name="${_csrf.parameterName}" th:value="${_csrf.token}">
@@ -255,6 +277,120 @@
             <h2>Chưa có bộ từ vựng nào</h2>
             <p>Tạo bộ từ vựng đầu tiên để gom các từ bạn muốn học riêng.</p>
             <button class="vocab-my-create-open" type="button" data-open-create-set>+ Tạo bộ từ</button>
+        </section>
+
+        <section class="vocab-create-modal" id="addWordsModal" hidden>
+            <div class="vocab-create-backdrop" data-close-add-words></div>
+            <div class="vocab-add-dialog" aria-modal="true" role="dialog" aria-labelledby="addWordsTitle">
+                <header>
+                    <div class="vocab-add-title-row">
+                        <h2 id="addWordsTitle">Thêm vào bộ từ</h2>
+                        <select class="vocab-add-set-select" data-add-target-select required>
+                            <option th:each="set : ${mySets}" th:value="${set.id()}" th:text="${set.title()}">Bộ từ của tôi</option>
+                        </select>
+                        <button class="vocab-add-new-set" type="button" data-open-create-set>+ Tạo mới</button>
+                    </div>
+                    <button type="button" data-close-add-words aria-label="Đóng">×</button>
+                </header>
+
+                <nav class="vocab-add-tabs" aria-label="Cách thêm từ">
+                    <button class="is-active" type="button" data-add-tab="manual">Nhập thủ công</button>
+                    <button type="button" data-add-tab="file">File CSV/Excel/PDF</button>
+                    <button type="button" data-add-tab="paste">Thêm nhanh</button>
+                    <button type="button" data-add-tab="gpt">GPT tạo</button>
+                </nav>
+
+                <form class="vocab-add-pane is-active" data-add-pane="manual" method="post" action="/vocab/my-sets/words/manual">
+                    <input type="hidden" th:if="${_csrf != null}" th:name="${_csrf.parameterName}" th:value="${_csrf.token}">
+                    <input type="hidden" name="targetSetId" data-add-target-input>
+                    <textarea name="rowsText" data-manual-rows hidden></textarea>
+                    <div class="vocab-manual-table-wrap">
+                        <table class="vocab-manual-table">
+                            <thead>
+                            <tr>
+                                <th>#</th>
+                                <th>Từ vựng *</th>
+                                <th>Phiên âm</th>
+                                <th>Nghĩa *</th>
+                                <th>Loại từ</th>
+                                <th>Ví dụ</th>
+                                <th>Ghi chú</th>
+                                <th></th>
+                            </tr>
+                            </thead>
+                            <tbody data-manual-body>
+                            <tr>
+                                <td>1</td>
+                                <td><input data-field="word" placeholder="Hello" required></td>
+                                <td><input data-field="phonetic" placeholder="/həˈloʊ/"></td>
+                                <td><input data-field="meaning" placeholder="Xin chào" required></td>
+                                <td><input data-field="partOfSpeech" placeholder="noun"></td>
+                                <td><input data-field="example" placeholder="Hello world."></td>
+                                <td><input data-field="note" placeholder="Đồng/trái nghĩa..."></td>
+                                <td><button type="button" data-remove-manual-row>×</button></td>
+                            </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                    <button class="vocab-add-row" type="button" data-add-manual-row>+ Thêm dòng</button>
+                    <footer>
+                        <button type="button" data-close-add-words>Hủy</button>
+                        <button type="submit" data-manual-submit>Lưu từ</button>
+                    </footer>
+                </form>
+
+                <form class="vocab-add-pane" data-add-pane="file" method="post" action="/vocab/my-sets/words/import" enctype="multipart/form-data">
+                    <input type="hidden" th:if="${_csrf != null}" th:name="${_csrf.parameterName}" th:value="${_csrf.token}">
+                    <input type="hidden" name="targetSetId" data-add-target-input>
+                    <label class="vocab-file-drop">
+                        <input type="file" name="file" accept=".csv,.xlsx,.xls,.pdf,text/csv,application/pdf" required>
+                        <strong>Nhập file CSV, Excel (.xlsx) hoặc PDF</strong>
+                        <span>Excel/CSV nên có cột: word, phonetic, partOfSpeech, meaning, example, note.</span>
+                    </label>
+                    <footer>
+                        <button type="button" data-close-add-words>Hủy</button>
+                        <button type="submit">Nhập file</button>
+                    </footer>
+                </form>
+
+                <form class="vocab-add-pane" data-add-pane="paste" method="post" action="/vocab/my-sets/words/manual">
+                    <input type="hidden" th:if="${_csrf != null}" th:name="${_csrf.parameterName}" th:value="${_csrf.token}">
+                    <input type="hidden" name="targetSetId" data-add-target-input>
+                    <details class="vocab-paste-guide" open>
+                        <summary>Hướng dẫn: dùng GPT tạo từ nhanh</summary>
+                        <p>Mỗi dòng một từ, cột cách bằng dấu <b>|</b>: từ vựng | /phiên âm/ | loại từ | nghĩa | ví dụ | ghi chú</p>
+                    </details>
+                    <textarea name="rowsText" rows="9" placeholder="abandon | /əˈbæn.dən/ | verb | từ bỏ | She abandoned her car. | thường dùng trong văn viết&#10;ability | /əˈbɪl.ə.ti/ | noun | khả năng | He has great ability. |"></textarea>
+                    <footer>
+                        <button type="button" data-close-add-words>Hủy</button>
+                        <button type="submit">Xem trước và lưu</button>
+                    </footer>
+                </form>
+
+                <form class="vocab-add-pane" data-add-pane="gpt" method="post" action="/vocab/my-sets/words/generate">
+                    <input type="hidden" th:if="${_csrf != null}" th:name="${_csrf.parameterName}" th:value="${_csrf.token}">
+                    <input type="hidden" name="targetSetId" data-add-target-input>
+                    <label>
+                        <span>Kiểu tạo</span>
+                        <select name="mode">
+                            <option value="topic">Theo chủ đề</option>
+                            <option value="reading">Từ đoạn đọc</option>
+                        </select>
+                    </label>
+                    <label>
+                        <span>Yêu cầu cho GPT/Gemini</span>
+                        <textarea name="input" rows="6" maxlength="2000" placeholder="VD: tạo 20 từ TOEIC chủ đề workplace communication, có nghĩa tiếng Việt và ví dụ đơn giản."></textarea>
+                    </label>
+                    <label class="vocab-ai-count">
+                        Số từ muốn tạo
+                        <input type="number" name="count" min="1" max="50" value="10">
+                    </label>
+                    <footer>
+                        <button type="button" data-close-add-words>Hủy</button>
+                        <button type="submit">GPT tạo và lưu</button>
+                    </footer>
+                </form>
+            </div>
         </section>
 
         <section class="vocab-create-modal" id="createSetModal" hidden>
@@ -455,12 +591,91 @@
             return {modal, openModal, closeModal};
         }
 
+        const addWordsModal = setupModal("addWordsModal", "[data-open-add-words]", "[data-close-add-words]", "[data-add-target-select]");
         const renameFolderModal = setupModal("renameFolderModal", "[data-open-rename-folder]", "[data-close-rename-folder]", 'input[name="name"]');
         const modals = [
+            addWordsModal,
             setupModal("createSetModal", "[data-open-create-set]", "[data-close-create-set]", 'input[name="title"]'),
             setupModal("createFolderModal", "[data-open-create-folder]", "[data-close-create-folder]", 'input[name="name"]'),
             renameFolderModal
         ].filter(Boolean);
+
+        const addWordsSelect = document.querySelector("[data-add-target-select]");
+        const addTargetInputs = document.querySelectorAll("[data-add-target-input]");
+
+        function syncAddWordsTarget(value) {
+            if (!addWordsSelect) return;
+            if (value) addWordsSelect.value = value;
+            addTargetInputs.forEach(input => input.value = addWordsSelect.value || "");
+        }
+
+        syncAddWordsTarget();
+
+        addWordsSelect?.addEventListener("change", () => syncAddWordsTarget());
+
+        document.querySelectorAll("[data-open-add-words]").forEach(button => {
+            button.addEventListener("click", () => {
+                syncAddWordsTarget(button.dataset.targetSet);
+            });
+        });
+
+        document.querySelectorAll("[data-add-tab]").forEach(button => {
+            button.addEventListener("click", () => {
+                const tab = button.dataset.addTab;
+                document.querySelectorAll("[data-add-tab]").forEach(item => item.classList.toggle("is-active", item === button));
+                document.querySelectorAll("[data-add-pane]").forEach(pane => pane.classList.toggle("is-active", pane.dataset.addPane === tab));
+            });
+        });
+
+        const manualBody = document.querySelector("[data-manual-body]");
+
+        function refreshManualIndexes() {
+            manualBody?.querySelectorAll("tr").forEach((row, index) => {
+                row.querySelector("td").textContent = index + 1;
+            });
+        }
+
+        function createManualRow() {
+            const row = document.createElement("tr");
+            row.innerHTML = `
+                <td></td>
+                <td><input data-field="word" placeholder="Hello" required></td>
+                <td><input data-field="phonetic" placeholder="/həˈloʊ/"></td>
+                <td><input data-field="meaning" placeholder="Xin chào" required></td>
+                <td><input data-field="partOfSpeech" placeholder="noun"></td>
+                <td><input data-field="example" placeholder="Hello world."></td>
+                <td><input data-field="note" placeholder="Đồng/trái nghĩa..."></td>
+                <td><button type="button" data-remove-manual-row>×</button></td>
+            `;
+            return row;
+        }
+
+        document.querySelector("[data-add-manual-row]")?.addEventListener("click", () => {
+            if (!manualBody) return;
+            manualBody.appendChild(createManualRow());
+            refreshManualIndexes();
+            manualBody.lastElementChild?.querySelector("input")?.focus();
+        });
+
+        manualBody?.addEventListener("click", event => {
+            const button = event.target.closest("[data-remove-manual-row]");
+            if (!button || manualBody.querySelectorAll("tr").length <= 1) return;
+            button.closest("tr").remove();
+            refreshManualIndexes();
+        });
+
+        document.querySelector('[data-add-pane="manual"]')?.addEventListener("submit", event => {
+            const rows = [...manualBody.querySelectorAll("tr")]
+                    .map(row => ["word", "phonetic", "partOfSpeech", "meaning", "example", "note"]
+                            .map(field => row.querySelector(`[data-field="${field}"]`)?.value.trim() || "")
+                            .join(" | "))
+                    .filter(line => line.split("|").some(part => part.trim()));
+            document.querySelector("[data-manual-rows]").value = rows.join("\n");
+            syncAddWordsTarget();
+            if (!rows.length) {
+                event.preventDefault();
+            }
+        });
 
         document.querySelectorAll("[data-open-rename-folder]").forEach(button => {
             button.addEventListener("click", () => {

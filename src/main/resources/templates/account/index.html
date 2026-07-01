@@ -3,18 +3,25 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Account - ENGLISHGO</title>
+    <title>Tài khoản - ENGLISHGO</title>
     <link rel="stylesheet" th:href="@{/css/app.css}">
 </head>
-<body>
-<div class="app-shell">
-    <div th:replace="~{fragments/shell :: sidebar}"></div>
-    <div class="app-main">
-        <div th:replace="~{fragments/shell :: topbar('Tài khoản', 'Quản lý thông tin đăng nhập và thiết bị')}"></div>
-        <main class="app-content wide">
-            <section class="ew-alert" th:if="${message}" th:text="${message}">Đã lưu thay đổi.</section>
+<body class="dash-body account-body">
+<header th:replace="~{fragments/public-header :: main('account')}"></header>
 
-            <div class="account-page">
+<main class="account-main">
+    <section class="account-hero">
+        <div>
+            <span class="account-kicker">TÀI KHOẢN</span>
+            <h1>Thông tin cá nhân</h1>
+            <p>Chỉnh sửa tên hiển thị, ảnh đại diện và thông tin đăng nhập của bạn.</p>
+        </div>
+        <button class="ew-button secondary compact" type="button" data-logout-button>Đăng xuất</button>
+    </section>
+
+    <section class="ew-alert" th:if="${message}" th:text="${message}">Đã lưu thay đổi.</section>
+
+    <div class="account-page">
                 <aside class="account-menu" aria-label="Account menu">
                     <div class="account-menu-group">
                         <span class="account-menu-title">TÀI KHOẢN</span>
@@ -37,10 +44,6 @@
                             <strong>Thiết bị</strong>
                         </a>
                     </div>
-                    <button class="account-logout" type="button" data-logout-button>
-                        <span>↪</span>
-                        <strong>Đăng xuất</strong>
-                    </button>
                 </aside>
 
                 <section class="account-panel" th:if="${activeTab == 'profile'}">
@@ -100,11 +103,8 @@
                         </span>
                     </article>
                 </section>
-            </div>
-        </main>
     </div>
-    <div th:replace="~{fragments/shell :: mobileNav}"></div>
-</div>
+</main>
 <script th:src="@{/js/app-shell.js}"></script>
 <script>
     const avatarButton = document.querySelector("[data-avatar-button]");

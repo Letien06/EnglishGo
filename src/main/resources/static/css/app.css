@@ -589,6 +589,52 @@ button.compact {
     font-weight: 750;
 }
 
+.account-body {
+    min-height: 100vh;
+}
+
+.account-main {
+    width: min(100% - 72px, 1360px);
+    margin: 0 auto;
+    padding: 44px 0 80px;
+}
+
+.account-hero {
+    display: flex;
+    align-items: flex-end;
+    justify-content: space-between;
+    gap: 24px;
+    margin-bottom: 28px;
+    padding-bottom: 26px;
+    border-bottom: 1px solid #dce5ee;
+}
+
+.account-kicker {
+    display: inline-flex;
+    align-items: center;
+    min-height: 30px;
+    padding: 0 14px;
+    border-radius: 999px;
+    background: #dff3fb;
+    color: #047c75;
+    font-size: 0.82rem;
+    font-weight: 950;
+}
+
+.account-hero h1 {
+    margin: 14px 0 8px;
+    color: #111827;
+    font-size: clamp(2rem, 4vw, 3rem);
+    line-height: 1.05;
+    font-weight: 950;
+}
+
+.account-hero p {
+    margin: 0;
+    color: var(--muted);
+    font-size: 1.08rem;
+}
+
 .account-page {
     display: grid;
     grid-template-columns: 290px minmax(0, 1fr);
@@ -598,7 +644,7 @@ button.compact {
 
 .account-menu {
     position: sticky;
-    top: 116px;
+    top: 110px;
     display: grid;
     gap: 18px;
     padding: 18px 14px;
@@ -4379,6 +4425,16 @@ button.compact {
         padding-top: 28px;
     }
 
+    .account-main {
+        width: min(100% - 32px, 760px);
+        padding-top: 28px;
+    }
+
+    .account-hero {
+        align-items: flex-start;
+        flex-direction: column;
+    }
+
     .dash-hero,
     .dash-stat-grid,
     .dash-skill-grid {
@@ -6954,6 +7010,320 @@ button.compact {
 
 .vocab-create-dialog footer button[type="submit"] {
     background: #1caf3d;
+    color: #ffffff;
+    box-shadow: 0 6px 0 #15803d;
+}
+
+.vocab-import-toolbar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 18px;
+    padding: 22px 24px;
+    border: 1px solid #d7e6f2;
+    border-radius: 22px;
+    background: #ffffff;
+    box-shadow: 0 14px 40px rgba(15, 23, 42, 0.06);
+}
+
+.vocab-import-toolbar h2 {
+    margin: 0 0 6px;
+    color: #111827;
+    font-size: 1.25rem;
+}
+
+.vocab-import-toolbar p {
+    margin: 0;
+    color: #64748b;
+    font-weight: 700;
+}
+
+.vocab-import-actions {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.vocab-import-primary,
+.vocab-import-menu summary,
+.vocab-import-menu button {
+    min-height: 46px;
+    border: 0;
+    border-radius: 16px;
+    padding: 0 18px;
+    background: #20b240;
+    color: #ffffff;
+    font-weight: 950;
+    cursor: pointer;
+}
+
+.vocab-import-primary:disabled {
+    cursor: not-allowed;
+    opacity: .5;
+}
+
+.vocab-import-menu {
+    position: relative;
+}
+
+.vocab-import-menu summary {
+    display: inline-flex;
+    align-items: center;
+    list-style: none;
+    background: #0ea5e9;
+}
+
+.vocab-import-menu summary::-webkit-details-marker {
+    display: none;
+}
+
+.vocab-import-menu form {
+    position: absolute;
+    top: calc(100% + 10px);
+    right: 0;
+    z-index: 12;
+    display: grid;
+    gap: 10px;
+    width: min(360px, calc(100vw - 36px));
+    padding: 14px;
+    border: 1px solid #d9e6f2;
+    border-radius: 16px;
+    background: #ffffff;
+    box-shadow: 0 22px 60px rgba(15, 23, 42, .18);
+}
+
+.vocab-import-menu select,
+.vocab-import-menu input,
+.vocab-add-dialog select,
+.vocab-add-dialog input,
+.vocab-add-dialog textarea {
+    width: 100%;
+    border: 1px solid #d8e5f0;
+    border-radius: 14px;
+    background: #ffffff;
+    color: #111827;
+    font: inherit;
+}
+
+.vocab-import-menu select,
+.vocab-import-menu input,
+.vocab-add-dialog select,
+.vocab-add-dialog input {
+    min-height: 44px;
+    padding: 0 14px;
+}
+
+.vocab-add-dialog {
+    position: relative;
+    z-index: 1;
+    display: grid;
+    gap: 18px;
+    width: min(1728px, calc(100vw - 64px));
+    min-height: min(640px, calc(100vh - 80px));
+    max-height: calc(100vh - 48px);
+    overflow: auto;
+    padding: 30px;
+    border-radius: 36px;
+    background: #ffffff;
+    box-shadow: 0 34px 90px rgba(15, 23, 42, .32);
+}
+
+.vocab-add-dialog > header,
+.vocab-add-dialog footer {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 18px;
+}
+
+.vocab-add-dialog > header > button {
+    width: 42px;
+    min-height: 42px;
+    border: 0;
+    border-radius: 999px;
+    background: transparent;
+    color: #111827;
+    font-size: 1.8rem;
+    cursor: pointer;
+}
+
+.vocab-add-title-row {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 14px;
+}
+
+.vocab-add-title-row h2 {
+    margin: 0;
+    color: #111827;
+    font-size: 1.5rem;
+}
+
+.vocab-add-set-select {
+    width: min(310px, 100%) !important;
+}
+
+.vocab-add-new-set {
+    min-height: 42px;
+    border: 1px solid #d8e5f0;
+    border-radius: 999px;
+    padding: 0 18px;
+    background: #ffffff;
+    color: #334155;
+    font-weight: 900;
+    cursor: pointer;
+}
+
+.vocab-add-tabs {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+    padding-bottom: 14px;
+    border-bottom: 1px solid #e1eaf3;
+}
+
+.vocab-add-tabs button {
+    min-height: 44px;
+    border: 1px solid #d8e5f0;
+    border-radius: 999px;
+    padding: 0 18px;
+    background: #ffffff;
+    color: #334155;
+    font-weight: 950;
+    cursor: pointer;
+}
+
+.vocab-add-tabs .is-active {
+    border-color: #20b240;
+    background: #20b240;
+    color: #ffffff;
+}
+
+.vocab-add-pane {
+    display: none;
+    gap: 18px;
+}
+
+.vocab-add-pane.is-active {
+    display: grid;
+}
+
+.vocab-manual-table-wrap {
+    overflow-x: auto;
+}
+
+.vocab-manual-table {
+    width: 100%;
+    min-width: 1300px;
+    border-collapse: collapse;
+}
+
+.vocab-manual-table th {
+    padding: 9px 10px;
+    background: #edf3f8;
+    color: #475569;
+    text-align: left;
+    font-size: .9rem;
+    font-weight: 950;
+    text-transform: uppercase;
+}
+
+.vocab-manual-table td {
+    padding: 10px;
+    border-bottom: 1px solid #e5edf5;
+}
+
+.vocab-manual-table td:first-child {
+    width: 44px;
+    color: #475569;
+    text-align: center;
+    font-weight: 900;
+}
+
+.vocab-manual-table button {
+    min-height: 38px;
+    border: 0;
+    border-radius: 12px;
+    background: #eef6fb;
+    color: #0ea5e9;
+    font-weight: 950;
+    cursor: pointer;
+}
+
+.vocab-add-row {
+    min-height: 52px;
+    border: 1px dashed #d2e1ed;
+    border-radius: 18px;
+    background: #ffffff;
+    color: #334155;
+    font-size: 1.05rem;
+    font-weight: 950;
+    cursor: pointer;
+}
+
+.vocab-add-dialog textarea {
+    min-height: 180px;
+    padding: 16px;
+    resize: vertical;
+}
+
+.vocab-file-drop,
+.vocab-paste-guide,
+.vocab-add-pane label {
+    display: grid;
+    gap: 10px;
+}
+
+.vocab-file-drop {
+    place-items: center;
+    min-height: 220px;
+    padding: 28px;
+    border: 2px dashed #cfe0ef;
+    border-radius: 22px;
+    color: #64748b;
+    text-align: center;
+    cursor: pointer;
+}
+
+.vocab-file-drop strong,
+.vocab-add-pane label > span {
+    color: #111827;
+    font-weight: 950;
+}
+
+.vocab-paste-guide {
+    padding: 14px 18px;
+    border: 1px solid #e9d5ff;
+    border-radius: 18px;
+    background: #faf5ff;
+    color: #8b5cf6;
+}
+
+.vocab-paste-guide p {
+    margin: 0;
+    color: #64748b;
+}
+
+.vocab-add-dialog footer {
+    justify-content: flex-end;
+    padding-top: 14px;
+    border-top: 1px solid #e1eaf3;
+}
+
+.vocab-add-dialog footer button {
+    min-height: 52px;
+    border: 0;
+    border-radius: 999px;
+    padding: 0 24px;
+    background: transparent;
+    color: #0ea5e9;
+    font-weight: 950;
+    cursor: pointer;
+}
+
+.vocab-add-dialog footer button[type="submit"] {
+    background: #20b240;
     color: #ffffff;
     box-shadow: 0 6px 0 #15803d;
 }

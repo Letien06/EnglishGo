@@ -25,8 +25,11 @@ import com.google.cloud.firestore.DocumentReference;
 import com.google.cloud.firestore.DocumentSnapshot;
 import com.google.cloud.firestore.Firestore;
 import com.google.cloud.firestore.SetOptions;
+import java.io.IOException;
+import java.io.InputStream;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
+import java.nio.charset.StandardCharsets;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.time.ZoneId;
@@ -43,6 +46,13 @@ import java.util.concurrent.ExecutionException;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.stream.Collectors;
 import lombok.RequiredArgsConstructor;
+import org.apache.pdfbox.pdmodel.PDDocument;
+import org.apache.pdfbox.text.PDFTextStripper;
+import org.apache.poi.ss.usermodel.DataFormatter;
+import org.apache.poi.ss.usermodel.Row;
+import org.apache.poi.ss.usermodel.Sheet;
+import org.apache.poi.ss.usermodel.Workbook;
+import org.apache.poi.ss.usermodel.WorkbookFactory;
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageImpl;
@@ -401,6 +411,38 @@ public class VocabService {
         setDoc(SETS, set.getId(), Map.of("deletedAtMillis", Instant.now().toEpochMilli()));
     }
 
+    public int addManualWords(Long userId, Long setId, String rowsText) {
+        requireOwnedSet(userId, setId);
+        List<AiVocabCandidate> candidates = parseDelimitedWords(rowsText);
+        return saveCandidates(setId, candidates, SourceType.MANUAL, "Added manually by the learner.", 300);
+    }
+
+    public int importWords(Long userId, Long setId, MultipartFile file) {
+        requireOwnedSet(userId, setId);
+        if (file == null || file.isEmpty()) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Import file is required");
+        }
+        String filename = Optional.ofNullable(file.getOriginalFilename()).orElse("").toLowerCase(Locale.ROOT);
+        SourceType sourceType;
+        List<AiVocabCandidate> candidates;
+        if (filename.endsWith(".xlsx") || filename.endsWith(".xls")) {
+            sourceType = SourceType.EXCEL_IMPORT;
+            candidates = parseExcelWords(file);
+        } else if (filename.endsWith(".pdf")) {
+            sourceType = SourceType.PDF_IMPORT;
+            candidates = parseDelimitedWords(extractPdfText(file));
+        } else {
+            sourceType = SourceType.CSV_IMPORT;
+            candidates = parseDelimitedWords(readTextFile(file));
+        }
+        return saveCandidates(setId, candidates, sourceType, "Imported from " + (StringUtils.hasText(filename) ? filename : "uploaded file") + ".", 500);
+    }
+
+    public int generateOwnedWordsWithAi(Long userId, Long setId, String mode, String input, int count) {
+        requireOwnedSet(userId, setId);
+        return saveAiWords(setId, previewAiWords(setId, mode, input, count, null));
+    }
+
     public VocabSetDetail getSetDetail(Long setId, Long userId) {
         VocabSet set = requirePublishedSet(setId);
         assertSetAccessible(set, userId);
@@ -458,11 +500,16 @@ public class VocabService {
 
     public int saveAiWords(Long setId, List<AiVocabCandidate> candidates) {
         requirePublishedSet(setId);
+        return saveCandidates(setId, candidates, SourceType.AI_GENERATED, null, 50);
+    }
+
+    private int saveCandidates(Long setId, List<AiVocabCandidate> candidates, SourceType sourceType, String sourceNote, int limit) {
+        requirePublishedSet(setId);
         if (candidates == null || candidates.isEmpty()) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "No vocabulary words selected");
         }
         int created = 0;
-        for (AiVocabCandidate candidate : candidates.stream().limit(50).toList()) {
+        for (AiVocabCandidate candidate : candidates.stream().limit(Math.max(1, limit)).toList()) {
             if (!StringUtils.hasText(candidate.word()) || !StringUtils.hasText(candidate.meaning())) {
                 continue;
             }
@@ -481,11 +528,16 @@ public class VocabService {
             data.put("phonetic", cleanOptional(candidate.phonetic()));
             data.put("example", exampleOrFallback(candidate));
             data.put("status", ContentStatus.PUBLISHED.name());
-            data.put("sourceType", SourceType.AI_GENERATED.name());
-            String source = cleanOptional(candidate.dictionarySource()) == null ? "dictionary" : candidate.dictionarySource().trim();
-            String definition = cleanOptional(candidate.dictionaryDefinition()) == null ? "" : " Definition: " + candidate.dictionaryDefinition().trim();
-            data.put("sourceNote", "AI suggested the word; dictionary data verified by " + source + "." + definition);
-            data.put("licenseNote", "AI-assisted vocabulary candidate verified with dictionary data for free learning use.");
+            data.put("sourceType", sourceType.name());
+            if (sourceType == SourceType.AI_GENERATED) {
+                String source = cleanOptional(candidate.dictionarySource()) == null ? "dictionary" : candidate.dictionarySource().trim();
+                String definition = cleanOptional(candidate.dictionaryDefinition()) == null ? "" : " Definition: " + candidate.dictionaryDefinition().trim();
+                data.put("sourceNote", "AI suggested the word; dictionary data verified by " + source + "." + definition);
+                data.put("licenseNote", "AI-assisted vocabulary candidate verified with dictionary data for free learning use.");
+            } else {
+                data.put("sourceNote", sourceNote);
+                data.put("licenseNote", "Learner-provided vocabulary for personal study.");
+            }
             data.put("publishedAtMillis", now.toEpochMilli());
             data.put("updatedAtMillis", now.toEpochMilli());
             setDoc(WORDS, id, data);
@@ -740,6 +792,194 @@ public class VocabService {
         }
         setDoc(SETS, targetSet.getId(), Map.of("updatedAtMillis", Instant.now().toEpochMilli()));
         return copied;
+    }
+
+    private List<AiVocabCandidate> parseDelimitedWords(String text) {
+        if (!StringUtils.hasText(text)) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Vocabulary content is required");
+        }
+        List<List<String>> rows = text.contains(",") && !text.contains("|")
+                ? parseCsv(text)
+                : text.lines()
+                        .map(this::parseDelimitedLine)
+                        .filter(row -> row.stream().anyMatch(StringUtils::hasText))
+                        .toList();
+        return rowsToCandidates(rows);
+    }
+
+    private List<String> parseDelimitedLine(String line) {
+        String trimmed = line == null ? "" : line.trim();
+        if (!StringUtils.hasText(trimmed)) {
+            return List.of();
+        }
+        if (!trimmed.contains("|") && !trimmed.contains("\t") && !trimmed.contains(",")) {
+            String[] spaced = trimmed.split("\\s{2,}", -1);
+            if (spaced.length > 1) {
+                return java.util.Arrays.stream(spaced).map(String::trim).toList();
+            }
+            String[] parts = trimmed.split("\\s+", 2);
+            return parts.length == 2 ? List.of(parts[0].trim(), "", "", parts[1].trim()) : List.of(trimmed);
+        }
+        String delimiter = trimmed.contains("|") ? "\\|" : trimmed.contains("\t") ? "\t" : ",";
+        return java.util.Arrays.stream(trimmed.split(delimiter, -1))
+                .map(String::trim)
+                .toList();
+    }
+
+    private List<AiVocabCandidate> parseExcelWords(MultipartFile file) {
+        try (InputStream inputStream = file.getInputStream();
+             Workbook workbook = WorkbookFactory.create(inputStream)) {
+            DataFormatter formatter = new DataFormatter();
+            List<List<String>> rows = new ArrayList<>();
+            for (Sheet sheet : workbook) {
+                for (Row row : sheet) {
+                    List<String> cells = new ArrayList<>();
+                    short lastCell = row.getLastCellNum();
+                    if (lastCell < 0) {
+                        continue;
+                    }
+                    for (int i = 0; i < lastCell; i++) {
+                        cells.add(formatter.formatCellValue(row.getCell(i)).trim());
+                    }
+                    if (cells.stream().anyMatch(StringUtils::hasText)) {
+                        rows.add(cells);
+                    }
+                }
+            }
+            return rowsToCandidates(rows);
+        } catch (IOException | RuntimeException exception) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Cannot read Excel file", exception);
+        }
+    }
+
+    private List<AiVocabCandidate> rowsToCandidates(List<List<String>> rows) {
+        if (rows == null || rows.isEmpty()) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "No vocabulary rows found");
+        }
+        Map<String, Integer> header = looksLikeHeader(rows.get(0)) ? headerMap(rows.get(0)) : Map.of();
+        int start = header.isEmpty() ? 0 : 1;
+        List<AiVocabCandidate> candidates = new ArrayList<>();
+        for (int i = start; i < rows.size(); i++) {
+            List<String> row = rows.get(i);
+            String word = header.isEmpty() ? cellAt(row, 0) : cell(row, header, "word", "từ vựng", "tu vung", "vocabulary");
+            String phonetic = header.isEmpty() ? cellAt(row, 1) : cell(row, header, "phonetic", "phiên âm", "phien am");
+            String partOfSpeech = header.isEmpty() ? cellAt(row, 2) : cell(row, header, "partOfSpeech", "part of speech", "loại từ", "loai tu", "pos");
+            String meaning = header.isEmpty() ? cellAt(row, 3) : cell(row, header, "meaning", "nghĩa", "nghia", "definition");
+            String example = header.isEmpty() ? cellAt(row, 4) : cell(row, header, "example", "ví dụ", "vi du");
+            String note = header.isEmpty() ? cellAt(row, 5) : cell(row, header, "note", "ghi chú", "ghi chu");
+
+            if (!StringUtils.hasText(meaning) && StringUtils.hasText(partOfSpeech)) {
+                meaning = partOfSpeech;
+                partOfSpeech = "";
+            }
+            if (!StringUtils.hasText(word) || !StringUtils.hasText(meaning)) {
+                continue;
+            }
+            candidates.add(new AiVocabCandidate(word, meaning, partOfSpeech, phonetic, example, note, "manual"));
+        }
+        if (candidates.isEmpty()) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "No valid vocabulary rows found");
+        }
+        return candidates;
+    }
+
+    private boolean looksLikeHeader(List<String> row) {
+        String joined = row.stream()
+                .map(this::normalizeHeader)
+                .collect(Collectors.joining(" "));
+        return joined.contains("word")
+                || joined.contains("vocabulary")
+                || joined.contains("meaning")
+                || joined.contains("tu vung")
+                || joined.contains("nghia");
+    }
+
+    private String readTextFile(MultipartFile file) {
+        try {
+            return new String(file.getBytes(), StandardCharsets.UTF_8);
+        } catch (IOException exception) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Cannot read import file", exception);
+        }
+    }
+
+    private String extractPdfText(MultipartFile file) {
+        try (InputStream inputStream = file.getInputStream();
+             PDDocument document = PDDocument.load(inputStream)) {
+            return new PDFTextStripper().getText(document);
+        } catch (IOException exception) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Cannot read PDF file", exception);
+        }
+    }
+
+    private List<List<String>> parseCsv(String csv) {
+        List<List<String>> rows = new ArrayList<>();
+        List<String> row = new ArrayList<>();
+        StringBuilder cell = new StringBuilder();
+        boolean quoted = false;
+        for (int i = 0; i < csv.length(); i++) {
+            char c = csv.charAt(i);
+            if (c == '"') {
+                if (quoted && i + 1 < csv.length() && csv.charAt(i + 1) == '"') {
+                    cell.append('"');
+                    i++;
+                } else {
+                    quoted = !quoted;
+                }
+            } else if (c == ',' && !quoted) {
+                row.add(cell.toString().trim());
+                cell.setLength(0);
+            } else if ((c == '\n' || c == '\r') && !quoted) {
+                if (c == '\r' && i + 1 < csv.length() && csv.charAt(i + 1) == '\n') {
+                    i++;
+                }
+                row.add(cell.toString().trim());
+                cell.setLength(0);
+                if (row.stream().anyMatch(StringUtils::hasText)) {
+                    rows.add(row);
+                }
+                row = new ArrayList<>();
+            } else {
+                cell.append(c);
+            }
+        }
+        row.add(cell.toString().trim());
+        if (row.stream().anyMatch(StringUtils::hasText)) {
+            rows.add(row);
+        }
+        return rows;
+    }
+
+    private Map<String, Integer> headerMap(List<String> headerRow) {
+        Map<String, Integer> header = new LinkedHashMap<>();
+        for (int i = 0; i < headerRow.size(); i++) {
+            header.put(normalizeHeader(headerRow.get(i)), i);
+        }
+        return header;
+    }
+
+    private String cell(List<String> row, Map<String, Integer> header, String... keys) {
+        for (String key : keys) {
+            Integer index = header.get(normalizeHeader(key));
+            if (index != null) {
+                return cellAt(row, index);
+            }
+        }
+        return "";
+    }
+
+    private String cellAt(List<String> row, int index) {
+        return index >= 0 && index < row.size() ? row.get(index) : "";
+    }
+
+    private String normalizeHeader(String value) {
+        if (value == null) {
+            return "";
+        }
+        String normalized = java.text.Normalizer.normalize(value, java.text.Normalizer.Form.NFD)
+                .replaceAll("\\p{M}", "")
+                .toLowerCase(Locale.ROOT)
+                .trim();
+        return normalized.replaceAll("[^a-z0-9]+", " ").trim();
     }
 
     private boolean matchesMastery(VocabWord word, Map<Long, ProgressDoc> progressByWordId, String mastery, Instant now) {

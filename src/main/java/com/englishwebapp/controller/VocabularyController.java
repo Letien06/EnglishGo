@@ -204,6 +204,62 @@ public class VocabularyController {
         return "redirect:/vocab?tab=my";
     }
 
+    @PostMapping("/vocab/my-sets/words/manual")
+    public String addManualWords(
+            @RequestParam Long targetSetId,
+            @RequestParam String rowsText,
+            @AuthenticationPrincipal AppUserPrincipal user,
+            RedirectAttributes redirectAttributes) {
+        if (user == null) {
+            return "redirect:/login?redirect=/vocab%3Ftab%3Dmy";
+        }
+        try {
+            int created = vocabService.addManualWords(user.id(), targetSetId, rowsText);
+            redirectAttributes.addFlashAttribute("notice", "Đã thêm " + created + " từ thủ công.");
+        } catch (RuntimeException exception) {
+            redirectAttributes.addFlashAttribute("error", errorMessage(exception));
+        }
+        return "redirect:/vocab/sets/" + targetSetId;
+    }
+
+    @PostMapping("/vocab/my-sets/words/import")
+    public String importWords(
+            @RequestParam Long targetSetId,
+            @RequestParam MultipartFile file,
+            @AuthenticationPrincipal AppUserPrincipal user,
+            RedirectAttributes redirectAttributes) {
+        if (user == null) {
+            return "redirect:/login?redirect=/vocab%3Ftab%3Dmy";
+        }
+        try {
+            int created = vocabService.importWords(user.id(), targetSetId, file);
+            redirectAttributes.addFlashAttribute("notice", "Đã nhập " + created + " từ từ file.");
+        } catch (RuntimeException exception) {
+            redirectAttributes.addFlashAttribute("error", errorMessage(exception));
+        }
+        return "redirect:/vocab/sets/" + targetSetId;
+    }
+
+    @PostMapping("/vocab/my-sets/words/generate")
+    public String generateMyWords(
+            @RequestParam Long targetSetId,
+            @RequestParam(defaultValue = "topic") String mode,
+            @RequestParam(required = false) String input,
+            @RequestParam(defaultValue = "10") Integer count,
+            @AuthenticationPrincipal AppUserPrincipal user,
+            RedirectAttributes redirectAttributes) {
+        if (user == null) {
+            return "redirect:/login?redirect=/vocab%3Ftab%3Dmy";
+        }
+        try {
+            int created = vocabService.generateOwnedWordsWithAi(user.id(), targetSetId, mode, input, count);
+            redirectAttributes.addFlashAttribute("notice", "Đã tạo " + created + " từ bằng GPT/Gemini.");
+        } catch (RuntimeException exception) {
+            redirectAttributes.addFlashAttribute("error", errorMessage(exception));
+        }
+        return "redirect:/vocab/sets/" + targetSetId;
+    }
+
     @PostMapping("/vocab/my-folders")
     public String createMyFolder(
             @RequestParam String name,
