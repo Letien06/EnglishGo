@@ -1032,6 +1032,10 @@ public class VocabService {
                 .anyMatch(normalizedWord::equals);
     }
 
+    private void touchFolder(Long folderId) {
+        setDoc(FOLDERS, folderId, Map.of("updatedAtMillis", Instant.now().toEpochMilli()));
+    }
+
     private VocabSet toSet(DocumentSnapshot doc) {
         VocabSet set = new VocabSet();
         Long id = longValue(doc, "id");
