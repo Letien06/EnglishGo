@@ -229,6 +229,36 @@ public class VocabService {
                 .count();
     }
 
+    public int streakDays(Long userId) {
+        if (userId == null) {
+            return 0;
+        }
+        List<LocalDate> days = progressForUser(userId).stream()
+                .map(ProgressDoc::lastReviewedAt)
+                .filter(java.util.Objects::nonNull)
+                .map(instant -> LocalDate.ofInstant(instant, ZoneId.systemDefault()))
+                .distinct()
+                .sorted(Comparator.reverseOrder())
+                .toList();
+        if (days.isEmpty()) {
+            return 0;
+        }
+        int streak = 0;
+        LocalDate expected = LocalDate.now(ZoneId.systemDefault());
+        for (LocalDate day : days) {
+            if (day.equals(expected)) {
+                streak++;
+                expected = expected.minusDays(1);
+            } else if (streak == 0 && day.equals(expected.minusDays(1))) {
+                streak++;
+                expected = day.minusDays(1);
+            } else {
+                break;
+            }
+        }
+        return streak;
+    }
+
     public List<VocabProgressSetCard> findProgressSetCards(Long userId) {
         if (userId == null) {
             return List.of();

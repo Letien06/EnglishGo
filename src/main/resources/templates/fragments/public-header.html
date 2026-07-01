@@ -20,7 +20,7 @@
         <a class="register-button" href="/signup">Đăng ký</a>
     </div>
     <div class="dash-actions" th:if="${shellUser != null}">
-        <span class="streak-pill"><span>♨</span> 2</span>
+        <span class="streak-pill"><span>♨</span> <b data-streak-count th:text="${shellStreakDays}">0</b></span>
         <button class="theme-button" type="button" aria-label="Đổi giao diện">☾</button>
         <button class="dash-icon-button" type="button" aria-label="Thông báo">
             ♢

@@ -14,6 +14,130 @@
     --shadow: 0 18px 50px rgba(22, 39, 34, 0.09);
 }
 
+:root[data-theme="dark"] {
+    color-scheme: dark;
+    --bg: #0f172a;
+    --surface: #111c2f;
+    --surface-soft: #17243a;
+    --line: #26364d;
+    --text: #e5edf7;
+    --muted: #9fb0c6;
+    --primary: #2dd4bf;
+    --primary-dark: #5eead4;
+    --primary-soft: #123b3b;
+    --accent: #fbbf24;
+    --danger: #f87171;
+    --success: #34d399;
+    --shadow: 0 18px 50px rgba(0, 0, 0, 0.32);
+}
+
+:root[data-theme="dark"] body,
+:root[data-theme="dark"] .landing-body,
+:root[data-theme="dark"] .dash-body,
+:root[data-theme="dark"] .vocab-body {
+    background: #0f172a;
+    color: var(--text);
+}
+
+:root[data-theme="dark"] .landing-header,
+:root[data-theme="dark"] .dash-header,
+:root[data-theme="dark"] .app-sidebar,
+:root[data-theme="dark"] .app-topbar,
+:root[data-theme="dark"] .app-main,
+:root[data-theme="dark"] .feature-card,
+:root[data-theme="dark"] .step-card,
+:root[data-theme="dark"] .install-card,
+:root[data-theme="dark"] .auth-form-panel,
+:root[data-theme="dark"] .account-menu,
+:root[data-theme="dark"] .account-panel,
+:root[data-theme="dark"] .vocab-import-toolbar,
+:root[data-theme="dark"] .vocab-create-dialog,
+:root[data-theme="dark"] .vocab-add-dialog,
+:root[data-theme="dark"] .vocab-my-create,
+:root[data-theme="dark"] .vocab-my-set-card,
+:root[data-theme="dark"] .vocab-folder-card,
+:root[data-theme="dark"] .vocab-word-table-wrap,
+:root[data-theme="dark"] .vocab-detail-toolbar,
+:root[data-theme="dark"] .vocab-ai-dialog,
+:root[data-theme="dark"] .listen-sidebar,
+:root[data-theme="dark"] .read-workspace,
+:root[data-theme="dark"] .mock-card,
+:root[data-theme="dark"] .dash-stat-card,
+:root[data-theme="dark"] .skill-summary,
+:root[data-theme="dark"] .goal-total-card,
+:root[data-theme="dark"] .goal-row {
+    border-color: var(--line);
+    background: var(--surface);
+    color: var(--text);
+    box-shadow: var(--shadow);
+}
+
+:root[data-theme="dark"] .landing-nav a,
+:root[data-theme="dark"] .landing-brand,
+:root[data-theme="dark"] .login-link,
+:root[data-theme="dark"] .theme-button,
+:root[data-theme="dark"] .dash-icon-button,
+:root[data-theme="dark"] h1,
+:root[data-theme="dark"] h2,
+:root[data-theme="dark"] h3,
+:root[data-theme="dark"] strong {
+    color: var(--text);
+}
+
+:root[data-theme="dark"] p,
+:root[data-theme="dark"] small,
+:root[data-theme="dark"] .muted,
+:root[data-theme="dark"] .account-hero p,
+:root[data-theme="dark"] .vocab-my-hero p,
+:root[data-theme="dark"] .vocab-import-toolbar p {
+    color: var(--muted);
+}
+
+:root[data-theme="dark"] input,
+:root[data-theme="dark"] textarea,
+:root[data-theme="dark"] select {
+    border-color: var(--line);
+    background: #0b1220;
+    color: var(--text);
+}
+
+:root[data-theme="dark"] input::placeholder,
+:root[data-theme="dark"] textarea::placeholder {
+    color: #72839a;
+}
+
+:root[data-theme="dark"] .landing-nav a.is-active,
+:root[data-theme="dark"] .landing-nav a:hover,
+:root[data-theme="dark"] .theme-button:hover,
+:root[data-theme="dark"] .dash-icon-button:hover,
+:root[data-theme="dark"] .account-menu-link.is-active,
+:root[data-theme="dark"] .vocab-add-tabs .is-active {
+    background: var(--primary-soft);
+    color: var(--primary-dark);
+}
+
+:root[data-theme="dark"] .dash-hero,
+:root[data-theme="dark"] .vocab-hero,
+:root[data-theme="dark"] .vocab-my-hero,
+:root[data-theme="dark"] .auth-marketing,
+:root[data-theme="dark"] .landing-cta {
+    border-color: var(--line);
+    background: linear-gradient(135deg, #13233b, #0f172a);
+    color: var(--text);
+}
+
+:root[data-theme="dark"] .vocab-manual-table th,
+:root[data-theme="dark"] .vocab-word-table th {
+    background: #17243a;
+    color: var(--muted);
+}
+
+:root[data-theme="dark"] .vocab-paste-guide {
+    border-color: #3b2762;
+    background: #1f1733;
+    color: #c4b5fd;
+}
+
 * {
     box-sizing: border-box;
 }

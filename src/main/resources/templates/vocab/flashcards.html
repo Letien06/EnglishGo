@@ -829,6 +829,7 @@
             render();
             return;
         }
+        document.dispatchEvent(new CustomEvent("englishgo:study-saved"));
         finishGame();
         reset();
         state.screen = "hub";
@@ -882,5 +883,6 @@
     function writeHistory() { try { localStorage.setItem(storageKey(), JSON.stringify(state.history.slice(0, 8))); } catch (error) {} }
     function storageKey() { return `englishgo-vocab-history-${setId}`; }
 </script>
+<script th:src="@{/js/app-shell.js}"></script>
 </body>
 </html>

@@ -2,19 +2,36 @@ package com.englishwebapp.controller;
 
 import com.englishwebapp.entity.UserRole;
 import com.englishwebapp.security.AppUserPrincipal;
+import com.englishwebapp.service.VocabService;
 import jakarta.servlet.http.HttpServletRequest;
 import java.util.ArrayList;
 import java.util.List;
+import lombok.RequiredArgsConstructor;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.ControllerAdvice;
 import org.springframework.web.bind.annotation.ModelAttribute;
 
 @ControllerAdvice
+@RequiredArgsConstructor
 public class LayoutControllerAdvice {
+
+    private final VocabService vocabService;
 
     @ModelAttribute("shellUser")
     public AppUserPrincipal shellUser(@AuthenticationPrincipal AppUserPrincipal user) {
         return user;
+    }
+
+    @ModelAttribute("shellStreakDays")
+    public int shellStreakDays(@AuthenticationPrincipal AppUserPrincipal user) {
+        if (user == null) {
+            return 0;
+        }
+        try {
+            return vocabService.streakDays(user.id());
+        } catch (RuntimeException exception) {
+            return 0;
+        }
     }
 
     @ModelAttribute("currentPath")
