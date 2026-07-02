@@ -77,25 +77,32 @@
             || url.pathname.startsWith("/read/");
     }
 
-    function showRouteLoading(label) {
+    function buildLoadingOverlay() {
+        const overlay = document.createElement("div");
+        overlay.className = "route-loading-overlay";
+        overlay.setAttribute("data-route-loading", "");
+        overlay.setAttribute("role", "status");
+        overlay.setAttribute("aria-live", "polite");
+        overlay.innerHTML = `
+            <div class="route-loading-panel">
+                <span class="route-loading-glow" aria-hidden="true"></span>
+                <span class="route-loading-spinner" aria-hidden="true"></span>
+                <span class="route-loading-dots" aria-hidden="true"><i></i><i></i><i></i></span>
+                <strong></strong>
+                <small></small>
+            </div>
+        `;
+        return overlay;
+    }
+
+    function showRouteLoading(label, detail = "Đang tải dữ liệu luyện tập...") {
         let overlay = document.querySelector("[data-route-loading]");
         if (!overlay) {
-            overlay = document.createElement("div");
-            overlay.className = "route-loading-overlay";
-            overlay.setAttribute("data-route-loading", "");
-            overlay.setAttribute("role", "status");
-            overlay.setAttribute("aria-live", "polite");
-            overlay.innerHTML = `
-                <div class="route-loading-panel">
-                    <span class="route-loading-spinner" aria-hidden="true"></span>
-                    <strong>${label}</strong>
-                    <small>Dang tai du lieu luyen tap...</small>
-                </div>
-            `;
+            overlay = buildLoadingOverlay();
             document.body.appendChild(overlay);
-        } else {
-            overlay.querySelector("strong").textContent = label;
         }
+        overlay.querySelector("strong").textContent = label;
+        overlay.querySelector("small").textContent = detail;
         requestAnimationFrame(() => overlay.classList.add("is-visible"));
     }
 
@@ -119,7 +126,7 @@
             if (url.pathname === window.location.pathname && url.search === window.location.search) {
                 return;
             }
-            showRouteLoading(url.pathname.startsWith("/read") ? "Dang mo phan Doc" : "Dang mo phan Nghe");
+            showRouteLoading(url.pathname.startsWith("/read") ? "Đang mở phần Đọc" : "Đang mở phần Nghe");
         });
     }
 

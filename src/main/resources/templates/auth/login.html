@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title th:text="${mode == 'signup'} ? 'Đăng ký - ENGLISHGO' : 'Đăng nhập - ENGLISHGO'">Đăng nhập - ENGLISHGO</title>
-    <link rel="stylesheet" th:href="@{/css/app.css(v='quy-ngu-skin-7')}">
+    <link rel="stylesheet" th:href="@{/css/app.css(v='route-loading-2')}">
 </head>
 <body class="auth-page">
 <main class="auth-layout">
@@ -115,6 +115,42 @@
     const emailToggle = document.getElementById("email-toggle");
     const firebaseReady = firebaseConfig.apiKey && firebaseConfig.authDomain && firebaseConfig.projectId && firebaseConfig.appId;
 
+    function buildAuthLoadingOverlay() {
+        const overlay = document.createElement("div");
+        overlay.className = "route-loading-overlay";
+        overlay.setAttribute("data-route-loading", "");
+        overlay.setAttribute("role", "status");
+        overlay.setAttribute("aria-live", "polite");
+        overlay.innerHTML = `
+            <div class="route-loading-panel">
+                <span class="route-loading-glow" aria-hidden="true"></span>
+                <span class="route-loading-spinner" aria-hidden="true"></span>
+                <span class="route-loading-dots" aria-hidden="true"><i></i><i></i><i></i></span>
+                <strong></strong>
+                <small></small>
+            </div>
+        `;
+        return overlay;
+    }
+
+    function showAuthLoading(label = "Đang đăng nhập", detail = "Đang kết nối máy chủ, vui lòng chờ...") {
+        let overlay = document.querySelector("[data-route-loading]");
+        if (!overlay) {
+            overlay = buildAuthLoadingOverlay();
+            document.body.appendChild(overlay);
+        }
+        overlay.querySelector("strong").textContent = label;
+        overlay.querySelector("small").textContent = detail;
+        requestAnimationFrame(() => overlay.classList.add("is-visible"));
+    }
+
+    function hideAuthLoading() {
+        const overlay = document.querySelector("[data-route-loading]");
+        if (overlay) {
+            overlay.classList.remove("is-visible");
+        }
+    }
+
     if (!firebaseReady) {
         if (emailButton) emailButton.disabled = true;
         googleButton.disabled = true;
@@ -133,6 +169,7 @@
             });
             const result = await response.json();
             if (result.success && result.data) {
+                showAuthLoading("Đang mở trang chủ", "Đang kiểm tra phiên đăng nhập...");
                 window.location.replace("/");
             }
         } catch (error) {
@@ -165,9 +202,11 @@
     async function runAuth(button, callback) {
         errorBox.textContent = "";
         button.disabled = true;
+        showAuthLoading();
         try {
             await callback();
         } catch (error) {
+            hideAuthLoading();
             errorBox.textContent = error.message;
         } finally {
             button.disabled = false;
