@@ -13,6 +13,7 @@ import com.englishwebapp.repository.VocabWordRepository;
 import java.time.LocalDate;
 import java.time.ZoneId;
 import java.util.List;
+import java.util.Optional;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -32,7 +33,7 @@ public class HubService {
 
     @Transactional(readOnly = true)
     public HubView getHub(AppUserPrincipal user) {
-        User storedUser = userRepository.findById(user.id()).orElseThrow();
+        Optional<User> storedUser = userRepository.findById(user.id());
         DashboardSummary summary = dashboardService.getSummary(user.id());
         long todayCompleted = userAttemptRepository.countByUserIdAndSubmittedAtBetween(
                 user.id(),
@@ -48,8 +49,8 @@ public class HubService {
                 summary.streakDays(),
                 summary.completedTests(),
                 summary.averageScore(),
-                storedUser.getTargetScore(),
-                storedUser.getLevel(),
+                storedUser.map(User::getTargetScore).orElse(null),
+                storedUser.map(User::getLevel).orElse(null),
                 summary.masteredWords(),
                 testRepository.count(),
                 questionRepository.count(),
