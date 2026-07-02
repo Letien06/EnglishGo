@@ -3,9 +3,59 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <meta name="color-scheme" content="light">
+    <meta name="color-scheme" content="light only">
     <title>Luyện nghe - ENGLISHGO</title>
-    <link rel="stylesheet" th:href="@{/css/app.css}">
+    <link rel="stylesheet" th:href="@{/css/app.css(v='practice-light-2')}">
+    <style>
+        html {
+            color-scheme: light only;
+            background: #f8fafc;
+        }
+
+        body.practice-body,
+        .listen-practice-page {
+            min-height: 100vh;
+            background: #f8fafc !important;
+            color: #111827 !important;
+            color-scheme: light only;
+        }
+
+        .practice-topbar {
+            background: #1f416a !important;
+            color: #ffffff !important;
+        }
+
+        .practice-topbar strong,
+        .practice-exit {
+            color: #ffffff !important;
+        }
+
+        .practice-listen-pane,
+        .practice-question,
+        .practice-tool-panel {
+            background: #ffffff !important;
+            color: #111827 !important;
+        }
+
+        .practice-question-pane,
+        .practice-audio-card,
+        .practice-tool-panel textarea,
+        .practice-tool-panel input {
+            background: #f8fafc !important;
+            color: #111827 !important;
+        }
+
+        .practice-instruction,
+        .practice-question-pane > header h2,
+        .practice-question h3,
+        .practice-question label,
+        .practice-tool-panel span,
+        .practice-tool-panel textarea,
+        .practice-tool-panel input,
+        .hidden-word-input {
+            color: #111827 !important;
+        }
+    </style>
 </head>
 <body class="practice-body">
 <main class="listen-practice-page"
@@ -184,6 +234,6 @@
         <p>Không tìm thấy item luyện nghe cho Part và Level đã chọn.</p>
     </section>
 </main>
-<script th:src="@{/js/listen-practice.js}"></script>
+<script th:src="@{/js/listen-practice.js(v='practice-light-2')}"></script>
 </body>
 </html>
