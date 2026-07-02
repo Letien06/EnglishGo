@@ -2344,7 +2344,7 @@ button.compact {
     background: #fef2f2;
 }
 
-.answer-feedback {
+.listening-answer-feedback {
     display: block;
     min-height: 20px;
     color: #475569;
@@ -2352,11 +2352,11 @@ button.compact {
     pointer-events: none;
 }
 
-.practice-question.is-correct .answer-feedback {
+.practice-question.is-correct .listening-answer-feedback {
     color: #15803d;
 }
 
-.practice-question.is-wrong .answer-feedback {
+.practice-question.is-wrong .listening-answer-feedback {
     color: #b91c1c;
 }
 

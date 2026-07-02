@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <meta name="color-scheme" content="light only">
     <title>Luyện nghe - ENGLISHGO</title>
-    <link rel="stylesheet" th:href="@{/css/app.css(v='practice-light-2')}">
+    <link rel="stylesheet" th:href="@{/css/app.css(v='practice-overlay-fix-1')}">
     <style>
         html {
             color-scheme: light only;
@@ -112,7 +112,7 @@
                 </p>
 
                 <div class="practice-audio-card" th:if="${item.audioUrl() != null}">
-                    <audio controls th:src="${item.audioUrl()}"></audio>
+                    <audio controls preload="none" th:src="${item.audioUrl()}"></audio>
                     <div>
                         <button type="button" data-audio-action="back-3">↺ 3s</button>
                         <button type="button" data-audio-action="back-5">↺ 5s</button>
@@ -192,7 +192,7 @@
                             <input type="radio" th:name="${'q-' + question.id()}" value="D">
                             <span th:text="${'(D) ' + question.optionD()}">(D)</span>
                         </label>
-                        <small class="answer-feedback" aria-live="polite"></small>
+                        <small class="listening-answer-feedback" aria-live="polite"></small>
                     </article>
                 </div>
 
@@ -234,6 +234,6 @@
         <p>Không tìm thấy item luyện nghe cho Part và Level đã chọn.</p>
     </section>
 </main>
-<script th:src="@{/js/listen-practice.js(v='practice-light-2')}"></script>
+<script th:src="@{/js/listen-practice.js(v='practice-overlay-fix-1')}"></script>
 </body>
 </html>

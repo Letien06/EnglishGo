@@ -25,7 +25,7 @@
 
     function setupAnswerProgress(question) {
         const correctAnswer = normalizeAnswer(question.dataset.correctAnswer);
-        const feedback = question.querySelector(".answer-feedback");
+        const feedback = question.querySelector(".listening-answer-feedback");
         question.querySelectorAll("input[type='radio']").forEach((input) => {
             input.addEventListener("change", () => {
                 const selectedAnswer = normalizeAnswer(input.value);
