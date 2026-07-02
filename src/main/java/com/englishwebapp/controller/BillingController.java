@@ -2,6 +2,7 @@ package com.englishwebapp.controller;
 
 import com.englishwebapp.security.AppUserPrincipal;
 import com.englishwebapp.service.BillingService;
+import java.util.List;
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.stereotype.Controller;
@@ -19,9 +20,9 @@ public class BillingController {
 
     @GetMapping("/billing")
     public String billing(@AuthenticationPrincipal AppUserPrincipal user, Model model) {
-        model.addAttribute("plans", billingService.plans());
-        model.addAttribute("subscription", billingService.activeSubscription(user.id()));
-        model.addAttribute("transactions", billingService.recentTransactions(user.id()));
+        model.addAttribute("plans", List.of());
+        model.addAttribute("subscription", null);
+        model.addAttribute("transactions", List.of());
         return "billing/index";
     }
 
@@ -31,8 +32,7 @@ public class BillingController {
             @RequestParam String planId,
             @RequestParam String provider,
             RedirectAttributes redirectAttributes) {
-        billingService.checkout(user.id(), planId, provider);
-        redirectAttributes.addFlashAttribute("message", "Payment recorded and subscription activated.");
+        redirectAttributes.addFlashAttribute("message", "All learning features are free. Checkout is disabled.");
         return "redirect:/billing";
     }
 }

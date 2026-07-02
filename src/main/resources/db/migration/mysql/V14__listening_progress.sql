@@ -1,4 +1,4 @@
-CREATE TABLE listening_progress (
+CREATE TABLE IF NOT EXISTS listening_progress (
     id BIGINT NOT NULL AUTO_INCREMENT,
     user_id BIGINT NOT NULL,
     source VARCHAR(30) NOT NULL,
@@ -15,7 +15,6 @@ CREATE TABLE listening_progress (
     completed_at TIMESTAMP(6) NOT NULL,
     PRIMARY KEY (id),
     CONSTRAINT fk_listening_progress_user FOREIGN KEY (user_id) REFERENCES users (id),
-    CONSTRAINT uk_listening_progress_user_question UNIQUE (user_id, question_id)
+    CONSTRAINT uk_listening_progress_user_question UNIQUE (user_id, question_id),
+    INDEX idx_listening_progress_user_part_level (user_id, part, level)
 );
-
-CREATE INDEX idx_listening_progress_user_part_level ON listening_progress (user_id, part, level);

@@ -69,4 +69,77 @@
     document.querySelectorAll(".theme-button").forEach(bindTheme);
     document.querySelectorAll("[data-logout-button]").forEach(bindLogout);
     document.addEventListener("englishgo:study-saved", markStudySaved);
+
+    /* ── PERCEIVED-PERF: hover/focus prefetch for internal links ──
+       Warm browser cache for the destination HTML the moment the user
+       signals intent. On click the
+       navigation is served from memory/disk cache and feels instant. */
+    const prefetched = new Set();
+    const prefetchExclude = /^(javascript:|mailto:|tel:|#|data:)/i;
+
+    function isInternalLink(anchor) {
+        if (!anchor || !anchor.href) return false;
+        if (prefetchExclude.test(anchor.getAttribute("href") || "")) return false;
+        if (anchor.hasAttribute("download")) return false;
+        const target = anchor.getAttribute("target");
+        if (target && target.toLowerCase() === "_blank") return false;
+        if (anchor.hasAttribute("data-no-prefetch")) return false;
+        let url;
+        try { url = new URL(anchor.href, window.location.href); } catch (e) { return false; }
+        if (url.origin !== window.location.origin) return false;
+        if (url.pathname === window.location.pathname && url.search === window.location.search) return false;
+        if (anchor.pathname === "/auth/logout") return false;
+        return true;
+    }
+
+    function prefetchPage(anchor) {
+        if (!isInternalLink(anchor)) return;
+        const url = anchor.href;
+        if (prefetched.has(url)) return;
+        prefetched.add(url);
+        try {
+            const link = document.createElement("link");
+            link.rel = "prefetch";
+            link.as = "document";
+            link.href = url;
+            link.crossOrigin = "same-origin";
+            document.head.appendChild(link);
+        } catch (e) { /* older browsers — ignore */ }
+        try {
+            fetch(url, {credentials: "same-origin", cache: "force-cache"})
+                .catch(() => { /* best-effort */ });
+        } catch (e) { /* ignore */ }
+    }
+
+    function bindPrefetch(anchor) {
+        let armed = false;
+        const arm = () => {
+            if (armed) return;
+            armed = true;
+            if (typeof window.requestIdleCallback === "function") {
+                window.requestIdleCallback(() => prefetchPage(anchor), {timeout: 600});
+            } else {
+                setTimeout(() => prefetchPage(anchor), 80);
+            }
+        };
+        anchor.addEventListener("pointerenter", arm, {passive: true});
+        anchor.addEventListener("focus", arm);
+    }
+
+    function scanPrefetch(root) {
+        if (!root || !root.querySelectorAll) return;
+        root.querySelectorAll('a[href]').forEach(bindPrefetch);
+    }
+
+    scanPrefetch(document);
+    const prefetchObserver = new MutationObserver(mutations => {
+        for (const mutation of mutations) {
+            for (const node of mutation.addedNodes) {
+                if (node.nodeType !== 1) continue;
+                if (node.tagName === "A" && node.hasAttribute("href")) bindPrefetch(node);
+                else if (node.querySelectorAll) scanPrefetch(node);
+            }
+        }
+    });
+    prefetchObserver.observe(document.documentElement, {childList: true, subtree: true});
 })();

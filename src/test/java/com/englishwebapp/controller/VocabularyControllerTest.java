@@ -64,12 +64,13 @@ class VocabularyControllerTest {
     }
 
     @Test
-    void vocabPageRendersLearningTabsAndSets() throws Exception {
+    void vocabPageRendersLearningDemo() throws Exception {
         mockMvc.perform(get("/vocab"))
                 .andExpect(status().isOk())
                 .andExpect(view().name("vocab/sets"))
                 .andExpect(content().string(Matchers.containsString("vocab-hero")))
-                .andExpect(content().string(Matchers.containsString("Contracts")));
+                .andExpect(content().string(Matchers.containsString("Học (demo)")))
+                .andExpect(content().string(Matchers.containsString("vocab-demo-panel")));
     }
 
     @Test

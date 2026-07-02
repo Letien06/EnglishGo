@@ -5,55 +5,42 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <meta name="color-scheme" content="light only">
     <title>Luyện nghe - ENGLISHGO</title>
-    <link rel="stylesheet" th:href="@{/css/app.css(v='practice-mask-levels-1')}">
+    <link rel="stylesheet" th:href="@{/css/app.css(v='practice-modern-11')}">
     <style>
-        html {
-            color-scheme: light only;
-            background: #f8fafc;
-        }
-
-        body.practice-body,
-        .listen-practice-page {
-            min-height: 100vh;
-            background: #f8fafc !important;
-            color: #111827 !important;
-            color-scheme: light only;
-        }
-
+        /* ====== Topbar layout: left | center | right ====== */
         .practice-topbar {
-            background: #1f416a !important;
-            color: #ffffff !important;
+            display: flex !important;
+            align-items: center !important;
+            gap: 18px !important;
         }
 
-        .practice-topbar strong,
-        .practice-exit {
-            color: #ffffff !important;
+        .practice-topbar-left {
+            display: flex !important;
+            align-items: center !important;
+            gap: 12px !important;
+            flex: 0 0 auto !important;
         }
 
-        .practice-listen-pane,
-        .practice-question,
-        .practice-tool-panel {
-            background: #ffffff !important;
-            color: #111827 !important;
+        .practice-topbar .practice-tools {
+            flex: 1 1 auto !important;
+            justify-content: center !important;
         }
 
-        .practice-question-pane,
-        .practice-audio-card,
-        .practice-tool-panel textarea,
-        .practice-tool-panel input {
-            background: #f8fafc !important;
-            color: #111827 !important;
+        .practice-topbar .qn-tools-more {
+            display: none !important;
         }
 
-        .practice-instruction,
-        .practice-question-pane > header h2,
-        .practice-question h3,
-        .practice-question label,
-        .practice-tool-panel span,
-        .practice-tool-panel textarea,
-        .practice-tool-panel input,
-        .hidden-word-input {
-            color: #111827 !important;
+        .practice-topbar .practice-status {
+            display: flex !important;
+            align-items: center !important;
+            gap: 10px !important;
+            flex: 0 0 auto !important;
+        }
+
+        .practice-topbar .practice-elapsed {
+            font-variant-numeric: tabular-nums;
+            min-width: 48px;
+            text-align: center;
         }
     </style>
 </head>
@@ -61,39 +48,43 @@
 <main class="listen-practice-page"
       th:attr="data-part=${activePart.id()},data-level=${selectedLevel},data-mode=${selectedMode},data-assist=${assistPercent},data-authenticated=${listeningUserAuthenticated}">
     <header class="practice-topbar">
-        <a class="practice-exit" th:href="@{/listen(part=${activePart.id()})}">← Thoát</a>
-        <strong th:text="${(activePart.id() == '1' ? 'Part 1' :
-                activePart.id() == '2' ? 'Part 2' :
-                activePart.id() == '3' ? 'Part 3' : 'Part 4') + ' - Lv' + selectedLevel + ' - Luyện tập'}">Part 1 - Lv1 - Luyện tập</strong>
-
-        <nav class="practice-tools" aria-label="Practice modes">
-            <a th:href="@{/listen/practice(part=${activePart.id()},level=${selectedLevel},mode='normal',assist=${assistPercent})}"
-               th:classappend="${selectedMode == 'normal'} ? ' is-active'">Bình thường</a>
-            <a th:href="@{/listen/practice(part=${activePart.id()},level=${selectedLevel},mode='bilingual',assist=${assistPercent})}"
-               th:classappend="${selectedMode == 'bilingual'} ? ' is-active'">Song ngữ</a>
-            <a th:href="@{/listen/practice(part=${activePart.id()},level=${selectedLevel},mode='fill',assist=${assistPercent})}"
-               th:classappend="${selectedMode == 'fill'} ? ' is-active'">Điền từ</a>
-            <a th:href="@{/listen/practice(part=${activePart.id()},level=${selectedLevel},mode='flip',assist=${assistPercent})}"
-               th:classappend="${selectedMode == 'flip'} ? ' is-active'">Lật từ</a>
-        </nav>
-
-        <div class="practice-quick-tools" aria-label="Learning tools">
-            <button type="button" data-panel-target="notes">Ghi chú</button>
-            <button type="button" data-panel-target="vocab">Giỏ từ</button>
-            <button type="button" data-auto-toggle>Auto</button>
+        <div class="practice-topbar-left">
+            <a class="practice-exit" th:href="@{/listen(part=${activePart.id()})}" aria-label="Thoát">←</a>
+            <span class="qn-seal" aria-hidden="true">文</span>
+            <strong class="practice-title"
+                    th:text="${(activePart.id() == '1' ? 'Part 1' :
+                            activePart.id() == '2' ? 'Part 2' :
+                            activePart.id() == '3' ? 'Part 3' : 'Part 4') + ' · Cấp độ ' + selectedLevel + ' · Luyện nghe'}">Part 1 · Cấp độ 1 · Luyện nghe</strong>
         </div>
 
-        <form class="assist-select" method="get" action="/listen/practice">
-            <input type="hidden" name="part" th:value="${activePart.id()}">
-            <input type="hidden" name="level" th:value="${selectedLevel}">
-            <input type="hidden" name="mode" th:value="${selectedMode}">
-            <select name="assist" onchange="this.form.submit()" aria-label="Tỉ lệ hỗ trợ">
-                <option th:each="value : ${assistOptions}"
-                        th:value="${value}"
-                        th:selected="${value == assistPercent}"
-                        th:text="${value + '%'}">30%</option>
-            </select>
-        </form>
+        <button class="qn-tools-more" type="button" data-tools-drawer aria-label="Mở công cụ học" aria-expanded="false">…</button>
+        <nav class="practice-tools" aria-label="Công cụ học">
+            <a th:href="@{/listen/practice(part=${activePart.id()},level=${selectedLevel},mode='normal',assist=${assistPercent})}"
+               th:classappend="${selectedMode == 'normal'} ? ' is-active'"><span class="qn-tool-icon" aria-hidden="true">▥</span>Bình thường</a>
+            <a th:href="@{/listen/practice(part=${activePart.id()},level=${selectedLevel},mode='bilingual',assist=${assistPercent})}"
+               th:classappend="${selectedMode == 'bilingual'} ? ' is-active'"><span class="qn-tool-icon" aria-hidden="true">文</span>Song ngữ</a>
+            <a th:href="@{/listen/practice(part=${activePart.id()},level=${selectedLevel},mode='fill',assist=${assistPercent})}"
+               th:classappend="${selectedMode == 'fill'} ? ' is-active'"><span class="qn-tool-icon" aria-hidden="true">✍</span>Điền từ</a>
+            <a th:href="@{/listen/practice(part=${activePart.id()},level=${selectedLevel},mode='flip',assist=${assistPercent})}"
+               th:classappend="${selectedMode == 'flip'} ? ' is-active'"><span class="qn-tool-icon" aria-hidden="true">⇄</span>Lật từ</a>
+        </nav>
+
+        <div class="practice-status" aria-label="Trạng thái luyện tập">
+            <button type="button" data-auto-toggle title="Tự chuyển bài khi trả lời đúng">Auto</button>
+            <span class="practice-elapsed" data-elapsed-time>00:00</span>
+            <form class="assist-select" method="get" action="/listen/practice">
+                <input type="hidden" name="part" th:value="${activePart.id()}">
+                <input type="hidden" name="level" th:value="${selectedLevel}">
+                <input type="hidden" name="mode" th:value="${selectedMode}">
+                <input type="hidden" name="q" value="0" data-q-field>
+                <select name="assist" onchange="this.form.submit()" aria-label="Tỉ lệ hỗ trợ">
+                    <option th:each="value : ${assistOptions}"
+                            th:value="${value}"
+                            th:selected="${value == assistPercent}"
+                            th:text="${value + '%'}">30%</option>
+                </select>
+            </form>
+        </div>
     </header>
 
     <section class="learning-empty" th:if="${dauToeicError != null}">
@@ -241,9 +232,16 @@
 
     <footer class="practice-bottom-nav"
             th:if="${practiceSession != null and !practiceSession.items().empty}">
-        <button type="button" data-practice-prev aria-label="Câu trước">‹</button>
-        <span data-practice-counter th:text="${'1/' + practiceSession.items().size()}">1/20</span>
-        <button type="button" data-practice-next aria-label="Câu sau">›</button>
+        <div class="practice-bottom-tools">
+            <a class="qn-report" href="mailto:support@quyngu.vn?subject=B%C3%A1o%20l%E1%BB%97i%20c%C3%A2u%20luy%E1%BB%87n%20nghe">⚑ Báo lỗi</a>
+            <button type="button" class="qn-basket" data-panel-target="vocab">☷ Giỏ từ</button>
+            <button type="button" class="qn-note" data-panel-target="notes">✎ Ghi chú</button>
+        </div>
+        <div class="practice-bottom-pager">
+            <button type="button" data-practice-prev aria-label="Câu trước">‹</button>
+            <span data-practice-counter th:text="${'1/' + practiceSession.items().size()}">1/20</span>
+            <button type="button" data-practice-next aria-label="Câu sau">›</button>
+        </div>
     </footer>
 
     <section class="listen-login-required"
@@ -253,6 +251,6 @@
         <p>Không tìm thấy item luyện nghe cho Part và Level đã chọn.</p>
     </section>
 </main>
-<script th:src="@{/js/listen-practice.js(v='practice-mask-levels-1')}"></script>
+<script th:src="@{/js/listen-practice.js(v='practice-modern-1')}"></script>
 </body>
 </html>

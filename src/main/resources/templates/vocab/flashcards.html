@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title th:text="${vocabSession.set.title} + ' - ENGLISHGO'">Vocabulary - ENGLISHGO</title>
-    <link rel="stylesheet" th:href="@{/css/app.css}">
+    <link rel="stylesheet" th:href="@{/css/app.css(v='quy-ngu-skin-7')}">
 </head>
 <body class="landing-body vocab-body" th:attr="data-set-id=${vocabSession.set.id}">
 <header th:replace="~{fragments/public-header :: main('vocab')}"></header>
@@ -883,6 +883,6 @@
     function writeHistory() { try { localStorage.setItem(storageKey(), JSON.stringify(state.history.slice(0, 8))); } catch (error) {} }
     function storageKey() { return `englishgo-vocab-history-${setId}`; }
 </script>
-<script th:src="@{/js/app-shell.js}"></script>
+<script th:src="@{/js/app-shell.js(v='quy-ngu-skin-8')}"></script>
 </body>
 </html>

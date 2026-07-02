@@ -12,7 +12,8 @@
         assist: Number(page.dataset.assist || 30),
         replayCount: 0,
         auto: false,
-        currentIndex: 0
+        currentIndex: 0,
+        startedAt: Date.now()
     };
 
     setupSingleItemNavigation();
@@ -24,12 +25,18 @@
     document.querySelectorAll(".practice-vocab-panel").forEach(setupVocabPanel);
     setupPanelToggles();
     setupAutoToggle();
+    setupElapsedTimer();
     setupKeyboardShortcuts();
 
     function setupSingleItemNavigation() {
-        activateItem(0, {scroll: false});
+        activateItem(initialItemIndex(), {scroll: false});
         document.querySelector("[data-practice-prev]")?.addEventListener("click", () => activateItem(state.currentIndex - 1));
         document.querySelector("[data-practice-next]")?.addEventListener("click", () => activateItem(state.currentIndex + 1));
+    }
+
+    function initialItemIndex() {
+        const value = Number.parseInt(new URLSearchParams(window.location.search).get("q") || "0", 10);
+        return Number.isNaN(value) ? 0 : value;
     }
 
     function activateItem(index, options = {}) {
@@ -61,9 +68,29 @@
         if (next) {
             next.disabled = state.currentIndex >= items.length - 1;
         }
+        syncCurrentQuestionParam();
+    }
+
+    function syncCurrentQuestionParam() {
+        document.querySelectorAll(".practice-tools a").forEach((link) => {
+            try {
+                const url = new URL(link.getAttribute("href"), window.location.origin);
+                url.searchParams.set("q", String(state.currentIndex));
+                link.setAttribute("href", url.pathname + url.search);
+            } catch (error) {
+                // giữ nguyên link nếu không hợp lệ
+            }
+        });
+        const qField = document.querySelector("[data-q-field]");
+        if (qField) {
+            qField.value = String(state.currentIndex);
+        }
     }
 
     function setupQuestionMode(question) {
+        if (state.mode === "normal") {
+            question.classList.add("uses-normal");
+        }
         if (state.mode === "bilingual") {
             setupBilingualAnswers(question);
         }
@@ -302,7 +329,8 @@
                     correctAnswer,
                     modeUsed: state.mode,
                     assistPercent: state.assist,
-                    replayCount: state.replayCount
+                    replayCount: state.replayCount,
+                    elapsedSeconds: Math.max(0, Math.round((Date.now() - state.startedAt) / 1000))
                 })
             });
         } catch (error) {
@@ -442,6 +470,21 @@
             state.auto = !state.auto;
             button.classList.toggle("is-active", state.auto);
         });
+    }
+
+    function setupElapsedTimer() {
+        const target = document.querySelector("[data-elapsed-time]");
+        if (!target) {
+            return;
+        }
+        const update = () => {
+            const seconds = Math.max(0, Math.floor((Date.now() - state.startedAt) / 1000));
+            const minutes = Math.floor(seconds / 60);
+            const rest = seconds % 60;
+            target.textContent = `${String(minutes).padStart(2, "0")}:${String(rest).padStart(2, "0")}`;
+        };
+        update();
+        window.setInterval(update, 1000);
     }
 
     function setupKeyboardShortcuts() {

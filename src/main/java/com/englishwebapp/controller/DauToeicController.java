@@ -9,6 +9,7 @@ import com.englishwebapp.dto.DauToeicTestResponse;
 import com.englishwebapp.security.AppUserPrincipal;
 import com.englishwebapp.service.DauToeicClientService;
 import com.englishwebapp.service.ListeningProgressService;
+import com.englishwebapp.service.ReadingProgressService;
 import java.util.List;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
@@ -26,6 +27,7 @@ public class DauToeicController {
 
     private final DauToeicClientService dauToeicClientService;
     private final ListeningProgressService listeningProgressService;
+    private final ReadingProgressService readingProgressService;
 
     @GetMapping("/sets")
     public ResponseEntity<ApiResponse<List<DauToeicSetResponse>>> sets() {
@@ -80,5 +82,23 @@ public class DauToeicController {
             @PathVariable int level,
             @RequestParam(required = false) Integer limit) {
         return ResponseEntity.ok(ApiResponse.ok(dauToeicClientService.getDifficultySession(part, level, limit)));
+    }
+
+    @GetMapping("/reading/parts/{part}/levels")
+    public ResponseEntity<ApiResponse<List<DauToeicDifficultyLevelResponse>>> readingDifficultyLevels(
+            @PathVariable int part,
+            @AuthenticationPrincipal AppUserPrincipal user) {
+        List<DauToeicDifficultyLevelResponse> levels = readingProgressService.applyProgress(
+                user == null ? null : user.id(),
+                dauToeicClientService.listReadingDifficultyLevels(part));
+        return ResponseEntity.ok(ApiResponse.ok(levels));
+    }
+
+    @GetMapping("/reading/parts/{part}/levels/{level}")
+    public ResponseEntity<ApiResponse<DauToeicDifficultySessionResponse>> readingDifficultySession(
+            @PathVariable int part,
+            @PathVariable int level,
+            @RequestParam(required = false) Integer limit) {
+        return ResponseEntity.ok(ApiResponse.ok(dauToeicClientService.getReadingDifficultySession(part, level, limit)));
     }
 }

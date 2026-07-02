@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Từ vựng - ENGLISHGO</title>
-    <link rel="stylesheet" th:href="@{/css/app.css}">
+    <link rel="stylesheet" th:href="@{/css/app.css(v='quy-ngu-skin-8')}">
 </head>
 <body class="landing-body vocab-body">
 <header th:replace="~{fragments/public-header :: main('vocab')}"></header>
@@ -20,7 +20,7 @@
     </section>
 
     <nav class="vocab-tabs" aria-label="Vocabulary sections">
-        <a th:classappend="${tab == 'learn'} ? ' is-active'" href="/vocab"><span>▦</span> Học</a>
+        <a th:classappend="${tab == 'learn'} ? ' is-active'" href="/vocab"><span>▦</span> Học (demo)</a>
         <a th:classappend="${tab == 'progress'} ? ' is-active'" href="/vocab?tab=progress"><span>◷</span> Tiến độ</a>
         <a th:classappend="${tab == 'my'} ? ' is-active'" href="/vocab?tab=my"><span>☆</span> Từ vựng của tôi</a>
         <a th:classappend="${tab == 'algorithm'} ? ' is-active'" href="/vocab?tab=algorithm"><span>⚙</span> Thuật toán học từ</a>
@@ -28,31 +28,10 @@
     </nav>
 
     <section class="vocab-learn" th:if="${tab == 'learn'}">
-        <div class="vocab-set-filters">
-            <a class="is-active" href="/vocab">Tất cả bộ học</a>
-            <a href="/vocab?topic=ETS 2023">ETS 2023</a>
-            <a href="/vocab?topic=ETS 2024">ETS 2024</a>
-            <a href="/vocab?topic=ETS 2026">ETS 2026</a>
-            <a href="/vocab?topic=TOEIC MASTER">TOEIC MASTER</a>
-        </div>
-
-        <section class="vocab-set-grid" th:if="${!sets.empty}">
-            <article class="vocab-set-card" th:each="set, iter : ${sets.content}" th:classappend="${iter.index == 3} ? ' is-highlighted'">
-                <span class="vocab-set-label" th:text="${set.topic()} ?: 'TOEIC'">TOEIC</span>
-                <span class="vocab-pro-badge" th:if="${set.premium()}">PRO</span>
-                <h2 th:text="${set.title()}">Contracts</h2>
-                <p><span th:text="${set.wordCount()}">12</span> từ vựng</p>
-                <a th:href="@{/vocab/sets/{id}(id=${set.id()})}">› Xem bộ từ</a>
-            </article>
-        </section>
-
-        <section class="vocab-set-grid" th:if="${sets.empty}">
-            <article class="vocab-set-card" th:each="name : ${fallbackSets}">
-                <span class="vocab-set-label">TOEIC</span>
-                <h2 th:text="${name}">Contracts</h2>
-                <p>12 từ vựng</p>
-                <a href="/vocab">› Vào học</a>
-            </article>
+        <section class="vocab-empty-panel vocab-demo-panel">
+            <span>▦</span>
+            <h2>Học từ vựng đang ở chế độ demo</h2>
+            <p>Các bộ học gợi ý chưa mở sử dụng. Hiện tại chỉ dùng các mục Tiến độ, Từ vựng của tôi, Thuật toán học từ và Cộng đồng.</p>
         </section>
     </section>
 
@@ -673,6 +652,6 @@
         });
     })();
 </script>
-<script th:src="@{/js/app-shell.js}"></script>
+<script th:src="@{/js/app-shell.js(v='quy-ngu-skin-8')}"></script>
 </body>
 </html>

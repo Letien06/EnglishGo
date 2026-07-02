@@ -1,0 +1,39 @@
+<!DOCTYPE html>
+<html lang="en" xmlns:th="http://www.thymeleaf.org">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Contribute</title>
+    <link rel="stylesheet" th:href="@{/css/app.css(v='quy-ngu-skin-7')}">
+</head>
+<body>
+<div class="app-shell">
+    <div th:replace="~{fragments/shell :: sidebar}"></div>
+    <div class="app-main">
+        <div th:replace="~{fragments/shell :: topbar('Contribute', 'Submit original TOEIC practice content')}"></div>
+        <main class="app-content narrow">
+            <section class="ew-alert" th:if="${message}" th:text="${message}">Message</section>
+            <section class="ew-alert" th:if="${error}" th:text="${error}">Error</section>
+            <form class="ew-card" method="post" action="/contribute">
+                <label class="form-field">Title
+                    <input name="title" required>
+                </label>
+                <label class="form-field">Question, passage, or notes
+                    <textarea name="content" rows="8" required></textarea>
+                </label>
+                <label class="form-field">Source note
+                    <input name="sourceNote" placeholder="Original, AI draft, teacher-created, licensed source">
+                </label>
+                <label class="form-field">
+                    <input name="ownsRights" type="checkbox" value="true" required>
+                    I confirm I have the right to share this content.
+                </label>
+                <button type="submit">Submit for review</button>
+            </form>
+        </main>
+    </div>
+    <div th:replace="~{fragments/shell :: mobileNav}"></div>
+</div>
+<script th:src="@{/js/app-shell.js(v='quy-ngu-skin-7')}"></script>
+</body>
+</html>

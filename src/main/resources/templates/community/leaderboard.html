@@ -1,0 +1,36 @@
+<!DOCTYPE html>
+<html lang="en" xmlns:th="http://www.thymeleaf.org">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Leaderboard</title>
+    <link rel="stylesheet" th:href="@{/css/app.css(v='quy-ngu-skin-7')}">
+</head>
+<body>
+<div class="app-shell">
+    <div th:replace="~{fragments/shell :: sidebar}"></div>
+    <div class="app-main">
+        <div th:replace="~{fragments/shell :: topbar('Leaderboard', 'Compare real learner progress')}"></div>
+        <main class="app-content">
+            <nav class="mock-tabs" aria-label="Leaderboard period">
+                <a th:classappend="${period == 'weekly'} ? ' is-active'" href="/leaderboard?period=weekly">Weekly</a>
+                <a th:classappend="${period == 'all-time'} ? ' is-active'" href="/leaderboard?period=all-time">All-time</a>
+            </nav>
+
+            <section class="ew-card">
+                <p class="muted" th:if="${leaderboard.empty}">No scores for this period yet.</p>
+                <ol class="leaderboard-list" th:unless="${leaderboard.empty}">
+                    <li th:each="entry, iter : ${leaderboard}">
+                        <span class="ew-badge" th:text="${entry.rankPosition != null ? '#' + entry.rankPosition : '#' + iter.count}">#1</span>
+                        <strong th:text="${entry.user.displayName != null && !#strings.isEmpty(entry.user.displayName) ? entry.user.displayName : entry.user.email}">Learner</strong>
+                        <span th:text="${entry.score}">0</span>
+                    </li>
+                </ol>
+            </section>
+        </main>
+    </div>
+    <div th:replace="~{fragments/shell :: mobileNav}"></div>
+</div>
+<script th:src="@{/js/app-shell.js(v='quy-ngu-skin-7')}"></script>
+</body>
+</html>

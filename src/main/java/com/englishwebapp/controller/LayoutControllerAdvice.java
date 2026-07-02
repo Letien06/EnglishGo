@@ -42,7 +42,7 @@ public class LayoutControllerAdvice {
     public List<NavItem> navItems(@AuthenticationPrincipal AppUserPrincipal user) {
         List<NavItem> items = new ArrayList<>();
         items.add(new NavItem("Hub", "/hub", "Learn", "H"));
-        items.add(new NavItem("Practice", "/tests", "Learn", "P"));
+        items.add(new NavItem("Practice", "/mock-test", "Learn", "P"));
         items.add(new NavItem("Vocabulary", "/vocab", "Learn", "V"));
         items.add(new NavItem("Lessons", "/lessons", "Learn", "L"));
         items.add(new NavItem("History", "/history", "Review", "H"));

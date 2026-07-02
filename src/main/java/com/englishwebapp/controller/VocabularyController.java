@@ -10,6 +10,7 @@ import com.englishwebapp.service.VocabService;
 import jakarta.validation.Valid;
 import java.util.List;
 import lombok.RequiredArgsConstructor;
+import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.web.PageableDefault;
 import org.springframework.http.ResponseEntity;
@@ -44,29 +45,42 @@ public class VocabularyController {
             @AuthenticationPrincipal AppUserPrincipal user,
             Model model) {
         Long userId = user == null ? null : user.id();
-        model.addAttribute("sets", vocabService.findSetCards(topic, pageable));
-        model.addAttribute("mySets", vocabService.findMySetCards(userId, folderId));
-        model.addAttribute("myFolders", vocabService.findMyFolderCards(userId, folderSearch));
-        model.addAttribute("communityFolders", vocabService.findCommunityFolderCards(q));
-        model.addAttribute("selectedCommunityFolder", communityFolderId == null ? null : vocabService.getCommunityFolderCard(communityFolderId));
-        model.addAttribute("communitySets", communityFolderId == null ? List.of() : vocabService.findCommunitySetCards(communityFolderId));
-        model.addAttribute("practiceSets", vocabService.findPracticeSetOptions(userId));
+        String activeTab = normalizeTab(tab);
+        model.addAttribute("sets", Page.empty(pageable));
+        model.addAttribute("mySets", List.of());
+        model.addAttribute("myFolders", List.of());
+        model.addAttribute("communityFolders", List.of());
+        model.addAttribute("selectedCommunityFolder", null);
+        model.addAttribute("communitySets", List.of());
+        model.addAttribute("practiceSets", List.of());
+        model.addAttribute("progressSets", List.of());
         model.addAttribute("selectedFolderId", folderId);
         model.addAttribute("selectedCommunityFolderId", communityFolderId);
         model.addAttribute("folderSearch", folderSearch);
         model.addAttribute("communityQuery", q);
         model.addAttribute("topic", topic);
-        model.addAttribute("tab", normalizeTab(tab));
-        model.addAttribute("totalWords", vocabService.totalWords(userId));
-        model.addAttribute("learnedWords", vocabService.learnedWords(userId));
-        model.addAttribute("masteredWords", vocabService.masteredWords(userId));
-        model.addAttribute("dueWords", vocabService.dueWords(userId));
-        long studiedToday = vocabService.studiedWordsToday(userId);
-        int dailyNewGoal = vocabService.dailyNewWordGoal();
-        model.addAttribute("studiedToday", studiedToday);
-        model.addAttribute("dailyNewGoal", dailyNewGoal);
-        model.addAttribute("dailyNewPercent", dailyNewGoal == 0 ? 0 : Math.min(100, Math.round((studiedToday * 100.0f) / dailyNewGoal)));
-        model.addAttribute("progressSets", vocabService.findProgressSetCards(userId));
+        model.addAttribute("tab", activeTab);
+        model.addAttribute("totalWords", 0L);
+        model.addAttribute("learnedWords", 0L);
+        model.addAttribute("masteredWords", 0L);
+        model.addAttribute("dueWords", 0L);
+        model.addAttribute("studiedToday", 0L);
+        model.addAttribute("dailyNewGoal", vocabService.dailyNewWordGoal());
+        model.addAttribute("dailyNewPercent", 0);
+        if ("progress".equals(activeTab)) {
+            addProgressTabModel(userId, model);
+        } else if ("my".equals(activeTab)) {
+            model.addAttribute("mySets", vocabService.findMySetCards(userId, folderId));
+            model.addAttribute("myFolders", vocabService.findMyFolderCards(userId, folderSearch));
+            model.addAttribute("dueWords", vocabService.dueWords(userId));
+        } else if ("community".equals(activeTab)) {
+            model.addAttribute("communityFolders", vocabService.findCommunityFolderCards(q));
+            if (communityFolderId != null) {
+                model.addAttribute("selectedCommunityFolder", vocabService.getCommunityFolderCard(communityFolderId));
+                model.addAttribute("communitySets", vocabService.findCommunitySetCards(communityFolderId));
+                model.addAttribute("mySets", vocabService.findMySetCards(userId));
+            }
+        }
         model.addAttribute("fallbackSets", List.of("Contracts", "Marketing", "Warranties", "Business Planning"));
         return "vocab/sets";
     }
@@ -402,6 +416,22 @@ public class VocabularyController {
             case "progress", "my", "community", "algorithm" -> tab;
             default -> "learn";
         };
+    }
+
+    private void addProgressTabModel(Long userId, Model model) {
+        if (userId == null) {
+            return;
+        }
+        model.addAttribute("totalWords", vocabService.totalWords(userId));
+        model.addAttribute("learnedWords", vocabService.learnedWords(userId));
+        model.addAttribute("masteredWords", vocabService.masteredWords(userId));
+        model.addAttribute("dueWords", vocabService.dueWords(userId));
+        long studiedToday = vocabService.studiedWordsToday(userId);
+        int dailyNewGoal = vocabService.dailyNewWordGoal();
+        model.addAttribute("studiedToday", studiedToday);
+        model.addAttribute("dailyNewGoal", dailyNewGoal);
+        model.addAttribute("dailyNewPercent", dailyNewGoal == 0 ? 0 : Math.min(100, Math.round((studiedToday * 100.0f) / dailyNewGoal)));
+        model.addAttribute("progressSets", vocabService.findProgressSetCards(userId));
     }
 
     private String normalizeMode(String mode) {

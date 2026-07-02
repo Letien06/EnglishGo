@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Luyện TOEIC miễn phí - ENGLISHGO</title>
-    <link rel="stylesheet" th:href="@{/css/app.css}">
+    <link rel="stylesheet" th:href="@{/css/app.css(v='quy-ngu-skin-7')}">
 </head>
 <body class="dash-body">
 <header th:replace="~{fragments/public-header :: main('home')}"></header>
@@ -76,7 +76,7 @@
             <button type="button"><span>⌕</span> Nói <em>Sắp ra</em></button>
             <button type="button"><span>✎</span> Viết <em>Sắp ra</em></button>
             <a href="/vocab"><span>A</span> Từ vựng</a>
-            <a href="/tests"><span>?</span> Đề thi</a>
+            <a href="/mock-test"><span>?</span> Đề thi</a>
             <a id="video" href="/lessons"><span>▻</span> Video</a>
         </div>
     </section>
@@ -174,6 +174,6 @@
     </section>
 </main>
 
-<script th:src="@{/js/app-shell.js}"></script>
+<script th:src="@{/js/app-shell.js(v='quy-ngu-skin-7')}"></script>
 </body>
 </html>

@@ -68,11 +68,11 @@ public class HubService {
 
     private List<HubAction> quickActions() {
         return List.of(
-                new HubAction("Listen", "Practice TOEIC listening items from the current question bank.", "/tests", "L", "Practice"),
-                new HubAction("Read", "Train reading, grammar, and passage questions.", "/tests", "R", "Practice"),
+                new HubAction("Listen", "Practice TOEIC listening items from the current question bank.", "/listen", "L", "Practice"),
+                new HubAction("Read", "Train reading, grammar, and passage questions.", "/read", "R", "Practice"),
                 new HubAction("Vocabulary", "Review flashcard sets and spaced repetition words.", "/vocab", "V", "Ready"),
-                new HubAction("Mock Test", "Start a timed TOEIC-style practice set.", "/tests", "M", "Ready"),
+                new HubAction("Mock Test", "Start a timed TOEIC-style practice set.", "/mock-test", "M", "Ready"),
                 new HubAction("Wrong", "Review submitted attempts and retry weak questions soon.", "/history", "W", "From history"),
-                new HubAction("Starred", "Starred-question queue is tracked for the next practice loop.", "/tests", "S", "Planned"));
+                new HubAction("Starred", "Starred-question queue is tracked for the next practice loop.", "/mock-test", "S", "Planned"));
     }
 }

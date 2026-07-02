@@ -25,11 +25,26 @@ public class LessonController {
             @RequestParam(required = false) String topic,
             @PageableDefault(size = 12) Pageable pageable,
             Model model) {
+        populateLessons(topic, pageable, model);
+        model.addAttribute("grammarMode", false);
+        return "lessons/list";
+    }
+
+    @GetMapping("/grammar")
+    public String grammar(
+            @RequestParam(defaultValue = "grammar") String topic,
+            @PageableDefault(size = 12) Pageable pageable,
+            Model model) {
+        populateLessons(topic, pageable, model);
+        model.addAttribute("grammarMode", true);
+        return "lessons/list";
+    }
+
+    private void populateLessons(String topic, Pageable pageable, Model model) {
         model.addAttribute("lessons", StringUtils.hasText(topic)
                 ? lessonRepository.findByTopicContainingIgnoreCaseAndStatus(topic, ContentStatus.PUBLISHED, pageable)
                 : lessonRepository.findByStatus(ContentStatus.PUBLISHED, pageable));
         model.addAttribute("topic", topic);
-        return "lessons/list";
     }
 
     @GetMapping("/lessons/{lessonId}")

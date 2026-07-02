@@ -21,6 +21,7 @@ import org.springframework.web.server.ResponseStatusException;
 public class CommunityService {
 
     private static final String ALL_TIME = "ALL_TIME";
+    private static final String WEEKLY = "WEEKLY";
 
     private final CommentRepository commentRepository;
     private final LeaderboardEntryRepository leaderboardEntryRepository;
@@ -51,6 +52,11 @@ public class CommunityService {
         return leaderboardEntryRepository.findTop20ByPeriodOrderByScoreDesc(ALL_TIME);
     }
 
+    @Transactional(readOnly = true)
+    public List<LeaderboardEntry> leaderboard(String period) {
+        return leaderboardEntryRepository.findTop20ByPeriodOrderByScoreDesc(normalizePeriod(period));
+    }
+
     @Transactional
     public void addScore(User user, BigDecimal score) {
         LeaderboardEntry entry = leaderboardEntryRepository.findByUserIdAndPeriod(user.getId(), ALL_TIME)
@@ -71,5 +77,12 @@ public class CommunityService {
             entries.get(index).setRankPosition(index + 1);
         }
         leaderboardEntryRepository.saveAll(entries);
+    }
+
+    public String normalizePeriod(String period) {
+        if ("weekly".equalsIgnoreCase(period) || WEEKLY.equalsIgnoreCase(period)) {
+            return WEEKLY;
+        }
+        return ALL_TIME;
     }
 }

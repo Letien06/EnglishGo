@@ -63,7 +63,7 @@ public class ListenController {
             model.addAttribute("practiceSession", dauToeicClientService.getDifficultySession(
                     Integer.parseInt(activeId),
                     level,
-                    20));
+                    null));
         } catch (RuntimeException exception) {
             model.addAttribute("dauToeicError", "Không tải được phiên luyện nghe từ Đậu TOEIC.");
         }
@@ -81,9 +81,6 @@ public class ListenController {
     }
 
     private void addDauToeicLevels(String activeId, AppUserPrincipal user, Model model) {
-        if ("dictation".equals(activeId)) {
-            return;
-        }
         try {
             model.addAttribute("dauToeicLevels", listeningProgressService.applyProgress(
                     user == null ? null : user.id(),
@@ -95,7 +92,7 @@ public class ListenController {
 
     private String normalizePart(String part) {
         return switch (part) {
-            case "2", "3", "4", "dictation" -> part;
+            case "2", "3", "4" -> part;
             default -> "1";
         };
     }
@@ -126,8 +123,7 @@ public class ListenController {
                 new ListenPartView("1", "Part 1: Hình ảnh", "Luyện Part 1 theo 5 cấp độ", "Câu hỏi lấy từ ngân hàng luyện nghe TOEIC và được phân loại theo tỉ lệ sai thực tế.", "P1", "1".equals(activeId)),
                 new ListenPartView("2", "Part 2: Hỏi - Đáp", "Luyện Part 2 theo 5 cấp độ", "Câu hỏi ngắn để luyện phản xạ nghe câu hỏi và chọn đáp án phù hợp.", "P2", "2".equals(activeId)),
                 new ListenPartView("3", "Part 3: Hội thoại ngắn", "Luyện Part 3 theo 5 cấp độ", "Một đoạn hội thoại đi kèm nhóm câu hỏi, phù hợp để luyện nghe theo ngữ cảnh.", "P3", "3".equals(activeId)),
-                new ListenPartView("4", "Part 4: Độc thoại", "Luyện Part 4 theo 5 cấp độ", "Một bài nói ngắn đi kèm nhóm câu hỏi, giúp tăng khả năng nắm ý chính và chi tiết.", "P4", "4".equals(activeId)),
-                new ListenPartView("dictation", "Nghe chép (Dictation)", "Luyện nghe chép theo 5 cấp độ", "Rèn phản xạ nghe chi tiết bằng cách gõ lại nội dung bạn nghe được.", "D", "dictation".equals(activeId)));
+                new ListenPartView("4", "Part 4: Độc thoại", "Luyện Part 4 theo 5 cấp độ", "Một bài nói ngắn đi kèm nhóm câu hỏi, giúp tăng khả năng nắm ý chính và chi tiết.", "P4", "4".equals(activeId)));
     }
 
     private List<Integer> questionParts(String activeId) {
@@ -135,7 +131,6 @@ public class ListenController {
             case "2" -> List.of(2);
             case "3" -> List.of(3);
             case "4" -> List.of(4);
-            case "dictation" -> List.of(1, 2, 3, 4);
             default -> List.of(1);
         };
     }

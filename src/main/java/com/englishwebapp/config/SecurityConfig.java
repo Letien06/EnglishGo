@@ -33,6 +33,7 @@ public class SecurityConfig {
                                 "/api/questions/**",
                                 "/api/dautoeic/**",
                                 "/api/listening/**",
+                                "/api/reading/**",
                                 "/api/practice/**",
                         "/api/vocab/**",
                         "/billing/**",
@@ -55,9 +56,19 @@ public class SecurityConfig {
                                 "/listen",
                                 "/listen/**",
                                 "/read",
+                                "/read/**",
                                 "/lessons",
                                 "/lessons/**",
+                                "/grammar",
+                                "/leaderboard",
+                                "/community",
+                                "/contribute",
+                                "/billing",
+                                "/billing/**",
                                 "/mock-test",
+                                "/starred-practice",
+                                "/wrong-practice",
+                                "/random-practice",
                                 "/tests",
                                 "/vocabulary",
                                 "/login",
@@ -70,11 +81,14 @@ public class SecurityConfig {
                                 "/js/**",
                                 "/images/**",
                                 "/media/**",
+                                "/manifest.webmanifest",
+                                "/version.json",
                                 "/favicon.ico")
                         .permitAll()
                         .requestMatchers("/api/questions/**").permitAll()
                         .requestMatchers("/api/dautoeic/**").permitAll()
                         .requestMatchers("/api/listening/**").permitAll()
+                        .requestMatchers("/api/reading/**").permitAll()
                         .requestMatchers("/api/vocab/**").permitAll()
                         .requestMatchers("/api/practice/**").authenticated()
                         .anyRequest().authenticated())

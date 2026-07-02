@@ -8,10 +8,10 @@
     </a>
 
     <nav class="landing-nav" aria-label="Main navigation">
-        <a th:classappend="${active == 'listen'} ? ' is-active'" href="/listen"><span class="nav-purple">♫</span> Nghe</a>
-        <a th:classappend="${active == 'read'} ? ' is-active'" href="/read"><span class="nav-blue">▥</span> Đọc</a>
-        <a th:classappend="${active == 'vocab'} ? ' is-active'" href="/vocab"><span class="nav-green">A</span> Từ vựng</a>
-        <a th:classappend="${active == 'tests'} ? ' is-active'" href="/mock-test"><span class="nav-orange">▧</span> Đề thi</a>
+        <a th:classappend="${active == 'listen'} ? ' is-active'" href="/listen"><span class="nav-purple">♫</span> <span class="nav-label">Nghe</span></a>
+        <a th:classappend="${active == 'read'} ? ' is-active'" href="/read"><span class="nav-blue">▥</span> <span class="nav-label">Đọc</span></a>
+        <a th:classappend="${active == 'vocab'} ? ' is-active'" href="/vocab"><span class="nav-green">A</span> <span class="nav-label">Từ vựng</span></a>
+        <a th:classappend="${active == 'tests'} ? ' is-active'" href="/mock-test"><span class="nav-orange">▧</span> <span class="nav-label">Đề thi</span></a>
     </nav>
 
     <div class="landing-actions" th:if="${shellUser == null}">

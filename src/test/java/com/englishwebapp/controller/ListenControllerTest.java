@@ -1,6 +1,7 @@
 package com.englishwebapp.controller;
 
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.content;
@@ -21,6 +22,8 @@ import java.util.List;
 import java.util.Map;
 import org.hamcrest.Matchers;
 import org.junit.jupiter.api.BeforeEach;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
@@ -112,7 +115,7 @@ class ListenControllerTest {
                 "Nguoi phu nu dang lam viec.",
                 null,
                 null);
-        when(dauToeicClientService.getDifficultySession(1, 1, 20))
+        when(dauToeicClientService.getDifficultySession(anyInt(), anyInt(), any()))
                 .thenReturn(new DauToeicDifficultySessionResponse(
                         1,
                         1,
@@ -140,7 +143,8 @@ class ListenControllerTest {
                         .param("assist", "30"))
                 .andExpect(status().isOk())
                 .andExpect(view().name("listen/practice"))
-                .andExpect(content().string(Matchers.containsString("Nghe &amp; Lật từ - 30%")))
+                .andExpect(content().string(Matchers.containsString("Part 1")))
+                .andExpect(content().string(Matchers.containsString("Luyện nghe")))
                 .andExpect(content().string(Matchers.containsString("practice-inline-mode-tools")))
                 .andExpect(content().string(Matchers.containsString("answer-option-text")))
                 .andExpect(content().string(Matchers.containsString("practice-bottom-nav")))

@@ -15,6 +15,7 @@ import com.englishwebapp.security.AuthSessionService;
 import com.englishwebapp.service.DauToeicClientService;
 import com.englishwebapp.service.FirebaseAuthenticationService;
 import com.englishwebapp.service.ListeningProgressService;
+import com.englishwebapp.service.ReadingProgressService;
 import com.englishwebapp.service.VocabService;
 import java.util.List;
 import org.junit.jupiter.api.Test;
@@ -22,7 +23,9 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
 import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest;
 import org.springframework.boot.test.mock.mockito.MockBean;
+import org.springframework.http.HttpStatus;
 import org.springframework.test.web.servlet.MockMvc;
+import org.springframework.web.server.ResponseStatusException;
 
 @WebMvcTest(DauToeicController.class)
 @AutoConfigureMockMvc(addFilters = false)
@@ -36,6 +39,9 @@ class DauToeicControllerTest {
 
     @MockBean
     private ListeningProgressService listeningProgressService;
+
+    @MockBean
+    private ReadingProgressService readingProgressService;
 
     @MockBean
     private FirebaseAuthenticationService firebaseAuthenticationService;
@@ -177,5 +183,147 @@ class DauToeicControllerTest {
                 .andExpect(jsonPath("$.success").value(true))
                 .andExpect(jsonPath("$.data.items[0].id").value("question-1"))
                 .andExpect(jsonPath("$.data.items[0].questions[0].correctAnswer").value("A"));
+    }
+
+    @Test
+    void readingDifficultyLevelEndpointReturnsLevelCards() throws Exception {
+        List<DauToeicDifficultyLevelResponse> levels = List.of(new DauToeicDifficultyLevelResponse(
+                5,
+                1,
+                "Level 1 - De",
+                0.01,
+                0.14,
+                100,
+                0,
+                0,
+                0,
+                100,
+                1200,
+                80));
+        when(dauToeicClientService.listReadingDifficultyLevels(5)).thenReturn(levels);
+        when(readingProgressService.applyProgress(null, levels)).thenReturn(levels);
+
+        mockMvc.perform(get("/api/dautoeic/reading/parts/5/levels"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.success").value(true))
+                .andExpect(jsonPath("$.data[0].part").value(5))
+                .andExpect(jsonPath("$.data[0].level").value(1))
+                .andExpect(jsonPath("$.data[0].total").value(100));
+    }
+
+    @Test
+    void readingDifficultySessionEndpointReturnsPracticeItems() throws Exception {
+        DauToeicQuestionResponse question = new DauToeicQuestionResponse(
+                "question-5",
+                "test-1",
+                null,
+                5,
+                "reading",
+                101,
+                null,
+                null,
+                null,
+                "The office ------- at nine.",
+                "opens",
+                "opening",
+                "open",
+                "opened",
+                "A",
+                "Can dong tu chia hien tai don.",
+                null,
+                1,
+                1,
+                "Van phong mo cua luc chin gio.",
+                "office (n) van phong",
+                null);
+        when(dauToeicClientService.getReadingDifficultySession(5, 1, 10))
+                .thenReturn(new DauToeicDifficultySessionResponse(
+                        5,
+                        1,
+                        "Level 1 - De",
+                        1,
+                        List.of(new DauToeicPracticeItemResponse(
+                                "question-5",
+                                "question",
+                                5,
+                                1,
+                                0.02,
+                                300,
+                                6,
+                                null,
+                                null,
+                                "The office ------- at nine.",
+                                "Van phong mo cua luc chin gio.",
+                                "office (n) van phong",
+                                List.of(question)))));
+
+        mockMvc.perform(get("/api/dautoeic/reading/parts/5/levels/1").param("limit", "10"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.success").value(true))
+                .andExpect(jsonPath("$.data.part").value(5))
+                .andExpect(jsonPath("$.data.items[0].questions[0].correctAnswer").value("A"));
+    }
+
+    @Test
+    void readingDifficultySessionEndpointReturnsPassageItems() throws Exception {
+        DauToeicQuestionResponse question = new DauToeicQuestionResponse(
+                "question-7",
+                "test-1",
+                "passage-7",
+                7,
+                "reading",
+                147,
+                null,
+                null,
+                null,
+                "What is the notice mainly about?",
+                "A schedule change",
+                "A hiring plan",
+                "A product launch",
+                "A travel policy",
+                "A",
+                "Thong bao noi ve thay doi lich.",
+                null,
+                3,
+                1,
+                "Thong bao chu yeu noi ve dieu gi?",
+                "notice (n) thong bao",
+                null);
+        when(dauToeicClientService.getReadingDifficultySession(7, 3, 5))
+                .thenReturn(new DauToeicDifficultySessionResponse(
+                        7,
+                        3,
+                        "Level 3 - Trung binh",
+                        1,
+                        List.of(new DauToeicPracticeItemResponse(
+                                "passage-7",
+                                "passage",
+                                7,
+                                3,
+                                0.25,
+                                120,
+                                30,
+                                null,
+                                null,
+                                "Office notice passage",
+                                "Ban dich doan doc",
+                                "notice (n) thong bao",
+                                List.of(question)))));
+
+        mockMvc.perform(get("/api/dautoeic/reading/parts/7/levels/3").param("limit", "5"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.success").value(true))
+                .andExpect(jsonPath("$.data.part").value(7))
+                .andExpect(jsonPath("$.data.items[0].itemType").value("passage"))
+                .andExpect(jsonPath("$.data.items[0].questions[0].passageId").value("passage-7"));
+    }
+
+    @Test
+    void readingDifficultyLevelEndpointRejectsInvalidPart() throws Exception {
+        when(dauToeicClientService.listReadingDifficultyLevels(4))
+                .thenThrow(new ResponseStatusException(HttpStatus.BAD_REQUEST, "Reading part must be between 5 and 7"));
+
+        mockMvc.perform(get("/api/dautoeic/reading/parts/4/levels"))
+                .andExpect(status().isBadRequest());
     }
 }

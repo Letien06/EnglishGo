@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Kỹ năng Đọc - ENGLISHGO</title>
-    <link rel="stylesheet" th:href="@{/css/app.css}">
+    <link rel="stylesheet" th:href="@{/css/app.css(v='quy-ngu-skin-9')}">
 </head>
 <body class="landing-body">
 <header th:replace="~{fragments/public-header :: main('read')}"></header>
@@ -21,8 +21,10 @@
 
         <nav class="listen-parts read-parts" aria-label="Reading parts">
             <a th:each="item : ${parts}"
-               th:href="@{/read(part=${item.id()})}"
-               th:classappend="${item.active()} ? ' is-active'">
+               th:with="demo=${item.id() == 'grammar' or item.id() == 'bilingual'}"
+               th:href="${demo} ? null : @{/read(part=${item.id()})}"
+               th:classappend="${(item.active() ? ' is-active' : '') + (demo ? ' is-disabled' : '')}"
+               th:attr="aria-disabled=${demo},tabindex=${demo ? -1 : null}">
                 <span th:text="${item.icon()}">▥</span>
                 <strong th:text="${item.label()}">Ngữ pháp</strong>
             </a>
@@ -46,85 +48,61 @@
             </div>
         </article>
 
-        <section class="read-workspace">
-            <nav class="read-tabs" aria-label="Reading views">
-                <button class="is-active" type="button"><span>▥</span> Theo chủ điểm</button>
-                <button type="button"><span>▥</span> Bài tập tổng hợp</button>
-                <button type="button"><span>▥</span> Tiến độ</button>
-            </nav>
-
-            <article class="read-random-card">
-                <span>⌘</span>
-                <div>
-                    <h2>Luyện tập ngẫu nhiên</h2>
-                    <p th:text="${'10 câu hỏi từ ngân hàng đã duyệt, hiện có ' + questions.totalElements + ' câu phù hợp mục này'}">10 câu hỏi từ ngân hàng đã duyệt</p>
-                </div>
-                <a href="/mock-test"><span>⌘</span> Bắt đầu</a>
-            </article>
-
-            <label class="read-search">
-                <span>⌕</span>
-                <input type="search" placeholder="Tìm kiếm bài học hoặc chủ đề...">
-            </label>
-
-            <section class="read-topic-section">
-                <h2><span>▥</span> Bài học đã duyệt</h2>
-                <div class="read-topic-grid" th:unless="${lessons.empty}">
-                    <article th:each="lesson, iter : ${lessons.content}">
-                        <span th:text="${#numbers.formatInteger(iter.count, 2)}">01</span>
-                        <h3 th:text="${lesson.title}">Từ loại</h3>
-                        <p th:text="${lesson.topic}">Chủ đề bài học</p>
-                        <a th:href="@{/lessons/{id}(id=${lesson.id})}">Mở bài học</a>
-                    </article>
-                </div>
-                <div class="read-topic-grid" th:if="${lessons.empty}">
-                    <article>
-                        <span>01</span>
-                        <h3>Chưa có bài học</h3>
-                        <p>Chưa có bài học đọc phù hợp để hiển thị ở mục này.</p>
-                    </article>
-                </div>
-            </section>
-
-            <section class="learning-question-panel">
-                <div class="learning-section-head">
-                    <div>
-                        <span>Ngân hàng câu hỏi</span>
-                        <h2 th:text="${activePart.label()}">Ngữ pháp</h2>
-                        <p th:text="${'Hiển thị ' + questions.content.size() + ' câu đã duyệt.'}">Hiển thị câu hỏi đã duyệt.</p>
-                    </div>
-                    <a href="/login">Đăng nhập để lưu tiến độ</a>
-                </div>
-
-                <div class="learning-question-grid" th:unless="${questions.empty}">
-                    <article class="learning-question-card"
-                             th:each="question, iter : ${questions.content}"
-                             th:with="questionOptions=${optionsByQuestionId[question.id]}">
-                        <header>
-                            <span th:text="${'Part ' + question.part}">Part 5</span>
-                            <strong th:text="${question.group != null ? question.group.title : 'ENGLISHGO Question Bank'}">ENGLISHGO Question Bank</strong>
-                        </header>
-                        <div class="learning-passage" th:if="${question.group != null and question.group.passageHtml != null}" th:utext="${question.group.passageHtml}"></div>
-                        <h2 th:text="${question.content}">Question content</h2>
-                        <ol th:if="${questionOptions != null and !questionOptions.empty}">
-                            <li th:each="option : ${questionOptions}" th:text="${option.content}">Answer option</li>
-                        </ol>
-                        <footer>
-                            <span th:text="${'#' + iter.count}">#1</span>
-                            <a href="/login">Lưu tiến độ</a>
-                        </footer>
-                    </article>
-                </div>
-
-                <section class="listen-login-required learning-empty" th:if="${questions.empty}">
-                    <span>!</span>
-                    <h2>Chưa có câu hỏi đã duyệt</h2>
-                    <p>Chưa có câu hỏi đọc phù hợp để hiển thị ở đây.</p>
-                </section>
-            </section>
+        <section class="learning-empty" th:if="${dauToeicError != null}">
+            <p th:text="${dauToeicError}">Không tải được dữ liệu Đậu TOEIC.</p>
         </section>
+
+        <section class="level-dashboard" th:if="${dauToeicReadingLevels != null and !dauToeicReadingLevels.empty}">
+            <div class="learning-section-head">
+                <div>
+                    <span>Level practice</span>
+                    <h2>Chọn cấp độ luyện đọc</h2>
+                    <p>Mỗi level được gom theo tỉ lệ sai từ ngân hàng câu hỏi Đậu TOEIC.</p>
+                </div>
+            </div>
+
+            <div class="level-card-grid">
+                <article class="level-card"
+                         th:each="level : ${dauToeicReadingLevels}"
+                         th:classappend="${' level-' + level.level()}">
+                    <header>
+                        <span th:text="${'Lv' + level.level()}">Lv1</span>
+                        <div>
+                            <h3 th:text="${level.level() == 1 ? 'Level 1 — Dễ' :
+                                    level.level() == 2 ? 'Level 2 — Cơ bản' :
+                                    level.level() == 3 ? 'Level 3 — Trung bình' :
+                                    level.level() == 4 ? 'Level 4 — Khó' : 'Level 5 — Rất khó'}">Level 1 — Dễ</h3>
+                            <p th:text="${'Tỉ lệ sai: ' + #numbers.formatDecimal(level.errorRateMin() * 100, 1, 0) + '% - ' + #numbers.formatDecimal(level.errorRateMax() * 100, 1, 0) + '%'}">Tỉ lệ sai</p>
+                        </div>
+                    </header>
+
+                    <div class="level-progress">
+                        <div>
+                            <strong>Tiến độ</strong>
+                            <span th:text="${level.done() + '/' + level.total()}">0/90</span>
+                        </div>
+                        <meter min="0" th:max="${level.total()}" th:value="${level.done()}"></meter>
+                    </div>
+
+                    <div class="level-stats">
+                        <span th:text="${'✓ ' + level.correct()}">✓ 0</span>
+                        <span th:text="${'✕ ' + level.wrong()}">✕ 0</span>
+                        <span th:text="${'○ ' + level.remaining()}">○ 90</span>
+                    </div>
+
+                    <footer>
+                        <small th:text="${level.total() + ' item'}">90 item</small>
+                        <button class="level-reset-button"
+                                type="button"
+                                th:attr="data-part=${level.part()},data-level=${level.level()}">Reset</button>
+                        <a th:href="@{/read/practice(part=${level.part()},level=${level.level()},mode=${activePart.id() == 'bilingual' ? 'bilingual' : 'normal'},assist=30)}">Luyện ngay →</a>
+                    </footer>
+                </article>
+            </div>
+        </section>
+
     </section>
 </main>
-<script th:src="@{/js/app-shell.js}"></script>
+<script th:src="@{/js/app-shell.js(v='quy-ngu-skin-9')}"></script>
 </body>
 </html>

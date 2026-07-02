@@ -1,0 +1,39 @@
+<!DOCTYPE html>
+<html lang="en" xmlns:th="http://www.thymeleaf.org">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AI Generator</title>
+    <link rel="stylesheet" th:href="@{/css/app.css(v='quy-ngu-skin-7')}">
+</head>
+<body>
+<div class="app-shell">
+    <div th:replace="~{fragments/shell :: sidebar}"></div>
+    <div class="app-main">
+        <div th:replace="~{fragments/shell :: topbar('AI generator', 'Create TOEIC-style draft content for review')}"></div>
+        <main class="app-content narrow">
+            <form class="ew-card">
+                <label class="form-field">Part
+                    <select name="part">
+                        <option>Part 1</option>
+                        <option>Part 2</option>
+                        <option>Part 5</option>
+                        <option>Part 6</option>
+                        <option>Part 7</option>
+                    </select>
+                </label>
+                <label class="form-field">Topic
+                    <input name="topic" placeholder="Contracts, travel, office policy">
+                </label>
+                <label class="form-field">Count
+                    <input name="count" type="number" min="1" max="10" value="5">
+                </label>
+                <button type="button">Preview draft schema</button>
+            </form>
+        </main>
+    </div>
+    <div th:replace="~{fragments/shell :: mobileNav}"></div>
+</div>
+<script th:src="@{/js/app-shell.js(v='quy-ngu-skin-7')}"></script>
+</body>
+</html>

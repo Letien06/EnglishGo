@@ -23,6 +23,14 @@ public class CommunityController {
         return "community/index";
     }
 
+    @GetMapping("/leaderboard")
+    public String leaderboard(@RequestParam(defaultValue = "all-time") String period, Model model) {
+        String normalizedPeriod = communityService.normalizePeriod(period);
+        model.addAttribute("period", "WEEKLY".equals(normalizedPeriod) ? "weekly" : "all-time");
+        model.addAttribute("leaderboard", communityService.leaderboard(normalizedPeriod));
+        return "community/leaderboard";
+    }
+
     @PostMapping("/community/comments")
     public String comment(
             @AuthenticationPrincipal AppUserPrincipal user,

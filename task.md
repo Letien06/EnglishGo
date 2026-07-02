@@ -30,7 +30,7 @@
   - DB: dung `users` hien co, bo sung audit fields neu can.
   - Done: user sua muc tieu diem va thay doi hien tren hub.
 
-- [ ] **P1.3 Leaderboard learner**
+- [x] **P1.3 Leaderboard learner**
   - FE: `/leaderboard` co top users, filter weekly/all-time.
   - BE: query rank tu attempts/streak, fallback seed.
   - DB: xem lai `leaderboard_entries`, them period neu can.
@@ -38,19 +38,19 @@
 
 ## Phase 2 - Skill hubs: Listen / Read / Grammar
 
-- [ ] **P2.1 Listen hub `/listen`**
+- [x] **P2.1 Listen hub `/listen`**
   - FE: trang hub Listening co TOEIC Part 1-4, progress, CTA luyen nhanh.
   - BE: service dem so cau/bai theo part, lay next recommended item.
   - DB: dung `questions.part`, can chuan hoa type/audio group.
   - Done: click Part 1-4 mo practice co audio neu seed co.
 
-- [ ] **P2.2 Read hub `/read`**
+- [x] **P2.2 Read hub `/read`**
   - FE: trang hub Reading co Part 5-7 va tab Grammar/Bilingual neu phu hop.
   - BE: query bai doc/cau hoi theo part, weak areas.
   - DB: bo sung metadata topic/tag cho questions neu can.
   - Done: click Part 5-7 mo practice dung nhom passage/question.
 
-- [ ] **P2.3 Grammar module `/grammar`**
+- [~] **P2.3 Grammar module `/grammar`**
   - FE: danh sach topic/subtopic, lesson card, nut practice.
   - BE: `GrammarController`, `GrammarService`; co the reuse `lessons` truoc, sau do tach `grammar_topics`.
   - DB: migration cho grammar topic/subtopic/exercises neu can.
@@ -58,19 +58,19 @@
 
 ## Phase 3 - Practice engine Dautoeic-style
 
-- [ ] **P3.1 Unified practice route**
+- [~] **P3.1 Unified practice route**
   - FE: thay `/tests/{id}/practice` bang shell co route moi: `/practice/session/{sessionId}` hoac route module.
   - BE: tao `PracticeSession` abstraction: source = test, part, grammar, wrong, starred, random.
   - DB: migration cho sessions neu can; giu `user_attempts` cho submitted result.
   - Done: practice bat dau tu hub va route cu van redirect/hoat dong.
 
-- [ ] **P3.2 Practice UX nang cao**
+- [~] **P3.2 Practice UX nang cao**
   - FE: timer, question navigator, answered/flagged states, keyboard 1-4, previous/next, pause, submit confirm.
   - BE: autosave payload gom current index, answers, flagged IDs, elapsed time.
   - DB: dung `draft_answers` hoac tach `practice_drafts`.
   - Done: reload trang khong mat bai, UI hien da luu.
 
-- [ ] **P3.3 Review result theo part**
+- [x] **P3.3 Review result theo part**
   - FE: review co overview, per-part accuracy, wrong list, explanation/transcript.
   - BE: DTO review gom grouped questions, skill stats.
   - DB: dung `user_answers`, bo sung selected answer snapshot neu can.
@@ -78,19 +78,19 @@
 
 ## Phase 4 - Wrong / Starred / Random loops
 
-- [ ] **P4.1 Starred questions**
+- [~] **P4.1 Starred questions**
   - FE: nut star trong practice/review, route `/starred-practice`.
   - BE: CRUD starred question per user.
   - DB: `user_starred_questions(user_id, question_id, created_at)`.
   - Done: star cau trong review, vao `/starred-practice` luyen lai.
 
-- [ ] **P4.2 Wrong answers queue**
+- [~] **P4.2 Wrong answers queue**
   - FE: `/wrong-practice` hien queue cau sai, filter by part.
   - BE: query cau sai tu `user_answers`, tao session luyen lai.
   - DB: co the them `wrong_answer_reviews` de theo doi da on/chua on.
   - Done: nop sai cau nao thi cau do xuat hien trong queue.
 
-- [ ] **P4.3 Random practice**
+- [~] **P4.3 Random practice**
   - FE: `/random-practice` chon skill, part, so cau, timed mode.
   - BE: query random questions co seed de reproducible.
   - DB: index theo part/type/topic.
@@ -98,19 +98,19 @@
 
 ## Phase 5 - Vocabulary Dautoeic-style
 
-- [ ] **P5.1 Rename/route vocabulary**
+- [~] **P5.1 Rename/route vocabulary**
   - FE: route moi `/vocabulary`, giu `/vocab` redirect.
   - BE: controller route moi, DTO progress.
   - DB: dung `vocab_sets`, `vocab_words`, `user_vocab_progress`.
   - Done: trang vocab home co sets, due today, mastered/difficult counts.
 
-- [ ] **P5.2 Difficult/mastered pages**
+- [~] **P5.2 Difficult/mastered pages**
   - FE: `/vocabulary/difficult`, `/vocabulary/mastered`.
   - BE: query theo `user_vocab_progress.status`.
   - DB: chuan hoa enum status neu can.
   - Done: danh dau kho/thuoc va thay doi queue.
 
-- [ ] **P5.3 Vocabulary test/shared**
+- [x] **P5.3 Vocabulary test/shared**
   - FE: practice tu vung dang multiple choice/fill blank, trang shared set.
   - BE: endpoint tao vocab test va cham.
   - DB: bang `vocab_tests` neu can.
@@ -118,13 +118,13 @@
 
 ## Phase 6 - Mock test roadmap
 
-- [ ] **P6.1 Mock test home `/mock-test`**
+- [x] **P6.1 Mock test home `/mock-test`**
   - FE: danh sach full tests, mini tests, roadmap Part 1-7.
   - BE: filter tests by type/difficulty/part.
   - DB: chuan hoa `tests.type` = MOCK, MINI, PART_PRACTICE.
   - Done: user thay mock test va vao lam.
 
-- [ ] **P6.2 Mock test settings**
+- [~] **P6.2 Mock test settings**
   - FE: choose mode: full timed, practice, review.
   - BE: tao session voi rule time/audio.
   - DB: them `test_settings` neu can.
@@ -132,26 +132,26 @@
 
 ## Phase 7 - Free access cleanup
 
-- [ ] **P7.1 Remove paywall thinking**
+- [x] **P7.1 Remove paywall thinking**
   - FE: khong co pricing, locked feature, upgrade CTA, premium badge.
   - BE: khong check entitlement cho learner features.
   - DB: `subscriptions`/`transactions` chi de legacy/demo, khong dung de khoa tinh nang.
   - Done: moi learner dang nhap deu vao duoc tat ca module hoc.
 
-- [ ] **P7.2 Route cleanup for old billing**
+- [x] **P7.2 Route cleanup for old billing**
   - FE: `/billing` hien thong bao "all features are free" hoac redirect ve `/hub`.
   - BE: vo hieu hoa checkout demo neu khong can.
   - Done: khong con luong thanh toan trong san pham hoc.
 
 ## Phase 8 - Admin CMS theo module
 
-- [ ] **P8.1 Admin dashboard `/admin`**
+- [~] **P8.1 Admin dashboard `/admin`**
   - FE: metrics users, attempts, content counts, issue reports.
   - BE: `AdminDashboardService`, role ADMIN.
   - DB: query aggregate.
   - Done: admin login thay dashboard rieng, khong co revenue/sales widget.
 
-- [ ] **P8.2 Admin content modules**
+- [~] **P8.2 Admin content modules**
   - FE: tach menu `/admin/listening`, `/admin/reading`, `/admin/vocabulary`, `/admin/mock-test`.
   - BE: CRUD service rieng cho content, validation.
   - DB: migration cho tags/topics/media neu can.
@@ -165,14 +165,14 @@
 
 ## Phase 9 - AI generator va content review
 
-- [ ] **P9.1 AI question generator `/admin/generate`**
+- [~] **P9.1 AI question generator `/admin/generate`**
   - FE: form chon TOEIC part, skill, difficulty, topic, so cau; preview JSON/result.
   - BE: `ContentGenerationService` goi AI provider de tao TOEIC-style questions, khong copy de that.
   - DB: `content_generation_jobs`, `generated_questions`.
   - Guardrail: output phai validate schema, co 4 options neu multiple choice, co correct answer, explanation, transcript/passage neu can.
   - Done: admin tao draft 5 cau Part 5/Part 7, nhung chua publish thang vao learner bank.
 
-- [ ] **P9.2 Generated content review `/admin/content-review`**
+- [~] **P9.2 Generated content review `/admin/content-review`**
   - FE: queue draft AI, editor sua cau hoi/options/explanation, approve/reject.
   - BE: review service publish draft vao `tests/questions/question_groups/answer_options`.
   - DB: `content_audit_logs`, reviewed_by/reviewed_at/status.
@@ -186,7 +186,7 @@
 
 ## Phase 10 - Community submit va import workflow
 
-- [ ] **P10.1 Community/teacher submit `/contribute`**
+- [~] **P10.1 Community/teacher submit `/contribute`**
   - FE: form gui cau hoi/passages/options/explanation/source note.
   - BE: save vao `content_submissions` status `PENDING_REVIEW`.
   - DB: `content_submissions`.
@@ -207,12 +207,20 @@
 
 ## Phase 11 - PWA polish va chat luong
 
-- [ ] **P11.1 PWA manifest/version**
+- [~] **P11.1 PWA manifest/version**
   - FE: manifest, app icons, theme color, version banner.
   - BE: `/version.json`, static cache headers.
   - Done: cai duoc PWA va update khong ket cache.
 
-- [ ] **P11.2 Test coverage**
+- [~] **P11.2 Test coverage**
   - FE: smoke test cac route chinh bang Playwright neu them toolchain.
   - BE: service tests cho grading, SRS, practice session, content generation validation, import parser.
   - Done: `mvn test` pass va co test cho logic moi.
+
+## Cap nhat 2026-07-02
+
+- Da bo sung route/thuc thi co ban cho: `/leaderboard`, `/grammar`, `/starred-practice`, `/wrong-practice`, `/random-practice`, `/practice/session/{testId}`, `/admin`, `/admin/listening`, `/admin/reading`, `/admin/vocabulary`, `/admin/mock-test`, `/admin/generate`, `/admin/content-review`, `/contribute`, `/manifest.webmanifest`, `/version.json`.
+- Da hoan thien doc theo Dau TOEIC hon: Reading Part 6/7 ghep du multi-passage, song ngu hien dich passage, fill/flip ap dung len passage, timer hien tren practice, save progress/tools co service tests.
+- Da cleanup free-access: `/billing` khong tao checkout/subscription nua, vocabulary khong hien badge `PRO`.
+- Cac muc `[~]` con thieu workflow day du: grammar exercise/result rieng, practice session abstraction that, wrong/starred queue tu DB question bank, canonical redirect `/vocabulary`, mock settings, admin CRUD/import, AI provider/job/review publish, content_submissions DB, source/license enforcement, PWA icon/cache header, Playwright smoke tests.
+- Kiem thu moi nhat: `mvn test` pass 38/38; smoke route public tren `http://localhost:8081` pass 200 cho leaderboard, grammar, billing, contribute, reading practice Part 6/7, practice loops, manifest/version, vocabulary.

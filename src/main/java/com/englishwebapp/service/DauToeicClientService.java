@@ -111,7 +111,15 @@ public class DauToeicClientService {
 
     public List<DauToeicDifficultyLevelResponse> listDifficultyLevels(int part) {
         requireListeningPart(part);
-        List<PracticeStat> stats = practiceStats(part);
+        return difficultyLevels(part, practiceStats(part));
+    }
+
+    public List<DauToeicDifficultyLevelResponse> listReadingDifficultyLevels(int part) {
+        requireReadingPart(part);
+        return difficultyLevels(part, practiceStats(part));
+    }
+
+    private List<DauToeicDifficultyLevelResponse> difficultyLevels(int part, List<PracticeStat> stats) {
         Map<Integer, List<PracticeStat>> byLevel = new LinkedHashMap<>();
         for (int level = 1; level <= 5; level++) {
             byLevel.put(level, new ArrayList<>());
@@ -165,15 +173,24 @@ public class DauToeicClientService {
 
     public DauToeicDifficultySessionResponse getDifficultySession(int part, int level, Integer limit) {
         requireListeningPart(part);
+        return difficultySession(part, level, limit);
+    }
+
+    public DauToeicDifficultySessionResponse getReadingDifficultySession(int part, int level, Integer limit) {
+        requireReadingPart(part);
+        return difficultySession(part, level, limit);
+    }
+
+    private DauToeicDifficultySessionResponse difficultySession(int part, int level, Integer limit) {
         if (level < 1 || level > 5) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Difficulty level must be between 1 and 5");
         }
-        int maxItems = limit == null || limit < 1 ? DEFAULT_PRACTICE_LIMIT : Math.min(limit, 100);
+        int effectiveLimit = limit == null || limit < 1 ? Integer.MAX_VALUE : limit;
         List<PracticeStat> levelStats = practiceStats(part).stream()
                 .filter(stat -> Integer.valueOf(level).equals(stat.level()))
-                .limit(maxItems)
+                .limit(effectiveLimit)
                 .toList();
-        List<DauToeicPracticeItemResponse> items = part <= 2
+        List<DauToeicPracticeItemResponse> items = part <= 2 || part == 5
                 ? questionPracticeItems(levelStats, part, level)
                 : passagePracticeItems(levelStats, part, level);
         return new DauToeicDifficultySessionResponse(part, level, levelTitle(level), levelStats.size(), items);
@@ -232,6 +249,11 @@ public class DauToeicClientService {
                 continue;
             }
             List<DauToeicQuestionResponse> questions = questionsByPassageId.getOrDefault(passage.id(), List.of());
+            String passageText = plainText(combinedText(
+                    passage.transcript(),
+                    passage.passageText(),
+                    passage.passageText2(),
+                    passage.passageText3()));
             items.add(new DauToeicPracticeItemResponse(
                     passage.id(),
                     stat.itemType(),
@@ -242,9 +264,9 @@ public class DauToeicClientService {
                     stat.wrongCount(),
                     passage.audioUrl(),
                     passage.imageUrl(),
-                    plainText(firstText(passage.transcript(), passage.passageText(), passage.passageText2(), passage.passageText3())),
-                    null,
-                    null,
+                    passageText,
+                    plainText(firstQuestionText(questions, DauToeicQuestionResponse::translationVi)),
+                    firstQuestionText(questions, DauToeicQuestionResponse::vocabulary),
                     questions));
         }
         return items;
@@ -529,6 +551,12 @@ public class DauToeicClientService {
         }
     }
 
+    private void requireReadingPart(int part) {
+        if (part < 5 || part > 7) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Reading part must be between 5 and 7");
+        }
+    }
+
     private String levelTitle(int level) {
         return switch (level) {
             case 1 -> "Level 1 - De";
@@ -569,6 +597,29 @@ public class DauToeicClientService {
             }
         }
         return null;
+    }
+
+    private String firstQuestionText(
+            List<DauToeicQuestionResponse> questions,
+            java.util.function.Function<DauToeicQuestionResponse, String> extractor) {
+        for (DauToeicQuestionResponse question : questions) {
+            String value = extractor.apply(question);
+            if (StringUtils.hasText(value)) {
+                return value;
+            }
+        }
+        return null;
+    }
+
+    private String combinedText(String... values) {
+        List<String> parts = new ArrayList<>();
+        for (String value : values) {
+            String cleaned = plainText(value);
+            if (StringUtils.hasText(cleaned) && !parts.contains(cleaned)) {
+                parts.add(cleaned);
+            }
+        }
+        return parts.isEmpty() ? null : String.join("\n\n", parts);
     }
 
     private String plainText(String value) {

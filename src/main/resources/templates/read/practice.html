@@ -1,0 +1,253 @@
+<!DOCTYPE html>
+<html lang="vi" xmlns:th="http://www.thymeleaf.org">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="color-scheme" content="light only">
+    <title>Luyện đọc - ENGLISHGO</title>
+    <link rel="stylesheet" th:href="@{/css/app.css(v='practice-modern-11')}">
+</head>
+<body class="practice-body qn-practice">
+<main class="listen-practice-page read-practice-page"
+      th:attr="data-part=${selectedPartNumber},data-level=${selectedLevel},data-mode=${selectedMode},data-assist=${assistPercent},data-authenticated=${readingUserAuthenticated}">
+    <header class="practice-topbar">
+        <div class="practice-topbar-left">
+            <a class="practice-exit" th:href="@{/read(part=${activePart.id()})}" aria-label="Thoát">←</a>
+            <span class="qn-seal" aria-hidden="true">文</span>
+            <strong class="practice-title"
+                    th:text="${'Part ' + selectedPartNumber + ' · Cấp độ ' + selectedLevel + ' · Luyện đọc'}">Part 5 · Cấp độ 1 · Luyện đọc</strong>
+        </div>
+
+        <button class="qn-tools-more" type="button" data-tools-drawer aria-label="Mở công cụ học" aria-expanded="false">…</button>
+        <nav class="practice-tools" aria-label="Công cụ học">
+            <a th:href="@{/read/practice(part=${selectedPartNumber},level=${selectedLevel},mode='normal',assist=${assistPercent})}"
+               th:classappend="${selectedMode == 'normal'} ? ' is-active'"><span class="qn-tool-icon" aria-hidden="true">▥</span>Bình thường</a>
+            <a th:href="@{/read/practice(part=${selectedPartNumber},level=${selectedLevel},mode='bilingual',assist=${assistPercent})}"
+               th:classappend="${selectedMode == 'bilingual'} ? ' is-active'"><span class="qn-tool-icon" aria-hidden="true">文</span>Song ngữ</a>
+            <a th:href="@{/read/practice(part=${selectedPartNumber},level=${selectedLevel},mode='fill',assist=${assistPercent})}"
+               th:classappend="${selectedMode == 'fill'} ? ' is-active'"><span class="qn-tool-icon" aria-hidden="true">✍</span>Điền từ</a>
+            <a th:href="@{/read/practice(part=${selectedPartNumber},level=${selectedLevel},mode='flip',assist=${assistPercent})}"
+               th:classappend="${selectedMode == 'flip'} ? ' is-active'"><span class="qn-tool-icon" aria-hidden="true">⇄</span>Lật từ</a>
+        </nav>
+
+        <div class="practice-status" aria-label="Trạng thái luyện tập">
+            <button type="button" data-auto-toggle title="Tự chuyển bài khi trả lời đúng">Auto</button>
+            <span class="practice-elapsed" data-elapsed-time>00:00</span>
+            <form class="assist-select" method="get" action="/read/practice">
+                <input type="hidden" name="part" th:value="${selectedPartNumber}">
+                <input type="hidden" name="level" th:value="${selectedLevel}">
+                <input type="hidden" name="mode" th:value="${selectedMode}">
+                <input type="hidden" name="q" value="0" data-q-field>
+                <select name="assist" onchange="this.form.submit()" aria-label="Tỉ lệ hỗ trợ">
+                    <option th:each="value : ${assistOptions}"
+                            th:value="${value}"
+                            th:selected="${value == assistPercent}"
+                            th:text="${value + '%'}">30%</option>
+                </select>
+            </form>
+        </div>
+    </header>
+
+    <section class="learning-empty" th:if="${dauToeicError != null}">
+        <p th:text="${dauToeicError}">Không tải được phiên luyện đọc.</p>
+    </section>
+
+    <section class="practice-session"
+             th:if="${practiceSession != null and !practiceSession.items().empty}"
+             th:attr="data-total=${practiceSession.items().size()}">
+        <article class="practice-item"
+                 th:each="item, iter : ${practiceSession.items()}"
+                 th:classappend="${iter.index == 0} ? ' is-active'"
+                 th:attr="data-item-id=${item.id()},
+                          data-item-index=${iter.index},
+                          data-translation=${item.translation() != null ? item.translation() : ''},
+                          data-vocabulary=${item.vocabulary() != null ? item.vocabulary() : ''}">
+            <section class="practice-listen-pane">
+                <p class="practice-instruction"
+                   th:text="${selectedPartNumber == 5 ? 'Choose the best word or phrase to complete the sentence.' :
+                   selectedPartNumber == 6 ? 'Choose the best option to complete the text.' :
+                   'Read the passage and choose the best answer.'}">
+                    Read the passage and choose the best answer.
+                </p>
+
+                <figure class="practice-image-frame" th:if="${item.imageUrl() != null}">
+                    <img class="practice-image"
+                         th:src="${item.imageUrl()}"
+                         alt="Reading passage image">
+                </figure>
+
+                <article class="learning-passage" th:if="${selectedPartNumber != 5 and item.transcript() != null}">
+                    <h2 th:text="${#lists.isEmpty(item.questions()) ? 'Passage' : item.questions().get(0).questionText()}">Passage</h2>
+                    <pre class="reading-passage-text"
+                         data-mask-target="passage"
+                         th:attr="data-original-text=${item.transcript()}"
+                         th:text="${item.transcript()}">Passage text</pre>
+                    <section class="reading-passage-translation"
+                             th:if="${selectedMode == 'bilingual' and item.translation() != null}">
+                        <strong>Passage translation</strong>
+                        <pre th:text="${item.translation()}">Passage translation</pre>
+                    </section>
+                </article>
+            </section>
+
+            <section class="practice-question-pane">
+                <header>
+                    <div>
+                        <span th:text="${'#' + iter.count + '/' + practiceSession.items().size()}">#1/20</span>
+                        <h2 th:text="${selectedPartNumber == 5 ? 'Question' : 'Nhóm câu hỏi'}">Question</h2>
+                    </div>
+                    <button class="favorite-button"
+                            type="button"
+                            aria-label="Yêu thích"
+                            th:attr="data-item-id=${item.id()},data-question-id=${#lists.isEmpty(item.questions()) ? '' : item.questions().get(0).id()}">☆</button>
+                </header>
+
+                <div class="practice-question-list">
+                    <article class="practice-question"
+                             th:each="question : ${item.questions()}"
+                             th:attr="data-item-id=${item.id()},
+                                      data-question-id=${question.id()},
+                                      data-correct-answer=${question.correctAnswer()},
+                                      data-question-translation=${question.translationVi() != null ? question.translationVi() : (item.translation() != null ? item.translation() : '')},
+                                      data-answer-translation=${question.answerTranslationVi() != null ? question.answerTranslationVi() : ''},
+                                      data-explanation=${question.explanationVi() != null ? question.explanationVi() : (question.explanationEn() != null ? question.explanationEn() : '')},
+                                      data-vocabulary=${question.vocabulary() != null ? question.vocabulary() : (item.vocabulary() != null ? item.vocabulary() : '')}">
+                        <h3 th:text="${question.questionText() != null ? question.questionText() : 'Question ' + question.questionNumber()}">Question text</h3>
+
+                        <p class="practice-reading-stem"
+                           th:if="${selectedPartNumber == 5 and item.transcript() != null}"
+                           th:text="${item.transcript()}">Question stem</p>
+
+                        <div class="practice-inline-mode-tools is-fill"
+                             th:if="${selectedMode == 'fill'}">
+                            <strong th:text="${'Đọc & Điền từ - ' + assistPercent + '%'}">Đọc & Điền từ</strong>
+                            <div class="qn-segmented" role="group" aria-label="Điều khiển điền từ">
+                                <button type="button" data-action="hint">Gợi ý</button>
+                                <button type="button" data-action="reveal-all">Mở tất cả</button>
+                            </div>
+                        </div>
+                        <div class="practice-inline-mode-tools is-flip"
+                             th:if="${selectedMode == 'flip'}">
+                            <strong th:text="${'Đọc & Lật từ - ' + assistPercent + '%'}">Đọc & Lật từ</strong>
+                            <div class="qn-segmented" role="group" aria-label="Điều khiển lật từ">
+                                <button type="button" data-action="flip-next">Lật từ tiếp</button>
+                                <button type="button" data-action="flip-three">Lật 3 từ</button>
+                                <button type="button" data-action="reveal-all">Mở tất cả</button>
+                            </div>
+                        </div>
+
+                        <label th:if="${question.optionA() != null}" data-answer-option="A">
+                            <input type="radio" th:name="${'q-' + question.id()}" value="A">
+                            <span class="answer-letter">(A)</span>
+                            <span class="answer-option-text" data-option="A" th:attr="data-original-text=${question.optionA()}" th:text="${question.optionA()}">Answer A</span>
+                        </label>
+                        <label th:if="${question.optionB() != null}" data-answer-option="B">
+                            <input type="radio" th:name="${'q-' + question.id()}" value="B">
+                            <span class="answer-letter">(B)</span>
+                            <span class="answer-option-text" data-option="B" th:attr="data-original-text=${question.optionB()}" th:text="${question.optionB()}">Answer B</span>
+                        </label>
+                        <label th:if="${question.optionC() != null}" data-answer-option="C">
+                            <input type="radio" th:name="${'q-' + question.id()}" value="C">
+                            <span class="answer-letter">(C)</span>
+                            <span class="answer-option-text" data-option="C" th:attr="data-original-text=${question.optionC()}" th:text="${question.optionC()}">Answer C</span>
+                        </label>
+                        <label th:if="${question.optionD() != null}" data-answer-option="D">
+                            <input type="radio" th:name="${'q-' + question.id()}" value="D">
+                            <span class="answer-letter">(D)</span>
+                            <span class="answer-option-text" data-option="D" th:attr="data-original-text=${question.optionD()}" th:text="${question.optionD()}">Answer D</span>
+                        </label>
+                        <small class="listening-answer-feedback" aria-live="polite"></small>
+
+                        <section class="practice-solution-panel" hidden>
+                            <div>
+                                <strong>Kết quả</strong>
+                                <p data-solution-result></p>
+                            </div>
+                            <div data-solution-explanation-wrap hidden>
+                                <strong>Giải thích</strong>
+                                <p data-solution-explanation></p>
+                            </div>
+                            <div data-solution-translation-wrap hidden>
+                                <strong>Dịch nghĩa</strong>
+                                <p data-solution-translation></p>
+                            </div>
+                            <div data-solution-answer-wrap hidden>
+                                <strong>Dịch đáp án</strong>
+                                <p data-solution-answer></p>
+                            </div>
+                            <div data-solution-vocabulary-wrap hidden>
+                                <strong>Từ vựng nên học</strong>
+                                <pre data-solution-vocabulary></pre>
+                            </div>
+                        </section>
+                    </article>
+                </div>
+
+                <div class="practice-tool-panels">
+                    <form class="practice-note-panel practice-tool-panel"
+                          data-tool-panel="notes"
+                          th:attr="data-item-id=${item.id()},data-question-id=${#lists.isEmpty(item.questions()) ? '' : item.questions().get(0).id()}">
+                        <label>
+                            <span>Ghi chú</span>
+                            <textarea name="note" rows="3"></textarea>
+                        </label>
+                        <button type="submit">Lưu ghi chú</button>
+                        <small aria-live="polite"></small>
+                    </form>
+
+                    <form class="practice-vocab-panel practice-tool-panel"
+                          data-tool-panel="vocab"
+                          th:attr="data-item-id=${item.id()},data-question-id=${#lists.isEmpty(item.questions()) ? '' : item.questions().get(0).id()}">
+                        <label>
+                            <span>Từ</span>
+                            <input name="word" type="text" autocomplete="off">
+                        </label>
+                        <label>
+                            <span>Nghĩa</span>
+                            <input name="meaning" type="text" autocomplete="off">
+                        </label>
+                        <button type="submit">Thêm vào giỏ từ</button>
+                        <small aria-live="polite"></small>
+                    </form>
+                </div>
+            </section>
+        </article>
+    </section>
+
+    <footer class="practice-bottom-nav"
+            th:if="${practiceSession != null and !practiceSession.items().empty}">
+        <div class="practice-bottom-tools">
+            <a class="qn-report" href="mailto:support@quyngu.vn?subject=B%C3%A1o%20l%E1%BB%97i%20c%C3%A2u%20luy%E1%BB%87n%20%C4%91%E1%BB%8Dc">⚑ Báo lỗi</a>
+            <button type="button" class="qn-basket" data-panel-target="vocab">☷ Giỏ từ</button>
+            <button type="button" class="qn-note" data-panel-target="notes">✎ Ghi chú</button>
+        </div>
+        <div class="practice-bottom-pager">
+            <button type="button" data-practice-prev aria-label="Bài trước">‹</button>
+            <span data-practice-counter th:text="${'1/' + practiceSession.items().size()}">1/20</span>
+            <button type="button" data-practice-next aria-label="Bài sau">›</button>
+        </div>
+    </footer>
+
+    <section class="listen-login-required"
+             th:if="${practiceSession != null and practiceSession.items().empty}">
+        <span>!</span>
+        <h2>Level này chưa có dữ liệu</h2>
+        <p>Không tìm thấy item luyện đọc cho Part và Level đã chọn.</p>
+    </section>
+</main>
+<script th:src="@{/js/read-practice.js(v='practice-modern-1')}"></script>
+<script>
+    (function () {
+        var toggle = document.querySelector("[data-tools-drawer]");
+        var tools = document.querySelector(".practice-tools");
+        if (!toggle || !tools) {
+            return;
+        }
+        toggle.addEventListener("click", function () {
+            var open = tools.classList.toggle("is-open");
+            toggle.setAttribute("aria-expanded", open ? "true" : "false");
+        });
+    })();
+</script>
+</body>
+</html>
