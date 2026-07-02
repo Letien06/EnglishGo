@@ -1665,13 +1665,14 @@ button.compact {
     place-items: center;
     padding: 24px;
     background:
-        radial-gradient(circle at 28% 20%, rgba(37, 99, 235, 0.22), transparent 34%),
-        radial-gradient(circle at 72% 76%, rgba(198, 161, 91, 0.28), transparent 36%),
-        rgba(9, 13, 22, 0.55);
-    backdrop-filter: blur(8px);
+        radial-gradient(circle at 15% 20%, rgba(139, 92, 246, 0.35), transparent 45%),
+        radial-gradient(circle at 85% 80%, rgba(236, 72, 153, 0.35), transparent 45%),
+        rgba(15, 23, 42, 0.7);
+    backdrop-filter: blur(16px);
+    -webkit-backdrop-filter: blur(16px);
     opacity: 0;
     pointer-events: none;
-    transition: opacity 0.16s ease;
+    transition: opacity 0.35s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
 .route-loading-overlay.is-visible {
@@ -1682,27 +1683,30 @@ button.compact {
 .route-loading-panel {
     position: relative;
     overflow: hidden;
-    display: grid;
-    justify-items: center;
-    gap: 9px;
-    width: min(360px, 100%);
-    padding: 28px 26px 26px;
-    border: 1px solid rgba(198, 161, 91, 0.28);
-    border-radius: 8px;
-    background:
-        linear-gradient(135deg, rgba(255, 255, 255, 0.98), rgba(255, 249, 235, 0.98) 48%, rgba(232, 247, 255, 0.98));
-    box-shadow: 0 28px 80px rgba(15, 23, 42, 0.28);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 12px;
+    width: min(340px, 100%);
+    padding: 36px 28px;
+    border: 1px solid rgba(255, 215, 0, 0.3);
+    border-radius: 20px;
+    background: var(--s1);
+    box-shadow:
+        0 20px 50px rgba(0, 0, 0, 0.25),
+        0 0 0 1px rgba(255, 255, 255, 0.1) inset,
+        0 0 30px rgba(236, 72, 153, 0.15);
     text-align: center;
-    animation: routePanelPop 0.22s ease-out both;
+    animation: routePanelPop 0.45s cubic-bezier(0.16, 1, 0.3, 1) both;
 }
 
 .route-loading-panel::before {
     content: "";
     position: absolute;
     inset: 0;
-    background: linear-gradient(115deg, transparent 18%, rgba(255, 255, 255, 0.74) 42%, transparent 66%);
-    transform: translateX(-120%);
-    animation: routeLoadingSheen 1.85s ease-in-out infinite;
+    background: linear-gradient(115deg, transparent 20%, rgba(255, 255, 255, 0.4) 45%, transparent 70%);
+    transform: translateX(-150%);
+    animation: routeLoadingSheen 2.5s cubic-bezier(0.4, 0, 0.2, 1) infinite;
 }
 
 .route-loading-panel > * {
@@ -1712,68 +1716,75 @@ button.compact {
 
 .route-loading-glow {
     position: absolute;
-    inset: auto auto -36px -30px;
-    width: 150px;
-    height: 150px;
-    border-radius: 50%;
-    background: radial-gradient(circle, rgba(30, 136, 229, 0.2), transparent 68%);
-    animation: routeGlowFloat 2.8s ease-in-out infinite;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    background:
+        radial-gradient(circle at 10% 100%, rgba(236, 72, 153, 0.15), transparent 60%),
+        radial-gradient(circle at 90% 0%, rgba(59, 130, 246, 0.15), transparent 60%);
+    animation: routeGlowFloat 4s ease-in-out infinite alternate;
 }
 
 .route-loading-panel strong {
-    color: var(--ink);
-    font-size: 1.08rem;
-    letter-spacing: 0;
+    font-size: 1.25rem;
+    font-weight: 700;
+    letter-spacing: -0.01em;
+    background: linear-gradient(90deg, #ec4899, #8b5cf6, #3b82f6);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    margin-top: 8px;
 }
 
 .route-loading-panel small {
     color: var(--mut);
-    font-weight: 650;
+    font-size: 0.95rem;
+    font-weight: 600;
     letter-spacing: 0;
 }
 
 .route-loading-spinner {
     position: relative;
-    width: 54px;
-    height: 54px;
+    width: 64px;
+    height: 64px;
     border-radius: 50%;
-    background: conic-gradient(from 0deg, var(--gold2), #1e88e5, #16a085, var(--gold2));
-    box-shadow: 0 10px 24px rgba(30, 136, 229, 0.22);
-    animation: routeLoadingSpin 0.75s linear infinite;
+    background: conic-gradient(from 0deg, #ec4899, #8b5cf6, #3b82f6, #10b981, #f59e0b, #ec4899);
+    box-shadow: 0 8px 24px rgba(139, 92, 246, 0.3);
+    animation: routeLoadingSpin 1.2s cubic-bezier(0.68, -0.15, 0.265, 1.15) infinite;
 }
 
 .route-loading-spinner::after {
     content: "";
     position: absolute;
-    inset: 6px;
+    inset: 4px;
     border-radius: inherit;
     background: var(--s1);
 }
 
 .route-loading-dots {
     display: inline-flex;
-    gap: 6px;
+    gap: 8px;
     min-height: 8px;
     align-items: center;
+    margin-top: 4px;
 }
 
 .route-loading-dots i {
     display: block;
-    width: 7px;
-    height: 7px;
+    width: 8px;
+    height: 8px;
     border-radius: 50%;
-    background: var(--gold2);
-    animation: routeDotPulse 0.9s ease-in-out infinite;
+    background: #ec4899;
+    animation: routeDotPulse 1s ease-in-out infinite;
 }
 
 .route-loading-dots i:nth-child(2) {
-    background: #1e88e5;
-    animation-delay: 0.12s;
+    background: #8b5cf6;
+    animation-delay: 0.15s;
 }
 
 .route-loading-dots i:nth-child(3) {
-    background: #16a085;
-    animation-delay: 0.24s;
+    background: #3b82f6;
+    animation-delay: 0.3s;
 }
 
 @keyframes routeLoadingSpin {
@@ -1784,7 +1795,7 @@ button.compact {
 
 @keyframes routePanelPop {
     from {
-        transform: translateY(8px) scale(0.98);
+        transform: translateY(20px) scale(0.92);
         opacity: 0;
     }
     to {
@@ -1794,17 +1805,20 @@ button.compact {
 }
 
 @keyframes routeLoadingSheen {
-    0%, 35% {
-        transform: translateX(-120%);
+    0%, 40% {
+        transform: translateX(-150%);
     }
-    70%, 100% {
-        transform: translateX(120%);
+    60%, 100% {
+        transform: translateX(150%);
     }
 }
 
 @keyframes routeGlowFloat {
-    0%, 100% {
-        transform: translate3d(0, 0, 0);
+    0% {
+        transform: scale(1) rotate(0deg);
+    }
+    100% {
+        transform: scale(1.1) rotate(5deg);
     }
     50% {
         transform: translate3d(190px, -18px, 0);
