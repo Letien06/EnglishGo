@@ -62,6 +62,9 @@ public class ReadingProgress {
     @Column(name = "elapsed_seconds", nullable = false)
     private Integer elapsedSeconds = 0;
 
+    @Column(name = "score", nullable = false)
+    private Integer score = 0;
+
     @Column(name = "completed_at", nullable = false)
     private Instant completedAt;
 }

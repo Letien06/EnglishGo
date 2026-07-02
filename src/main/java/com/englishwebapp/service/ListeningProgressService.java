@@ -85,6 +85,7 @@ public class ListeningProgressService {
         progress.setModeUsed(normalizeMode(request.modeUsed()));
         progress.setAssistPercent(normalizeAssist(request.assistPercent()));
         progress.setReplayCount(request.replayCount() == null ? 0 : Math.max(0, request.replayCount()));
+        progress.setScore(isCorrect ? request.level() * 10 : 0);
         progress.setCompletedAt(Instant.now());
         listeningProgressRepository.save(progress);
         return new ListeningProgressResponse(true, true, isCorrect);

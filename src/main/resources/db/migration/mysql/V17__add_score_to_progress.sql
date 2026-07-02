@@ -1,0 +1,2 @@
+ALTER TABLE listening_progress ADD COLUMN score INT NOT NULL DEFAULT 0;
+ALTER TABLE reading_progress ADD COLUMN score INT NOT NULL DEFAULT 0;

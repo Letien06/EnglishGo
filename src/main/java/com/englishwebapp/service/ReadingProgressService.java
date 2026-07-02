@@ -85,6 +85,7 @@ public class ReadingProgressService {
         progress.setModeUsed(normalizeMode(request.modeUsed()));
         progress.setAssistPercent(normalizeAssist(request.assistPercent()));
         progress.setElapsedSeconds(request.elapsedSeconds() == null ? 0 : Math.max(0, request.elapsedSeconds()));
+        progress.setScore(isCorrect ? request.level() * 10 : 0);
         progress.setCompletedAt(Instant.now());
         readingProgressRepository.save(progress);
         return new ReadingProgressResponse(true, true, isCorrect);
