@@ -70,6 +70,61 @@
     document.querySelectorAll("[data-logout-button]").forEach(bindLogout);
     document.addEventListener("englishgo:study-saved", markStudySaved);
 
+    function isLoadingRoute(url) {
+        return url.pathname === "/listen"
+            || url.pathname.startsWith("/listen/")
+            || url.pathname === "/read"
+            || url.pathname.startsWith("/read/");
+    }
+
+    function showRouteLoading(label) {
+        let overlay = document.querySelector("[data-route-loading]");
+        if (!overlay) {
+            overlay = document.createElement("div");
+            overlay.className = "route-loading-overlay";
+            overlay.setAttribute("data-route-loading", "");
+            overlay.setAttribute("role", "status");
+            overlay.setAttribute("aria-live", "polite");
+            overlay.innerHTML = `
+                <div class="route-loading-panel">
+                    <span class="route-loading-spinner" aria-hidden="true"></span>
+                    <strong>${label}</strong>
+                    <small>Dang tai du lieu luyen tap...</small>
+                </div>
+            `;
+            document.body.appendChild(overlay);
+        } else {
+            overlay.querySelector("strong").textContent = label;
+        }
+        requestAnimationFrame(() => overlay.classList.add("is-visible"));
+    }
+
+    function bindRouteLoading(anchor) {
+        anchor.addEventListener("click", function (event) {
+            if (event.defaultPrevented || event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) {
+                return;
+            }
+            if (anchor.target && anchor.target.toLowerCase() === "_blank") {
+                return;
+            }
+            let url;
+            try {
+                url = new URL(anchor.href, window.location.href);
+            } catch (error) {
+                return;
+            }
+            if (url.origin !== window.location.origin || !isLoadingRoute(url)) {
+                return;
+            }
+            if (url.pathname === window.location.pathname && url.search === window.location.search) {
+                return;
+            }
+            showRouteLoading(url.pathname.startsWith("/read") ? "Dang mo phan Doc" : "Dang mo phan Nghe");
+        });
+    }
+
+    document.querySelectorAll('a[href]').forEach(bindRouteLoading);
+
     /* ── PERCEIVED-PERF: hover/focus prefetch for internal links ──
        Warm browser cache for the destination HTML the moment the user
        signals intent. On click the
@@ -136,8 +191,13 @@
         for (const mutation of mutations) {
             for (const node of mutation.addedNodes) {
                 if (node.nodeType !== 1) continue;
-                if (node.tagName === "A" && node.hasAttribute("href")) bindPrefetch(node);
-                else if (node.querySelectorAll) scanPrefetch(node);
+                if (node.tagName === "A" && node.hasAttribute("href")) {
+                    bindPrefetch(node);
+                    bindRouteLoading(node);
+                } else if (node.querySelectorAll) {
+                    scanPrefetch(node);
+                    node.querySelectorAll('a[href]').forEach(bindRouteLoading);
+                }
             }
         }
     });
