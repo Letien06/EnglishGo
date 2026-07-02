@@ -13,6 +13,7 @@ import java.util.Locale;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.StringUtils;
 import org.springframework.web.server.ResponseStatusException;
 
@@ -61,6 +62,7 @@ public class ListeningProgressService {
         return new ListeningProgressSummary(part, level, (int) distinctItems, correct, wrong);
     }
 
+    @Transactional
     public ListeningProgressResponse record(Long userId, ListeningProgressRequest request) {
         boolean isCorrect = normalize(request.selectedAnswer()).equals(normalize(request.correctAnswer()));
         if (userId == null) {
@@ -85,6 +87,7 @@ public class ListeningProgressService {
         progress.setModeUsed(normalizeMode(request.modeUsed()));
         progress.setAssistPercent(normalizeAssist(request.assistPercent()));
         progress.setReplayCount(request.replayCount() == null ? 0 : Math.max(0, request.replayCount()));
+        progress.setElapsedSeconds(request.elapsedSeconds() == null ? 0 : Math.max(0, request.elapsedSeconds()));
         progress.setScore(isCorrect ? request.level() * 10 : 0);
         progress.setCompletedAt(Instant.now());
         listeningProgressRepository.save(progress);

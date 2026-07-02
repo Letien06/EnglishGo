@@ -278,9 +278,10 @@
 
     async function saveProgress(question, selectedAnswer, correctAnswer) {
         try {
-            await fetch("/api/reading/progress", {
+            const response = await fetch("/api/reading/progress", {
                 method: "POST",
                 keepalive: true,
+                credentials: "same-origin",
                 headers: {"Content-Type": "application/json"},
                 body: JSON.stringify({
                     part: state.part,
@@ -294,6 +295,14 @@
                     elapsedSeconds: Math.max(0, Math.round((Date.now() - state.startedAt) / 1000))
                 })
             });
+            if (!response.ok) {
+                console.warn("Reading progress save returned", response.status);
+                return;
+            }
+            const payload = await response.json();
+            if (payload && payload.data && payload.data.saved === false) {
+                console.warn("Reading progress not saved per server response", payload);
+            }
         } catch (error) {
             console.warn("Reading progress was not saved", error);
         }

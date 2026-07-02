@@ -18,6 +18,7 @@ import org.springframework.context.annotation.Condition;
 import org.springframework.context.annotation.ConditionContext;
 import org.springframework.context.annotation.Conditional;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.context.annotation.Lazy;
 import org.springframework.core.env.Environment;
 import org.springframework.core.type.AnnotatedTypeMetadata;
 import org.springframework.util.StringUtils;
@@ -27,6 +28,7 @@ import org.springframework.util.StringUtils;
 public class FirebaseConfig {
 
     @Bean
+    @Lazy
     @Conditional(FirebaseCredentialsCondition.class)
     public FirebaseApp firebaseApp(AppProperties appProperties) throws IOException {
         try (InputStream serviceAccount = openServiceAccount(appProperties)) {
@@ -42,12 +44,14 @@ public class FirebaseConfig {
     }
 
     @Bean
+    @Lazy
     @ConditionalOnBean(FirebaseApp.class)
     public FirebaseAuth firebaseAuth(FirebaseApp firebaseApp) {
         return FirebaseAuth.getInstance(firebaseApp);
     }
 
     @Bean
+    @Lazy
     @ConditionalOnBean(FirebaseApp.class)
     public Firestore firestore(FirebaseApp firebaseApp) {
         return FirestoreClient.getFirestore(firebaseApp);

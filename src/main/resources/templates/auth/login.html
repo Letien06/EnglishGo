@@ -190,11 +190,11 @@
         const contentType = response.headers.get("content-type") || "";
         if (!contentType.includes("application/json")) {
             const body = await response.text();
-            throw new Error(`Backend returned ${response.status}: ${body.slice(0, 120)}`);
+            throw new Error(`Máy chủ đăng nhập trả về ${response.status}: ${body.slice(0, 120)}`);
         }
         const result = await response.json();
         if (!response.ok || !result.success) {
-            throw new Error(result.error || "Sign in failed");
+            throw new Error(result.error || result.message || `Đăng nhập thất bại (${response.status})`);
         }
         window.location.href = "/";
     }

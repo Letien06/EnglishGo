@@ -13,6 +13,7 @@ import java.util.Locale;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.StringUtils;
 import org.springframework.web.server.ResponseStatusException;
 
@@ -61,6 +62,7 @@ public class ReadingProgressService {
         return new ReadingProgressSummary(part, level, (int) distinctItems, correct, wrong);
     }
 
+    @Transactional
     public ReadingProgressResponse record(Long userId, ReadingProgressRequest request) {
         boolean isCorrect = normalize(request.selectedAnswer()).equals(normalize(request.correctAnswer()));
         if (userId == null) {

@@ -16,6 +16,7 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.concurrent.ExecutionException;
 import lombok.RequiredArgsConstructor;
+import org.springframework.beans.BeansException;
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.security.authentication.BadCredentialsException;
 import org.springframework.stereotype.Service;
@@ -36,10 +37,12 @@ public class FirebaseAuthenticationService {
             throw new BadCredentialsException("Firebase ID token is required");
         }
 
-        FirebaseAuth firebaseAuth = Optional.ofNullable(firebaseAuthProvider.getIfAvailable())
-                .orElseThrow(() -> new IllegalStateException("Firebase authentication SDK is not configured"));
-        Firestore firestore = Optional.ofNullable(firestoreProvider.getIfAvailable())
-                .orElseThrow(() -> new IllegalStateException("Firestore is not configured"));
+        FirebaseAuth firebaseAuth = requiredBean(
+                firebaseAuthProvider,
+                "Firebase authentication SDK is not configured correctly");
+        Firestore firestore = requiredBean(
+                firestoreProvider,
+                "Firestore is not configured correctly");
 
         FirebaseToken decodedToken;
         try {
@@ -73,10 +76,17 @@ public class FirebaseAuthenticationService {
                 transaction.set(userRef, data, SetOptions.merge());
                 return toUser(id, decodedToken, email, role);
             }));
-        } catch (RuntimeException ex) {
-            throw ex;
         } catch (Exception ex) {
             throw new IllegalStateException("Could not create Firestore user session", ex);
+        }
+    }
+
+    private <T> T requiredBean(ObjectProvider<T> provider, String message) {
+        try {
+            return Optional.ofNullable(provider.getIfAvailable())
+                    .orElseThrow(() -> new IllegalStateException(message));
+        } catch (BeansException ex) {
+            throw new IllegalStateException(message, ex);
         }
     }
 

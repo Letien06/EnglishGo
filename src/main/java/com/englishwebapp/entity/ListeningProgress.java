@@ -62,6 +62,9 @@ public class ListeningProgress {
     @Column(name = "replay_count", nullable = false)
     private Integer replayCount = 0;
 
+    @Column(name = "elapsed_seconds", nullable = false)
+    private Integer elapsedSeconds = 0;
+
     @Column(name = "score", nullable = false)
     private Integer score = 0;
 

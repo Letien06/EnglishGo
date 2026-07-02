@@ -9,5 +9,6 @@ public record ListeningProgressRequest(
         String correctAnswer,
         String modeUsed,
         Integer assistPercent,
-        Integer replayCount) {
+        Integer replayCount,
+        Integer elapsedSeconds) {
 }
