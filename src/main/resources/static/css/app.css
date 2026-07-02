@@ -1940,10 +1940,60 @@ button.compact {
     min-height: 100vh;
     margin: 0;
     background: #f8fafc;
+    color: #111827;
+    color-scheme: only light;
 }
 
 .listen-practice-page {
     min-height: 100vh;
+    background: #f8fafc;
+    color: #111827;
+    color-scheme: only light;
+}
+
+:root[data-theme="dark"] .practice-body,
+:root[data-theme="dark"] .listen-practice-page {
+    background: #f8fafc;
+    color: #111827;
+    color-scheme: only light;
+}
+
+:root[data-theme="dark"] .practice-listen-pane,
+:root[data-theme="dark"] .practice-question,
+:root[data-theme="dark"] .practice-tool-panel {
+    background: #ffffff;
+}
+
+:root[data-theme="dark"] .practice-question-pane,
+:root[data-theme="dark"] .practice-audio-card,
+:root[data-theme="dark"] .practice-tool-panel textarea,
+:root[data-theme="dark"] .practice-tool-panel input {
+    background: #f8fafc;
+}
+
+:root[data-theme="dark"] .practice-instruction,
+:root[data-theme="dark"] .practice-question-pane > header h2,
+:root[data-theme="dark"] .practice-question h3,
+:root[data-theme="dark"] .practice-question label,
+:root[data-theme="dark"] .practice-tool-panel textarea,
+:root[data-theme="dark"] .practice-tool-panel input,
+:root[data-theme="dark"] .hidden-word-input {
+    color: #111827;
+}
+
+:root[data-theme="dark"] .practice-topbar,
+:root[data-theme="dark"] .practice-topbar strong,
+:root[data-theme="dark"] .practice-exit {
+    color: #ffffff;
+}
+
+:root[data-theme="dark"] .practice-tools a,
+:root[data-theme="dark"] .practice-quick-tools button,
+:root[data-theme="dark"] .practice-audio-card button,
+:root[data-theme="dark"] .practice-question-pane > header button,
+:root[data-theme="dark"] .practice-mode-panel button {
+    background: #ffffff !important;
+    color: #1f2937 !important;
 }
 
 .practice-topbar {
