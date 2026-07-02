@@ -41,7 +41,6 @@ FIREBASE_AUTH_DOMAIN=<firebase-auth-domain>
 FIREBASE_PROJECT_ID=<firebase-project-id>
 FIREBASE_APP_ID=<firebase-app-id>
 FIREBASE_SERVICE_ACCOUNT_JSON=<firebase-service-account-json-one-line>
-ADMIN_EMAILS=<comma-separated-admin-emails>
 GEMINI_API_KEY=<gemini-api-key>
 GEMINI_MODEL=gemini-2.5-flash
 MEDIA_BASE_URL=https://<vercel-domain>/media

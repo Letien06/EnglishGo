@@ -35,11 +35,9 @@ public class SecurityConfig {
                                 "/api/listening/**",
                                 "/api/practice/**",
                         "/api/vocab/**",
-                        "/admin/**",
                         "/billing/**",
                         "/community/**",
-                        "/ai/**",
-                        "/teacher/cms/**"))
+                        "/ai/**"))
                 .formLogin(AbstractHttpConfigurer::disable)
                 .httpBasic(AbstractHttpConfigurer::disable)
                 .logout(AbstractHttpConfigurer::disable)
@@ -79,8 +77,6 @@ public class SecurityConfig {
                         .requestMatchers("/api/listening/**").permitAll()
                         .requestMatchers("/api/vocab/**").permitAll()
                         .requestMatchers("/api/practice/**").authenticated()
-                        .requestMatchers("/admin/**").hasRole("ADMIN")
-                        .requestMatchers("/teacher/**").hasAnyRole("TEACHER", "ADMIN")
                         .anyRequest().authenticated())
                 .addFilterBefore(firebaseAuthenticationFilter, UsernamePasswordAuthenticationFilter.class);
 

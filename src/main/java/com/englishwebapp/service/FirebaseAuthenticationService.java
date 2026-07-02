@@ -1,6 +1,5 @@
 package com.englishwebapp.service;
 
-import com.englishwebapp.config.AppProperties;
 import com.englishwebapp.entity.User;
 import com.englishwebapp.entity.UserRole;
 import com.google.api.core.ApiFuture;
@@ -31,7 +30,6 @@ public class FirebaseAuthenticationService {
 
     private final ObjectProvider<FirebaseAuth> firebaseAuthProvider;
     private final ObjectProvider<Firestore> firestoreProvider;
-    private final AppProperties appProperties;
 
     public User verifyAndProvisionUser(String idToken) {
         if (!StringUtils.hasText(idToken)) {
@@ -39,7 +37,7 @@ public class FirebaseAuthenticationService {
         }
 
         FirebaseAuth firebaseAuth = Optional.ofNullable(firebaseAuthProvider.getIfAvailable())
-                .orElseThrow(() -> new IllegalStateException("Firebase Admin SDK is not configured"));
+                .orElseThrow(() -> new IllegalStateException("Firebase authentication SDK is not configured"));
         Firestore firestore = Optional.ofNullable(firestoreProvider.getIfAvailable())
                 .orElseThrow(() -> new IllegalStateException("Firestore is not configured"));
 
@@ -60,7 +58,7 @@ public class FirebaseAuthenticationService {
                 }
 
                 String email = resolveEmail(decodedToken);
-                UserRole role = resolveProvisionedRole(email);
+                UserRole role = UserRole.STUDENT;
                 Map<String, Object> data = new LinkedHashMap<>();
                 data.put("id", id);
                 data.put("firebaseUid", decodedToken.getUid());
@@ -110,17 +108,6 @@ public class FirebaseAuthenticationService {
             return decodedToken.getEmail();
         }
         return decodedToken.getUid() + "@firebase.local";
-    }
-
-    private UserRole resolveProvisionedRole(String email) {
-        if (!StringUtils.hasText(email)) {
-            return UserRole.STUDENT;
-        }
-        boolean isAdmin = appProperties.getAdminEmails().stream()
-                .filter(StringUtils::hasText)
-                .map(String::trim)
-                .anyMatch(adminEmail -> adminEmail.equalsIgnoreCase(email));
-        return isAdmin ? UserRole.ADMIN : UserRole.STUDENT;
     }
 
     private Long longValue(DocumentSnapshot snapshot, String field) {

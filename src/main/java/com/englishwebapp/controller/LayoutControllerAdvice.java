@@ -1,6 +1,5 @@
 package com.englishwebapp.controller;
 
-import com.englishwebapp.entity.UserRole;
 import com.englishwebapp.security.AppUserPrincipal;
 import com.englishwebapp.service.VocabService;
 import jakarta.servlet.http.HttpServletRequest;
@@ -49,12 +48,6 @@ public class LayoutControllerAdvice {
         items.add(new NavItem("History", "/history", "Review", "H"));
         items.add(new NavItem("Community", "/community", "Review", "C"));
         items.add(new NavItem("Writing", "/ai/writing", "Review", "W"));
-        if (user != null && user.role() == UserRole.ADMIN) {
-            items.add(new NavItem("Admin CMS", "/admin", "Build", "A"));
-        } else if (user != null && user.role() == UserRole.TEACHER) {
-            items.add(new NavItem("Teacher CMS", "/teacher/cms", "Build", "T"));
-        }
-
         return items;
     }
 

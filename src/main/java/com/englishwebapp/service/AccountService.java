@@ -68,7 +68,7 @@ public class AccountService {
         User user = findUser(userId);
         FirebaseAuth firebaseAuth = firebaseAuthProvider.getIfAvailable();
         if (firebaseAuth == null) {
-            throw new ResponseStatusException(HttpStatus.SERVICE_UNAVAILABLE, "Firebase Admin SDK is not configured");
+            throw new ResponseStatusException(HttpStatus.SERVICE_UNAVAILABLE, "Firebase authentication SDK is not configured");
         }
 
         try {

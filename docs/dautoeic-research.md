@@ -22,7 +22,7 @@ He thong duoc to chuc theo hub hoc tap thay vi chi la danh sach de thi. Nguoi ho
 - App nay danh cho nguoi hoc ca nhan.
 - Tat ca module hoc se free: hub, listen, read, grammar, vocabulary, mock test, random, wrong, starred, review, leaderboard.
 - Khong clone monetization: khong pricing page, khong premium lock, khong checkout, khong affiliate/revenue flow.
-- Neu Dautoeic co route ban goi/payment, ta chi ghi nhan la route quan sat duoc va loai khoi scope.
+- Neu Dautoeic co route ban goi/payment hoac quan tri noi bo, ta chi ghi nhan la route quan sat duoc va loai khoi scope.
 
 ## Public route map quan trong
 
@@ -46,18 +46,8 @@ He thong duoc to chuc theo hub hoc tap thay vi chi la danh sach de thi. Nguoi ho
 ### Route monetization quan sat duoc nhung khong clone
 
 - `/upgrade`, `/upgrade/speak-write`, `/pro`.
-- Admin payment/revenue/promotion/affiliate routes.
-
-### Admin / CMS can clone cho quan tri noi dung
-
-- `/admin`, `/admin/login`, `/admin-invite`.
-- `/admin/topics`, `/admin/topics/:topicId/:subtopicId`, `/admin/exercises`.
-- `/admin/listening`, `/admin/topic-listening`, `/admin/reading`, `/admin/vocabulary`.
-- `/admin/mock-test`, `/admin/mock-test-media`, `/admin/mock-test-settings`, `/admin/mock-test-explanation-review`.
-- `/admin/users`, `/admin/analytics`, `/admin/issue-reports`.
-- `/admin/classes`, `/admin/class-website`, `/admin/course`, `/admin/courses`, `/admin/course-schedule`.
-- `/admin/blog`, `/admin/website`, `/admin/visual-editor`, `/admin/file-manager`.
-- `/admin/notifications`, `/admin/sharing`, `/admin/maintenance`.
+- Payment/revenue/promotion/affiliate routes.
+- Internal content-management routes.
 
 ## Module suy ra tu bundle cong khai
 
@@ -69,28 +59,25 @@ He thong duoc to chuc theo hub hoc tap thay vi chi la danh sach de thi. Nguoi ho
 - Grammar: topic/subtopic, grammar bank, progress by set.
 - Mock test: home, roadmap, answer sync, media, explanation review.
 - Course/video/class: content learning, assignments, course schedule.
-- Admin CMS: CRUD content, upload/import CSV/Excel, analytics, users, issue reports.
 - PWA/runtime: theme, version check, service-worker/cache reset, crash recovery.
 
 ## Chien luoc du lieu/noi dung cho app minh
 
-Khong dung API hay data cua Dautoeic/Study4 lam datasource. Dautoeic dung Supabase public client va cac bang/edge functions rieng; viec thay duoc endpoint trong JS khong dong nghia voi quyen sao chep cau hoi/de thi/audio.
+Voi listening, app dung client/API Dautoeic da duoc cau hinh trong app de lay du lieu luyen nghe theo part/level. Cac module khac van can uu tien nguon hop phap rieng cua app, bo cong dong hoac du lieu nguoi dung tu tao.
 
 App minh se tao data bang 2 luong hop phap:
 
-### AI generate TOEIC-style
+### API listening
 
-- Admin dung `/admin/generate` de tao cau hoi theo format TOEIC-style.
-- AI chi tao noi dung moi dua tren part/topic/difficulty, khong tai tao/copy de that.
-- Ket qua AI la draft, phai qua `/admin/content-review` moi duoc publish.
-- Can luu raw prompt/response, schema validation, reviewer, audit log.
+- Listening hub goi API theo part/level va hien thi cau hoi truc tiep cho nguoi hoc.
+- Practice engine phu trach mode ho tro: song ngu, dien tu, lat tu theo 30/50/100%, ghi chu va tu vung nen hoc.
+- Neu API loi, UI can co empty/error state ro rang, khong phu thuoc trang quan tri.
 
-### CMS/community/import
+### Community/import ca nhan
 
-- Teacher/admin/contributor nhap cau hoi qua form hoac CSV/Excel.
-- Noi dung nhap vao queue `PENDING_REVIEW`, khong publish truc tiep.
-- Bat buoc source/license note: tu tao, open-license, public-domain, hoac co quyen su dung.
-- Admin approve/reject/sua truoc khi learner thay trong practice.
+- Nguoi dung tu tao bo tu vung rieng va co the import CSV/Excel/PDF vao bo ca nhan.
+- Noi dung cong dong duoc chia se tu folder/bo tu cua nguoi dung, co nut sao chep ve tai khoan.
+- Khong can CMS/review quan tri noi bo trong phien ban hien tai.
 
 ## So sanh voi app hien tai
 
@@ -98,7 +85,7 @@ App minh se tao data bang 2 luong hop phap:
 
 - Spring Boot 3, MySQL, Flyway, Firebase Auth.
 - Entity co ban: user, test, question, question group, answer option, accepted answer, attempt, draft, vocabulary, lesson, subscription, transaction, comment, leaderboard, writing job.
-- Trang server-rendered: login, dashboard, tests, practice session, review, history, vocab flashcards, lessons, billing legacy, community, AI writing, teacher CMS.
+- Trang server-rendered: login, dashboard, tests, practice session, review, history, vocab flashcards, lessons, billing legacy, community, AI writing.
 
 ### Thieu de dat trai nghiem giong Dautoeic
 
@@ -108,10 +95,9 @@ App minh se tao data bang 2 luong hop phap:
 - Chua co cau sai/cau danh dau/retry queue.
 - Vocabulary chua co trang difficult/mastered/shared va review queue dung nghia.
 - Dashboard chua du manh ve streak, daily goals, weak skills, progress theo ngay.
-- CMS hien tai la teacher CMS don gian, chua co admin dashboard/module CMS theo skill.
 - UI con theo Thymeleaf co ban, chua co design system/hub experience/PWA polish.
 - Con ton tai billing/subscription demo, can vo hieu hoa trong san pham learner-free.
-- Chua co pipeline tao noi dung AI, community submit, import-to-review va audit nguon noi dung.
+- Chua co du cac queue luyen lai: cau sai, cau danh dau, retry queue cho tung skill.
 
 ## Huong clone hop ly cho repo nay
 
@@ -120,7 +106,7 @@ Repo hien tai la Spring Boot + Thymeleaf, khong phai React SPA. Vi vay khong nen
 1. Giu Spring Boot, MySQL, Firebase Auth.
 2. Tao route va UI Dautoeic-style bang Thymeleaf + Alpine/HTMX.
 3. Moi task phai co FE + BE + data + test/seed de nhin thay san pham chay duoc.
-4. Uu tien learner-facing truoc admin deep CMS.
+4. Uu tien learner-facing; khong build trang quan tri noi bo trong giai do hien tai.
 5. Loai bo paywall/upgrade/payment khoi learner flow.
-6. Them content pipeline: AI generate + CMS/community/import + admin review + publish.
+6. Mo rong API/client du lieu cho listen/read/mock test va giu import tu vung o cap ca nhan/cong dong.
 7. Khong copy asset/text/branding/cau hoi cua Dautoeic; dat brand tam thoi la `EnglishWebApp` hoac doi thanh brand rieng sau.
