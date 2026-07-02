@@ -125,7 +125,7 @@ public class ListeningProgressService {
             return 30;
         }
         return switch (assist) {
-            case 10, 20, 30, 50, 70, 100 -> assist;
+            case 30, 50, 100 -> assist;
             default -> 30;
         };
     }

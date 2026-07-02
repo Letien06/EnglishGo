@@ -144,6 +144,9 @@ class ListenControllerTest {
                 .andExpect(content().string(Matchers.containsString("practice-inline-mode-tools")))
                 .andExpect(content().string(Matchers.containsString("answer-option-text")))
                 .andExpect(content().string(Matchers.containsString("practice-bottom-nav")))
+                .andExpect(content().string(Matchers.containsString("50%")))
+                .andExpect(content().string(Matchers.containsString("100%")))
+                .andExpect(content().string(Matchers.not(Matchers.containsString("10%"))))
                 .andExpect(content().string(Matchers.containsString("The woman is working.")));
     }
 }

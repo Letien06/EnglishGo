@@ -2561,6 +2561,20 @@ button.compact {
     vertical-align: baseline;
 }
 
+.hidden-word-revealed {
+    display: inline-grid;
+    place-items: center;
+    min-height: 34px;
+    margin: 0 3px;
+    padding: 0 10px;
+    border: 1px solid #22c55e;
+    border-radius: 8px;
+    background: #d1fae5;
+    color: #047857;
+    font-weight: 950;
+    vertical-align: baseline;
+}
+
 @media (max-width: 1180px) {
     .level-card-grid {
         grid-template-columns: repeat(2, minmax(0, 1fr));

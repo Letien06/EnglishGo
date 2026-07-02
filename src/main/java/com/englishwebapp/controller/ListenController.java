@@ -57,7 +57,7 @@ public class ListenController {
         model.addAttribute("selectedLevel", level);
         model.addAttribute("selectedMode", normalizeMode(mode));
         model.addAttribute("assistPercent", normalizeAssist(assist));
-        model.addAttribute("assistOptions", List.of(10, 20, 30, 50, 70, 100));
+        model.addAttribute("assistOptions", List.of(30, 50, 100));
         model.addAttribute("listeningUserAuthenticated", user != null);
         try {
             model.addAttribute("practiceSession", dauToeicClientService.getDifficultySession(
@@ -109,7 +109,7 @@ public class ListenController {
 
     private int normalizeAssist(int assist) {
         return switch (assist) {
-            case 10, 20, 30, 50, 70, 100 -> assist;
+            case 30, 50, 100 -> assist;
             default -> 30;
         };
     }

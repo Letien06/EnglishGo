@@ -177,8 +177,19 @@
                 span.append(document.createTextNode(token.value));
                 return;
             }
-            if (!hiddenSet.has(index) || mask.revealed.has(index)) {
+            if (!hiddenSet.has(index)) {
                 span.append(document.createTextNode(token.value));
+                return;
+            }
+            if (mask.revealed.has(index)) {
+                if (mask.mode === "flip") {
+                    const revealed = document.createElement("span");
+                    revealed.className = "hidden-word-revealed";
+                    revealed.textContent = token.value;
+                    span.append(revealed);
+                } else {
+                    span.append(document.createTextNode(token.value));
+                }
                 return;
             }
             if (mask.mode === "fill") {
@@ -309,13 +320,29 @@
     function chooseHiddenIndexes(tokens, percent) {
         const eligible = tokens
             .map((token, index) => ({token, index}))
-            .filter(({token}) => token.type === "word" && normalizeWord(token.value).length > 3);
-        const count = Math.max(1, Math.round(eligible.length * (percent / 100)));
-        return eligible
-            .sort((left, right) => scoreWord(right.token.value) - scoreWord(left.token.value))
-            .slice(0, count)
-            .map(({index}) => index)
-            .sort((left, right) => left - right);
+            .filter(({token}) => token.type === "word" && normalizeWord(token.value).length > 0);
+        if (eligible.length === 0) {
+            return [];
+        }
+        const count = Math.min(eligible.length, Math.max(1, Math.ceil(eligible.length * (percent / 100))));
+        if (count >= eligible.length) {
+            return eligible.map(({index}) => index);
+        }
+        if (count === 1) {
+            return [[...eligible].sort((left, right) => scoreWord(right.token.value) - scoreWord(left.token.value))[0].index];
+        }
+        const selected = new Set();
+        for (let step = 0; step < count; step += 1) {
+            const position = Math.round(step * ((eligible.length - 1) / (count - 1)));
+            selected.add(eligible[position].index);
+        }
+        for (const {index} of eligible) {
+            if (selected.size >= count) {
+                break;
+            }
+            selected.add(index);
+        }
+        return Array.from(selected).sort((left, right) => left - right);
     }
 
     function setupAudioCard(card) {
@@ -542,10 +569,10 @@
     }
 
     function tokenize(text) {
-        const matches = text.match(/[A-Za-z]+(?:['-][A-Za-z]+)?|\s+|./g) || [];
+        const matches = text.match(/[A-Za-z]+(?:['’\\-][A-Za-z]+)?|\s+|./g) || [];
         return matches.map((value) => ({
             value,
-            type: /^\s+$/.test(value) ? "space" : /^[A-Za-z]+(?:['-][A-Za-z]+)?$/.test(value) ? "word" : "punct"
+            type: /^\s+$/.test(value) ? "space" : /^[A-Za-z]+(?:['’\\-][A-Za-z]+)?$/.test(value) ? "word" : "punct"
         }));
     }
 
