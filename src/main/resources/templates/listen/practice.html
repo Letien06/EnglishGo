@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <meta name="color-scheme" content="light only">
     <title>Luyện nghe - ENGLISHGO</title>
-    <link rel="stylesheet" th:href="@{/css/app.css(v='practice-overlay-fix-1')}">
+    <link rel="stylesheet" th:href="@{/css/app.css(v='practice-single-item-1')}">
     <style>
         html {
             color-scheme: light only;
@@ -101,10 +101,16 @@
     </section>
 
     <section class="practice-session"
-             th:if="${practiceSession != null and !practiceSession.items().empty}">
+             th:if="${practiceSession != null and !practiceSession.items().empty}"
+             th:attr="data-total=${practiceSession.items().size()}">
         <article class="practice-item"
                  th:each="item, iter : ${practiceSession.items()}"
-                 th:attr="data-item-id=${item.id()},data-first-question-id=${#lists.isEmpty(item.questions()) ? '' : item.questions().get(0).id()}">
+                 th:classappend="${iter.index == 0} ? ' is-active'"
+                 th:attr="data-item-id=${item.id()},
+                          data-first-question-id=${#lists.isEmpty(item.questions()) ? '' : item.questions().get(0).id()},
+                          data-item-index=${iter.index},
+                          data-translation=${item.translation() != null ? item.translation() : ''},
+                          data-vocabulary=${item.vocabulary() != null ? item.vocabulary() : ''}">
             <section class="practice-listen-pane">
                 <p class="practice-instruction"
                    th:text="${activePart.id() == '1' ? 'Select the one statement that best describes what you see in the picture.' : 'Select the best response to each question.'}">
@@ -124,20 +130,12 @@
                      th:if="${item.imageUrl() != null}"
                      th:src="${item.imageUrl()}"
                      alt="Listening question image">
-
-                <div class="practice-support"
-                     th:if="${selectedMode == 'bilingual' and item.transcript() != null}">
-                    <strong>Transcript</strong>
-                    <p th:text="${item.transcript()}">Transcript</p>
-                    <p th:if="${item.translation() != null}" th:text="${item.translation()}">Translation</p>
-                    <pre th:if="${item.vocabulary() != null}" th:text="${item.vocabulary()}">Vocabulary</pre>
-                </div>
             </section>
 
             <section class="practice-question-pane">
                 <header>
                     <div>
-                        <span th:text="${'#' + iter.count + '/' + practiceSession.total()}">#1/20</span>
+                        <span th:text="${'#' + iter.count + '/' + practiceSession.items().size()}">#1/20</span>
                         <h2 th:text="${activePart.id() == '3' or activePart.id() == '4' ? 'Nhóm câu hỏi' : 'Question'}">Question</h2>
                     </div>
                     <button class="favorite-button"
@@ -146,53 +144,67 @@
                             th:attr="data-item-id=${item.id()},data-question-id=${#lists.isEmpty(item.questions()) ? '' : item.questions().get(0).id()}">☆</button>
                 </header>
 
-                <div class="practice-mode-panel is-fill"
-                     th:if="${selectedMode == 'fill'}"
-                     th:attr="data-hidden-text=${item.transcript() != null ? item.transcript() : ''},data-percent=${assistPercent},data-mode='fill'">
-                    <div>
-                        <strong th:text="${'Nghe & Điền từ - ' + assistPercent + '%'}">Nghe & Điền từ</strong>
-                        <button type="button" data-action="hint">Gợi ý</button>
-                        <button type="button" data-action="reveal-all">Mở tất cả</button>
-                    </div>
-                    <p class="hidden-word-output"></p>
-                    <small>Tab gợi ý từ, Enter kiểm tra ô đang nhập.</small>
-                </div>
-
-                <div class="practice-mode-panel is-flip"
-                     th:if="${selectedMode == 'flip'}"
-                     th:attr="data-hidden-text=${item.transcript() != null ? item.transcript() : ''},data-percent=${assistPercent},data-mode='flip'">
-                    <div>
-                        <strong th:text="${'Nghe & Lật từ - ' + assistPercent + '%'}">Nghe & Lật từ</strong>
-                        <button type="button" data-action="flip-next">Lật từ tiếp</button>
-                        <button type="button" data-action="flip-three">Lật 3 từ</button>
-                        <button type="button" data-action="reveal-all">Mở tất cả</button>
-                    </div>
-                    <p class="hidden-word-output"></p>
-                    <small>Nghe trước, lật từng từ khi cần thêm gợi ý.</small>
-                </div>
-
                 <div class="practice-question-list">
                     <article class="practice-question"
                              th:each="question : ${item.questions()}"
-                             th:attr="data-item-id=${item.id()},data-question-id=${question.id()},data-correct-answer=${question.correctAnswer()}">
+                             th:attr="data-item-id=${item.id()},
+                                      data-question-id=${question.id()},
+                                      data-correct-answer=${question.correctAnswer()},
+                                      data-question-translation=${question.translationVi() != null ? question.translationVi() : (item.translation() != null ? item.translation() : '')},
+                                      data-answer-translation=${question.answerTranslationVi() != null ? question.answerTranslationVi() : ''},
+                                      data-vocabulary=${question.vocabulary() != null ? question.vocabulary() : (item.vocabulary() != null ? item.vocabulary() : '')}">
                         <h3 th:text="${question.questionText() != null ? question.questionText() : 'Question ' + question.questionNumber()}">Question text</h3>
-                        <label th:if="${question.optionA() != null}">
+
+                        <div class="practice-inline-mode-tools is-fill"
+                             th:if="${selectedMode == 'fill'}">
+                            <strong th:text="${'Nghe & Điền từ - ' + assistPercent + '%'}">Nghe & Điền từ</strong>
+                            <button type="button" data-action="hint">Gợi ý</button>
+                            <button type="button" data-action="reveal-all">Mở tất cả</button>
+                        </div>
+                        <div class="practice-inline-mode-tools is-flip"
+                             th:if="${selectedMode == 'flip'}">
+                            <strong th:text="${'Nghe & Lật từ - ' + assistPercent + '%'}">Nghe & Lật từ</strong>
+                            <button type="button" data-action="flip-next">Lật từ tiếp</button>
+                            <button type="button" data-action="flip-three">Lật 3 từ</button>
+                            <button type="button" data-action="reveal-all">Mở tất cả</button>
+                        </div>
+
+                        <label th:if="${question.optionA() != null}" data-answer-option="A">
                             <input type="radio" th:name="${'q-' + question.id()}" value="A">
-                            <span th:text="${'(A) ' + question.optionA()}">(A)</span>
+                            <span class="answer-letter">(A)</span>
+                            <span class="answer-option-text" data-option="A" th:attr="data-original-text=${question.optionA()}" th:text="${question.optionA()}">Answer A</span>
                         </label>
-                        <label th:if="${question.optionB() != null}">
+                        <label th:if="${question.optionB() != null}" data-answer-option="B">
                             <input type="radio" th:name="${'q-' + question.id()}" value="B">
-                            <span th:text="${'(B) ' + question.optionB()}">(B)</span>
+                            <span class="answer-letter">(B)</span>
+                            <span class="answer-option-text" data-option="B" th:attr="data-original-text=${question.optionB()}" th:text="${question.optionB()}">Answer B</span>
                         </label>
-                        <label th:if="${question.optionC() != null}">
+                        <label th:if="${question.optionC() != null}" data-answer-option="C">
                             <input type="radio" th:name="${'q-' + question.id()}" value="C">
-                            <span th:text="${'(C) ' + question.optionC()}">(C)</span>
+                            <span class="answer-letter">(C)</span>
+                            <span class="answer-option-text" data-option="C" th:attr="data-original-text=${question.optionC()}" th:text="${question.optionC()}">Answer C</span>
                         </label>
-                        <label th:if="${question.optionD() != null}">
+                        <label th:if="${question.optionD() != null}" data-answer-option="D">
                             <input type="radio" th:name="${'q-' + question.id()}" value="D">
-                            <span th:text="${'(D) ' + question.optionD()}">(D)</span>
+                            <span class="answer-letter">(D)</span>
+                            <span class="answer-option-text" data-option="D" th:attr="data-original-text=${question.optionD()}" th:text="${question.optionD()}">Answer D</span>
                         </label>
                         <small class="listening-answer-feedback" aria-live="polite"></small>
+
+                        <section class="practice-solution-panel" hidden>
+                            <div>
+                                <strong>Kết quả</strong>
+                                <p data-solution-result></p>
+                            </div>
+                            <div data-solution-translation-wrap hidden>
+                                <strong>Dịch nghĩa câu hỏi</strong>
+                                <p data-solution-translation></p>
+                            </div>
+                            <div data-solution-vocabulary-wrap hidden>
+                                <strong>Từ vựng nên học</strong>
+                                <pre data-solution-vocabulary></pre>
+                            </div>
+                        </section>
                     </article>
                 </div>
 
@@ -227,6 +239,13 @@
         </article>
     </section>
 
+    <footer class="practice-bottom-nav"
+            th:if="${practiceSession != null and !practiceSession.items().empty}">
+        <button type="button" data-practice-prev aria-label="Câu trước">‹</button>
+        <span data-practice-counter th:text="${'1/' + practiceSession.items().size()}">1/20</span>
+        <button type="button" data-practice-next aria-label="Câu sau">›</button>
+    </footer>
+
     <section class="listen-login-required"
              th:if="${practiceSession != null and practiceSession.items().empty}">
         <span>!</span>
@@ -234,6 +253,6 @@
         <p>Không tìm thấy item luyện nghe cho Part và Level đã chọn.</p>
     </section>
 </main>
-<script th:src="@{/js/listen-practice.js(v='practice-overlay-fix-1')}"></script>
+<script th:src="@{/js/listen-practice.js(v='practice-single-item-1')}"></script>
 </body>
 </html>

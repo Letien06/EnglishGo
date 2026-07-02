@@ -4,16 +4,19 @@
         return;
     }
 
+    const items = Array.from(document.querySelectorAll(".practice-item"));
     const state = {
         part: Number(page.dataset.part || 1),
         level: Number(page.dataset.level || 1),
         mode: page.dataset.mode || "normal",
         assist: Number(page.dataset.assist || 30),
         replayCount: 0,
-        auto: false
+        auto: false,
+        currentIndex: 0
     };
 
-    document.querySelectorAll(".practice-mode-panel[data-hidden-text]").forEach(setupHiddenWords);
+    setupSingleItemNavigation();
+    document.querySelectorAll(".practice-question").forEach(setupQuestionMode);
     document.querySelectorAll(".practice-question").forEach(setupAnswerProgress);
     document.querySelectorAll(".practice-audio-card").forEach(setupAudioCard);
     document.querySelectorAll(".favorite-button").forEach(setupFavoriteButton);
@@ -23,6 +26,197 @@
     setupAutoToggle();
     setupKeyboardShortcuts();
 
+    function setupSingleItemNavigation() {
+        activateItem(0, {scroll: false});
+        document.querySelector("[data-practice-prev]")?.addEventListener("click", () => activateItem(state.currentIndex - 1));
+        document.querySelector("[data-practice-next]")?.addEventListener("click", () => activateItem(state.currentIndex + 1));
+    }
+
+    function activateItem(index, options = {}) {
+        if (items.length === 0) {
+            return;
+        }
+        const nextIndex = Math.max(0, Math.min(items.length - 1, index));
+        pauseAudios(items[state.currentIndex]);
+        state.currentIndex = nextIndex;
+        items.forEach((item, itemIndex) => {
+            item.classList.toggle("is-active", itemIndex === state.currentIndex);
+        });
+        updateNavigation();
+        if (options.scroll !== false) {
+            window.scrollTo({top: 0, behavior: "smooth"});
+        }
+    }
+
+    function updateNavigation() {
+        const counter = document.querySelector("[data-practice-counter]");
+        const prev = document.querySelector("[data-practice-prev]");
+        const next = document.querySelector("[data-practice-next]");
+        if (counter) {
+            counter.textContent = `${state.currentIndex + 1}/${items.length}`;
+        }
+        if (prev) {
+            prev.disabled = state.currentIndex === 0;
+        }
+        if (next) {
+            next.disabled = state.currentIndex >= items.length - 1;
+        }
+    }
+
+    function setupQuestionMode(question) {
+        if (state.mode === "bilingual") {
+            setupBilingualAnswers(question);
+        }
+        if (state.mode !== "fill" && state.mode !== "flip") {
+            return;
+        }
+        question.classList.add(`uses-${state.mode}`);
+        question.querySelectorAll(".answer-option-text").forEach((span) => setupMaskedAnswer(span, state.mode));
+        setupInlineModeTools(question);
+    }
+
+    function setupBilingualAnswers(question) {
+        const item = question.closest(".practice-item");
+        const translations = parseOptionTranslations(
+                firstText(question.dataset.answerTranslation, question.dataset.questionTranslation, item?.dataset.translation));
+        Object.entries(translations).forEach(([option, translation]) => {
+            const label = question.querySelector(`label[data-answer-option='${option}']`);
+            if (!label || !translation) {
+                return;
+            }
+            const text = document.createElement("small");
+            text.className = "answer-option-translation";
+            text.textContent = translation;
+            label.append(text);
+        });
+    }
+
+    function setupMaskedAnswer(span, mode) {
+        const tokens = tokenize(span.dataset.originalText || span.textContent || "");
+        const hiddenIndexes = chooseHiddenIndexes(tokens, state.assist);
+        span._maskState = {
+            mode,
+            tokens,
+            hiddenIndexes,
+            revealed: new Set()
+        };
+        renderMaskedAnswer(span);
+    }
+
+    function setupInlineModeTools(question) {
+        question.querySelectorAll("[data-action]").forEach((button) => {
+            button.addEventListener("click", () => {
+                const action = button.dataset.action;
+                if (action === "reveal-all") {
+                    revealAll(question);
+                } else if (action === "flip-three") {
+                    revealNextWords(question, 3);
+                } else {
+                    revealNextWords(question, 1);
+                }
+            });
+        });
+
+        question.addEventListener("keydown", (event) => {
+            if (state.mode !== "fill" || event.key !== "Enter") {
+                return;
+            }
+            const input = event.target.closest("input[data-answer]");
+            if (!input) {
+                return;
+            }
+            event.preventDefault();
+            checkInput(input);
+        });
+
+        question.addEventListener("input", (event) => {
+            const input = event.target.closest("input[data-answer]");
+            if (input) {
+                checkInput(input);
+            }
+        });
+    }
+
+    function revealNextWords(question, count) {
+        let remaining = count;
+        question.querySelectorAll(".answer-option-text").forEach((span) => {
+            if (remaining <= 0 || !span._maskState) {
+                return;
+            }
+            const stateForSpan = span._maskState;
+            stateForSpan.hiddenIndexes
+                .filter((index) => !stateForSpan.revealed.has(index))
+                .slice(0, remaining)
+                .forEach((index) => {
+                    stateForSpan.revealed.add(index);
+                    remaining -= 1;
+                });
+            renderMaskedAnswer(span);
+        });
+    }
+
+    function revealAll(question) {
+        question.querySelectorAll(".answer-option-text").forEach((span) => {
+            if (!span._maskState) {
+                return;
+            }
+            span._maskState.hiddenIndexes.forEach((index) => span._maskState.revealed.add(index));
+            renderMaskedAnswer(span);
+        });
+    }
+
+    function renderMaskedAnswer(span) {
+        const mask = span._maskState;
+        if (!mask) {
+            return;
+        }
+        const hiddenSet = new Set(mask.hiddenIndexes);
+        span.replaceChildren();
+        mask.tokens.forEach((token, index) => {
+            if (token.type === "space") {
+                span.append(document.createTextNode(token.value));
+                return;
+            }
+            if (!hiddenSet.has(index) || mask.revealed.has(index)) {
+                span.append(document.createTextNode(token.value));
+                return;
+            }
+            if (mask.mode === "fill") {
+                const input = document.createElement("input");
+                input.className = "hidden-word-input";
+                input.type = "text";
+                input.autocomplete = "off";
+                input.spellcheck = false;
+                input.dataset.answer = token.value;
+                input.style.width = `${Math.max(48, token.value.length * 12)}px`;
+                input.setAttribute("aria-label", "Điền từ còn thiếu");
+                input.addEventListener("click", (event) => event.stopPropagation());
+                span.append(input);
+                return;
+            }
+            const chip = document.createElement("span");
+            chip.className = "hidden-word-chip";
+            chip.tabIndex = 0;
+            chip.role = "button";
+            chip.textContent = "•".repeat(Math.max(3, Math.min(token.value.length, 10)));
+            chip.addEventListener("click", (event) => {
+                event.preventDefault();
+                event.stopPropagation();
+                mask.revealed.add(index);
+                renderMaskedAnswer(span);
+            });
+            chip.addEventListener("keydown", (event) => {
+                if (event.key !== "Enter" && event.key !== " ") {
+                    return;
+                }
+                event.preventDefault();
+                mask.revealed.add(index);
+                renderMaskedAnswer(span);
+            });
+            span.append(chip);
+        });
+    }
+
     function setupAnswerProgress(question) {
         const correctAnswer = normalizeAnswer(question.dataset.correctAnswer);
         const feedback = question.querySelector(".listening-answer-feedback");
@@ -30,17 +224,57 @@
             input.addEventListener("change", () => {
                 const selectedAnswer = normalizeAnswer(input.value);
                 const correct = selectedAnswer === correctAnswer;
+                markAnswerLabels(question, selectedAnswer, correctAnswer);
                 question.classList.toggle("is-correct", correct);
                 question.classList.toggle("is-wrong", !correct);
                 if (feedback) {
                     feedback.textContent = correct ? "Đúng" : `Chưa đúng. Đáp án đúng: ${correctAnswer}`;
                 }
+                showSolution(question, selectedAnswer, correctAnswer, correct);
                 saveProgress(question, selectedAnswer, correctAnswer);
                 if (correct && state.auto) {
-                    moveToNextItem(question);
+                    moveToNextItem();
                 }
             });
         });
+    }
+
+    function markAnswerLabels(question, selectedAnswer, correctAnswer) {
+        question.querySelectorAll("label[data-answer-option]").forEach((label) => {
+            const option = normalizeAnswer(label.dataset.answerOption);
+            label.classList.toggle("is-selected", option === selectedAnswer);
+            label.classList.toggle("is-correct-choice", option === correctAnswer);
+            label.classList.toggle("is-wrong-choice", option === selectedAnswer && option !== correctAnswer);
+        });
+    }
+
+    function showSolution(question, selectedAnswer, correctAnswer, correct) {
+        const panel = question.querySelector(".practice-solution-panel");
+        if (!panel) {
+            return;
+        }
+        const item = question.closest(".practice-item");
+        const result = panel.querySelector("[data-solution-result]");
+        const translationWrap = panel.querySelector("[data-solution-translation-wrap]");
+        const translationText = panel.querySelector("[data-solution-translation]");
+        const vocabularyWrap = panel.querySelector("[data-solution-vocabulary-wrap]");
+        const vocabularyText = panel.querySelector("[data-solution-vocabulary]");
+        panel.hidden = false;
+        if (result) {
+            result.textContent = correct
+                    ? `Bạn chọn ${selectedAnswer}. Đáp án đúng.`
+                    : `Bạn chọn ${selectedAnswer}. Đáp án đúng là ${correctAnswer}.`;
+        }
+        const translation = firstText(question.dataset.answerTranslation, question.dataset.questionTranslation, item?.dataset.translation);
+        if (translationWrap && translationText) {
+            translationWrap.hidden = !translation;
+            translationText.textContent = translation || "";
+        }
+        const vocabulary = firstText(question.dataset.vocabulary, item?.dataset.vocabulary);
+        if (vocabularyWrap && vocabularyText) {
+            vocabularyWrap.hidden = !vocabulary;
+            vocabularyText.textContent = vocabulary || "";
+        }
     }
 
     async function saveProgress(question, selectedAnswer, correctAnswer) {
@@ -62,96 +296,6 @@
             });
         } catch (error) {
             console.warn("Listening progress was not saved", error);
-        }
-    }
-
-    function setupHiddenWords(panel) {
-        const output = panel.querySelector(".hidden-word-output");
-        if (!output) {
-            return;
-        }
-        const mode = panel.dataset.mode;
-        const percent = Number(panel.dataset.percent || 30);
-        const tokens = tokenize(toText(panel.dataset.hiddenText || ""));
-        const hiddenIndexes = chooseHiddenIndexes(tokens, percent);
-        const hiddenSet = new Set(hiddenIndexes);
-        const revealed = new Set();
-
-        render();
-
-        panel.querySelectorAll("[data-action]").forEach((button) => {
-            button.addEventListener("click", () => {
-                const action = button.dataset.action;
-                if (action === "reveal-all") {
-                    hiddenIndexes.forEach((index) => revealed.add(index));
-                } else if (action === "flip-three") {
-                    revealNext(3);
-                } else {
-                    revealNext(1);
-                }
-                render();
-            });
-        });
-
-        output.addEventListener("keydown", (event) => {
-            if (mode !== "fill" || event.key !== "Enter") {
-                return;
-            }
-            const input = event.target.closest("input[data-answer]");
-            if (!input) {
-                return;
-            }
-            event.preventDefault();
-            checkInput(input);
-        });
-
-        output.addEventListener("input", (event) => {
-            const input = event.target.closest("input[data-answer]");
-            if (input) {
-                checkInput(input);
-            }
-        });
-
-        function revealNext(count) {
-            hiddenIndexes
-                .filter((index) => !revealed.has(index))
-                .slice(0, count)
-                .forEach((index) => revealed.add(index));
-        }
-
-        function render() {
-            output.replaceChildren();
-            tokens.forEach((token, index) => {
-                if (token.type === "space") {
-                    output.append(document.createTextNode(token.value));
-                    return;
-                }
-                if (!hiddenSet.has(index) || revealed.has(index)) {
-                    output.append(document.createTextNode(token.value));
-                    return;
-                }
-                if (mode === "fill") {
-                    const input = document.createElement("input");
-                    input.className = "hidden-word-input";
-                    input.type = "text";
-                    input.autocomplete = "off";
-                    input.spellcheck = false;
-                    input.dataset.answer = token.value;
-                    input.style.width = `${Math.max(48, token.value.length * 12)}px`;
-                    input.setAttribute("aria-label", "Điền từ còn thiếu");
-                    output.append(input);
-                } else {
-                    const button = document.createElement("button");
-                    button.className = "hidden-word-chip";
-                    button.type = "button";
-                    button.textContent = "•".repeat(Math.max(3, Math.min(token.value.length, 10)));
-                    button.addEventListener("click", () => {
-                        revealed.add(index);
-                        render();
-                    });
-                    output.append(button);
-                }
-            });
         }
     }
 
@@ -255,7 +399,7 @@
         document.querySelectorAll("[data-panel-target]").forEach((button) => {
             button.addEventListener("click", () => {
                 const target = button.dataset.panelTarget;
-                document.querySelectorAll(`.practice-tool-panel[data-tool-panel='${target}']`).forEach((panel) => {
+                currentItem().querySelectorAll(`.practice-tool-panel[data-tool-panel='${target}']`).forEach((panel) => {
                     panel.classList.toggle("is-open");
                 });
             });
@@ -290,7 +434,7 @@
                 event.preventDefault();
                 rewind(audio, 3);
             } else if (event.key === "Tab") {
-                const button = document.querySelector("[data-action='flip-next'], [data-action='hint']");
+                const button = currentItem().querySelector("[data-action='flip-next'], [data-action='hint']");
                 if (button) {
                     event.preventDefault();
                     button.click();
@@ -322,34 +466,32 @@
 
     function currentTranscriptSnippet(form) {
         const item = form.closest(".practice-item");
-        return (item && item.querySelector(".hidden-word-output, .practice-support p")?.textContent || "").trim().slice(0, 1000);
+        return (item && item.querySelector("[data-solution-translation], .answer-option-text")?.textContent || "").trim().slice(0, 1000);
     }
 
-    function moveToNextItem(question) {
-        const item = question.closest(".practice-item");
-        const next = item && item.nextElementSibling;
-        if (!next) {
+    function moveToNextItem() {
+        if (state.currentIndex >= items.length - 1) {
             return;
         }
         window.setTimeout(() => {
-            next.scrollIntoView({behavior: "smooth", block: "start"});
-            const audio = next.querySelector("audio");
+            activateItem(state.currentIndex + 1);
+            const audio = currentAudio();
             if (audio) {
                 audio.play().catch(() => {});
             }
         }, 450);
     }
 
+    function currentItem() {
+        return items[state.currentIndex] || document;
+    }
+
     function currentAudio() {
-        const midpoint = window.scrollY + window.innerHeight / 2;
-        const cards = Array.from(document.querySelectorAll(".practice-audio-card"));
-        if (cards.length === 0) {
-            return null;
-        }
-        const card = cards
-            .map((candidate) => ({candidate, distance: Math.abs(candidate.getBoundingClientRect().top + window.scrollY - midpoint)}))
-            .sort((left, right) => left.distance - right.distance)[0].candidate;
-        return card.querySelector("audio");
+        return currentItem().querySelector(".practice-audio-card audio");
+    }
+
+    function pauseAudios(item) {
+        item?.querySelectorAll("audio").forEach((audio) => audio.pause());
     }
 
     function rewind(audio, seconds) {
@@ -370,6 +512,25 @@
         return 0.75;
     }
 
+    function parseOptionTranslations(text) {
+        const result = {};
+        if (!text) {
+            return result;
+        }
+        const parts = text
+            .replace(/\r/g, "\n")
+            .split(/\n+|(?=\([A-D]\))/g)
+            .map((part) => part.trim())
+            .filter(Boolean);
+        parts.forEach((part) => {
+            const match = part.match(/^\(?([A-D])\)?[\s.:-]*(.+)$/i);
+            if (match) {
+                result[match[1].toUpperCase()] = match[2].trim();
+            }
+        });
+        return result;
+    }
+
     function isTypingTarget(target) {
         return target && ["INPUT", "TEXTAREA", "SELECT"].includes(target.tagName);
     }
@@ -388,10 +549,9 @@
         }));
     }
 
-    function toText(value) {
-        const element = document.createElement("div");
-        element.innerHTML = value;
-        return (element.textContent || element.innerText || value).trim();
+    function firstText(...values) {
+        const value = values.find((candidate) => candidate && String(candidate).trim().length > 0);
+        return value == null ? "" : String(value).trim();
     }
 
     function normalizeWord(value) {
