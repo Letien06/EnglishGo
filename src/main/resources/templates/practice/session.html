@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title th:text="${session.test.title} + ' - Practice'">Practice</title>
-    <link rel="stylesheet" th:href="@{/css/app.css}">
+    <link rel="stylesheet" th:href="@{/css/app.css(v='app-shell-20260702-3')}">
     <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"></script>
 </head>
 <body th:attr="data-test-id=${session.test.id},data-duration=${session.test.duration},data-draft=${session.draftPayload}">
@@ -186,6 +186,6 @@
         };
     }
 </script>
-<script th:src="@{/js/app-shell.js}"></script>
+<script th:src="@{/js/app-shell.js(v='app-shell-20260702-3')}"></script>
 </body>
 </html>
