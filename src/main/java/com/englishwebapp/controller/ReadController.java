@@ -26,6 +26,9 @@ public class ReadController {
             @RequestParam(defaultValue = "part5") String part,
             @AuthenticationPrincipal AppUserPrincipal user,
             Model model) {
+        if (user == null) {
+            return "redirect:/login";
+        }
         String activeId = normalizePart(part);
         List<ListenPartView> parts = parts(activeId);
         ListenPartView activePart = parts.stream()
@@ -48,6 +51,9 @@ public class ReadController {
             @RequestParam(defaultValue = "30") int assist,
             @AuthenticationPrincipal AppUserPrincipal user,
             Model model) {
+        if (user == null) {
+            return "redirect:/login";
+        }
         String activeId = normalizePracticePart(part);
         List<ListenPartView> parts = parts(activeId);
         ListenPartView activePart = parts.stream()

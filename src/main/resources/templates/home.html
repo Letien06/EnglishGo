@@ -143,24 +143,6 @@
     <small>© 2026 ENGLISHGO. Bản quyền được bảo lưu.</small>
 </footer>
 
-<aside class="install-card" data-install-card>
-    <span class="install-icon">⇩</span>
-    <div>
-        <strong>Cài đặt ứng dụng ENGLISHGO</strong>
-        <p>Học mọi lúc mọi nơi — cài miễn phí từ trình duyệt</p>
-        <button type="button">⇩ Cài đặt ngay</button>
-    </div>
-    <button class="install-close" type="button" data-install-close aria-label="Đóng">×</button>
-</aside>
-
 <script th:src="@{/js/app-shell.js(v='quy-ngu-skin-7')}"></script>
-<script>
-    const installClose = document.querySelector("[data-install-close]");
-    if (installClose) {
-        installClose.addEventListener("click", () => {
-            document.querySelector("[data-install-card]").style.display = "none";
-        });
-    }
-</script>
 </body>
 </html>

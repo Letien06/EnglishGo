@@ -5,6 +5,7 @@ import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.content;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.redirectedUrl;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.view;
 
@@ -12,6 +13,8 @@ import com.englishwebapp.dto.DauToeicDifficultyLevelResponse;
 import com.englishwebapp.dto.DauToeicDifficultySessionResponse;
 import com.englishwebapp.dto.DauToeicPracticeItemResponse;
 import com.englishwebapp.dto.DauToeicQuestionResponse;
+import com.englishwebapp.entity.UserRole;
+import com.englishwebapp.security.AppUserPrincipal;
 import com.englishwebapp.security.AuthSessionService;
 import com.englishwebapp.service.DauToeicClientService;
 import com.englishwebapp.service.FirebaseAuthenticationService;
@@ -21,8 +24,8 @@ import com.englishwebapp.service.VocabService;
 import java.util.List;
 import java.util.Map;
 import org.hamcrest.Matchers;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
-import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -30,6 +33,8 @@ import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMock
 import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest;
 import org.springframework.boot.test.mock.mockito.MockBean;
 import org.springframework.data.domain.PageImpl;
+import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
+import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.test.web.servlet.MockMvc;
 
 @WebMvcTest(ListenController.class)
@@ -64,8 +69,21 @@ class ListenControllerTest {
         when(learnerContentService.findOptionsByQuestionId(any())).thenReturn(Map.of());
     }
 
+    @AfterEach
+    void clearSecurityContext() {
+        SecurityContextHolder.clearContext();
+    }
+
+    @Test
+    void listenPageRedirectsGuestsToLogin() throws Exception {
+        mockMvc.perform(get("/listen").param("part", "2"))
+                .andExpect(status().is3xxRedirection())
+                .andExpect(redirectedUrl("/login"));
+    }
+
     @Test
     void listenPageRendersDauToeicLevelDashboard() throws Exception {
+        authenticateLearner();
         List<DauToeicDifficultyLevelResponse> levels = List.of(new DauToeicDifficultyLevelResponse(
                         2,
                         1,
@@ -80,7 +98,7 @@ class ListenControllerTest {
                         1000,
                         120));
         when(dauToeicClientService.listDifficultyLevels(2)).thenReturn(levels);
-        when(listeningProgressService.applyProgress(null, levels)).thenReturn(levels);
+        when(listeningProgressService.applyProgress(any(), eq(levels))).thenReturn(levels);
 
         mockMvc.perform(get("/listen").param("part", "2"))
                 .andExpect(status().isOk())
@@ -91,7 +109,17 @@ class ListenControllerTest {
     }
 
     @Test
+    void practicePageRedirectsGuestsToLogin() throws Exception {
+        mockMvc.perform(get("/listen/practice")
+                        .param("part", "1")
+                        .param("level", "1"))
+                .andExpect(status().is3xxRedirection())
+                .andExpect(redirectedUrl("/login"));
+    }
+
+    @Test
     void practicePageRendersDauToeicSession() throws Exception {
+        authenticateLearner();
         DauToeicQuestionResponse question = new DauToeicQuestionResponse(
                 "question-1",
                 "test-1",
@@ -152,5 +180,18 @@ class ListenControllerTest {
                 .andExpect(content().string(Matchers.containsString("100%")))
                 .andExpect(content().string(Matchers.not(Matchers.containsString("10%"))))
                 .andExpect(content().string(Matchers.containsString("The woman is working.")));
+    }
+
+    private void authenticateLearner() {
+        AppUserPrincipal principal = new AppUserPrincipal(
+                1L,
+                "firebase-user",
+                "learner@example.com",
+                "Learner",
+                UserRole.STUDENT);
+        SecurityContextHolder.getContext().setAuthentication(new UsernamePasswordAuthenticationToken(
+                principal,
+                null,
+                List.of()));
     }
 }

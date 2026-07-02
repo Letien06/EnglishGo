@@ -29,6 +29,9 @@ public class ListenController {
             @RequestParam(defaultValue = "1") String part,
             @AuthenticationPrincipal AppUserPrincipal user,
             Model model) {
+        if (user == null) {
+            return "redirect:/login";
+        }
         String activeId = normalizePart(part);
         List<ListenPartView> parts = parts(activeId);
         ListenPartView activePart = activePart(parts);
@@ -48,6 +51,9 @@ public class ListenController {
             @RequestParam(defaultValue = "30") int assist,
             @AuthenticationPrincipal AppUserPrincipal user,
             Model model) {
+        if (user == null) {
+            return "redirect:/login";
+        }
         String activeId = normalizePart(String.valueOf(part));
         List<ListenPartView> parts = parts(activeId);
         ListenPartView activePart = activePart(parts);
