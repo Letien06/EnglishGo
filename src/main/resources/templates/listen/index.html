@@ -95,7 +95,7 @@
                         <button class="level-reset-button"
                                 type="button"
                                 th:attr="data-part=${activePart.id()},data-level=${level.level()}">Reset</button>
-                        <a th:href="@{/listen/practice(part=${activePart.id()},level=${level.level()},mode='normal',assist=30)}">Luyện ngay →</a>
+                        <a th:href="@{/listen/practice(part=${activePart.id()},level=${level.level()},mode='normal',assist=30,q=${level.done() < level.total() ? level.done() : 0})}">Luyện ngay →</a>
                     </footer>
                 </article>
             </div>

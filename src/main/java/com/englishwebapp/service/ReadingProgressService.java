@@ -57,7 +57,8 @@ public class ReadingProgressService {
         List<ReadingProgress> rows = readingProgressRepository.findByUserIdAndPartAndLevel(userId, part, level);
         int correct = (int) rows.stream().filter(ReadingProgress::isCorrect).count();
         int wrong = rows.size() - correct;
-        return new ReadingProgressSummary(part, level, rows.size(), correct, wrong);
+        long distinctItems = rows.stream().map(ReadingProgress::getItemId).distinct().count();
+        return new ReadingProgressSummary(part, level, (int) distinctItems, correct, wrong);
     }
 
     public ReadingProgressResponse record(Long userId, ReadingProgressRequest request) {

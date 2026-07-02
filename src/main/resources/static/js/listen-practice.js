@@ -319,6 +319,7 @@
         try {
             await fetch("/api/listening/progress", {
                 method: "POST",
+                keepalive: true,
                 headers: {"Content-Type": "application/json"},
                 body: JSON.stringify({
                     part: state.part,

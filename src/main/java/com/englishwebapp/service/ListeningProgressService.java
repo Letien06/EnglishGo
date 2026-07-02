@@ -57,7 +57,8 @@ public class ListeningProgressService {
         List<ListeningProgress> rows = listeningProgressRepository.findByUserIdAndPartAndLevel(userId, part, level);
         int correct = (int) rows.stream().filter(ListeningProgress::isCorrect).count();
         int wrong = rows.size() - correct;
-        return new ListeningProgressSummary(part, level, rows.size(), correct, wrong);
+        long distinctItems = rows.stream().map(ListeningProgress::getItemId).distinct().count();
+        return new ListeningProgressSummary(part, level, (int) distinctItems, correct, wrong);
     }
 
     public ListeningProgressResponse record(Long userId, ListeningProgressRequest request) {
