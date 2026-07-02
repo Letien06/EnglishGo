@@ -49,7 +49,7 @@
         </article>
 
         <section class="learning-empty" th:if="${dauToeicError != null}">
-            <p th:text="${dauToeicError}">Không tải được dữ liệu Đậu TOEIC.</p>
+            <p th:text="${dauToeicError}">Không tải được dữ liệu.</p>
         </section>
 
         <section class="level-dashboard" th:if="${dauToeicReadingLevels != null and !dauToeicReadingLevels.empty}">

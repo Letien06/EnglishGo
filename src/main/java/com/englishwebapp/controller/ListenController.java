@@ -71,7 +71,7 @@ public class ListenController {
                     level,
                     null));
         } catch (RuntimeException exception) {
-            model.addAttribute("dauToeicError", "Không tải được phiên luyện nghe từ Đậu TOEIC.");
+            model.addAttribute("dauToeicError", "Không tải được phiên luyện tập.");
         }
         return "listen/practice";
     }
@@ -88,11 +88,16 @@ public class ListenController {
 
     private void addDauToeicLevels(String activeId, AppUserPrincipal user, Model model) {
         try {
-            model.addAttribute("dauToeicLevels", listeningProgressService.applyProgress(
-                    user == null ? null : user.id(),
-                    dauToeicClientService.listDifficultyLevels(Integer.parseInt(activeId))));
+            var levels = dauToeicClientService.listDifficultyLevels(Integer.parseInt(activeId));
+            try {
+                model.addAttribute("dauToeicLevels", listeningProgressService.applyProgress(
+                        user == null ? null : user.id(),
+                        levels));
+            } catch (RuntimeException exception) {
+                model.addAttribute("dauToeicLevels", levels);
+            }
         } catch (RuntimeException exception) {
-            model.addAttribute("dauToeicError", "Không tải được dữ liệu level từ Đậu TOEIC.");
+            model.addAttribute("dauToeicError", "Không tải được dữ liệu.");
         }
     }
 

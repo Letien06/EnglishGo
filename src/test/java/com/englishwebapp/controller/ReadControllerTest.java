@@ -119,6 +119,32 @@ class ReadControllerTest {
     }
 
     @Test
+    void readPageStillRendersLevelsWhenProgressLookupFails() throws Exception {
+        authenticateLearner();
+        List<DauToeicDifficultyLevelResponse> levels = List.of(new DauToeicDifficultyLevelResponse(
+                5,
+                1,
+                "Level 1 - De",
+                0.01,
+                0.14,
+                20,
+                0,
+                0,
+                0,
+                20,
+                200,
+                10));
+        when(dauToeicClientService.listReadingDifficultyLevels(5)).thenReturn(levels);
+        when(readingProgressService.applyProgress(any(), any())).thenThrow(new RuntimeException("progress failed"));
+
+        mockMvc.perform(get("/read").param("part", "part5"))
+                .andExpect(status().isOk())
+                .andExpect(view().name("read/index"))
+                .andExpect(content().string(Matchers.containsString("/read/practice?part=5")))
+                .andExpect(content().string(Matchers.not(Matchers.containsString("Không tải được dữ liệu"))));
+    }
+
+    @Test
     void readPracticePageRedirectsGuestsToLogin() throws Exception {
         mockMvc.perform(get("/read/practice").param("part", "5").param("level", "1"))
                 .andExpect(status().is3xxRedirection())

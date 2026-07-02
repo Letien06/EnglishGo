@@ -48,7 +48,7 @@
         </article>
 
         <section class="learning-empty" th:if="${dauToeicError != null}">
-            <p th:text="${dauToeicError}">Không tải được dữ liệu Đậu TOEIC.</p>
+            <p th:text="${dauToeicError}">Không tải được dữ liệu.</p>
         </section>
 
         <section class="level-dashboard" th:if="${dauToeicLevels != null and !dauToeicLevels.empty}">
@@ -141,7 +141,7 @@
                  th:if="${(dauToeicLevels == null or dauToeicLevels.empty) and (questions == null or questions.empty)}">
             <span>!</span>
             <h2>Chưa có dữ liệu nghe</h2>
-            <p>Không tải được dữ liệu nội bộ hoặc dữ liệu Đậu TOEIC cho phần này.</p>
+            <p>Không tải được dữ liệu.</p>
         </section>
     </section>
 </main>

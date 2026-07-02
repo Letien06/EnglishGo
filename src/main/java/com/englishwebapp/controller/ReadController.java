@@ -75,7 +75,7 @@ public class ReadController {
                     normalizeLevel(level),
                     PRACTICE_SESSION_LIMIT));
         } catch (RuntimeException exception) {
-            model.addAttribute("dauToeicError", "Khong tai duoc phien luyen doc tu Dau TOEIC.");
+            model.addAttribute("dauToeicError", "Không tải được phiên luyện tập.");
         }
         return "read/practice";
     }
@@ -85,11 +85,16 @@ public class ReadController {
             return;
         }
         try {
-            model.addAttribute("dauToeicReadingLevels", readingProgressService.applyProgress(
-                    user == null ? null : user.id(),
-                    dauToeicClientService.listReadingDifficultyLevels(readingPartNumber(activeId))));
+            var levels = dauToeicClientService.listReadingDifficultyLevels(readingPartNumber(activeId));
+            try {
+                model.addAttribute("dauToeicReadingLevels", readingProgressService.applyProgress(
+                        user == null ? null : user.id(),
+                        levels));
+            } catch (RuntimeException exception) {
+                model.addAttribute("dauToeicReadingLevels", levels);
+            }
         } catch (RuntimeException exception) {
-            model.addAttribute("dauToeicError", "Khong tai duoc du lieu doc tu Dau TOEIC.");
+            model.addAttribute("dauToeicError", "Không tải được dữ liệu.");
         }
     }
 

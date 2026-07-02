@@ -109,6 +109,32 @@ class ListenControllerTest {
     }
 
     @Test
+    void listenPageStillRendersLevelsWhenProgressLookupFails() throws Exception {
+        authenticateLearner();
+        List<DauToeicDifficultyLevelResponse> levels = List.of(new DauToeicDifficultyLevelResponse(
+                1,
+                1,
+                "Level 1 - De",
+                0.01,
+                0.14,
+                90,
+                0,
+                0,
+                0,
+                90,
+                1000,
+                120));
+        when(dauToeicClientService.listDifficultyLevels(1)).thenReturn(levels);
+        when(listeningProgressService.applyProgress(any(), eq(levels))).thenThrow(new RuntimeException("progress failed"));
+
+        mockMvc.perform(get("/listen").param("part", "1"))
+                .andExpect(status().isOk())
+                .andExpect(view().name("listen/index"))
+                .andExpect(content().string(Matchers.containsString("Level 1")))
+                .andExpect(content().string(Matchers.not(Matchers.containsString("Không tải được dữ liệu"))));
+    }
+
+    @Test
     void practicePageRedirectsGuestsToLogin() throws Exception {
         mockMvc.perform(get("/listen/practice")
                         .param("part", "1")
