@@ -23,7 +23,7 @@
             <a th:each="item : ${parts}"
                th:href="@{/listen(part=${item.id()})}"
                th:classappend="${item.active()} ? ' is-active'">
-                <span th:text="${item.icon()}">▧</span>
+                <span th:text="${item.icon()}">P1</span>
                 <strong th:text="${item.label()}">Part 1: Hình ảnh</strong>
             </a>
         </nav>
@@ -38,75 +38,74 @@
     <section class="listen-content">
         <article class="listen-hero-card">
             <div>
-                <span class="listen-pill">♕ Tính năng miễn phí</span>
+                <span class="listen-pill">Dữ liệu Đậu TOEIC API</span>
                 <h1 th:text="${activePart.title()}">Luyện Part 1 theo 5 cấp độ</h1>
-                <p th:text="${activePart.shortDescription()}">Câu hỏi được phân loại theo độ khó.</p>
+                <p th:text="${activePart.shortDescription()}">Câu hỏi được phân loại theo tỉ lệ sai thực tế.</p>
             </div>
             <div class="listen-hero-icon">
-                <span th:text="${activePart.icon()}">▧</span>
+                <span th:text="${activePart.icon()}">P1</span>
             </div>
         </article>
-
-        <section class="learning-question-panel" th:if="${dauToeicPart != null}">
-            <div class="learning-section-head">
-                <div>
-                    <span>Đậu TOEIC API</span>
-                    <h2 th:text="${dauToeicPart.test().setName() + ' - ' + dauToeicPart.test().name() + ' / Part ' + dauToeicPart.part()}">Dau TOEIC listening part</h2>
-                    <p th:text="${'Hiển thị ' + dauToeicPart.questions().size() + ' câu nghe từ API công khai.'}">Hiển thị câu hỏi từ API.</p>
-                </div>
-                <a href="/api/dautoeic/sets" target="_blank" rel="noopener">Xem API</a>
-            </div>
-
-            <form class="dautoeic-picker" method="get" action="/listen" th:if="${dauToeicTests != null and !dauToeicTests.empty}">
-                <input type="hidden" name="part" th:value="${activePart.id()}">
-                <label>
-                    <span>Chọn đề</span>
-                    <select name="dautoeicTestId" onchange="this.form.submit()">
-                        <option th:each="test : ${dauToeicTests}"
-                                th:value="${test.id()}"
-                                th:selected="${test.id() == dauToeicSelectedTestId}"
-                                th:text="${test.setName() + ' - ' + test.name()}">ETS 2024 - Test 1</option>
-                    </select>
-                </label>
-            </form>
-
-            <div class="learning-question-grid">
-                <article class="learning-question-card"
-                         th:each="question : ${dauToeicPart.questions()}">
-                    <header>
-                        <span th:text="${'Part ' + question.part()}">Part 1</span>
-                        <strong th:text="${dauToeicPart.test().setName() + ' - ' + dauToeicPart.test().name()}">Dau TOEIC</strong>
-                    </header>
-                    <div class="learning-media" th:if="${question.audioUrl() != null or question.imageUrl() != null}">
-                        <audio controls th:if="${question.audioUrl() != null}" th:src="${question.audioUrl()}"></audio>
-                        <img th:if="${question.imageUrl() != null}" th:src="${question.imageUrl()}" alt="Listening question image">
-                    </div>
-                    <div class="learning-passage" th:if="${question.passageText() != null}">
-                        <pre th:text="${question.passageText()}">Passage text</pre>
-                    </div>
-                    <h2 th:text="${question.questionText() != null ? question.questionText() : 'Question ' + question.questionNumber()}">Question content</h2>
-                    <ol>
-                        <li th:if="${question.optionA() != null}" th:text="${'A. ' + question.optionA()}">A</li>
-                        <li th:if="${question.optionB() != null}" th:text="${'B. ' + question.optionB()}">B</li>
-                        <li th:if="${question.optionC() != null}" th:text="${'C. ' + question.optionC()}">C</li>
-                        <li th:if="${question.optionD() != null}" th:text="${'D. ' + question.optionD()}">D</li>
-                    </ol>
-                    <footer>
-                        <span th:text="${'#' + question.questionNumber()}">#1</span>
-                        <a th:href="@{/api/dautoeic/tests/{id}/listening(id=${dauToeicPart.test().id()},part=${dauToeicPart.part()})}" target="_blank" rel="noopener">JSON</a>
-                    </footer>
-                </article>
-            </div>
-        </section>
 
         <section class="learning-empty" th:if="${dauToeicError != null}">
             <p th:text="${dauToeicError}">Không tải được dữ liệu Đậu TOEIC.</p>
         </section>
 
-        <section class="learning-question-panel" th:unless="${questions.empty}">
+        <section class="level-dashboard" th:if="${dauToeicLevels != null and !dauToeicLevels.empty}">
             <div class="learning-section-head">
                 <div>
-                    <span>Miễn phí</span>
+                    <span>Level practice</span>
+                    <h2>Chọn cấp độ luyện nghe</h2>
+                    <p>Mỗi level được gom theo tỉ lệ sai từ ngân hàng câu hỏi Đậu TOEIC.</p>
+                </div>
+                <a th:href="@{/api/dautoeic/difficulty/parts/{part}/levels(part=${activePart.id()})}" target="_blank" rel="noopener">Xem JSON</a>
+            </div>
+
+            <div class="level-card-grid">
+                <article class="level-card"
+                         th:each="level : ${dauToeicLevels}"
+                         th:classappend="${' level-' + level.level()}">
+                    <header>
+                        <span th:text="${'Lv' + level.level()}">Lv1</span>
+                        <div>
+                            <h3 th:text="${level.level() == 1 ? 'Level 1 — Dễ' :
+                                    level.level() == 2 ? 'Level 2 — Cơ bản' :
+                                    level.level() == 3 ? 'Level 3 — Trung bình' :
+                                    level.level() == 4 ? 'Level 4 — Khó' : 'Level 5 — Rất khó'}">Level 1 — Dễ</h3>
+                            <p th:text="${'Tỉ lệ sai: ' + #numbers.formatDecimal(level.errorRateMin() * 100, 1, 0) + '% - ' + #numbers.formatDecimal(level.errorRateMax() * 100, 1, 0) + '%'}">Tỉ lệ sai</p>
+                        </div>
+                    </header>
+
+                    <div class="level-progress">
+                        <div>
+                            <strong>Tiến độ</strong>
+                            <span th:text="${level.done() + '/' + level.total()}">0/90</span>
+                        </div>
+                        <meter min="0" th:max="${level.total()}" th:value="${level.done()}"></meter>
+                    </div>
+
+                    <div class="level-stats">
+                        <span th:text="${'✓ ' + level.correct()}">✓ 0</span>
+                        <span th:text="${'✕ ' + level.wrong()}">✕ 0</span>
+                        <span th:text="${'○ ' + level.remaining()}">○ 90</span>
+                    </div>
+
+                    <footer>
+                        <small th:text="${level.total() + ' item'}">90 item</small>
+                        <button class="level-reset-button"
+                                type="button"
+                                th:attr="data-part=${activePart.id()},data-level=${level.level()}">Reset</button>
+                        <a th:href="@{/listen/practice(part=${activePart.id()},level=${level.level()},mode='normal',assist=30)}">Luyện ngay →</a>
+                    </footer>
+                </article>
+            </div>
+        </section>
+
+        <section class="learning-question-panel"
+                 th:if="${(dauToeicLevels == null or dauToeicLevels.empty) and questions != null and !questions.empty}">
+            <div class="learning-section-head">
+                <div>
+                    <span>Dữ liệu nội bộ</span>
                     <h2>Ngân hàng câu hỏi đã duyệt</h2>
                     <p th:text="${'Hiển thị ' + questions.content.size() + ' câu mới nhất do admin publish.'}">Hiển thị câu hỏi đã duyệt.</p>
                 </div>
@@ -138,7 +137,8 @@
             </div>
         </section>
 
-        <section class="listen-login-required" th:if="${questions.empty and dauToeicPart == null}">
+        <section class="listen-login-required"
+                 th:if="${(dauToeicLevels == null or dauToeicLevels.empty) and (questions == null or questions.empty)}">
             <span>!</span>
             <h2>Chưa có dữ liệu nghe</h2>
             <p>Không tải được dữ liệu nội bộ hoặc dữ liệu Đậu TOEIC cho phần này.</p>
@@ -146,5 +146,6 @@
     </section>
 </main>
 <script th:src="@{/js/app-shell.js}"></script>
+<script th:src="@{/js/listen-dashboard.js}"></script>
 </body>
 </html>

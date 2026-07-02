@@ -11,6 +11,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import com.englishwebapp.security.AuthSessionService;
 import com.englishwebapp.service.FirebaseAuthenticationService;
 import com.englishwebapp.service.PracticeQueryService;
+import com.englishwebapp.service.VocabService;
 import java.util.List;
 import org.hamcrest.Matchers;
 import org.junit.jupiter.api.BeforeEach;
@@ -31,6 +32,9 @@ class PracticePageControllerTest {
 
     @MockBean
     private PracticeQueryService practiceQueryService;
+
+    @MockBean
+    private VocabService vocabService;
 
     @MockBean
     private FirebaseAuthenticationService firebaseAuthenticationService;

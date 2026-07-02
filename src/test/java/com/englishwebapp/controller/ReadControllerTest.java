@@ -12,6 +12,7 @@ import com.englishwebapp.security.AppUserPrincipal;
 import com.englishwebapp.security.AuthSessionService;
 import com.englishwebapp.service.FirebaseAuthenticationService;
 import com.englishwebapp.service.LearnerContentService;
+import com.englishwebapp.service.VocabService;
 import java.util.List;
 import java.util.Map;
 import org.hamcrest.Matchers;
@@ -41,6 +42,9 @@ class ReadControllerTest {
 
     @MockBean
     private LearnerContentService learnerContentService;
+
+    @MockBean
+    private VocabService vocabService;
 
     @BeforeEach
     void setUp() {

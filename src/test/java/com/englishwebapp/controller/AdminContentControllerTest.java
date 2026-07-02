@@ -30,6 +30,7 @@ import com.englishwebapp.security.AuthSessionService;
 import com.englishwebapp.service.AdminContentGenerationService;
 import com.englishwebapp.service.AdminContentImportService;
 import com.englishwebapp.service.FirebaseAuthenticationService;
+import com.englishwebapp.service.VocabService;
 import java.util.List;
 import java.util.Optional;
 import org.hamcrest.Matchers;
@@ -81,6 +82,9 @@ class AdminContentControllerTest {
 
     @MockBean
     private ContentAuditLogRepository contentAuditLogRepository;
+
+    @MockBean
+    private VocabService vocabService;
 
     @MockBean
     private AdminContentGenerationService contentGenerationService;

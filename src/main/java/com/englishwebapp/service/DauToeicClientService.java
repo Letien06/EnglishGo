@@ -1,20 +1,30 @@
 package com.englishwebapp.service;
 
 import com.englishwebapp.config.AppProperties;
+import com.englishwebapp.dto.DauToeicDifficultyLevelResponse;
+import com.englishwebapp.dto.DauToeicDifficultySessionResponse;
 import com.englishwebapp.dto.DauToeicPartResponse;
 import com.englishwebapp.dto.DauToeicPassageResponse;
+import com.englishwebapp.dto.DauToeicPracticeItemResponse;
 import com.englishwebapp.dto.DauToeicQuestionResponse;
 import com.englishwebapp.dto.DauToeicSetResponse;
 import com.englishwebapp.dto.DauToeicTestResponse;
 import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.node.JsonNodeFactory;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
+import java.util.Comparator;
+import java.util.HashMap;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
+import java.util.Objects;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.util.StringUtils;
+import org.springframework.web.util.HtmlUtils;
 import org.springframework.web.client.RestClient;
 import org.springframework.web.client.RestClientException;
 import org.springframework.web.client.RestClientResponseException;
@@ -25,6 +35,8 @@ import org.springframework.web.util.UriUtils;
 @Service
 @RequiredArgsConstructor
 public class DauToeicClientService {
+
+    private static final int DEFAULT_PRACTICE_LIMIT = 30;
 
     private final AppProperties appProperties;
 
@@ -97,6 +109,164 @@ public class DauToeicClientService {
         return new DauToeicPartResponse(test, part, part <= 4 ? "listening" : "reading", passages, questions);
     }
 
+    public List<DauToeicDifficultyLevelResponse> listDifficultyLevels(int part) {
+        requireListeningPart(part);
+        List<PracticeStat> stats = practiceStats(part);
+        Map<Integer, List<PracticeStat>> byLevel = new LinkedHashMap<>();
+        for (int level = 1; level <= 5; level++) {
+            byLevel.put(level, new ArrayList<>());
+        }
+        for (PracticeStat stat : stats) {
+            if (stat.level() != null && byLevel.containsKey(stat.level())) {
+                byLevel.get(stat.level()).add(stat);
+            }
+        }
+        List<DauToeicDifficultyLevelResponse> levels = new ArrayList<>();
+        for (Map.Entry<Integer, List<PracticeStat>> entry : byLevel.entrySet()) {
+            int level = entry.getKey();
+            List<PracticeStat> levelStats = entry.getValue();
+            int total = levelStats.size();
+            int totalAttempts = levelStats.stream()
+                    .map(PracticeStat::totalAttempts)
+                    .filter(Objects::nonNull)
+                    .mapToInt(Integer::intValue)
+                    .sum();
+            int wrongAttempts = levelStats.stream()
+                    .map(PracticeStat::wrongCount)
+                    .filter(Objects::nonNull)
+                    .mapToInt(Integer::intValue)
+                    .sum();
+            Double min = levelStats.stream()
+                    .map(PracticeStat::errorRate)
+                    .filter(Objects::nonNull)
+                    .min(Comparator.naturalOrder())
+                    .orElse(defaultErrorMin(level));
+            Double max = levelStats.stream()
+                    .map(PracticeStat::errorRate)
+                    .filter(Objects::nonNull)
+                    .max(Comparator.naturalOrder())
+                    .orElse(defaultErrorMax(level));
+            levels.add(new DauToeicDifficultyLevelResponse(
+                    part,
+                    level,
+                    levelTitle(level),
+                    min,
+                    max,
+                    total,
+                    0,
+                    0,
+                    0,
+                    total,
+                    totalAttempts,
+                    wrongAttempts));
+        }
+        return levels;
+    }
+
+    public DauToeicDifficultySessionResponse getDifficultySession(int part, int level, Integer limit) {
+        requireListeningPart(part);
+        if (level < 1 || level > 5) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Difficulty level must be between 1 and 5");
+        }
+        int maxItems = limit == null || limit < 1 ? DEFAULT_PRACTICE_LIMIT : Math.min(limit, 100);
+        List<PracticeStat> levelStats = practiceStats(part).stream()
+                .filter(stat -> Integer.valueOf(level).equals(stat.level()))
+                .limit(maxItems)
+                .toList();
+        List<DauToeicPracticeItemResponse> items = part <= 2
+                ? questionPracticeItems(levelStats, part, level)
+                : passagePracticeItems(levelStats, part, level);
+        return new DauToeicDifficultySessionResponse(part, level, levelTitle(level), levelStats.size(), items);
+    }
+
+    private List<DauToeicPracticeItemResponse> questionPracticeItems(List<PracticeStat> stats, int part, int level) {
+        Map<String, PracticeStat> statsById = new LinkedHashMap<>();
+        for (PracticeStat stat : stats) {
+            statsById.put(stat.itemId(), stat);
+        }
+        List<DauToeicQuestionResponse> questions = questionsByIds(new ArrayList<>(statsById.keySet()));
+        Map<String, DauToeicQuestionResponse> questionsById = new HashMap<>();
+        for (DauToeicQuestionResponse question : questions) {
+            questionsById.put(question.id(), question);
+        }
+        List<DauToeicPracticeItemResponse> items = new ArrayList<>();
+        for (PracticeStat stat : stats) {
+            DauToeicQuestionResponse question = questionsById.get(stat.itemId());
+            if (question == null) {
+                continue;
+            }
+            items.add(new DauToeicPracticeItemResponse(
+                    question.id(),
+                    stat.itemType(),
+                    part,
+                    level,
+                    stat.errorRate(),
+                    stat.totalAttempts(),
+                    stat.wrongCount(),
+                    question.audioUrl(),
+                    question.imageUrl(),
+                    plainText(firstText(question.passageText(), question.questionText())),
+                    question.translationVi(),
+                    question.vocabulary(),
+                    List.of(question)));
+        }
+        return items;
+    }
+
+    private List<DauToeicPracticeItemResponse> passagePracticeItems(List<PracticeStat> stats, int part, int level) {
+        Map<String, PracticeStat> statsById = new LinkedHashMap<>();
+        for (PracticeStat stat : stats) {
+            statsById.put(stat.itemId(), stat);
+        }
+        List<DauToeicPassageResponse> passages = passagesByIds(new ArrayList<>(statsById.keySet()));
+        Map<String, DauToeicPassageResponse> passagesById = new HashMap<>();
+        for (DauToeicPassageResponse passage : passages) {
+            passagesById.put(passage.id(), passage);
+        }
+        Map<String, List<DauToeicQuestionResponse>> questionsByPassageId =
+                questionsByPassageIds(new ArrayList<>(statsById.keySet()));
+        List<DauToeicPracticeItemResponse> items = new ArrayList<>();
+        for (PracticeStat stat : stats) {
+            DauToeicPassageResponse passage = passagesById.get(stat.itemId());
+            if (passage == null) {
+                continue;
+            }
+            List<DauToeicQuestionResponse> questions = questionsByPassageId.getOrDefault(passage.id(), List.of());
+            items.add(new DauToeicPracticeItemResponse(
+                    passage.id(),
+                    stat.itemType(),
+                    part,
+                    level,
+                    stat.errorRate(),
+                    stat.totalAttempts(),
+                    stat.wrongCount(),
+                    passage.audioUrl(),
+                    passage.imageUrl(),
+                    plainText(firstText(passage.transcript(), passage.passageText(), passage.passageText2(), passage.passageText3())),
+                    null,
+                    null,
+                    questions));
+        }
+        return items;
+    }
+
+    private List<PracticeStat> practiceStats(int part) {
+        var body = JsonNodeFactory.instance.objectNode().put("p_part", part);
+        JsonNode rows = post("/rest/v1/rpc/get_practice_stats", body);
+        List<PracticeStat> stats = new ArrayList<>();
+        for (JsonNode row : rows) {
+            stats.add(new PracticeStat(
+                    text(row, "item_id"),
+                    text(row, "item_type"),
+                    integer(row, "part"),
+                    integer(row, "difficulty_level"),
+                    integer(row, "total_attempts"),
+                    integer(row, "wrong_count"),
+                    decimal(row, "error_rate")));
+        }
+        return stats;
+    }
+
     private List<DauToeicQuestionResponse> questions(DauToeicTestResponse test, int part) {
         JsonNode rows = get("/rest/v1/mock_test_questions", builder -> builder
                 .queryParam("select", "*")
@@ -105,31 +275,69 @@ public class DauToeicClientService {
                 .queryParam("order", "question_number.asc"));
         List<DauToeicQuestionResponse> questions = new ArrayList<>();
         for (JsonNode row : rows) {
-            questions.add(new DauToeicQuestionResponse(
-                    text(row, "id"),
-                    text(row, "test_id"),
-                    text(row, "passage_id"),
-                    integer(row, "part"),
-                    text(row, "section"),
-                    integer(row, "question_number"),
-                    mediaUrl(test.mediaFolder(), text(row, "audio_url")),
-                    mediaUrl(test.mediaFolder(), text(row, "image_url")),
-                    text(row, "passage_text"),
-                    text(row, "question_text"),
-                    text(row, "option_a"),
-                    text(row, "option_b"),
-                    text(row, "option_c"),
-                    text(row, "option_d"),
-                    text(row, "correct_answer"),
-                    text(row, "explanation_vi"),
-                    text(row, "explanation_en"),
-                    integer(row, "difficulty_level"),
-                    integer(row, "order_index"),
-                    text(row, "dich_nghia"),
-                    text(row, "tu_vung"),
-                    text(row, "dich_nghia_dap_an")));
+            questions.add(question(row, Map.of(test.id(), test)));
         }
         return questions;
+    }
+
+    private List<DauToeicQuestionResponse> questionsByIds(List<String> ids) {
+        if (ids.isEmpty()) {
+            return List.of();
+        }
+        JsonNode rows = get("/rest/v1/mock_test_questions", builder -> builder
+                .queryParam("select", "*")
+                .queryParam("id", "in.(" + String.join(",", ids) + ")"));
+        Map<String, DauToeicTestResponse> testsById = testsById(rows);
+        List<DauToeicQuestionResponse> questions = new ArrayList<>();
+        for (JsonNode row : rows) {
+            questions.add(question(row, testsById));
+        }
+        return questions;
+    }
+
+    private Map<String, List<DauToeicQuestionResponse>> questionsByPassageIds(List<String> passageIds) {
+        if (passageIds.isEmpty()) {
+            return Map.of();
+        }
+        JsonNode rows = get("/rest/v1/mock_test_questions", builder -> builder
+                .queryParam("select", "*")
+                .queryParam("passage_id", "in.(" + String.join(",", passageIds) + ")")
+                .queryParam("order", "question_number.asc"));
+        Map<String, DauToeicTestResponse> testsById = testsById(rows);
+        Map<String, List<DauToeicQuestionResponse>> questionsByPassageId = new LinkedHashMap<>();
+        for (JsonNode row : rows) {
+            DauToeicQuestionResponse question = question(row, testsById);
+            questionsByPassageId.computeIfAbsent(question.passageId(), ignored -> new ArrayList<>()).add(question);
+        }
+        return questionsByPassageId;
+    }
+
+    private DauToeicQuestionResponse question(JsonNode row, Map<String, DauToeicTestResponse> testsById) {
+        DauToeicTestResponse test = testsById.get(text(row, "test_id"));
+        String mediaFolder = test == null ? null : test.mediaFolder();
+        return new DauToeicQuestionResponse(
+                text(row, "id"),
+                text(row, "test_id"),
+                text(row, "passage_id"),
+                integer(row, "part"),
+                text(row, "section"),
+                integer(row, "question_number"),
+                mediaUrl(mediaFolder, text(row, "audio_url")),
+                mediaUrl(mediaFolder, text(row, "image_url")),
+                text(row, "passage_text"),
+                text(row, "question_text"),
+                text(row, "option_a"),
+                text(row, "option_b"),
+                text(row, "option_c"),
+                text(row, "option_d"),
+                text(row, "correct_answer"),
+                text(row, "explanation_vi"),
+                text(row, "explanation_en"),
+                integer(row, "difficulty_level"),
+                integer(row, "order_index"),
+                text(row, "dich_nghia"),
+                text(row, "tu_vung"),
+                text(row, "dich_nghia_dap_an"));
     }
 
     private List<DauToeicPassageResponse> passages(DauToeicTestResponse test, int part) {
@@ -140,21 +348,64 @@ public class DauToeicClientService {
                 .queryParam("order", "order_index.asc"));
         List<DauToeicPassageResponse> passages = new ArrayList<>();
         for (JsonNode row : rows) {
-            passages.add(new DauToeicPassageResponse(
-                    text(row, "id"),
-                    text(row, "test_id"),
-                    integer(row, "part"),
-                    text(row, "passage_type"),
-                    mediaUrl(test.mediaFolder(), text(row, "audio_url")),
-                    mediaUrl(test.mediaFolder(), text(row, "image_url")),
-                    text(row, "passage_text"),
-                    text(row, "passage_text_2"),
-                    text(row, "passage_text_3"),
-                    text(row, "transcript"),
-                    integer(row, "order_index"),
-                    text(row, "title")));
+            passages.add(passage(row, Map.of(test.id(), test)));
         }
         return passages;
+    }
+
+    private List<DauToeicPassageResponse> passagesByIds(List<String> ids) {
+        if (ids.isEmpty()) {
+            return List.of();
+        }
+        JsonNode rows = get("/rest/v1/mock_test_passages", builder -> builder
+                .queryParam("select", "*")
+                .queryParam("id", "in.(" + String.join(",", ids) + ")"));
+        Map<String, DauToeicTestResponse> testsById = testsById(rows);
+        List<DauToeicPassageResponse> passages = new ArrayList<>();
+        for (JsonNode row : rows) {
+            passages.add(passage(row, testsById));
+        }
+        return passages;
+    }
+
+    private DauToeicPassageResponse passage(JsonNode row, Map<String, DauToeicTestResponse> testsById) {
+        DauToeicTestResponse test = testsById.get(text(row, "test_id"));
+        String mediaFolder = test == null ? null : test.mediaFolder();
+        return new DauToeicPassageResponse(
+                text(row, "id"),
+                text(row, "test_id"),
+                integer(row, "part"),
+                text(row, "passage_type"),
+                mediaUrl(mediaFolder, text(row, "audio_url")),
+                mediaUrl(mediaFolder, text(row, "image_url")),
+                text(row, "passage_text"),
+                text(row, "passage_text_2"),
+                text(row, "passage_text_3"),
+                text(row, "transcript"),
+                integer(row, "order_index"),
+                text(row, "title"));
+    }
+
+    private Map<String, DauToeicTestResponse> testsById(JsonNode rows) {
+        List<String> testIds = new ArrayList<>();
+        for (JsonNode row : rows) {
+            String testId = text(row, "test_id");
+            if (StringUtils.hasText(testId) && !testIds.contains(testId)) {
+                testIds.add(testId);
+            }
+        }
+        if (testIds.isEmpty()) {
+            return Map.of();
+        }
+        JsonNode tests = get("/rest/v1/mock_tests", builder -> builder
+                .queryParam("select", "*,mock_test_sets(name)")
+                .queryParam("id", "in.(" + String.join(",", testIds) + ")"));
+        Map<String, DauToeicTestResponse> testsById = new HashMap<>();
+        for (JsonNode row : tests) {
+            DauToeicTestResponse test = test(row);
+            testsById.put(test.id(), test);
+        }
+        return testsById;
     }
 
     private DauToeicTestResponse test(JsonNode row) {
@@ -194,6 +445,34 @@ public class DauToeicClientService {
                     .retrieve()
                     .body(JsonNode.class);
             return response == null ? com.fasterxml.jackson.databind.node.JsonNodeFactory.instance.arrayNode() : response;
+        } catch (RestClientResponseException exception) {
+            throw new ResponseStatusException(
+                    HttpStatus.BAD_GATEWAY,
+                    "Dau TOEIC API error (" + exception.getStatusCode().value() + ")",
+                    exception);
+        } catch (RestClientException exception) {
+            throw new ResponseStatusException(HttpStatus.BAD_GATEWAY, "Cannot connect to Dau TOEIC API", exception);
+        }
+    }
+
+    private JsonNode post(String path, JsonNode body) {
+        AppProperties.DauToeic config = appProperties.getDautoeic();
+        if (!StringUtils.hasText(config.getSupabaseUrl()) || !StringUtils.hasText(config.getAnonKey())) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Dau TOEIC API is not configured");
+        }
+        try {
+            JsonNode response = RestClient.builder()
+                    .baseUrl(config.getSupabaseUrl())
+                    .defaultHeader("apikey", config.getAnonKey())
+                    .defaultHeader(HttpHeaders.AUTHORIZATION, "Bearer " + config.getAnonKey())
+                    .defaultHeader(HttpHeaders.ACCEPT, "application/json")
+                    .build()
+                    .post()
+                    .uri(path)
+                    .body(body)
+                    .retrieve()
+                    .body(JsonNode.class);
+            return response == null ? JsonNodeFactory.instance.arrayNode() : response;
         } catch (RestClientResponseException exception) {
             throw new ResponseStatusException(
                     HttpStatus.BAD_GATEWAY,
@@ -244,6 +523,70 @@ public class DauToeicClientService {
         }
     }
 
+    private void requireListeningPart(int part) {
+        if (part < 1 || part > 4) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Listening part must be between 1 and 4");
+        }
+    }
+
+    private String levelTitle(int level) {
+        return switch (level) {
+            case 1 -> "Level 1 - De";
+            case 2 -> "Level 2 - Co ban";
+            case 3 -> "Level 3 - Trung binh";
+            case 4 -> "Level 4 - Kho";
+            case 5 -> "Level 5 - Rat kho";
+            default -> "Level " + level;
+        };
+    }
+
+    private Double defaultErrorMin(int level) {
+        return switch (level) {
+            case 1 -> 0.01;
+            case 2 -> 0.14;
+            case 3 -> 0.23;
+            case 4 -> 0.32;
+            case 5 -> 0.43;
+            default -> 0.0;
+        };
+    }
+
+    private Double defaultErrorMax(int level) {
+        return switch (level) {
+            case 1 -> 0.14;
+            case 2 -> 0.23;
+            case 3 -> 0.32;
+            case 4 -> 0.43;
+            case 5 -> 0.85;
+            default -> 1.0;
+        };
+    }
+
+    private String firstText(String... values) {
+        for (String value : values) {
+            if (StringUtils.hasText(value)) {
+                return value;
+            }
+        }
+        return null;
+    }
+
+    private String plainText(String value) {
+        if (!StringUtils.hasText(value)) {
+            return null;
+        }
+        String withBreaks = value
+                .replaceAll("(?i)<br\\s*/?>", "\n")
+                .replaceAll("(?i)</p>", "\n")
+                .replaceAll("(?i)</div>", "\n");
+        String withoutTags = withBreaks.replaceAll("<[^>]+>", "");
+        String decoded = HtmlUtils.htmlUnescape(withoutTags);
+        return decoded.replaceAll("[ \\t\\x0B\\f\\r]+", " ")
+                .replaceAll("\\n\\s+", "\n")
+                .replaceAll("\\n{3,}", "\n\n")
+                .trim();
+    }
+
     private String text(JsonNode node, String field) {
         JsonNode value = node.path(field);
         if (value.isMissingNode() || value.isNull()) {
@@ -258,8 +601,23 @@ public class DauToeicClientService {
         return value.isNumber() ? value.asInt() : null;
     }
 
+    private Double decimal(JsonNode node, String field) {
+        JsonNode value = node.path(field);
+        return value.isNumber() ? value.asDouble() : null;
+    }
+
     private Boolean bool(JsonNode node, String field) {
         JsonNode value = node.path(field);
         return value.isBoolean() ? value.asBoolean() : null;
+    }
+
+    private record PracticeStat(
+            String itemId,
+            String itemType,
+            Integer part,
+            Integer level,
+            Integer totalAttempts,
+            Integer wrongCount,
+            Double errorRate) {
     }
 }

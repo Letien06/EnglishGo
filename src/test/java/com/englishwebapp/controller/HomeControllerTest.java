@@ -12,6 +12,7 @@ import com.englishwebapp.security.AppUserPrincipal;
 import com.englishwebapp.security.AuthSessionService;
 import com.englishwebapp.service.FirebaseAuthenticationService;
 import com.englishwebapp.service.HubService;
+import com.englishwebapp.service.VocabService;
 import java.math.BigDecimal;
 import java.util.List;
 import org.junit.jupiter.api.Test;
@@ -32,6 +33,9 @@ class HomeControllerTest {
 
     @MockBean
     private HubService hubService;
+
+    @MockBean
+    private VocabService vocabService;
 
     @MockBean
     private FirebaseAuthenticationService firebaseAuthenticationService;

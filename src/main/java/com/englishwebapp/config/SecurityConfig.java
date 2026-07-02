@@ -32,6 +32,7 @@ public class SecurityConfig {
                                 "/auth/logout",
                                 "/api/questions/**",
                                 "/api/dautoeic/**",
+                                "/api/listening/**",
                                 "/api/practice/**",
                         "/api/vocab/**",
                         "/admin/**",
@@ -54,6 +55,7 @@ public class SecurityConfig {
                         .requestMatchers(
                                 "/",
                                 "/listen",
+                                "/listen/**",
                                 "/read",
                                 "/lessons",
                                 "/lessons/**",
@@ -74,6 +76,7 @@ public class SecurityConfig {
                         .permitAll()
                         .requestMatchers("/api/questions/**").permitAll()
                         .requestMatchers("/api/dautoeic/**").permitAll()
+                        .requestMatchers("/api/listening/**").permitAll()
                         .requestMatchers("/api/vocab/**").permitAll()
                         .requestMatchers("/api/practice/**").authenticated()
                         .requestMatchers("/admin/**").hasRole("ADMIN")

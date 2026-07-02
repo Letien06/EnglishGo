@@ -1,13 +1,18 @@
 package com.englishwebapp.controller;
 
 import com.englishwebapp.dto.ApiResponse;
+import com.englishwebapp.dto.DauToeicDifficultyLevelResponse;
+import com.englishwebapp.dto.DauToeicDifficultySessionResponse;
 import com.englishwebapp.dto.DauToeicPartResponse;
 import com.englishwebapp.dto.DauToeicSetResponse;
 import com.englishwebapp.dto.DauToeicTestResponse;
+import com.englishwebapp.security.AppUserPrincipal;
 import com.englishwebapp.service.DauToeicClientService;
+import com.englishwebapp.service.ListeningProgressService;
 import java.util.List;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -20,6 +25,7 @@ import org.springframework.web.bind.annotation.RestController;
 public class DauToeicController {
 
     private final DauToeicClientService dauToeicClientService;
+    private final ListeningProgressService listeningProgressService;
 
     @GetMapping("/sets")
     public ResponseEntity<ApiResponse<List<DauToeicSetResponse>>> sets() {
@@ -56,5 +62,23 @@ public class DauToeicController {
             @PathVariable String testId,
             @RequestParam(defaultValue = "5") int part) {
         return ResponseEntity.ok(ApiResponse.ok(dauToeicClientService.getReadingPart(testId, part)));
+    }
+
+    @GetMapping("/difficulty/parts/{part}/levels")
+    public ResponseEntity<ApiResponse<List<DauToeicDifficultyLevelResponse>>> difficultyLevels(
+            @PathVariable int part,
+            @AuthenticationPrincipal AppUserPrincipal user) {
+        List<DauToeicDifficultyLevelResponse> levels = listeningProgressService.applyProgress(
+                user == null ? null : user.id(),
+                dauToeicClientService.listDifficultyLevels(part));
+        return ResponseEntity.ok(ApiResponse.ok(levels));
+    }
+
+    @GetMapping("/difficulty/parts/{part}/levels/{level}")
+    public ResponseEntity<ApiResponse<DauToeicDifficultySessionResponse>> difficultySession(
+            @PathVariable int part,
+            @PathVariable int level,
+            @RequestParam(required = false) Integer limit) {
+        return ResponseEntity.ok(ApiResponse.ok(dauToeicClientService.getDifficultySession(part, level, limit)));
     }
 }
