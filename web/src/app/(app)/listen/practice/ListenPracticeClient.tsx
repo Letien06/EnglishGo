@@ -46,7 +46,9 @@ export default function ListenPracticeClient({
     () => normalizeSavedAnswers(savedAnswers),
     [savedAnswers],
   );
-  const [currentIndex, setCurrentIndex] = useState(0);
+  const [currentIndex, setCurrentIndex] = useState(() =>
+    initialItemIndex(items, initialAnswers),
+  );
   const [answeredMap, setAnsweredMap] = useState<Record<string, string>>(initialAnswers);
   const [revealedMap, setRevealedMap] = useState<Record<string, number[]>>({});
   const [fillValues, setFillValues] = useState<Record<string, string>>({});
@@ -856,17 +858,25 @@ function initialItemIndex(
 ) {
   const total = items.length;
   if (typeof window === "undefined") return 0;
+
+  // If the learner has already answered something, always resume at the first
+  // unanswered question (e.g. 4/90 done → open item 5). A stale `q` param left
+  // in the URL from the auto-sync effect must NOT override this resume logic.
+  const hasSavedAnswers = Object.keys(answers).length > 0;
+  if (hasSavedAnswers) {
+    return firstUnansweredIndex(items, answers);
+  }
+
+  // No saved progress: honour an explicit `q` param (deep link / in-page nav).
   const params = new URLSearchParams(window.location.search);
   const rawParam = params.get("q");
-  // An explicit `q` param (e.g. deep link or in-page navigation) wins.
   if (rawParam != null && rawParam !== "") {
     const raw = Number.parseInt(rawParam, 10);
     if (!Number.isNaN(raw)) {
       return Math.max(0, Math.min(Math.max(total - 1, 0), raw));
     }
   }
-  // Otherwise resume at the first question the learner has not answered yet.
-  return firstUnansweredIndex(items, answers);
+  return 0;
 }
 
 function chooseHiddenIndexes(tokens: Token[], percent: number) {
