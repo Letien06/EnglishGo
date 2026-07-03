@@ -20,6 +20,7 @@
 import Link from "next/link";
 import { useCallback, useEffect, useRef, useState } from "react";
 import ResetLevelButton from "@/components/ResetLevelButton";
+import { markVisited, routeKey } from "@/lib/nav/session-nav";
 import type { DauToeicDifficultyLevel } from "@/types/dautoeic";
 
 const levelStyles = [
@@ -105,6 +106,11 @@ export default function LevelDashboardClient({
 
   useEffect(() => {
     mounted.current = true;
+    // Mark this dashboard route as visited so the route-level loading overlay
+    // does not flash if the user returns to it (or switches Nghe<->Đọc) later
+    // in this session. Path mirrors the dashboard pages: /listen or /read.
+    const dashboardPath = skill === "listening" ? "/listen" : "/read";
+    markVisited(routeKey(dashboardPath, { part: partId }));
     // Always revalidate silently in the background on mount (or with an overlay
     // when we truly have nothing to display).
     void revalidate(levels.length === 0 && !error);

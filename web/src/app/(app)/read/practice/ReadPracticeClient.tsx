@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { markVisited, routeKey } from "@/lib/nav/session-nav";
 import type {
   DauToeicDifficultySession,
   DauToeicPracticeItem,
@@ -66,6 +67,19 @@ export default function ReadPracticeClient({
     }, 1000);
     return () => window.clearInterval(timer);
   }, []);
+
+  // Mark this practice route as visited so re-opening it later this session
+  // (e.g. tapping "Luyện ngay" again) does not flash the loading overlay.
+  useEffect(() => {
+    markVisited(
+      routeKey("/read/practice", {
+        part: partId,
+        level: String(level),
+        mode,
+        assist: String(assist),
+      }),
+    );
+  }, [partId, level, mode, assist]);
 
   useEffect(() => {
     const url = new URL(window.location.href);
