@@ -67,6 +67,29 @@ export function createLearningToolService(
     return snap.docs.map(toProgressDoc);
   }
 
+  async function findProgressByPart(
+    uid: string,
+    part: number | null,
+  ): Promise<ListeningProgressDoc[]> {
+    const snap = await userCol(uid, config.progressCollection)
+      .where("part", "==", part)
+      .get();
+    return snap.docs.map(toProgressDoc);
+  }
+
+  function summarizeRows(
+    rows: ListeningProgressDoc[],
+    part: number | null,
+    level: number | null,
+  ): ProgressSummary {
+    const correct = rows.filter((row) => row.correct).length;
+    const wrong = rows.length - correct;
+    const distinctItems = new Set(
+      rows.map((row) => row.itemId).filter(Boolean),
+    ).size;
+    return { part, level, done: distinctItems, correct, wrong };
+  }
+
   async function deleteProgressByPartAndLevel(
     uid: string,
     part: number,
@@ -88,30 +111,37 @@ export function createLearningToolService(
   ): Promise<ProgressSummary> {
     if (!uid) return { part, level, done: 0, correct: 0, wrong: 0 };
     const rows = await findProgressByPartAndLevel(uid, part, level);
-    const correct = rows.filter((row) => row.correct).length;
-    const wrong = rows.length - correct;
-    const distinctItems = new Set(
-      rows.map((row) => row.itemId).filter(Boolean),
-    ).size;
-    return { part, level, done: distinctItems, correct, wrong };
+    return summarizeRows(rows, part, level);
   }
 
   return {
     async applyProgress(uid, levels) {
-      if (!uid) return levels;
-      const enriched: DauToeicDifficultyLevel[] = [];
-      for (const level of levels) {
-        const summary = await summarize(uid, level.part, level.level);
+      if (!uid || levels.length === 0) return levels;
+      // Fetch all progress rows for this part in a SINGLE Firestore query,
+      // then compute each level's summary in memory. This avoids the previous
+      // one-query-per-level fan-out that made the dashboard slow on every
+      // navigation. Progress is still always fresh (not cached).
+      const part = levels[0]?.part ?? null;
+      const allRows = await findProgressByPart(uid, part);
+      const rowsByLevel = new Map<number | null, ListeningProgressDoc[]>();
+      for (const row of allRows) {
+        const key = row.level ?? null;
+        const bucket = rowsByLevel.get(key);
+        if (bucket) bucket.push(row);
+        else rowsByLevel.set(key, [row]);
+      }
+      return levels.map((level) => {
+        const rows = rowsByLevel.get(level.level) ?? [];
+        const summary = summarizeRows(rows, level.part, level.level);
         const remaining = Math.max(0, (level.total ?? 0) - summary.done);
-        enriched.push({
+        return {
           ...level,
           done: summary.done,
           correct: summary.correct,
           wrong: summary.wrong,
           remaining,
-        });
-      }
-      return enriched;
+        };
+      });
     },
 
     summarize,
