@@ -6,12 +6,23 @@ import { parseBody } from "@/lib/api/validate";
 import { requireUser } from "@/lib/auth/session";
 import * as vocab from "@/lib/services/vocab";
 
+// Coerce optional/nullable text fields to empty strings so the inferred type
+// matches `AiVocabCandidate` (whose `meaning`/`partOfSpeech` are required
+// strings) under `exactOptionalPropertyTypes: true`.
 const candidateSchema = z.object({
   word: z.string(),
-  meaning: z.string().optional().nullable(),
-  partOfSpeech: z.string().optional().nullable(),
-  phonetic: z.string().optional().nullable(),
-  example: z.string().optional().nullable(),
+  meaning: z
+    .string()
+    .nullable()
+    .default("")
+    .transform((v) => v ?? ""),
+  partOfSpeech: z
+    .string()
+    .nullable()
+    .default("")
+    .transform((v) => v ?? ""),
+  phonetic: z.string().optional(),
+  example: z.string().optional(),
   selected: z.boolean().optional(),
 });
 
