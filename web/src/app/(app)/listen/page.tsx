@@ -118,11 +118,8 @@ function Hero({ part }: { part: (typeof parts)[number] }) {
   return (
     <article className="flex min-h-48 items-center justify-between overflow-hidden rounded-3xl border border-blue-100 bg-gradient-to-r from-sky-100 via-white to-amber-100 px-8 py-8 shadow-[0_20px_45px_rgba(15,27,45,0.08)]">
       <div>
-        <span className="inline-flex rounded-full border border-blue-200 bg-white px-3 py-1 text-xs font-extrabold text-blue-600">
-          Dữ liệu Đậu TOEIC API
-        </span>
-        <h1 className="mt-5 text-4xl font-extrabold text-ink">{part.title}</h1>
-        <p className="mt-2 text-base text-muted">{part.desc}</p>
+        <h1 className="text-4xl font-extrabold text-ink">{part.title}</h1>
+        <p className="mt-3 text-base text-muted">{part.desc}</p>
       </div>
       <div className="hidden h-32 w-32 items-center justify-center rounded-3xl bg-gradient-to-br from-blue-600 to-cyan-500 text-5xl font-extrabold text-white shadow-2xl lg:flex">
         {part.badge}
