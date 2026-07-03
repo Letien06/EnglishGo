@@ -26,9 +26,9 @@ function labelForPath(pathname: string): string {
  *     overlay at all — the data comes back instantly from the client cache.
  *  2. Otherwise, wait a short grace period before showing, so genuinely fast
  *     navigations don't flash the overlay either. It only appears for real,
- *     first-time-this-session loads that take a moment.
+ *     first-time-this-session loads that take longer than the grace period.
  */
-const GRACE_MS = 250;
+const GRACE_MS = 200;
 
 export default function AppLoadingOverlay() {
   const pathname = usePathname();
@@ -55,14 +55,14 @@ export default function AppLoadingOverlay() {
   const label = labelForPath(pathname);
 
   return (
-    <div className="fixed right-5 top-20 z-[80] w-[300px] rounded-2xl border border-primary/25 bg-white/95 p-4 shadow-2xl backdrop-blur-xl">
-      <div className="flex items-center gap-3">
-        <span className="h-9 w-9 shrink-0 animate-spin rounded-full border-4 border-[#23c58b] border-r-[#ff4e9d] border-t-[#2879ff]" />
+    <div className="fixed inset-0 z-[80] flex items-center justify-center bg-slate-900/30 backdrop-blur-sm">
+      <div className="flex w-[560px] max-w-[90vw] items-center gap-8 rounded-3xl border border-primary/25 bg-white/95 p-10 shadow-2xl backdrop-blur-xl">
+        <span className="h-24 w-24 shrink-0 animate-spin rounded-full border-[12px] border-[#23c58b] border-r-[#ff4e9d] border-t-[#2879ff]" />
         <div>
-          <p className="bg-gradient-to-r from-[#ef4da0] to-[#3177ff] bg-clip-text text-sm font-extrabold text-transparent">
+          <p className="bg-gradient-to-r from-[#ef4da0] to-[#3177ff] bg-clip-text text-3xl font-extrabold text-transparent">
             Đang mở {label}
           </p>
-          <p className="text-xs font-bold text-slate-500">
+          <p className="mt-1 text-lg font-bold text-slate-500">
             Đang tải dữ liệu luyện tập...
           </p>
         </div>
