@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { markVisited, routeKey } from "@/lib/nav/session-nav";
+import PracticeMobileMenu from "../../_components/PracticeMobileMenu";
 import type {
   DauToeicDifficultySession,
   DauToeicPracticeItem,
@@ -153,19 +154,19 @@ export default function ReadPracticeClient({
 
   return (
     <main className="min-h-dvh bg-white">
-      <header className="sticky top-0 z-40 flex h-16 items-center gap-4 bg-gradient-to-r from-cyan-500 to-blue-800 px-7 text-white shadow-md">
+      <header className="sticky top-0 z-40 flex h-16 items-center gap-2 bg-gradient-to-r from-cyan-500 to-blue-800 px-3 text-white shadow-md sm:gap-4 sm:px-7">
         <Link
           href={`/read?part=${partId}`}
-          className="inline-flex h-10 w-10 items-center justify-center rounded-xl border border-white/30 bg-white/10 text-xl font-bold"
+          className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-white/30 bg-white/10 text-xl font-bold"
           aria-label="Thoát"
         >
           ←
         </Link>
-        <span className="inline-flex h-11 w-11 items-center justify-center rounded-full bg-primary text-xl font-extrabold text-gold-ink">
+        <span className="hidden h-11 w-11 items-center justify-center rounded-full bg-primary text-xl font-extrabold text-gold-ink sm:inline-flex">
           文
         </span>
-        <h1 className="min-w-0 flex-1 truncate text-xl font-extrabold">
-          Part {partNum} · Cấp độ {level} · Luyện đọc
+        <h1 className="min-w-0 flex-1 truncate text-base font-extrabold sm:text-xl">
+          Part {partNum} · Cấp {level} · Đọc
         </h1>
 
         <nav className="hidden flex-1 items-center justify-center rounded-xl border border-white/25 bg-white/10 p-1 lg:flex">
@@ -186,17 +187,17 @@ export default function ReadPracticeClient({
         <button
           type="button"
           onClick={() => setAuto((value) => !value)}
-          className={`rounded-xl border border-white/30 px-4 py-2 text-sm font-extrabold ${
+          className={`hidden rounded-xl border border-white/30 px-4 py-2 text-sm font-extrabold lg:block ${
             auto ? "bg-white text-blue-700" : "bg-white/10 text-white"
           }`}
           title="Tự chuyển bài khi trả lời đúng"
         >
           Auto
         </button>
-        <span className="min-w-14 text-center text-sm font-extrabold tabular-nums">{formatElapsed(elapsed)}</span>
+        <span className="hidden min-w-14 text-center text-sm font-extrabold tabular-nums lg:inline">{formatElapsed(elapsed)}</span>
         <select
           value={assist}
-          className="rounded-xl border border-white/30 bg-white/10 px-4 py-2 text-sm font-extrabold text-white"
+          className="hidden rounded-xl border border-white/30 bg-white/10 px-4 py-2 text-sm font-extrabold text-white lg:block"
           onChange={(event) => {
             window.location.href = `/read/practice?part=${partId}&level=${level}&mode=${activeMode}&assist=${event.target.value}&q=${currentIndex}`;
           }}
@@ -206,11 +207,23 @@ export default function ReadPracticeClient({
             <option key={value} className="text-ink" value={value}>{value}%</option>
           ))}
         </select>
+
+        <PracticeMobileMenu
+          modes={modes}
+          activeMode={activeMode}
+          auto={auto}
+          onToggleAuto={() => setAuto((value) => !value)}
+          assist={assist}
+          assistOptions={assistOptions}
+          elapsed={formatElapsed(elapsed)}
+          modeHref={(m) => `/read/practice?part=${partId}&level=${level}&mode=${m}&assist=${assist}&q=${currentIndex}`}
+          assistHref={(value) => `/read/practice?part=${partId}&level=${level}&mode=${activeMode}&assist=${value}&q=${currentIndex}`}
+        />
       </header>
 
       <div className="grid min-h-[calc(100dvh-8rem)] lg:grid-cols-[1fr_1fr]">
-        <section className="border-r border-slate-200 px-10 py-6">
-          <p className="mb-5 text-xl italic text-ink">{readingInstruction(partNum)}</p>
+        <section className="border-b border-slate-200 px-4 py-5 sm:px-6 lg:border-b-0 lg:border-r lg:px-10 lg:py-6">
+          <p className="mb-5 text-lg italic text-ink sm:text-xl">{readingInstruction(partNum)}</p>
 
           {item.imageUrl && (
             <img src={item.imageUrl} alt="Reading material" className="mb-4 max-h-[48dvh] w-full object-contain" />
@@ -256,7 +269,7 @@ export default function ReadPracticeClient({
           )}
         </section>
 
-        <section className="px-10 py-6">
+        <section className="px-4 py-5 sm:px-6 lg:px-10 lg:py-6">
           <div className="mb-4 flex items-center justify-between">
             <span className="rounded-full border border-blue-200 bg-blue-50 px-4 py-1 text-sm font-extrabold text-ink">
               #{currentIndex + 1}/{items.length}
@@ -343,25 +356,25 @@ export default function ReadPracticeClient({
         </section>
       </div>
 
-      <footer className="sticky bottom-0 z-40 flex h-16 items-center justify-between bg-gradient-to-r from-cyan-500 to-blue-800 px-7 text-white">
-        <div className="flex gap-3">
+      <footer className="sticky bottom-0 z-40 flex h-16 items-center justify-between gap-2 bg-gradient-to-r from-cyan-500 to-blue-800 px-3 text-white sm:px-7">
+        <div className="flex gap-2 sm:gap-3">
           <a
             href="mailto:support@quyngu.vn?subject=B%C3%A1o%20l%E1%BB%97i%20c%C3%A2u%20luy%E1%BB%87n%20%C4%91%E1%BB%8Dc"
-            className="rounded-xl bg-white px-5 py-2 text-sm font-extrabold text-red-500"
+            className="rounded-xl bg-white px-3 py-2 text-sm font-extrabold text-red-500 sm:px-5"
           >
-            ⚑ Báo lỗi
+            ⚑<span className="hidden sm:inline"> Báo lỗi</span>
           </a>
-          <button onClick={() => setShowVocab((value) => !value)} className="rounded-xl bg-white px-5 py-2 text-sm font-extrabold text-primary">
-            ☷ Giỏ từ
+          <button onClick={() => setShowVocab((value) => !value)} className="rounded-xl bg-white px-3 py-2 text-sm font-extrabold text-primary sm:px-5">
+            ☷<span className="hidden sm:inline"> Giỏ từ</span>
           </button>
-          <button onClick={() => setShowNote((value) => !value)} className="rounded-xl bg-white px-5 py-2 text-sm font-extrabold text-primary">
-            ✎ Ghi chú
+          <button onClick={() => setShowNote((value) => !value)} className="rounded-xl bg-white px-3 py-2 text-sm font-extrabold text-primary sm:px-5">
+            ✎<span className="hidden sm:inline"> Ghi chú</span>
           </button>
         </div>
-        <div className="flex items-center gap-3">
-          <button onClick={() => goTo(currentIndex - 1)} disabled={currentIndex === 0} className="rounded-xl bg-blue-600 px-5 py-3 font-extrabold disabled:opacity-40">‹</button>
-          <span className="rounded-xl bg-green-500 px-5 py-3 font-extrabold">{currentIndex + 1}/{items.length}</span>
-          <button onClick={() => goTo(currentIndex + 1)} disabled={currentIndex >= items.length - 1} className="rounded-xl bg-blue-600 px-5 py-3 font-extrabold disabled:opacity-40">›</button>
+        <div className="flex items-center gap-2 sm:gap-3">
+          <button onClick={() => goTo(currentIndex - 1)} disabled={currentIndex === 0} className="rounded-xl bg-blue-600 px-4 py-3 font-extrabold disabled:opacity-40 sm:px-5">‹</button>
+          <span className="rounded-xl bg-green-500 px-4 py-3 font-extrabold sm:px-5">{currentIndex + 1}/{items.length}</span>
+          <button onClick={() => goTo(currentIndex + 1)} disabled={currentIndex >= items.length - 1} className="rounded-xl bg-blue-600 px-4 py-3 font-extrabold disabled:opacity-40 sm:px-5">›</button>
         </div>
       </footer>
     </main>
