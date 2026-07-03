@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title th:text="${session.test.title} + ' - Practice'">Practice</title>
-    <link rel="stylesheet" th:href="@{/css/app.css(v='app-shell-20260702-3')}">
+    <link rel="stylesheet" th:href="@{/css/app.css(v='app-shell-20260703-1')}">
     <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"></script>
 </head>
 <body th:attr="data-test-id=${session.test.id},data-duration=${session.test.duration},data-draft=${session.draftPayload}">
@@ -40,12 +40,12 @@
                         <h2>Question <span th:text="${iter.index + 1}">1</span> <small>(Part <span th:text="${question.part}">3</span>)</small></h2>
                         <div class="ew-alert" th:if="${question.group != null}">
                             <p th:text="${question.group.passageText}">Passage</p>
-                            <audio th:if="${question.group.audioUrl != null}" controls th:src="@{'/media/' + ${question.group.audioUrl}}"></audio>
-                            <img th:if="${question.group.imageUrl != null}" th:src="@{'/media/' + ${question.group.imageUrl}}" alt="Question group image" loading="lazy">
+                            <audio th:if="${question.group.audioUrl != null}" controls th:src="${#strings.startsWith(question.group.audioUrl, 'http') ? question.group.audioUrl : '/media/' + question.group.audioUrl}"></audio>
+                            <img th:if="${question.group.imageUrl != null}" th:src="${#strings.startsWith(question.group.imageUrl, 'http') ? question.group.imageUrl : '/media/' + question.group.imageUrl}" alt="Question group image" loading="lazy">
                         </div>
                         <p th:text="${question.content}">Question content</p>
-                        <audio th:if="${question.audioUrl != null}" controls th:src="@{'/media/' + ${question.audioUrl}}"></audio>
-                        <img th:if="${question.imageUrl != null}" th:src="@{'/media/' + ${question.imageUrl}}" alt="Question image" loading="lazy">
+                        <audio th:if="${question.audioUrl != null}" controls th:src="${#strings.startsWith(question.audioUrl, 'http') ? question.audioUrl : '/media/' + question.audioUrl}"></audio>
+                        <img th:if="${question.imageUrl != null}" th:src="${#strings.startsWith(question.imageUrl, 'http') ? question.imageUrl : '/media/' + question.imageUrl}" alt="Question image" loading="lazy">
 
                         <div class="options" th:if="${session.optionsByQuestionId[question.id] != null and !session.optionsByQuestionId[question.id].empty}">
                             <label class="option" th:each="option : ${session.optionsByQuestionId[question.id]}">
@@ -186,6 +186,6 @@
         };
     }
 </script>
-<script th:src="@{/js/app-shell.js(v='app-shell-20260702-3')}"></script>
+<script th:src="@{/js/app-shell.js(v='app-shell-20260703-1')}"></script>
 </body>
 </html>

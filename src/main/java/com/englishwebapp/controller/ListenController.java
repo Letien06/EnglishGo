@@ -1,15 +1,13 @@
 package com.englishwebapp.controller;
 
 import com.englishwebapp.dto.ListenPartView;
-import com.englishwebapp.entity.SkillType;
 import com.englishwebapp.security.AppUserPrincipal;
 import com.englishwebapp.service.DauToeicClientService;
-import com.englishwebapp.service.LearnerContentService;
 import com.englishwebapp.service.ListeningProgressService;
 import java.util.List;
 import lombok.RequiredArgsConstructor;
-import org.springframework.data.domain.PageRequest;
-import org.springframework.data.domain.Pageable;
+import java.util.Map;
+import org.springframework.data.domain.Page;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.stereotype.Controller;
 import org.springframework.ui.Model;
@@ -20,7 +18,6 @@ import org.springframework.web.bind.annotation.RequestParam;
 @RequiredArgsConstructor
 public class ListenController {
 
-    private final LearnerContentService learnerContentService;
     private final DauToeicClientService dauToeicClientService;
     private final ListeningProgressService listeningProgressService;
 
@@ -77,13 +74,8 @@ public class ListenController {
     }
 
     private void addInternalFallbackQuestions(String activeId, Model model) {
-        Pageable pageable = PageRequest.of(0, 8);
-        var questions = learnerContentService.findPublishedQuestions(
-                questionParts(activeId),
-                SkillType.LISTENING,
-                pageable);
-        model.addAttribute("questions", questions);
-        model.addAttribute("optionsByQuestionId", learnerContentService.findOptionsByQuestionId(questions));
+        model.addAttribute("questions", Page.empty());
+        model.addAttribute("optionsByQuestionId", Map.of());
     }
 
     private void addDauToeicLevels(String activeId, AppUserPrincipal user, Model model) {
@@ -91,7 +83,7 @@ public class ListenController {
             var levels = dauToeicClientService.listDifficultyLevels(Integer.parseInt(activeId));
             try {
                 model.addAttribute("dauToeicLevels", listeningProgressService.applyProgress(
-                        user == null ? null : user.id(),
+                        user == null ? null : user.firebaseUid(),
                         levels));
             } catch (RuntimeException exception) {
                 model.addAttribute("dauToeicLevels", levels);
@@ -137,12 +129,4 @@ public class ListenController {
                 new ListenPartView("4", "Part 4: Độc thoại", "Luyện Part 4 theo 5 cấp độ", "Một bài nói ngắn đi kèm nhóm câu hỏi, giúp tăng khả năng nắm ý chính và chi tiết.", "P4", "4".equals(activeId)));
     }
 
-    private List<Integer> questionParts(String activeId) {
-        return switch (activeId) {
-            case "2" -> List.of(2);
-            case "3" -> List.of(3);
-            case "4" -> List.of(4);
-            default -> List.of(1);
-        };
-    }
 }

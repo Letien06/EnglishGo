@@ -2,10 +2,9 @@ package com.englishwebapp.service;
 
 import com.englishwebapp.entity.User;
 import com.englishwebapp.entity.UserRole;
-import com.google.api.core.ApiFuture;
-import com.google.cloud.firestore.DocumentReference;
+import com.englishwebapp.service.firestore.FirestoreSupport;
 import com.google.cloud.firestore.DocumentSnapshot;
-import com.google.cloud.firestore.Firestore;
+import com.google.cloud.firestore.FieldValue;
 import com.google.cloud.firestore.SetOptions;
 import com.google.firebase.auth.FirebaseAuth;
 import com.google.firebase.auth.FirebaseAuthException;
@@ -14,7 +13,6 @@ import java.time.Instant;
 import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.Optional;
-import java.util.concurrent.ExecutionException;
 import lombok.RequiredArgsConstructor;
 import org.springframework.beans.BeansException;
 import org.springframework.beans.factory.ObjectProvider;
@@ -27,10 +25,9 @@ import org.springframework.util.StringUtils;
 public class FirebaseAuthenticationService {
 
     private static final String USERS_COLLECTION = "users";
-    private static final String COUNTERS_COLLECTION = "counters";
 
     private final ObjectProvider<FirebaseAuth> firebaseAuthProvider;
-    private final ObjectProvider<Firestore> firestoreProvider;
+    private final FirestoreSupport firestoreSupport;
 
     public User verifyAndProvisionUser(String idToken) {
         if (!StringUtils.hasText(idToken)) {
@@ -40,10 +37,6 @@ public class FirebaseAuthenticationService {
         FirebaseAuth firebaseAuth = requiredBean(
                 firebaseAuthProvider,
                 "Firebase authentication SDK is not configured correctly");
-        Firestore firestore = requiredBean(
-                firestoreProvider,
-                "Firestore is not configured correctly");
-
         FirebaseToken decodedToken;
         try {
             decodedToken = firebaseAuth.verifyIdToken(idToken);
@@ -52,29 +45,30 @@ public class FirebaseAuthenticationService {
         }
 
         try {
-            return await(firestore.runTransaction(transaction -> {
-                DocumentReference userRef = firestore.collection(USERS_COLLECTION).document(decodedToken.getUid());
+            return firestoreSupport.await(firestoreSupport.firestore().runTransaction(transaction -> {
+                var userRef = firestoreSupport.firestore().collection(USERS_COLLECTION).document(decodedToken.getUid());
                 DocumentSnapshot snapshot = transaction.get(userRef).get();
-                Long id = snapshot.exists() ? longValue(snapshot, "id") : null;
-                if (id == null) {
-                    id = nextIdInTransaction(firestore, transaction, "users");
-                }
 
                 String email = resolveEmail(decodedToken);
-                UserRole role = UserRole.STUDENT;
+                UserRole role = snapshot.exists()
+                        ? enumValue(UserRole.class, stringValue(snapshot, "role"), UserRole.STUDENT)
+                        : UserRole.STUDENT;
+                Long legacyId = snapshot.exists() ? longValue(snapshot, "id") : null;
                 Map<String, Object> data = new LinkedHashMap<>();
-                data.put("id", id);
+                data.put("uid", decodedToken.getUid());
                 data.put("firebaseUid", decodedToken.getUid());
                 data.put("email", email);
                 data.put("displayName", decodedToken.getName());
                 data.put("avatarUrl", decodedToken.getPicture());
                 data.put("role", role.name());
                 data.put("updatedAtMillis", Instant.now().toEpochMilli());
+                data.put("updatedAt", FieldValue.serverTimestamp());
                 if (!snapshot.exists()) {
                     data.put("createdAtMillis", Instant.now().toEpochMilli());
+                    data.put("createdAt", FieldValue.serverTimestamp());
                 }
                 transaction.set(userRef, data, SetOptions.merge());
-                return toUser(id, decodedToken, email, role);
+                return toUser(legacyId, decodedToken, email, role);
             }));
         } catch (Exception ex) {
             throw new IllegalStateException("Could not create Firestore user session", ex);
@@ -90,21 +84,9 @@ public class FirebaseAuthenticationService {
         }
     }
 
-    private Long nextIdInTransaction(
-            Firestore firestore,
-            com.google.cloud.firestore.Transaction transaction,
-            String counterName) throws Exception {
-        DocumentReference counterRef = firestore.collection(COUNTERS_COLLECTION).document(counterName);
-        DocumentSnapshot counter = transaction.get(counterRef).get();
-        long current = counter.exists() && longValue(counter, "value") != null ? longValue(counter, "value") : 0L;
-        long next = current + 1;
-        transaction.set(counterRef, Map.of("value", next), SetOptions.merge());
-        return next;
-    }
-
-    private User toUser(Long id, FirebaseToken decodedToken, String email, UserRole role) {
+    private User toUser(Long legacyId, FirebaseToken decodedToken, String email, UserRole role) {
         User user = new User();
-        user.setId(id);
+        user.setId(legacyId);
         user.setFirebaseUid(decodedToken.getUid());
         user.setEmail(email);
         user.setDisplayName(decodedToken.getName());
@@ -120,6 +102,11 @@ public class FirebaseAuthenticationService {
         return decodedToken.getUid() + "@firebase.local";
     }
 
+    private String stringValue(DocumentSnapshot snapshot, String field) {
+        Object value = snapshot.get(field);
+        return value == null ? null : value.toString();
+    }
+
     private Long longValue(DocumentSnapshot snapshot, String field) {
         Object value = snapshot.get(field);
         if (value instanceof Number number) {
@@ -131,12 +118,14 @@ public class FirebaseAuthenticationService {
         return null;
     }
 
-    private <T> T await(ApiFuture<T> future) throws InterruptedException, ExecutionException {
+    private <E extends Enum<E>> E enumValue(Class<E> type, String value, E fallback) {
+        if (!StringUtils.hasText(value)) {
+            return fallback;
+        }
         try {
-            return future.get();
-        } catch (InterruptedException ex) {
-            Thread.currentThread().interrupt();
-            throw ex;
+            return Enum.valueOf(type, value);
+        } catch (IllegalArgumentException ex) {
+            return fallback;
         }
     }
 }

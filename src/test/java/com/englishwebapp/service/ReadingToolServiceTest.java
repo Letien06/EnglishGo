@@ -2,17 +2,13 @@ package com.englishwebapp.service;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import com.englishwebapp.dto.ReadingToolRequest;
 import com.englishwebapp.entity.ReadingFavorite;
-import com.englishwebapp.entity.User;
-import com.englishwebapp.repository.ReadingFavoriteRepository;
-import com.englishwebapp.repository.ReadingNoteRepository;
-import com.englishwebapp.repository.ReadingProgressRepository;
-import com.englishwebapp.repository.ReadingVocabBasketRepository;
-import com.englishwebapp.repository.UserRepository;
+import com.englishwebapp.service.firestore.FirestoreReadingStore;
 import java.util.Optional;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -24,19 +20,7 @@ import org.mockito.junit.jupiter.MockitoExtension;
 class ReadingToolServiceTest {
 
     @Mock
-    private ReadingNoteRepository readingNoteRepository;
-
-    @Mock
-    private ReadingFavoriteRepository readingFavoriteRepository;
-
-    @Mock
-    private ReadingVocabBasketRepository readingVocabBasketRepository;
-
-    @Mock
-    private ReadingProgressRepository readingProgressRepository;
-
-    @Mock
-    private UserRepository userRepository;
+    private FirestoreReadingStore readingStore;
 
     @InjectMocks
     private ReadingToolService service;
@@ -52,36 +36,33 @@ class ReadingToolServiceTest {
 
     @Test
     void toggleFavoriteCreatesFavoriteWhenMissing() {
-        User user = new User();
-        user.setId(7L);
-        when(readingFavoriteRepository.findByUserIdAndItemId(7L, "item-1")).thenReturn(Optional.empty());
-        when(userRepository.findById(7L)).thenReturn(Optional.of(user));
+        when(readingStore.findFavorite("uid-7", "item-1")).thenReturn(Optional.empty());
 
-        var response = service.toggleFavorite(7L, request());
+        var response = service.toggleFavorite("uid-7", request());
 
         assertThat(response.saved()).isTrue();
         assertThat(response.favorite()).isTrue();
-        verify(readingFavoriteRepository).save(any(ReadingFavorite.class));
+        verify(readingStore).saveFavorite(eq("uid-7"), any(ReadingFavorite.class));
     }
 
     @Test
     void toggleFavoriteDeletesFavoriteWhenExisting() {
         ReadingFavorite existing = new ReadingFavorite();
-        when(readingFavoriteRepository.findByUserIdAndItemId(7L, "item-1")).thenReturn(Optional.of(existing));
+        when(readingStore.findFavorite("uid-7", "item-1")).thenReturn(Optional.of(existing));
 
-        var response = service.toggleFavorite(7L, request());
+        var response = service.toggleFavorite("uid-7", request());
 
         assertThat(response.saved()).isTrue();
         assertThat(response.favorite()).isFalse();
-        verify(readingFavoriteRepository).delete(existing);
+        verify(readingStore).deleteFavorite("uid-7", "item-1");
     }
 
     @Test
     void resetLevelDeletesProgressForPartAndLevel() {
-        var response = service.resetLevel(7L, request());
+        var response = service.resetLevel("uid-7", request());
 
         assertThat(response.saved()).isTrue();
-        verify(readingProgressRepository).deleteByUserIdAndPartAndLevel(7L, 5, 2);
+        verify(readingStore).deleteProgressByPartAndLevel("uid-7", 5, 2);
     }
 
     private ReadingToolRequest request() {

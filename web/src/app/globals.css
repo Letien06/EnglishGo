@@ -1,0 +1,195 @@
+@import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:ital,wght@0,400;0,500;0,600;0,700;0,800;1,500;1,600&family=Fraunces:ital,opsz,wght@0,9..144,500;0,9..144,600;0,9..144,700;1,9..144,500&family=Be+Vietnam+Pro:wght@300;400;500;600;700;800&family=Manrope:wght@500;600;700;800&display=swap');
+@import "tailwindcss";
+
+/* ── QUÝ NGỮ BRAND TOKENS — Dark (default) ── */
+:root {
+  color-scheme: dark;
+  --s0: #0B0A0C;
+  --s1: #151217;
+  --s2: #1B171D;
+  --s3: #100D12;
+  --ink: #ECE4D3;
+  --ink2: #D6CCB8;
+  --ink3: #C4BAA4;
+  --mut: #8F8676;
+  --gold: #E0A744;
+  --gold2: #F2C66A;
+  --gold-deep: #B0801F;
+  --gold-ink: #1A1408;
+  --jade: #2A8C6A;
+  --jade2: #6BC79E;
+  --jade3: #8FE0BA;
+  --crimson: #C8364A;
+  --crimson2: #F0A0A8;
+  --crimson3: #DC6878;
+  --plum: #8A55A0;
+  --plum2: #C29AD0;
+  --terracotta: #D26A3D;
+  --terracotta2: #EAA681;
+  --azure: #3D7AB0;
+  --azure2: #80B4D8;
+  --celadon: #5A9985;
+  --celadon2: #9CD3C2;
+  --glass: rgba(21, 18, 23, 0.94);
+  --glass-soft: rgba(21, 18, 23, 0.80);
+  --plum-soft: rgba(107, 70, 115, 0.20);
+  --terracotta-soft: rgba(182, 96, 58, 0.18);
+  --azure-soft: rgba(46, 90, 120, 0.22);
+  --celadon-soft: rgba(74, 122, 107, 0.20);
+  --qn-hairline: rgba(198, 161, 91, 0.18);
+  --qn-gold-glow: 0 0 0 1px rgba(198, 161, 91, 0.35), 0 0 18px rgba(198, 161, 91, 0.22);
+  --primary-soft: rgba(198, 161, 91, 0.14);
+  --bg: var(--s0);
+  --surface: var(--s1);
+  --surface-soft: var(--s2);
+  --line: var(--qn-hairline);
+  --text: var(--ink);
+  --muted: var(--mut);
+  --primary: var(--gold);
+  --primary-dark: var(--gold2);
+  --accent: var(--gold2);
+  --danger: var(--crimson);
+  --success: var(--jade);
+  --shadow: 0 18px 50px rgba(0, 0, 0, 0.45);
+}
+
+/* ── LIGHT THEME ── */
+[data-theme="light"] {
+  color-scheme: light;
+  --s0: #F4F6FB;
+  --s1: #FFFFFF;
+  --s2: #EDF1F8;
+  --s3: #F8FAFD;
+  --ink: #0F1B2D;
+  --ink2: #3A4A63;
+  --ink3: #5A6B82;
+  --mut: #7A8699;
+  --gold: #E0952B;
+  --gold2: #C77F1A;
+  --gold-deep: #A46713;
+  --gold-ink: #1A1304;
+  --jade: #0F9D6E;
+  --jade2: #0B7E58;
+  --jade3: #076144;
+  --crimson: #E11D48;
+  --crimson2: #BE123C;
+  --crimson3: #E11D48;
+  --plum: #9333EA;
+  --plum2: #7E22CE;
+  --terracotta: #EA580C;
+  --terracotta2: #C2410C;
+  --azure: #2563EB;
+  --azure2: #1D4ED8;
+  --celadon: #06B6D4;
+  --celadon2: #0891B2;
+  --plum-soft: rgba(147, 51, 234, 0.10);
+  --terracotta-soft: rgba(234, 88, 12, 0.10);
+  --azure-soft: rgba(37, 99, 235, 0.10);
+  --celadon-soft: rgba(6, 182, 212, 0.10);
+  --glass: rgba(255, 255, 255, 0.78);
+  --glass-soft: rgba(255, 255, 255, 0.65);
+  --qn-hairline: rgba(15, 27, 45, 0.08);
+  --primary-soft: rgba(224, 149, 43, 0.12);
+  --qn-gold-glow: 0 0 0 1px rgba(224, 149, 43, 0.35), 0 0 18px rgba(224, 149, 43, 0.20);
+  --shadow: 0 6px 24px rgba(15, 27, 45, 0.08), 0 1px 2px rgba(15, 27, 45, 0.04);
+  --bg: var(--s0);
+  --surface: var(--s1);
+  --surface-soft: var(--s2);
+  --line: var(--qn-hairline);
+  --text: var(--ink);
+  --muted: var(--mut);
+  --primary: var(--gold);
+  --primary-dark: var(--gold2);
+  --accent: var(--gold2);
+  --danger: var(--crimson);
+  --success: var(--jade);
+}
+
+/* ── Tailwind v4 @theme ── */
+@theme inline {
+  --color-bg: var(--bg);
+  --color-surface: var(--surface);
+  --color-surface-soft: var(--surface-soft);
+  --color-ink: var(--ink);
+  --color-ink2: var(--ink2);
+  --color-ink3: var(--ink3);
+  --color-muted: var(--muted);
+  --color-primary: var(--primary);
+  --color-primary-dark: var(--primary-dark);
+  --color-accent: var(--accent);
+  --color-gold: var(--gold);
+  --color-gold2: var(--gold2);
+  --color-gold-deep: var(--gold-deep);
+  --color-gold-ink: var(--gold-ink);
+  --color-jade: var(--jade);
+  --color-jade2: var(--jade2);
+  --color-crimson: var(--crimson);
+  --color-crimson2: var(--crimson2);
+  --color-plum: var(--plum);
+  --color-plum2: var(--plum2);
+  --color-terracotta: var(--terracotta);
+  --color-terracotta2: var(--terracotta2);
+  --color-azure: var(--azure);
+  --color-azure2: var(--azure2);
+  --color-celadon: var(--celadon);
+  --color-celadon2: var(--celadon2);
+  --color-danger: var(--danger);
+  --color-success: var(--success);
+  --color-line: var(--line);
+  --color-glass: var(--glass);
+  --color-glass-soft: var(--glass-soft);
+  --font-display: "Plus Jakarta Sans", "Be Vietnam Pro", Inter, ui-sans-serif, system-ui, sans-serif;
+  --font-serif: "Fraunces", "Times New Roman", Georgia, serif;
+  --font-body: "Be Vietnam Pro", "Plus Jakarta Sans", Inter, ui-sans-serif, system-ui, sans-serif;
+  --font-ui: "Plus Jakarta Sans", "Manrope", Inter, ui-sans-serif, system-ui, sans-serif;
+}
+
+/* ── BASE ── */
+html {
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  text-rendering: optimizeLegibility;
+}
+body {
+  font-family: var(--font-body);
+  font-feature-settings: "ss01", "cv11";
+  font-weight: 400;
+  line-height: 1.62;
+  letter-spacing: -0.005em;
+  background: var(--bg);
+  color: var(--text);
+}
+h1, h2, h3, h4, h5 {
+  font-family: var(--font-display);
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  line-height: 1.18;
+}
+
+/* ── LIGHT CARD SHADOW ── */
+[data-theme="light"] .card-elevated {
+  background: var(--surface);
+  border: 1px solid var(--line);
+  box-shadow: 0 1px 2px rgba(15, 27, 45, 0.04), 0 8px 24px rgba(15, 27, 45, 0.06);
+}
+
+/* ── PROGRESS BAR ── */
+.progress-bar {
+  height: 6px;
+  border-radius: 999px;
+  background: var(--surface-soft);
+  overflow: hidden;
+}
+.progress-bar > span {
+  display: block;
+  height: 100%;
+  border-radius: 999px;
+  background: var(--primary);
+  transition: width 0.4s ease;
+}
+
+/* ── SCROLLBAR (dark theme) ── */
+::-webkit-scrollbar { width: 6px; height: 6px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: var(--muted); border-radius: 999px; }
+::-webkit-scrollbar-thumb:hover { background: var(--ink3); }

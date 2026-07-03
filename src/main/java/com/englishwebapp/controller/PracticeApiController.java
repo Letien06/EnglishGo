@@ -9,6 +9,7 @@ import com.englishwebapp.security.AppUserPrincipal;
 import com.englishwebapp.service.PracticeSubmissionService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
+import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -16,6 +17,7 @@ import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.server.ResponseStatusException;
 
 @RestController
 @RequestMapping("/api/practice")
@@ -30,7 +32,7 @@ public class PracticeApiController {
             @AuthenticationPrincipal AppUserPrincipal user,
             @Valid @RequestBody DraftAnswerRequest request) {
         return ResponseEntity.ok(ApiResponse.ok(
-                practiceSubmissionService.saveDraft(user.id(), testId, request.payload())));
+                practiceSubmissionService.saveDraft(uid(user), testId, request.payload())));
     }
 
     @PostMapping("/tests/{testId}/submit")
@@ -39,6 +41,13 @@ public class PracticeApiController {
             @AuthenticationPrincipal AppUserPrincipal user,
             @Valid @RequestBody PracticeSubmissionRequest request) {
         return ResponseEntity.ok(ApiResponse.ok(
-                practiceSubmissionService.submit(user.id(), testId, request)));
+                practiceSubmissionService.submit(uid(user), testId, request)));
+    }
+
+    private String uid(AppUserPrincipal user) {
+        if (user == null) {
+            throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Login required");
+        }
+        return user.firebaseUid();
     }
 }

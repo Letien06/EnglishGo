@@ -1,0 +1,32 @@
+rules_version = '2';
+
+service firebase.storage {
+  match /b/{bucket}/o {
+    function signedIn() {
+      return request.auth != null;
+    }
+
+    match /audio/{fileName} {
+      allow read: if true;
+      allow write: if signedIn()
+        && request.resource.contentType in [
+          'audio/mpeg',
+          'audio/mp3',
+          'audio/x-mpeg'
+        ];
+    }
+
+    match /images/{fileName} {
+      allow read: if true;
+      allow write: if signedIn()
+        && request.resource.contentType in [
+          'image/jpeg',
+          'image/png'
+        ];
+    }
+
+    match /{allPaths=**} {
+      allow read, write: if false;
+    }
+  }
+}

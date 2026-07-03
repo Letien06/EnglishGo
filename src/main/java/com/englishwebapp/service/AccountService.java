@@ -5,18 +5,15 @@ import com.englishwebapp.dto.AccountSettingsView;
 import com.englishwebapp.dto.PasswordChangeForm;
 import com.englishwebapp.entity.User;
 import com.englishwebapp.entity.UserRole;
-import com.google.api.core.ApiFuture;
+import com.englishwebapp.service.firestore.FirestoreSupport;
 import com.google.cloud.firestore.DocumentSnapshot;
-import com.google.cloud.firestore.Firestore;
+import com.google.cloud.firestore.FieldValue;
 import com.google.cloud.firestore.SetOptions;
 import com.google.firebase.auth.FirebaseAuth;
 import com.google.firebase.auth.FirebaseAuthException;
 import com.google.firebase.auth.UserRecord;
-import java.time.Instant;
 import java.util.LinkedHashMap;
 import java.util.Map;
-import java.util.Optional;
-import java.util.concurrent.ExecutionException;
 import lombok.RequiredArgsConstructor;
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.http.HttpStatus;
@@ -28,35 +25,30 @@ import org.springframework.web.server.ResponseStatusException;
 @RequiredArgsConstructor
 public class AccountService {
 
-    private static final String USERS_COLLECTION = "users";
-
-    private final ObjectProvider<Firestore> firestoreProvider;
+    private final FirestoreSupport firestoreSupport;
     private final ObjectProvider<FirebaseAuth> firebaseAuthProvider;
 
-    public AccountSettingsView getSettings(Long userId) {
-        User user = findUser(userId);
+    public AccountSettingsView getSettings(String uid) {
+        User user = findUser(uid);
         return new AccountSettingsView(
                 user.getEmail(),
                 user.getRole().name(),
                 toForm(user));
     }
 
-    public User updateSettings(Long userId, AccountSettingsForm form) {
-        User user = findUser(userId);
+    public User updateSettings(String uid, AccountSettingsForm form) {
+        User user = findUser(uid);
         String displayName = form.getDisplayName().trim();
         String avatarUrl = cleanOptional(form.getAvatarUrl());
 
         Map<String, Object> data = new LinkedHashMap<>();
         data.put("displayName", displayName);
         data.put("avatarUrl", avatarUrl);
-        data.put("updatedAtMillis", Instant.now().toEpochMilli());
+        data.put("updatedAt", FieldValue.serverTimestamp());
         try {
-            await(firestore()
-                    .collection(USERS_COLLECTION)
-                    .document(user.getFirebaseUid())
-                    .set(data, SetOptions.merge()));
+            firestoreSupport.await(firestoreSupport.userDocument(uid).set(data, SetOptions.merge()));
         } catch (Exception ex) {
-            throw new ResponseStatusException(HttpStatus.SERVICE_UNAVAILABLE, "Could not update account profile", ex);
+            throw firestoreSupport.failure("Could not update account profile", ex);
         }
 
         user.setDisplayName(displayName);
@@ -64,8 +56,8 @@ public class AccountService {
         return user;
     }
 
-    public void changePassword(Long userId, PasswordChangeForm form) {
-        User user = findUser(userId);
+    public void changePassword(String uid, PasswordChangeForm form) {
+        User user = findUser(uid);
         FirebaseAuth firebaseAuth = firebaseAuthProvider.getIfAvailable();
         if (firebaseAuth == null) {
             throw new ResponseStatusException(HttpStatus.SERVICE_UNAVAILABLE, "Firebase authentication SDK is not configured");
@@ -79,26 +71,22 @@ public class AccountService {
         }
     }
 
-    private User findUser(Long userId) {
-        if (userId == null) {
-            throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "User not found");
-        }
+    private User findUser(String uid) {
         try {
-            return await(firestore().collection(USERS_COLLECTION).get()).getDocuments().stream()
-                    .filter(snapshot -> userId.equals(longValue(snapshot, "id")))
-                    .findFirst()
-                    .map(this::toUser)
-                    .orElseThrow(() -> new ResponseStatusException(HttpStatus.UNAUTHORIZED, "User not found"));
+            DocumentSnapshot snapshot = firestoreSupport.await(firestoreSupport.userDocument(uid).get());
+            if (!snapshot.exists()) {
+                throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "User not found");
+            }
+            return toUser(snapshot);
         } catch (ResponseStatusException ex) {
             throw ex;
         } catch (Exception ex) {
-            throw new ResponseStatusException(HttpStatus.SERVICE_UNAVAILABLE, "Could not load account profile", ex);
+            throw firestoreSupport.failure("Could not load account profile", ex);
         }
     }
 
     private User toUser(DocumentSnapshot snapshot) {
         User user = new User();
-        user.setId(longValue(snapshot, "id"));
         user.setFirebaseUid(defaultString(stringValue(snapshot, "firebaseUid"), snapshot.getId()));
         user.setEmail(defaultString(stringValue(snapshot, "email"), user.getFirebaseUid() + "@firebase.local"));
         user.setDisplayName(stringValue(snapshot, "displayName"));
@@ -112,31 +100,6 @@ public class AccountService {
         form.setDisplayName(StringUtils.hasText(user.getDisplayName()) ? user.getDisplayName() : user.getEmail());
         form.setAvatarUrl(user.getAvatarUrl());
         return form;
-    }
-
-    private Firestore firestore() {
-        return Optional.ofNullable(firestoreProvider.getIfAvailable())
-                .orElseThrow(() -> new ResponseStatusException(HttpStatus.SERVICE_UNAVAILABLE, "Firestore is not configured"));
-    }
-
-    private <T> T await(ApiFuture<T> future) throws InterruptedException, ExecutionException {
-        try {
-            return future.get();
-        } catch (InterruptedException ex) {
-            Thread.currentThread().interrupt();
-            throw ex;
-        }
-    }
-
-    private Long longValue(DocumentSnapshot snapshot, String field) {
-        Object value = snapshot.get(field);
-        if (value instanceof Number number) {
-            return number.longValue();
-        }
-        if (value instanceof String text && StringUtils.hasText(text)) {
-            return Long.parseLong(text);
-        }
-        return null;
     }
 
     private String stringValue(DocumentSnapshot snapshot, String field) {

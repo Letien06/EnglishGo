@@ -1,0 +1,25 @@
+{
+  "$schema": "https://openapi.vercel.sh/vercel.json",
+  "framework": "nextjs",
+  "regions": ["sin1"],
+  "functions": {
+    "src/app/api/**/*/route.ts": {
+      "maxDuration": 30
+    },
+    "src/app/api/admin/dautoeic-sync/route.ts": {
+      "maxDuration": 60
+    },
+    "src/app/api/admin/media/route.ts": {
+      "maxDuration": 60
+    },
+    "src/app/api/vocab/sets/[setId]/ai-words/preview/route.ts": {
+      "maxDuration": 60
+    }
+  },
+  "crons": [
+    {
+      "path": "/api/admin/dautoeic-sync",
+      "schedule": "0 20 * * *"
+    }
+  ]
+}

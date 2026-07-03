@@ -6,7 +6,6 @@ import org.slf4j.LoggerFactory;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.authentication.BadCredentialsException;
-import org.springframework.transaction.CannotCreateTransactionException;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
@@ -37,14 +36,6 @@ public class GlobalExceptionHandler {
         return ResponseEntity.status(ex.getStatusCode()).body(ApiResponse.error(ex.getReason()));
     }
 
-    @ExceptionHandler(CannotCreateTransactionException.class)
-    public ResponseEntity<ApiResponse<Void>> handleCannotCreateTransaction(CannotCreateTransactionException ex) {
-        Throwable rootCause = rootCause(ex);
-        log.error("Database transaction failure: {}", rootCause.getMessage(), ex);
-        return ResponseEntity.status(HttpStatus.SERVICE_UNAVAILABLE)
-                .body(ApiResponse.error("Database connection failed: " + safeMessage(rootCause)));
-    }
-
     @ExceptionHandler(Exception.class)
     public ResponseEntity<ApiResponse<Void>> handleUnexpected(Exception ex) {
         log.error("Unhandled request failure", ex);
@@ -52,19 +43,4 @@ public class GlobalExceptionHandler {
                 .body(ApiResponse.error("Server error: " + ex.getClass().getSimpleName()));
     }
 
-    private Throwable rootCause(Throwable throwable) {
-        Throwable current = throwable;
-        while (current.getCause() != null && current.getCause() != current) {
-            current = current.getCause();
-        }
-        return current;
-    }
-
-    private String safeMessage(Throwable throwable) {
-        String message = throwable.getMessage();
-        if (message == null || message.isBlank()) {
-            return throwable.getClass().getSimpleName();
-        }
-        return message.replaceAll("(?i)(password=)[^\\s&]+", "$1[hidden]");
-    }
 }

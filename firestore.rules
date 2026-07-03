@@ -1,0 +1,56 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+    function signedIn() {
+      return request.auth != null;
+    }
+
+    function isOwner(uid) {
+      return signedIn() && request.auth.uid == uid;
+    }
+
+    match /users/{uid} {
+      allow create, read, update: if isOwner(uid);
+      allow delete: if false;
+
+      match /{subcollection}/{docId} {
+        allow read, write: if isOwner(uid);
+      }
+    }
+
+    match /vocabSets/{setId} {
+      allow read: if resource.data.status == 'PUBLISHED';
+      allow write: if false;
+    }
+
+    match /vocabWords/{wordId} {
+      allow read: if true;
+      allow write: if false;
+    }
+
+    match /vocabFolders/{folderId} {
+      allow read: if resource.data.publicShared == true;
+      allow write: if false;
+    }
+
+    match /targets/{targetId}/comments/{commentId} {
+      allow read: if true;
+      allow write: if false;
+    }
+
+    match /leaderboards/{period}/entries/{uid} {
+      allow read: if true;
+      allow write: if false;
+    }
+
+    match /mediaAssets/{assetId} {
+      allow read: if true;
+      allow write: if false;
+    }
+
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}

@@ -11,6 +11,7 @@ import com.englishwebapp.dto.DauToeicSetResponse;
 import com.englishwebapp.dto.DauToeicTestResponse;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.node.JsonNodeFactory;
+import jakarta.annotation.PostConstruct;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.Comparator;
@@ -20,6 +21,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import lombok.RequiredArgsConstructor;
+import org.springframework.cache.annotation.Cacheable;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
@@ -40,6 +42,23 @@ public class DauToeicClientService {
 
     private final AppProperties appProperties;
 
+    /** Shared RestClient — built once at startup, reused across requests. */
+    private RestClient restClient;
+
+    @PostConstruct
+    void initRestClient() {
+        AppProperties.DauToeic config = appProperties.getDautoeic();
+        if (StringUtils.hasText(config.getSupabaseUrl()) && StringUtils.hasText(config.getAnonKey())) {
+            this.restClient = RestClient.builder()
+                    .baseUrl(config.getSupabaseUrl())
+                    .defaultHeader("apikey", config.getAnonKey())
+                    .defaultHeader(HttpHeaders.AUTHORIZATION, "Bearer " + config.getAnonKey())
+                    .defaultHeader(HttpHeaders.ACCEPT, "application/json")
+                    .build();
+        }
+    }
+
+    @Cacheable(value = "dautoeic-sets")
     public List<DauToeicSetResponse> listSets() {
         JsonNode rows = get("/rest/v1/mock_test_sets", builder -> builder
                 .queryParam("select", "id,name,description,order_index")
@@ -56,6 +75,7 @@ public class DauToeicClientService {
         return sets;
     }
 
+    @Cacheable(value = "dautoeic-tests", key = "#setId ?: 'all'")
     public List<DauToeicTestResponse> listTests(String setId) {
         JsonNode rows = get("/rest/v1/mock_tests", builder -> {
             builder.queryParam("select", "*,mock_test_sets(name)")
@@ -73,6 +93,7 @@ public class DauToeicClientService {
         return tests;
     }
 
+    @Cacheable(value = "dautoeic-test", key = "#testId")
     public DauToeicTestResponse getTest(String testId) {
         requireId(testId, "testId");
         JsonNode rows = get("/rest/v1/mock_tests", builder -> builder
@@ -109,11 +130,13 @@ public class DauToeicClientService {
         return new DauToeicPartResponse(test, part, part <= 4 ? "listening" : "reading", passages, questions);
     }
 
+    @Cacheable(value = "dautoeic-difficulty-levels", key = "#part")
     public List<DauToeicDifficultyLevelResponse> listDifficultyLevels(int part) {
         requireListeningPart(part);
         return difficultyLevels(part, practiceStats(part));
     }
 
+    @Cacheable(value = "dautoeic-reading-difficulty-levels", key = "#part")
     public List<DauToeicDifficultyLevelResponse> listReadingDifficultyLevels(int part) {
         requireReadingPart(part);
         return difficultyLevels(part, practiceStats(part));
@@ -171,11 +194,13 @@ public class DauToeicClientService {
         return levels;
     }
 
+    @Cacheable(value = "dautoeic-difficulty-session", key = "#part + '-' + #level + '-' + (#limit ?: 'all')")
     public DauToeicDifficultySessionResponse getDifficultySession(int part, int level, Integer limit) {
         requireListeningPart(part);
         return difficultySession(part, level, limit);
     }
 
+    @Cacheable(value = "dautoeic-reading-difficulty-session", key = "#part + '-' + #level + '-' + (#limit ?: 'all')")
     public DauToeicDifficultySessionResponse getReadingDifficultySession(int part, int level, Integer limit) {
         requireReadingPart(part);
         return difficultySession(part, level, limit);
@@ -451,18 +476,9 @@ public class DauToeicClientService {
     }
 
     private JsonNode get(String path, java.util.function.Function<UriBuilder, UriBuilder> uriCustomizer) {
-        AppProperties.DauToeic config = appProperties.getDautoeic();
-        if (!StringUtils.hasText(config.getSupabaseUrl()) || !StringUtils.hasText(config.getAnonKey())) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Dau TOEIC API is not configured");
-        }
+        requireConfigured();
         try {
-            JsonNode response = RestClient.builder()
-                    .baseUrl(config.getSupabaseUrl())
-                    .defaultHeader("apikey", config.getAnonKey())
-                    .defaultHeader(HttpHeaders.AUTHORIZATION, "Bearer " + config.getAnonKey())
-                    .defaultHeader(HttpHeaders.ACCEPT, "application/json")
-                    .build()
-                    .get()
+            JsonNode response = restClient.get()
                     .uri(builder -> uriCustomizer.apply(builder.path(path)).build())
                     .retrieve()
                     .body(JsonNode.class);
@@ -478,18 +494,9 @@ public class DauToeicClientService {
     }
 
     private JsonNode post(String path, JsonNode body) {
-        AppProperties.DauToeic config = appProperties.getDautoeic();
-        if (!StringUtils.hasText(config.getSupabaseUrl()) || !StringUtils.hasText(config.getAnonKey())) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Dau TOEIC API is not configured");
-        }
+        requireConfigured();
         try {
-            JsonNode response = RestClient.builder()
-                    .baseUrl(config.getSupabaseUrl())
-                    .defaultHeader("apikey", config.getAnonKey())
-                    .defaultHeader(HttpHeaders.AUTHORIZATION, "Bearer " + config.getAnonKey())
-                    .defaultHeader(HttpHeaders.ACCEPT, "application/json")
-                    .build()
-                    .post()
+            JsonNode response = restClient.post()
                     .uri(path)
                     .body(body)
                     .retrieve()
@@ -537,6 +544,12 @@ public class DauToeicClientService {
 
     private String stripTrailingSlash(String value) {
         return value == null ? "" : value.replaceAll("/+$", "");
+    }
+
+    private void requireConfigured() {
+        if (restClient == null) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Dau TOEIC API is not configured");
+        }
     }
 
     private void requireId(String value, String fieldName) {

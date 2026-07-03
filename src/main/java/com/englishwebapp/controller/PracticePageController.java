@@ -78,7 +78,10 @@ public class PracticePageController {
             @PathVariable Long testId,
             @AuthenticationPrincipal AppUserPrincipal user,
             Model model) {
-        model.addAttribute("session", practiceQueryService.getPracticeSession(testId, user.id()));
+        if (user == null) {
+            return "redirect:/login?redirect=/tests/" + testId + "/practice";
+        }
+        model.addAttribute("session", practiceQueryService.getPracticeSession(testId, user.firebaseUid()));
         return "practice/session";
     }
 
@@ -95,7 +98,10 @@ public class PracticePageController {
             @PathVariable Long attemptId,
             @AuthenticationPrincipal AppUserPrincipal user,
             Model model) {
-        model.addAttribute("review", practiceQueryService.getAttemptReview(attemptId, user.id()));
+        if (user == null) {
+            return "redirect:/login?redirect=/history";
+        }
+        model.addAttribute("review", practiceQueryService.getAttemptReview(attemptId, user.firebaseUid()));
         return "practice/review";
     }
 
@@ -104,7 +110,10 @@ public class PracticePageController {
             @AuthenticationPrincipal AppUserPrincipal user,
             @PageableDefault(size = 10) Pageable pageable,
             Model model) {
-        model.addAttribute("attempts", practiceQueryService.getHistory(user.id(), pageable));
+        if (user == null) {
+            return "redirect:/login?redirect=/history";
+        }
+        model.addAttribute("attempts", practiceQueryService.getHistory(user.firebaseUid(), pageable));
         return "practice/history";
     }
 }

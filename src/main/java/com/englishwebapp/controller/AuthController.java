@@ -57,7 +57,7 @@ public class AuthController {
             return ResponseEntity.ok(ApiResponse.ok(null));
         }
         return ResponseEntity.ok(ApiResponse.ok(new AuthenticatedUserResponse(
-                user.id(),
+                user.firebaseUid(),
                 user.email(),
                 user.displayName(),
                 user.role().name())));

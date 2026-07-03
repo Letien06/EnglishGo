@@ -29,7 +29,7 @@ public class ListeningProgressController {
             @AuthenticationPrincipal AppUserPrincipal user,
             @RequestBody ListeningProgressRequest request) {
         return ResponseEntity.ok(ApiResponse.ok(listeningProgressService.record(
-                user == null ? null : user.id(),
+                user == null ? null : user.firebaseUid(),
                 request)));
     }
 
@@ -37,27 +37,27 @@ public class ListeningProgressController {
     public ResponseEntity<ApiResponse<ListeningToolResponse>> notes(
             @AuthenticationPrincipal AppUserPrincipal user,
             @RequestBody ListeningToolRequest request) {
-        return ResponseEntity.ok(ApiResponse.ok(listeningToolService.saveNote(user == null ? null : user.id(), request)));
+        return ResponseEntity.ok(ApiResponse.ok(listeningToolService.saveNote(user == null ? null : user.firebaseUid(), request)));
     }
 
     @PostMapping("/favorites")
     public ResponseEntity<ApiResponse<ListeningToolResponse>> favorites(
             @AuthenticationPrincipal AppUserPrincipal user,
             @RequestBody ListeningToolRequest request) {
-        return ResponseEntity.ok(ApiResponse.ok(listeningToolService.toggleFavorite(user == null ? null : user.id(), request)));
+        return ResponseEntity.ok(ApiResponse.ok(listeningToolService.toggleFavorite(user == null ? null : user.firebaseUid(), request)));
     }
 
     @PostMapping("/vocab-basket")
     public ResponseEntity<ApiResponse<ListeningToolResponse>> vocabBasket(
             @AuthenticationPrincipal AppUserPrincipal user,
             @RequestBody ListeningToolRequest request) {
-        return ResponseEntity.ok(ApiResponse.ok(listeningToolService.addVocab(user == null ? null : user.id(), request)));
+        return ResponseEntity.ok(ApiResponse.ok(listeningToolService.addVocab(user == null ? null : user.firebaseUid(), request)));
     }
 
     @PostMapping("/reset")
     public ResponseEntity<ApiResponse<ListeningToolResponse>> reset(
             @AuthenticationPrincipal AppUserPrincipal user,
             @RequestBody ListeningToolRequest request) {
-        return ResponseEntity.ok(ApiResponse.ok(listeningToolService.resetLevel(user == null ? null : user.id(), request)));
+        return ResponseEntity.ok(ApiResponse.ok(listeningToolService.resetLevel(user == null ? null : user.firebaseUid(), request)));
     }
 }

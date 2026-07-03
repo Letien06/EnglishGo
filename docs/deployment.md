@@ -1,85 +1,117 @@
 # Deployment
 
-This project is a Spring Boot application. For Vercel, deploy it as a container using `Dockerfile.vercel`. For Supabase, use the PostgreSQL database connection with the `prod` Spring profile.
+EnglishWebApp now deploys from the `web/` Next.js application to Vercel. The legacy Spring Boot code remains in the repository during the strangler migration, but production traffic should point at the Vercel Next.js app.
 
-## Supabase
+## Architecture
 
-Create a Supabase project and copy the PostgreSQL connection details from the project settings. Use the JDBC URL form:
+- Runtime: Next.js App Router, TypeScript, Tailwind.
+- Hosting: Vercel, project root directory `web`.
+- Auth: Firebase Authentication with httpOnly session cookies.
+- Database: Cloud Firestore through Firebase Admin SDK.
+- Media: Firebase Storage. Uploaded media is served from Firebase Storage URLs, not from the app filesystem.
+- AI: Gemini API for vocabulary generation and writing-related flows.
+- External TOEIC source: DauToeic Supabase REST API for practice/listening/reading content.
 
-```text
-jdbc:postgresql://db.<project-ref>.supabase.co:5432/postgres?sslmode=require
-```
+## Required Vercel Variables
 
-Set these environment variables in the hosting provider:
-
-```text
-SPRING_PROFILES_ACTIVE=prod
-DATABASE_URL=jdbc:postgresql://db.<project-ref>.supabase.co:5432/postgres?sslmode=require
-DATABASE_USERNAME=postgres
-DATABASE_PASSWORD=<supabase-database-password>
-DATABASE_POOL_SIZE=5
-```
-
-On first startup, Flyway runs the PostgreSQL migrations from:
+Set these variables in the Vercel project for Production and Preview as appropriate:
 
 ```text
-src/main/resources/db/migration/postgresql
-```
+FIREBASE_SERVICE_ACCOUNT_JSON=<one-line-service-account-json>
+FIREBASE_PROJECT_ID=englishwebapp-67ab4
+FIREBASE_STORAGE_BUCKET=<bucket-name-if-not-default>
 
-## Vercel
+NEXT_PUBLIC_FIREBASE_WEB_API_KEY=<firebase-web-api-key>
+NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN=<firebase-auth-domain>
+NEXT_PUBLIC_FIREBASE_PROJECT_ID=englishwebapp-67ab4
+NEXT_PUBLIC_FIREBASE_APP_ID=<firebase-web-app-id>
 
-This repo includes `Dockerfile.vercel` for Vercel's container-based deployment path. Required Vercel project environment variables:
-
-```text
-SPRING_PROFILES_ACTIVE=prod
-DATABASE_URL=jdbc:postgresql://db.<project-ref>.supabase.co:5432/postgres?sslmode=require
-DATABASE_USERNAME=postgres
-DATABASE_PASSWORD=<supabase-database-password>
-DATABASE_POOL_SIZE=5
-FIREBASE_WEB_API_KEY=<firebase-web-api-key>
-FIREBASE_AUTH_DOMAIN=<firebase-auth-domain>
-FIREBASE_PROJECT_ID=<firebase-project-id>
-FIREBASE_APP_ID=<firebase-app-id>
-FIREBASE_SERVICE_ACCOUNT_JSON=<firebase-service-account-json-one-line>
 GEMINI_API_KEY=<gemini-api-key>
 GEMINI_MODEL=gemini-2.5-flash
-MEDIA_BASE_URL=https://<vercel-domain>/media
+ADMIN_EMAILS=<comma-separated-admin-emails>
+
+DAUTOEIC_SUPABASE_URL=https://qfhmnlvgweznzcsoijyr.supabase.co
+DAUTOEIC_ANON_KEY=<dautoeic-anon-key>
+DAUTOEIC_MEDIA_BASE_URL=https://qfhmnlvgweznzcsoijyr.supabase.co/storage/v1/object/public/mock-test-media
+MEDIA_BASE_URL=<optional-firebase-storage-base-url>
 ```
 
-Use `FIREBASE_SERVICE_ACCOUNT_JSON` for production containers. Keep `FIREBASE_SERVICE_ACCOUNT_PATH` for local development only.
+`FIREBASE_STORAGE_BUCKET` is optional only when the default bucket name is correct for the Firebase project. If uploads fail with a bucket error, set it explicitly from Firebase Console.
 
-Deploy with the Vercel CLI after logging in:
+## Local Development
+
+Run all commands from `web/`:
 
 ```powershell
-npm install -g vercel
-vercel login
-vercel --prod
+cd D:\EnglishWebApp\web
+npm install
+npm run dev
 ```
 
-## Local Verification
+Create `web/.env.local` from `web/.env.example` and fill the same Firebase/Gemini/DauToeic values used in Vercel.
+
+## Verification
+
+Before deploying:
 
 ```powershell
-.\mvnw.cmd test
-.\mvnw.cmd -DskipTests package
+cd D:\EnglishWebApp\web
+npm test
+npm run test:e2e
+npm run build
 ```
 
-To test the Vercel container locally, start Docker Desktop first:
+Health check:
+
+```text
+https://englishwebapp.vercel.app/api/health
+```
+
+Expected response:
+
+```json
+{"success":true,"data":{"status":"up"},"error":null}
+```
+
+## Firebase Rules And Indexes
+
+Deploy Firestore rules and indexes from the repo root:
 
 ```powershell
-docker build -f Dockerfile.vercel -t englishwebapp-vercel .
-docker run --rm -p 8080:80 --env-file .env englishwebapp-vercel
+firebase deploy --only firestore:rules
+firebase deploy --only firestore:indexes
+firebase deploy --only storage
 ```
 
-## Railway
+Relevant files:
 
-Use Railway or Render for the Spring Boot application because it is a long-running JVM web server. This repo includes a standard `Dockerfile` for those platforms.
+- `firestore.rules`
+- `firestore.indexes.json`
+- `storage.rules`
 
-For Railway:
+## Vercel Settings
 
-1. Create a Railway project.
-2. Choose **Deploy from GitHub repo** and select `Letien06/EnglishGo`.
-3. Railway should build the root `Dockerfile`.
-4. Add variables from `.env.railway`.
-5. Deploy.
+- Root Directory: `web`
+- Framework Preset: Next.js
+- Region: `sin1` in `web/vercel.json`
+- Serverless function limits are declared in `web/vercel.json`; Gemini and upload endpoints are allowed longer timeouts.
+- Vercel Analytics and Speed Insights are loaded from `web/src/app/layout.tsx`.
 
-Keep Supabase as the PostgreSQL database. Use the Supabase pooler JDBC URL in `DATABASE_URL`.
+After production deploy, inspect Vercel:
+
+- Function logs for failed Firebase/Gemini/DauToeic calls.
+- Analytics and Speed Insights for slow routes.
+- Build output for function size warnings.
+
+## Go-Live Checklist
+
+1. Deploy production from `web/`.
+2. Verify `/api/health`, `/login`, `/hub`, `/vocab`, `/listen`, `/read`, `/practice`, `/community`, `/ai/writing`, `/account`, `/billing`, and `/admin` with appropriate user roles.
+3. Add the custom domain in Vercel and update DNS records at the DNS provider.
+4. Keep `englishwebapp.vercel.app` as a fallback while DNS propagates.
+5. Monitor Vercel logs, Firebase usage, Firestore indexes, and Storage upload/read behavior for several days.
+6. After production is stable, archive or remove the legacy Spring Boot runtime from a dedicated cleanup branch.
+
+## Rollback
+
+Keep the old Spring Boot deployment available until the custom domain has been stable on Vercel for several days. If a critical issue appears, point DNS back to the previous deployment or use Vercel's instant rollback to a known-good deployment.

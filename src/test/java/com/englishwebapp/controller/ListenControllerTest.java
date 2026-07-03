@@ -18,21 +18,17 @@ import com.englishwebapp.security.AppUserPrincipal;
 import com.englishwebapp.security.AuthSessionService;
 import com.englishwebapp.service.DauToeicClientService;
 import com.englishwebapp.service.FirebaseAuthenticationService;
-import com.englishwebapp.service.LearnerContentService;
 import com.englishwebapp.service.ListeningProgressService;
 import com.englishwebapp.service.VocabService;
 import java.util.List;
-import java.util.Map;
 import org.hamcrest.Matchers;
 import org.junit.jupiter.api.AfterEach;
-import org.junit.jupiter.api.BeforeEach;
 import static org.mockito.ArgumentMatchers.eq;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
 import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest;
 import org.springframework.boot.test.mock.mockito.MockBean;
-import org.springframework.data.domain.PageImpl;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.test.web.servlet.MockMvc;
@@ -43,9 +39,6 @@ class ListenControllerTest {
 
     @Autowired
     private MockMvc mockMvc;
-
-    @MockBean
-    private LearnerContentService learnerContentService;
 
     @MockBean
     private DauToeicClientService dauToeicClientService;
@@ -61,13 +54,6 @@ class ListenControllerTest {
 
     @MockBean
     private VocabService vocabService;
-
-    @BeforeEach
-    void setUp() {
-        when(learnerContentService.findPublishedQuestions(any(), any(), any()))
-                .thenReturn(new PageImpl<>(List.of()));
-        when(learnerContentService.findOptionsByQuestionId(any())).thenReturn(Map.of());
-    }
 
     @AfterEach
     void clearSecurityContext() {

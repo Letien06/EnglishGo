@@ -1,0 +1,1402 @@
+/**
+ * Vocabulary service.
+ * Port of `service/VocabService.java` — the core vocabulary domain logic.
+ *
+ * Uses Firebase Admin Firestore directly (no Prisma/SQL).
+ * Collections: vocabSets, vocabWords, vocabFolders, counters
+ * User progress: users/{uid}/userVocabProgress/{wordId}
+ */
+import { adminDb } from "@/lib/firestore/db";
+import { FieldValue } from "firebase-admin/firestore";
+import { randomInt } from "crypto";
+import { BadRequest, Forbidden, NotFound, Unauthorized } from "@/lib/api/response";
+import type {
+  VocabSetDoc,
+  VocabWordDoc,
+  VocabFolderDoc,
+  VocabProgressDoc,
+  VocabSetCard,
+  MyVocabSetCard,
+  MyVocabFolderCard,
+  CommunityVocabFolderCard,
+  CommunityVocabSetCard,
+  VocabProgressSetCard,
+  VocabWordCard,
+  VocabSetDetail,
+  VocabSetSession,
+  AiVocabCandidate,
+  VocabReviewResponse,
+  VocabProgressStatus,
+  ContentStatus,
+  SourceType,
+} from "@/types/vocab";
+import {
+  suggestWordsFromTopic,
+  suggestWordsFromReading,
+  suggestWordsFromImage,
+} from "./gemini";
+import { enrichWithDictionary } from "./dictionary";
+import { parseImportFile, parseDelimitedWords } from "@/lib/parsers/vocab-import";
+
+/* ------------------------------------------------------------------ */
+/*  Collection constants                                               */
+/* ------------------------------------------------------------------ */
+
+const SETS = "vocabSets";
+const WORDS = "vocabWords";
+const FOLDERS = "vocabFolders";
+const PROGRESS = "userVocabProgress";
+const DAILY_NEW_WORD_GOAL = 20;
+
+/* ------------------------------------------------------------------ */
+/*  Query helpers                                                      */
+/* ------------------------------------------------------------------ */
+
+async function publishedSets(): Promise<VocabSetDoc[]> {
+  const snap = await adminDb
+    .collection(SETS)
+    .where("status", "==", "PUBLISHED")
+    .get();
+  return snap.docs
+    .map(toSetDoc)
+    .filter((s) => s.status === "PUBLISHED" && !s.deletedAtMillis);
+}
+
+async function liveFolders(): Promise<VocabFolderDoc[]> {
+  const snap = await adminDb
+    .collection(FOLDERS)
+    .where("deletedAtMillis", "==", null)
+    .get();
+  return snap.docs.map(toFolderDoc).filter((f) => !f.deletedAtMillis);
+}
+
+async function findPublishedSet(setId: number): Promise<VocabSetDoc | null> {
+  const doc = await adminDb.collection(SETS).doc(String(setId)).get();
+  if (!doc.exists) return null;
+  const set = toSetDoc(doc);
+  if (set.status !== "PUBLISHED" || set.deletedAtMillis) return null;
+  return set;
+}
+
+async function wordsForSet(setId: number): Promise<VocabWordDoc[]> {
+  const snap = await adminDb
+    .collection(WORDS)
+    .where("setId", "==", setId)
+    .where("status", "==", "PUBLISHED")
+    .get();
+  return snap.docs
+    .map(toWordDoc)
+    .filter((w) => w.setId === setId && w.status === "PUBLISHED" && !w.deletedAtMillis);
+}
+
+async function wordCountBySetId(setIds: number[]): Promise<Map<number, number>> {
+  const counts = new Map<number, number>();
+  const uniqueIds = [...new Set(setIds)].filter((id) => Number.isFinite(id));
+  for (let i = 0; i < uniqueIds.length; i += 30) {
+    const chunk = uniqueIds.slice(i, i + 30);
+    if (chunk.length === 0) continue;
+    const snap = await adminDb
+      .collection(WORDS)
+      .where("setId", "in", chunk)
+      .where("status", "==", "PUBLISHED")
+      .get();
+    for (const doc of snap.docs) {
+      const word = toWordDoc(doc);
+      if (word.deletedAtMillis) continue;
+      counts.set(word.setId, (counts.get(word.setId) ?? 0) + 1);
+    }
+  }
+  return counts;
+}
+
+async function userProgressDocs(uid: string): Promise<VocabProgressDoc[]> {
+  const snap = await progressCollection(uid).get();
+  return snap.docs.map(toProgressDoc);
+}
+
+function progressCollection(uid: string) {
+  return adminDb
+    .collection("users")
+    .doc(uid)
+    .collection(PROGRESS);
+}
+
+async function countProgress(uid: string): Promise<number> {
+  const snap = await progressCollection(uid).count().get();
+  return snap.data().count;
+}
+
+async function countProgressByStatuses(
+  uid: string,
+  statuses: VocabProgressStatus[],
+): Promise<number> {
+  const snap = await progressCollection(uid)
+    .where("status", "in", statuses)
+    .count()
+    .get();
+  return snap.data().count;
+}
+
+async function progressForSet(
+  uid: string,
+  setId: number,
+): Promise<VocabProgressDoc[]> {
+  const snap = await progressCollection(uid).where("setId", "==", setId).get();
+  return snap.docs.map(toProgressDoc);
+}
+
+async function findProgress(
+  uid: string,
+  wordId: number,
+): Promise<VocabProgressDoc | null> {
+  const doc = await adminDb
+    .collection("users")
+    .doc(uid)
+    .collection(PROGRESS)
+    .doc(String(wordId))
+    .get();
+  if (!doc.exists) return null;
+  return toProgressDoc(doc);
+}
+
+async function saveProgress(progress: VocabProgressDoc): Promise<void> {
+  const data: Record<string, unknown> = {
+    uid: progress.uid,
+    wordId: progress.wordId,
+    setId: progress.setId,
+    status: progress.status,
+    interval: progress.interval,
+    easeFactor: progress.easeFactor,
+    repetitions: progress.repetitions,
+  };
+  if (progress.nextReviewAtMillis != null) {
+    data.nextReviewAtMillis = progress.nextReviewAtMillis;
+  }
+  if (progress.lastReviewedAtMillis != null) {
+    data.lastReviewedAtMillis = progress.lastReviewedAtMillis;
+  }
+  await adminDb
+    .collection("users")
+    .doc(progress.uid)
+    .collection(PROGRESS)
+    .doc(String(progress.wordId))
+    .set(data, { merge: true });
+}
+
+/* ------------------------------------------------------------------ */
+/*  Public: Stats                                                      */
+/* ------------------------------------------------------------------ */
+
+export async function totalWords(uid: string): Promise<number> {
+  requireUid(uid);
+  return countProgress(uid);
+}
+
+export async function learnedWords(uid: string): Promise<number> {
+  requireUid(uid);
+  return countProgressByStatuses(uid, ["LEARNING", "REVIEWING", "MASTERED"]);
+}
+
+export async function masteredWords(uid: string): Promise<number> {
+  requireUid(uid);
+  return countProgressByStatuses(uid, ["MASTERED"]);
+}
+
+export async function dueWords(uid: string): Promise<number> {
+  requireUid(uid);
+  const now = Date.now();
+  const snap = await progressCollection(uid)
+    .where("status", "in", ["LEARNING", "REVIEWING", "MASTERED"])
+    .where("nextReviewAtMillis", "<=", now)
+    .count()
+    .get();
+  return snap.data().count;
+}
+
+export function dailyNewWordGoal(): number {
+  return DAILY_NEW_WORD_GOAL;
+}
+
+export async function studiedWordsToday(uid: string): Promise<number> {
+  requireUid(uid);
+  const todayStart = startOfDay(Date.now());
+  const snap = await progressCollection(uid)
+    .where("lastReviewedAtMillis", ">=", todayStart)
+    .count()
+    .get();
+  return snap.data().count;
+}
+
+export async function streakDays(uid: string): Promise<number> {
+  requireUid(uid);
+  const snap = await progressCollection(uid)
+    .orderBy("lastReviewedAtMillis", "desc")
+    .limit(500)
+    .get();
+  const progress = snap.docs.map(toProgressDoc);
+  const reviewDays = [
+    ...new Set(
+      progress
+        .filter((p) => p.lastReviewedAtMillis != null)
+        .map((p) => dayString(p.lastReviewedAtMillis!)),
+    ),
+  ]
+    .sort()
+    .reverse();
+
+  if (reviewDays.length === 0) return 0;
+
+  let streak = 0;
+  const today = new Date();
+  let expected = dayString(today.getTime());
+
+  for (const day of reviewDays) {
+    if (day === expected) {
+      streak++;
+      const prev = new Date(expected);
+      prev.setDate(prev.getDate() - 1);
+      expected = dayString(prev.getTime());
+    } else if (streak === 0) {
+      const yesterday = new Date(today);
+      yesterday.setDate(yesterday.getDate() - 1);
+      if (day === dayString(yesterday.getTime())) {
+        streak = 1;
+        const prev = new Date(yesterday);
+        prev.setDate(prev.getDate() - 1);
+        expected = dayString(prev.getTime());
+      } else {
+        break;
+      }
+    } else {
+      break;
+    }
+  }
+  return streak;
+}
+
+/* ------------------------------------------------------------------ */
+/*  Public: Set queries                                                */
+/* ------------------------------------------------------------------ */
+
+export async function findSetCards(topic?: string): Promise<VocabSetCard[]> {
+  const sets = await publishedSets();
+
+  let filtered = sets;
+  if (topic) {
+    const lower = topic.toLowerCase();
+    filtered = sets.filter(
+      (s) =>
+        s.title.toLowerCase().includes(lower) ||
+        s.topic.toLowerCase().includes(lower),
+      );
+  }
+  const wordCounts = await wordCountBySetId(filtered.map((set) => set.id));
+
+  return filtered.map((set) => ({
+    id: set.id,
+    title: set.title,
+    topic: set.topic,
+    icon: set.icon,
+    level: set.level,
+    wordCount: wordCounts.get(set.id) ?? 0,
+  }));
+}
+
+export async function findPracticeSetOptions(
+  uid: string | null,
+): Promise<VocabSetCard[]> {
+  if (!uid) return [];
+  const sets = await publishedSets();
+  const progress = await userProgressDocs(uid);
+  const setIds = new Set(progress.map((p) => p.setId));
+  const filteredSets = sets.filter((s) => setIds.has(s.id));
+  const wordCounts = await wordCountBySetId(filteredSets.map((set) => set.id));
+
+  return filteredSets
+    .map((set) => ({
+      id: set.id,
+      title: set.title,
+      topic: set.topic,
+      icon: set.icon,
+      level: set.level,
+      wordCount: wordCounts.get(set.id) ?? 0,
+    }));
+}
+
+export async function findMySetCards(
+  uid: string | null,
+  folderId?: number | null,
+): Promise<MyVocabSetCard[]> {
+  if (!uid) return [];
+  const sets = await publishedSets();
+  const folders = await liveFolders();
+
+  let mySets = sets.filter((s) => s.ownerUid === uid);
+  if (folderId != null) {
+    mySets = mySets.filter((s) => s.folderId === folderId);
+  }
+  const wordCounts = await wordCountBySetId(mySets.map((set) => set.id));
+
+  return mySets.map((set) => {
+    const folder = folders.find((f) => f.id === set.folderId);
+    return {
+      id: set.id,
+      title: set.title,
+      topic: set.topic,
+      icon: set.icon,
+      level: set.level,
+      wordCount: wordCounts.get(set.id) ?? 0,
+      folderId: set.folderId,
+      folderName: folder?.name,
+    };
+  });
+}
+
+export async function findMyFolderCards(
+  uid: string,
+  search?: string | null,
+): Promise<MyVocabFolderCard[]> {
+  requireUid(uid);
+  const folders = await liveFolders();
+  const sets = await publishedSets();
+
+  let myFolders = folders.filter((f) => f.ownerUid === uid);
+  if (search) {
+    const lower = search.toLowerCase();
+    myFolders = myFolders.filter((f) => f.name.toLowerCase().includes(lower));
+  }
+
+  return myFolders.map((folder) => ({
+    id: folder.id,
+    name: folder.name,
+    publicShared: folder.publicShared,
+    setCount: sets.filter(
+      (s) => s.folderId === folder.id && s.ownerUid === uid,
+    ).length,
+  }));
+}
+
+export async function findCommunityFolderCards(
+  search?: string | null,
+): Promise<CommunityVocabFolderCard[]> {
+  const folders = await liveFolders();
+  const sets = await publishedSets();
+
+  let shared = folders.filter((f) => f.publicShared);
+  if (search) {
+    const lower = search.toLowerCase();
+    shared = shared.filter((f) => f.name.toLowerCase().includes(lower));
+  }
+
+  return shared.map((folder) => ({
+    id: folder.id,
+    name: folder.name,
+    ownerName: folder.ownerName,
+    setCount: sets.filter((s) => s.folderId === folder.id).length,
+  }));
+}
+
+export async function getCommunityFolderCard(
+  folderId: number,
+): Promise<CommunityVocabFolderCard | null> {
+  const folders = await liveFolders();
+  const folder = folders.find((f) => f.id === folderId && f.publicShared);
+  if (!folder) return null;
+  const sets = await publishedSets();
+  return {
+    id: folder.id,
+    name: folder.name,
+    ownerName: folder.ownerName,
+    setCount: sets.filter((s) => s.folderId === folder.id).length,
+  };
+}
+
+export async function findCommunitySetCards(
+  folderId: number,
+): Promise<CommunityVocabSetCard[]> {
+  const sets = await publishedSets();
+  const folderSets = sets.filter((s) => s.folderId === folderId);
+  const wordCounts = await wordCountBySetId(folderSets.map((set) => set.id));
+
+  return folderSets
+    .map((set) => ({
+      id: set.id,
+      title: set.title,
+      topic: set.topic,
+      wordCount: wordCounts.get(set.id) ?? 0,
+    }));
+}
+
+/* ------------------------------------------------------------------ */
+/*  Public: Progress                                                   */
+/* ------------------------------------------------------------------ */
+
+export async function findProgressSetCards(
+  uid: string,
+): Promise<VocabProgressSetCard[]> {
+  requireUid(uid);
+  const sets = await publishedSets();
+  const progress = await userProgressDocs(uid);
+  const now = Date.now();
+
+  const setIds = new Set(progress.map((p) => p.setId));
+  const relevantSets = sets.filter((s) => setIds.has(s.id));
+  const wordCounts = await wordCountBySetId(relevantSets.map((set) => set.id));
+
+  return relevantSets
+    .map((set) => {
+      const setProgress = progress.filter((p) => p.setId === set.id);
+
+      return {
+        id: set.id,
+        title: set.title,
+        topic: set.topic,
+        icon: set.icon,
+        totalWords: wordCounts.get(set.id) ?? 0,
+        learnedWords: setProgress.filter((p) => p.status !== "NEW").length,
+        masteredWords: setProgress.filter((p) => p.status === "MASTERED")
+          .length,
+        dueWords: setProgress.filter(
+          (p) =>
+            p.status !== "NEW" &&
+            p.nextReviewAtMillis != null &&
+            p.nextReviewAtMillis <= now,
+        ).length,
+      };
+    })
+    .sort(
+      (a, b) => b.dueWords - a.dueWords || b.learnedWords - a.learnedWords,
+    );
+}
+
+/* ------------------------------------------------------------------ */
+/*  Public: Sessions                                                   */
+/* ------------------------------------------------------------------ */
+
+export async function getSession(setId: number): Promise<VocabSetSession> {
+  const set = await findPublishedSet(setId);
+  if (!set) throw NotFound("Set not found");
+  const words = await wordsForSet(setId);
+  return {
+    set: { id: set.id, title: set.title, topic: set.topic },
+    words: words.map((w) => toWordCard(w, false)),
+  };
+}
+
+export async function getFilteredSession(
+  setId: number,
+  uid: string | null,
+  mastery: string,
+  order: string,
+  amount: string,
+): Promise<VocabSetSession> {
+  const set = await findPublishedSet(setId);
+  if (!set) throw NotFound("Set not found");
+  const words = await wordsForSet(setId);
+  const progress = uid ? await progressForSet(uid, setId) : [];
+  const progressByWordId = new Map(progress.map((p) => [p.wordId, p]));
+  const now = Date.now();
+  const normalizedMastery = normalizeMastery(mastery);
+
+  let filtered = words;
+  if (normalizedMastery !== "all" && uid) {
+    filtered = words.filter((w) =>
+      matchesMastery(w, progressByWordId, normalizedMastery, now),
+    );
+  }
+
+  if (order === "random") {
+    filtered = shuffleArray([...filtered]);
+  }
+
+  const total = filtered.length;
+  const limit = parseAmount(amount, total);
+  filtered = filtered.slice(0, limit);
+
+  return {
+    set: { id: set.id, title: set.title, topic: set.topic },
+    words: filtered.map((w) => {
+      const prog = progressByWordId.get(w.id);
+      return toWordCard(w, prog?.status === "MASTERED");
+    }),
+  };
+}
+
+export async function getReviewSession(
+  uid: string,
+  size: number,
+): Promise<VocabSetSession> {
+  requireUid(uid);
+  const progress = await userProgressDocs(uid);
+  const now = Date.now();
+  const due = progress.filter(
+    (p) =>
+      p.status !== "NEW" &&
+      p.nextReviewAtMillis != null &&
+      p.nextReviewAtMillis <= now,
+  );
+
+  due.sort(
+    (a, b) => (a.nextReviewAtMillis ?? 0) - (b.nextReviewAtMillis ?? 0),
+  );
+
+  const selected = due.slice(0, size);
+  const wordRefs = selected.map((p) =>
+    adminDb.collection(WORDS).doc(String(p.wordId)),
+  );
+  const wordSnaps = wordRefs.length > 0 ? await adminDb.getAll(...wordRefs) : [];
+  const wordMap = new Map(
+    wordSnaps
+      .filter((snap) => snap.exists)
+      .map((snap) => {
+        const word = toWordDoc(snap);
+        return [word.id, word] as const;
+      })
+      .filter(([, word]) => word.status === "PUBLISHED" && !word.deletedAtMillis),
+  );
+
+  const cards: VocabWordCard[] = [];
+  for (const p of selected) {
+    const word = wordMap.get(p.wordId);
+    if (word) {
+      cards.push(toWordCard(word, p.status === "MASTERED"));
+    }
+  }
+
+  return {
+    set: { id: 0, title: "Ôn tập", topic: "Review" },
+    words: shuffleArray(cards),
+  };
+}
+
+/* ------------------------------------------------------------------ */
+/*  Public: Set detail                                                 */
+/* ------------------------------------------------------------------ */
+
+export async function getSetDetail(
+  setId: number,
+  uid: string | null,
+): Promise<VocabSetDetail> {
+  const set = await findPublishedSet(setId);
+  if (!set) throw NotFound("Set not found");
+
+  const words = await wordsForSet(setId);
+  const progress = uid ? await progressForSet(uid, setId) : [];
+  const progressByWordId = new Map(progress.map((p) => [p.wordId, p]));
+
+  const wordCards = words.map((w) => {
+    const prog = progressByWordId.get(w.id);
+    return toWordCard(w, prog?.status === "MASTERED");
+  });
+
+  const mastered = progress.filter((p) => p.status === "MASTERED").length;
+  const total = words.length;
+
+  return {
+    set: {
+      id: set.id,
+      title: set.title,
+      topic: set.topic,
+      level: set.level,
+      ownerUid: set.ownerUid,
+    },
+    words: wordCards,
+    totalWords: total,
+    masteredWords: mastered,
+    progressPercent: total === 0 ? 0 : Math.round((mastered / total) * 100),
+  };
+}
+
+/* ------------------------------------------------------------------ */
+/*  Public: CRUD                                                       */
+/* ------------------------------------------------------------------ */
+
+export async function createMySet(
+  uid: string,
+  title: string,
+  description?: string,
+  icon?: string,
+): Promise<{ id: number }> {
+  requireUid(uid);
+  if (!title?.trim()) throw BadRequest("Title is required");
+
+  const id = await newNumericId(SETS);
+  const now = Date.now();
+  const data: Record<string, unknown> = {
+    id,
+    ownerUid: uid,
+    title: title.trim(),
+    topic: title.trim(),
+    description: description?.trim() || null,
+    icon: normalizeIcon(icon),
+    status: "PUBLISHED" satisfies ContentStatus,
+    sourceType: "MANUAL" satisfies SourceType,
+    publishedAtMillis: now,
+    updatedAtMillis: now,
+  };
+  await adminDb.collection(SETS).doc(String(id)).set(data);
+  return { id };
+}
+
+export async function createMyFolder(
+  uid: string,
+  name: string,
+): Promise<{ id: number }> {
+  requireUid(uid);
+  if (!name?.trim()) throw BadRequest("Folder name is required");
+
+  const id = await newNumericId(FOLDERS);
+  const now = Date.now();
+  const data: Record<string, unknown> = {
+    id,
+    ownerUid: uid,
+    name: name.trim(),
+    publicShared: false,
+    createdAtMillis: now,
+    updatedAtMillis: now,
+    deletedAtMillis: null,
+  };
+  await adminDb.collection(FOLDERS).doc(String(id)).set(data);
+  return { id };
+}
+
+export async function assignMySetToFolder(
+  uid: string,
+  setId: number,
+  folderId: number | null,
+): Promise<void> {
+  requireUid(uid);
+  await requireOwnedSet(uid, setId);
+  if (folderId != null) {
+    await requireOwnedFolder(uid, folderId);
+  }
+  await adminDb
+    .collection(SETS)
+    .doc(String(setId))
+    .update({
+      folderId: folderId ?? FieldValue.delete(),
+      updatedAtMillis: Date.now(),
+    });
+}
+
+export async function shareMyFolder(
+  uid: string,
+  folderId: number,
+): Promise<void> {
+  requireUid(uid);
+  await requireOwnedFolder(uid, folderId);
+  await adminDb.collection(FOLDERS).doc(String(folderId)).update({
+    publicShared: true,
+    sharedAtMillis: Date.now(),
+    updatedAtMillis: Date.now(),
+  });
+}
+
+export async function renameMyFolder(
+  uid: string,
+  folderId: number,
+  name: string,
+): Promise<void> {
+  requireUid(uid);
+  if (!name?.trim()) throw BadRequest("Name is required");
+  await requireOwnedFolder(uid, folderId);
+  await adminDb.collection(FOLDERS).doc(String(folderId)).update({
+    name: name.trim(),
+    updatedAtMillis: Date.now(),
+  });
+}
+
+export async function deleteMyFolder(
+  uid: string,
+  folderId: number,
+): Promise<void> {
+  requireUid(uid);
+  await requireOwnedFolder(uid, folderId);
+  const sets = await publishedSets();
+  const folderSets = sets.filter(
+    (s) => s.folderId === folderId && s.ownerUid === uid,
+  );
+  const batch = adminDb.batch();
+  for (const set of folderSets) {
+    batch.update(adminDb.collection(SETS).doc(String(set.id)), {
+      folderId: FieldValue.delete(),
+      updatedAtMillis: Date.now(),
+    });
+  }
+  batch.update(adminDb.collection(FOLDERS).doc(String(folderId)), {
+    deletedAtMillis: Date.now(),
+  });
+  await batch.commit();
+}
+
+export async function renameMySet(
+  uid: string,
+  setId: number,
+  title: string,
+): Promise<void> {
+  requireUid(uid);
+  if (!title?.trim()) throw BadRequest("Title is required");
+  await requireOwnedSet(uid, setId);
+  await adminDb.collection(SETS).doc(String(setId)).update({
+    title: title.trim(),
+    updatedAtMillis: Date.now(),
+  });
+}
+
+export async function deleteMySet(
+  uid: string,
+  setId: number,
+): Promise<void> {
+  requireUid(uid);
+  await requireOwnedSet(uid, setId);
+  await adminDb.collection(SETS).doc(String(setId)).update({
+    deletedAtMillis: Date.now(),
+  });
+}
+
+/* ------------------------------------------------------------------ */
+/*  Public: Word operations                                            */
+/* ------------------------------------------------------------------ */
+
+export async function addManualWords(
+  uid: string,
+  setId: number,
+  rowsText: string,
+): Promise<number> {
+  requireUid(uid);
+  await requireOwnedSet(uid, setId);
+  const candidates = parseDelimitedWords(rowsText);
+  return saveCandidates(setId, candidates, "MANUAL", null, 200);
+}
+
+export async function importWords(
+  uid: string,
+  setId: number,
+  fileBuffer: Buffer,
+  filename: string,
+): Promise<number> {
+  requireUid(uid);
+  await requireOwnedSet(uid, setId);
+  const candidates = await parseImportFile(fileBuffer, filename);
+  return saveCandidates(setId, candidates, "IMPORT", filename, 500);
+}
+
+/* ------------------------------------------------------------------ */
+/*  Public: AI word generation                                         */
+/* ------------------------------------------------------------------ */
+
+export async function generateWordsWithAi(
+  setId: number,
+  uid: string | null,
+  mode: string,
+  input: string,
+  count: number,
+  imageBase64?: string,
+  imageMimeType?: string,
+): Promise<number> {
+  const candidates = await previewAiWords(
+    setId,
+    mode,
+    input,
+    count,
+    imageBase64,
+    imageMimeType,
+  );
+  return saveAiWords(setId, candidates);
+}
+
+export async function previewAiWords(
+  setId: number,
+  mode: string,
+  input: string,
+  count: number,
+  imageBase64?: string,
+  imageMimeType?: string,
+): Promise<AiVocabCandidate[]> {
+  const clampedCount = Math.min(Math.max(count, 1), 50);
+  const existingWords = (await wordsForSet(setId)).map((w) =>
+    w.word.toLowerCase().trim(),
+  );
+
+  let suggestedWords: string[];
+  if (mode === "image" && imageBase64 && imageMimeType) {
+    suggestedWords = await suggestWordsFromImage(
+      imageBase64,
+      imageMimeType,
+      clampedCount + 10,
+      existingWords,
+    );
+  } else if (mode === "reading") {
+    suggestedWords = await suggestWordsFromReading(
+      input,
+      clampedCount + 10,
+      existingWords,
+    );
+  } else {
+    suggestedWords = await suggestWordsFromTopic(
+      input,
+      clampedCount + 10,
+      existingWords,
+    );
+  }
+
+  const filtered = excludeExistingWords(
+    suggestedWords,
+    existingWords,
+    clampedCount + 5,
+  );
+
+  return enrichWithDictionary(filtered, clampedCount);
+}
+
+export async function saveAiWords(
+  setId: number,
+  candidates: AiVocabCandidate[],
+): Promise<number> {
+  const selected = candidates.filter((c) => c.selected !== false);
+  return saveCandidates(setId, selected, "AI", "Gemini + Dictionary", 50);
+}
+
+/* ------------------------------------------------------------------ */
+/*  Public: Community                                                  */
+/* ------------------------------------------------------------------ */
+
+export async function copyCommunityFolder(
+  uid: string,
+  folderId: number,
+): Promise<{ id: number }> {
+  requireUid(uid);
+  const folders = await liveFolders();
+  const sourceFolder = folders.find(
+    (f) => f.id === folderId && f.publicShared,
+  );
+  if (!sourceFolder) throw NotFound("Community folder not found");
+
+  const folderName = await uniqueFolderName(uid, sourceFolder.name);
+  const newFolder = await createMyFolder(uid, folderName);
+
+  const sets = await publishedSets();
+  const folderSets = sets.filter((s) => s.folderId === folderId);
+  for (const set of folderSets) {
+    await copySetAsNew(uid, set, newFolder.id);
+  }
+
+  return newFolder;
+}
+
+export async function copyCommunitySet(
+  uid: string,
+  sourceSetId: number,
+  targetSetId?: number | null,
+): Promise<number> {
+  requireUid(uid);
+  const sets = await publishedSets();
+  const sourceSet = sets.find((s) => s.id === sourceSetId);
+  if (!sourceSet) throw NotFound("Source set not found");
+
+  if (targetSetId) {
+    await requireOwnedSet(uid, targetSetId);
+    return copyWords(sourceSetId, targetSetId);
+  } else {
+    await copySetAsNew(uid, sourceSet, null);
+    const words = await wordsForSet(sourceSetId);
+    return words.length;
+  }
+}
+
+/* ------------------------------------------------------------------ */
+/*  Public: Review (SM-2)                                              */
+/* ------------------------------------------------------------------ */
+
+export async function review(
+  uid: string,
+  wordId: number,
+  quality: number,
+): Promise<VocabReviewResponse> {
+  requireUid(uid);
+  if (quality < 0 || quality > 5) throw BadRequest("Quality must be 0-5");
+
+  const wordSnap = await adminDb.collection(WORDS).doc(String(wordId)).get();
+  const word = wordSnap.exists ? toWordDoc(wordSnap) : null;
+  if (!word || word.status !== "PUBLISHED" || word.deletedAtMillis) {
+    throw NotFound("Word not found");
+  }
+
+  let progress = await findProgress(uid, wordId);
+  if (!progress) {
+    progress = {
+      uid,
+      wordId,
+      setId: word.setId,
+      status: "NEW",
+      interval: 0,
+      easeFactor: 2.5,
+      repetitions: 0,
+    };
+  }
+
+  const updated = applySm2(progress, quality);
+  await saveProgress(updated);
+
+  return {
+    wordId,
+    newStatus: updated.status,
+    nextReviewAtMillis: updated.nextReviewAtMillis,
+  };
+}
+
+/* ------------------------------------------------------------------ */
+/*  SM-2 Algorithm                                                     */
+/* ------------------------------------------------------------------ */
+
+function applySm2(
+  progress: VocabProgressDoc,
+  quality: number,
+): VocabProgressDoc {
+  const now = Date.now();
+  let { easeFactor, interval, repetitions } = progress;
+  let status: VocabProgressStatus;
+
+  if (quality >= 3) {
+    if (repetitions === 0) {
+      interval = 1;
+    } else if (repetitions === 1) {
+      interval = 6;
+    } else {
+      interval = Math.round(interval * easeFactor);
+    }
+    repetitions++;
+    easeFactor =
+      easeFactor + (0.1 - (5 - quality) * (0.08 + (5 - quality) * 0.02));
+    if (easeFactor < 1.3) easeFactor = 1.3;
+
+    if (quality >= 4 && repetitions >= 3) {
+      status = "MASTERED";
+    } else {
+      status = "REVIEWING";
+    }
+  } else {
+    repetitions = 0;
+    interval = 1;
+    status = "LEARNING";
+  }
+
+  const nextReviewAtMillis = now + interval * 24 * 60 * 60 * 1000;
+
+  return {
+    ...progress,
+    status,
+    interval,
+    easeFactor: Math.round(easeFactor * 100) / 100,
+    repetitions,
+    nextReviewAtMillis,
+    lastReviewedAtMillis: now,
+  };
+}
+
+/* ------------------------------------------------------------------ */
+/*  Internal helpers                                                   */
+/* ------------------------------------------------------------------ */
+
+async function saveCandidates(
+  setId: number,
+  candidates: AiVocabCandidate[],
+  sourceType: SourceType,
+  sourceNote: string | null,
+  limit: number,
+): Promise<number> {
+  const existingWords = (await wordsForSet(setId)).map((w) =>
+    w.word.toLowerCase().trim(),
+  );
+  const existingSet = new Set(existingWords);
+
+  const writes: Array<{ id: number; data: Record<string, unknown> }> = [];
+  for (const candidate of candidates) {
+    if (writes.length >= limit) break;
+    const normalized = candidate.word.toLowerCase().trim();
+    if (!normalized || existingSet.has(normalized)) continue;
+
+    const wordId = await newNumericId(WORDS);
+    const now = Date.now();
+    writes.push({
+      id: wordId,
+      data: {
+        id: wordId,
+        setId,
+        word: candidate.word.trim(),
+        meaning: candidate.meaning?.trim() || "",
+        partOfSpeech: candidate.partOfSpeech || "OTHER",
+        phonetic: candidate.phonetic || null,
+        example: candidate.example || null,
+        status: "PUBLISHED" satisfies ContentStatus,
+        sourceType,
+        sourceNote,
+        publishedAtMillis: now,
+        updatedAtMillis: now,
+      },
+    });
+    existingSet.add(normalized);
+  }
+
+  await commitWordWrites(writes);
+
+  if (writes.length > 0) {
+    await adminDb.collection(SETS).doc(String(setId)).update({
+      updatedAtMillis: Date.now(),
+    });
+  }
+
+  return writes.length;
+}
+
+async function copySetAsNew(
+  uid: string,
+  sourceSet: VocabSetDoc,
+  folderId: number | null,
+): Promise<{ id: number }> {
+  const id = await newNumericId(SETS);
+  const now = Date.now();
+  const data: Record<string, unknown> = {
+    id,
+    ownerUid: uid,
+    title: sourceSet.title,
+    topic: sourceSet.topic,
+    description: sourceSet.description,
+    icon: sourceSet.icon,
+    level: sourceSet.level,
+    status: "PUBLISHED" satisfies ContentStatus,
+    sourceType: "COMMUNITY" satisfies SourceType,
+    sourceNote: `Copied from set #${sourceSet.id}`,
+    publishedAtMillis: now,
+    updatedAtMillis: now,
+  };
+  if (folderId) {
+    data.folderId = folderId;
+  }
+  await adminDb.collection(SETS).doc(String(id)).set(data);
+  await copyWords(sourceSet.id, id);
+  return { id };
+}
+
+async function copyWords(
+  sourceSetId: number,
+  targetSetId: number,
+): Promise<number> {
+  const sourceWords = await wordsForSet(sourceSetId);
+  const existingWords = (await wordsForSet(targetSetId)).map((w) =>
+    w.word.toLowerCase().trim(),
+  );
+  const existingSet = new Set(existingWords);
+
+  const writes: Array<{ id: number; data: Record<string, unknown> }> = [];
+  for (const word of sourceWords) {
+    const normalized = word.word.toLowerCase().trim();
+    if (existingSet.has(normalized)) continue;
+
+    const wordId = await newNumericId(WORDS);
+    const now = Date.now();
+    writes.push({
+      id: wordId,
+      data: {
+        id: wordId,
+        setId: targetSetId,
+        word: word.word,
+        meaning: word.meaning,
+        partOfSpeech: word.partOfSpeech,
+        phonetic: word.phonetic,
+        example: word.example,
+        audioUrl: word.audioUrl,
+        status: "PUBLISHED" satisfies ContentStatus,
+        sourceType: "COMMUNITY" satisfies SourceType,
+        publishedAtMillis: now,
+        updatedAtMillis: now,
+      },
+    });
+    existingSet.add(normalized);
+  }
+  await commitWordWrites(writes);
+  return writes.length;
+}
+
+async function newNumericId(collection: string): Promise<number> {
+  for (let attempt = 0; attempt < 5; attempt++) {
+    const id = randomInt(1_000_000_000, 281_474_976_710_655);
+    const snap = await adminDb.collection(collection).doc(String(id)).get();
+    if (!snap.exists) return id;
+  }
+  throw new Error(`Could not allocate id for ${collection}`);
+}
+
+async function commitWordWrites(
+  writes: Array<{ id: number; data: Record<string, unknown> }>,
+): Promise<void> {
+  for (let index = 0; index < writes.length; index += 450) {
+    const batch = adminDb.batch();
+    for (const write of writes.slice(index, index + 450)) {
+      batch.set(adminDb.collection(WORDS).doc(String(write.id)), write.data);
+    }
+    await batch.commit();
+  }
+}
+
+async function uniqueFolderName(
+  uid: string,
+  sourceName: string,
+): Promise<string> {
+  const folders = await findMyFolderCards(uid);
+  const existing = new Set(folders.map((f) => f.name.toLowerCase()));
+  let name = sourceName;
+  let counter = 1;
+  while (existing.has(name.toLowerCase())) {
+    counter++;
+    name = `${sourceName} (${counter})`;
+  }
+  return name;
+}
+
+async function requireOwnedSet(
+  uid: string,
+  setId: number,
+): Promise<VocabSetDoc> {
+  const doc = await adminDb.collection(SETS).doc(String(setId)).get();
+  if (!doc.exists) throw NotFound("Set not found");
+  const set = toSetDoc(doc);
+  if (set.ownerUid !== uid) throw Forbidden("Not authorized");
+  return set;
+}
+
+async function requireOwnedFolder(
+  uid: string,
+  folderId: number,
+): Promise<VocabFolderDoc> {
+  const doc = await adminDb
+    .collection(FOLDERS)
+    .doc(String(folderId))
+    .get();
+  if (!doc.exists) throw NotFound("Folder not found");
+  const folder = toFolderDoc(doc);
+  if (folder.ownerUid !== uid) throw Forbidden("Not authorized");
+  return folder;
+}
+
+function excludeExistingWords(
+  suggestedWords: string[],
+  existingWords: string[],
+  limit: number,
+): string[] {
+  const existingSet = new Set(existingWords.map((w) => w.toLowerCase()));
+  return suggestedWords
+    .filter((w) => !existingSet.has(w.toLowerCase()))
+    .slice(0, limit);
+}
+
+function matchesMastery(
+  word: VocabWordDoc,
+  progressByWordId: Map<number, VocabProgressDoc>,
+  mastery: string,
+  now: number,
+): boolean {
+  const prog = progressByWordId.get(word.id);
+  switch (mastery) {
+    case "mastered":
+      return prog?.status === "MASTERED";
+    case "due":
+      return (
+        prog != null &&
+        prog.status !== "NEW" &&
+        prog.nextReviewAtMillis != null &&
+        prog.nextReviewAtMillis <= now
+      );
+    case "learning":
+    default:
+      return !prog || prog.status !== "MASTERED";
+  }
+}
+
+function normalizeMastery(mastery: string): string {
+  switch (mastery) {
+    case "all":
+    case "mastered":
+    case "due":
+      return mastery;
+    default:
+      return "learning";
+  }
+}
+
+function parseAmount(amount: string, total: number): number {
+  if (amount === "all") return total;
+  const parsed = parseInt(amount, 10);
+  return isNaN(parsed) || parsed <= 0 ? 20 : Math.min(parsed, total);
+}
+
+function normalizeIcon(icon?: string): string {
+  if (!icon) return "📚";
+  const trimmed = icon.trim();
+  return trimmed || "📚";
+}
+
+function requireUid(uid: string | null): asserts uid is string {
+  if (!uid) throw Unauthorized("Authentication required");
+}
+
+/* ------------------------------------------------------------------ */
+/*  Document mapping                                                   */
+/* ------------------------------------------------------------------ */
+
+function toSetDoc(
+  doc: FirebaseFirestore.DocumentSnapshot,
+): VocabSetDoc {
+  const d = doc.data() ?? {};
+  return {
+    id: numVal(d, "id") ?? parseInt(doc.id, 10),
+    ownerUid: strVal(d, "ownerUid"),
+    ownerName: strVal(d, "ownerName"),
+    folderId: numVal(d, "folderId"),
+    folderName: strVal(d, "folderName"),
+    folderPublicShared: boolVal(d, "folderPublicShared"),
+    title: strVal(d, "title") || "Vocabulary set",
+    topic: strVal(d, "topic") || "Vocabulary",
+    description: strVal(d, "description"),
+    icon: strVal(d, "icon"),
+    level: strVal(d, "level"),
+    status: (strVal(d, "status") as ContentStatus) || "PUBLISHED",
+    sourceType: (strVal(d, "sourceType") as SourceType) || "MANUAL",
+    sourceNote: strVal(d, "sourceNote"),
+    licenseNote: strVal(d, "licenseNote"),
+    publishedAtMillis: numVal(d, "publishedAtMillis"),
+    updatedAtMillis: numVal(d, "updatedAtMillis"),
+    deletedAtMillis: numVal(d, "deletedAtMillis"),
+  };
+}
+
+function toWordDoc(
+  doc: FirebaseFirestore.DocumentSnapshot,
+): VocabWordDoc {
+  const d = doc.data() ?? {};
+  return {
+    id: numVal(d, "id") ?? parseInt(doc.id, 10),
+    setId: numVal(d, "setId") ?? 0,
+    word: strVal(d, "word") || "",
+    meaning: strVal(d, "meaning") || "",
+    partOfSpeech: strVal(d, "partOfSpeech"),
+    phonetic: strVal(d, "phonetic"),
+    example: strVal(d, "example"),
+    audioUrl: strVal(d, "audioUrl"),
+    status: (strVal(d, "status") as ContentStatus) || "PUBLISHED",
+    sourceType: (strVal(d, "sourceType") as SourceType) || "MANUAL",
+    sourceNote: strVal(d, "sourceNote"),
+    licenseNote: strVal(d, "licenseNote"),
+    publishedAtMillis: numVal(d, "publishedAtMillis"),
+    updatedAtMillis: numVal(d, "updatedAtMillis"),
+    deletedAtMillis: numVal(d, "deletedAtMillis"),
+  };
+}
+
+function toFolderDoc(
+  doc: FirebaseFirestore.DocumentSnapshot,
+): VocabFolderDoc {
+  const d = doc.data() ?? {};
+  return {
+    id: numVal(d, "id") ?? parseInt(doc.id, 10),
+    ownerUid: strVal(d, "ownerUid"),
+    ownerName: strVal(d, "ownerName"),
+    name: strVal(d, "name") || "Folder",
+    publicShared: boolVal(d, "publicShared") ?? false,
+    sharedAtMillis: numVal(d, "sharedAtMillis"),
+    createdAtMillis: numVal(d, "createdAtMillis"),
+    updatedAtMillis: numVal(d, "updatedAtMillis"),
+    deletedAtMillis: numVal(d, "deletedAtMillis"),
+  };
+}
+
+function toProgressDoc(
+  doc: FirebaseFirestore.DocumentSnapshot,
+): VocabProgressDoc {
+  const d = doc.data() ?? {};
+  return {
+    uid: strVal(d, "uid") || "",
+    wordId: numVal(d, "wordId") ?? parseInt(doc.id, 10),
+    setId: numVal(d, "setId") ?? 0,
+    status: (strVal(d, "status") as VocabProgressStatus) || "NEW",
+    interval: numVal(d, "interval") ?? 0,
+    easeFactor: numericVal(d, "easeFactor") ?? 2.5,
+    repetitions: numVal(d, "repetitions") ?? 0,
+    nextReviewAtMillis: numVal(d, "nextReviewAtMillis"),
+    lastReviewedAtMillis: numVal(d, "lastReviewedAtMillis"),
+  };
+}
+
+function toWordCard(word: VocabWordDoc, mastered: boolean): VocabWordCard {
+  return {
+    id: word.id,
+    word: word.word,
+    meaning: word.meaning,
+    partOfSpeech: word.partOfSpeech,
+    phonetic: word.phonetic,
+    example: word.example,
+    audioUrl: word.audioUrl,
+    mastered,
+  };
+}
+
+/* ------------------------------------------------------------------ */
+/*  Primitive helpers                                                  */
+/* ------------------------------------------------------------------ */
+
+function strVal(
+  data: Record<string, unknown>,
+  key: string,
+): string | undefined {
+  const v = data[key];
+  if (v == null) return undefined;
+  return String(v);
+}
+
+function numVal(
+  data: Record<string, unknown>,
+  key: string,
+): number | undefined {
+  const v = data[key];
+  if (v == null) return undefined;
+  if (typeof v === "number") return v;
+  const parsed = Number(v);
+  return isNaN(parsed) ? undefined : parsed;
+}
+
+function numericVal(
+  data: Record<string, unknown>,
+  key: string,
+): number | undefined {
+  const v = data[key];
+  if (v == null) return undefined;
+  if (typeof v === "number") return v;
+  const parsed = parseFloat(String(v));
+  return isNaN(parsed) ? undefined : parsed;
+}
+
+function boolVal(data: Record<string, unknown>, key: string): boolean {
+  const v = data[key];
+  if (typeof v === "boolean") return v;
+  if (typeof v === "string") return v.toLowerCase() === "true";
+  return false;
+}
+
+function startOfDay(millis: number): number {
+  const d = new Date(millis);
+  d.setHours(0, 0, 0, 0);
+  return d.getTime();
+}
+
+function dayString(millis: number): string {
+  const d = new Date(millis);
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+}
+
+function shuffleArray<T>(array: T[]): T[] {
+  for (let i = array.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [array[i], array[j]] = [array[j], array[i]];
+  }
+  return array;
+}

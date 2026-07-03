@@ -6971,6 +6971,82 @@ button.compact {
     background: rgba(62, 122, 99, 0.12);
 }
 
+/* ── Demo / locked mock-test cards ── */
+
+.mock-demo-banner {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    padding: 18px 24px;
+    margin-bottom: 24px;
+    border-radius: 12px;
+    border: 1px solid rgba(198, 161, 91, 0.22);
+    background: linear-gradient(135deg, rgba(198, 161, 91, 0.08), rgba(198, 161, 91, 0.02));
+    color: var(--mut);
+    font-size: 0.95rem;
+}
+
+.mock-demo-banner strong {
+    display: block;
+    color: var(--ink);
+    font-size: 1.05rem;
+    margin-bottom: 2px;
+}
+
+.mock-demo-banner p {
+    margin: 0;
+}
+
+.mock-demo-icon {
+    font-size: 1.6rem;
+}
+
+.mock-card.is-locked {
+    position: relative;
+    pointer-events: none;
+    user-select: none;
+    opacity: 0.55;
+    filter: grayscale(0.3);
+}
+
+.mock-lock-overlay {
+    position: absolute;
+    top: 12px;
+    right: 12px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 2px;
+    font-size: 1.3rem;
+    color: var(--mut);
+    z-index: 2;
+}
+
+.mock-lock-overlay small {
+    font-size: 0.7rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+}
+
+.mock-card-actions .is-disabled {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 44px;
+    border-radius: 10px;
+    font-weight: 900;
+    text-decoration: none;
+    cursor: not-allowed;
+    opacity: 0.5;
+}
+
+.mock-tabs .is-disabled,
+.mock-filters .is-disabled {
+    cursor: not-allowed;
+    opacity: 0.6;
+}
+
 .data-table audio {
     width: min(260px, 100%);
 }

@@ -1,0 +1,19 @@
+import AppTopbar from "@/components/AppTopbar";
+import { requireRole } from "@/lib/auth/session";
+import AdminGenerateForm from "./AdminGenerateForm";
+
+export const dynamic = "force-dynamic";
+
+export default async function AdminGeneratePage() {
+  const user = await requireRole("ADMIN");
+  return (
+    <>
+      <AppTopbar pageTitle="AI generator" pageSubtitle="Create TOEIC-style draft content for review" userName={user.displayName} userEmail={user.email} />
+      <main className="flex-1 overflow-y-auto px-4 py-6 lg:px-8">
+        <section className="max-w-xl p-5 rounded-xl bg-surface border border-line">
+          <AdminGenerateForm />
+        </section>
+      </main>
+    </>
+  );
+}

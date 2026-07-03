@@ -3,15 +3,14 @@ package com.englishwebapp.service;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import com.englishwebapp.dto.ReadingProgressRequest;
 import com.englishwebapp.entity.ReadingProgress;
-import com.englishwebapp.entity.User;
-import com.englishwebapp.repository.ReadingProgressRepository;
-import com.englishwebapp.repository.UserRepository;
+import com.englishwebapp.service.firestore.FirestoreReadingStore;
 import java.util.Optional;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -25,10 +24,7 @@ import org.springframework.web.server.ResponseStatusException;
 class ReadingProgressServiceTest {
 
     @Mock
-    private ReadingProgressRepository readingProgressRepository;
-
-    @Mock
-    private UserRepository userRepository;
+    private FirestoreReadingStore readingStore;
 
     @InjectMocks
     private ReadingProgressService service;
@@ -40,26 +36,22 @@ class ReadingProgressServiceTest {
         assertThat(response.saved()).isFalse();
         assertThat(response.authenticated()).isFalse();
         assertThat(response.correct()).isTrue();
-        verify(readingProgressRepository, never()).save(any());
+        verify(readingStore, never()).saveProgress(any(), any());
     }
 
     @Test
     void authenticatedRecordPersistsNormalizedProgress() {
-        User user = new User();
-        user.setId(7L);
-        when(readingProgressRepository.findByUserIdAndQuestionId(7L, "question-1")).thenReturn(Optional.empty());
-        when(userRepository.findById(7L)).thenReturn(Optional.of(user));
+        when(readingStore.findProgress("uid-7", "question-1")).thenReturn(Optional.empty());
 
-        var response = service.record(7L, request(6, " b ", "B"));
+        var response = service.record("uid-7", request(6, " b ", "B"));
 
         assertThat(response.saved()).isTrue();
         assertThat(response.authenticated()).isTrue();
         assertThat(response.correct()).isTrue();
 
         ArgumentCaptor<ReadingProgress> captor = ArgumentCaptor.forClass(ReadingProgress.class);
-        verify(readingProgressRepository).save(captor.capture());
+        verify(readingStore).saveProgress(eq("uid-7"), captor.capture());
         ReadingProgress saved = captor.getValue();
-        assertThat(saved.getUser()).isSameAs(user);
         assertThat(saved.getPart()).isEqualTo(6);
         assertThat(saved.getLevel()).isEqualTo(2);
         assertThat(saved.getItemId()).isEqualTo("item-1");
@@ -74,7 +66,7 @@ class ReadingProgressServiceTest {
 
     @Test
     void invalidReadingPartIsRejectedForAuthenticatedSave() {
-        assertThatThrownBy(() -> service.record(7L, request(4, "A", "A")))
+        assertThatThrownBy(() -> service.record("uid-7", request(4, "A", "A")))
                 .isInstanceOf(ResponseStatusException.class)
                 .hasMessageContaining("Reading part must be between 5 and 7");
     }

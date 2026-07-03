@@ -44,7 +44,7 @@ public class VocabularyController {
             @PageableDefault(size = 12) Pageable pageable,
             @AuthenticationPrincipal AppUserPrincipal user,
             Model model) {
-        Long userId = user == null ? null : user.id();
+        String uid = user == null ? null : user.firebaseUid();
         String activeTab = normalizeTab(tab);
         model.addAttribute("sets", Page.empty(pageable));
         model.addAttribute("mySets", List.of());
@@ -68,17 +68,17 @@ public class VocabularyController {
         model.addAttribute("dailyNewGoal", vocabService.dailyNewWordGoal());
         model.addAttribute("dailyNewPercent", 0);
         if ("progress".equals(activeTab)) {
-            addProgressTabModel(userId, model);
+            addProgressTabModel(uid, model);
         } else if ("my".equals(activeTab)) {
-            model.addAttribute("mySets", vocabService.findMySetCards(userId, folderId));
-            model.addAttribute("myFolders", vocabService.findMyFolderCards(userId, folderSearch));
-            model.addAttribute("dueWords", vocabService.dueWords(userId));
+            model.addAttribute("mySets", vocabService.findMySetCards(uid, folderId));
+            model.addAttribute("myFolders", vocabService.findMyFolderCards(uid, folderSearch));
+            model.addAttribute("dueWords", vocabService.dueWords(uid));
         } else if ("community".equals(activeTab)) {
             model.addAttribute("communityFolders", vocabService.findCommunityFolderCards(q));
             if (communityFolderId != null) {
                 model.addAttribute("selectedCommunityFolder", vocabService.getCommunityFolderCard(communityFolderId));
                 model.addAttribute("communitySets", vocabService.findCommunitySetCards(communityFolderId));
-                model.addAttribute("mySets", vocabService.findMySetCards(userId));
+                model.addAttribute("mySets", vocabService.findMySetCards(uid));
             }
         }
         model.addAttribute("fallbackSets", List.of("Contracts", "Marketing", "Warranties", "Business Planning"));
@@ -108,11 +108,11 @@ public class VocabularyController {
             @RequestParam(defaultValue = "20") String amount,
             @AuthenticationPrincipal AppUserPrincipal user,
             Model model) {
-        Long userId = user == null ? null : user.id();
-        model.addAttribute("vocabSession", vocabService.getFilteredSession(setId, userId, mastery, order, amount));
+        String uid = user == null ? null : user.firebaseUid();
+        model.addAttribute("vocabSession", vocabService.getFilteredSession(setId, uid, mastery, order, amount));
         model.addAttribute("mode", normalizeMode(mode));
         model.addAttribute("reviewMode", false);
-        model.addAttribute("practiceSets", vocabService.findPracticeSetOptions(userId));
+        model.addAttribute("practiceSets", vocabService.findPracticeSetOptions(uid));
         model.addAttribute("selectedMastery", normalizeMastery(mastery));
         model.addAttribute("selectedOrder", normalizeOrder(order));
         model.addAttribute("selectedAmount", normalizeAmount(amount));
@@ -124,8 +124,8 @@ public class VocabularyController {
             @PathVariable Long setId,
             @AuthenticationPrincipal AppUserPrincipal user,
             Model model) {
-        Long userId = user == null ? null : user.id();
-        model.addAttribute("detail", vocabService.getSetDetail(setId, userId));
+        String uid = user == null ? null : user.firebaseUid();
+        model.addAttribute("detail", vocabService.getSetDetail(setId, uid));
         return "vocab/set-detail";
     }
 
@@ -141,7 +141,7 @@ public class VocabularyController {
         try {
             int created = vocabService.generateWordsWithAi(
                     setId,
-                    user == null ? null : user.id(),
+                    user == null ? null : user.firebaseUid(),
                     mode,
                     input,
                     count,
@@ -180,10 +180,10 @@ public class VocabularyController {
         if (user == null) {
             return "redirect:/login?redirect=/vocab/review";
         }
-        model.addAttribute("vocabSession", vocabService.getReviewSession(user.id(), 50));
+        model.addAttribute("vocabSession", vocabService.getReviewSession(user.firebaseUid(), 50));
         model.addAttribute("mode", normalizeMode(mode));
         model.addAttribute("reviewMode", true);
-        model.addAttribute("practiceSets", vocabService.findPracticeSetOptions(user.id()));
+        model.addAttribute("practiceSets", vocabService.findPracticeSetOptions(user.firebaseUid()));
         model.addAttribute("selectedMastery", "due");
         model.addAttribute("selectedOrder", "random");
         model.addAttribute("selectedAmount", "50");
@@ -196,7 +196,7 @@ public class VocabularyController {
             @PathVariable Long wordId,
             @AuthenticationPrincipal AppUserPrincipal user,
                 @Valid @RequestBody VocabReviewRequest request) {
-        return ResponseEntity.ok(ApiResponse.ok(vocabService.review(user == null ? null : user.id(), wordId, request.quality())));
+        return ResponseEntity.ok(ApiResponse.ok(vocabService.review(user == null ? null : user.firebaseUid(), wordId, request.quality())));
     }
 
     @PostMapping("/vocab/my-sets")
@@ -210,7 +210,7 @@ public class VocabularyController {
             return "redirect:/login?redirect=/vocab%3Ftab%3Dmy";
         }
         try {
-            vocabService.createMySet(user.id(), title, description, icon);
+            vocabService.createMySet(user.firebaseUid(), title, description, icon);
             redirectAttributes.addFlashAttribute("notice", "Đã tạo bộ từ vựng.");
         } catch (RuntimeException exception) {
             redirectAttributes.addFlashAttribute("error", errorMessage(exception));
@@ -228,7 +228,7 @@ public class VocabularyController {
             return "redirect:/login?redirect=/vocab%3Ftab%3Dmy";
         }
         try {
-            int created = vocabService.addManualWords(user.id(), targetSetId, rowsText);
+            int created = vocabService.addManualWords(user.firebaseUid(), targetSetId, rowsText);
             redirectAttributes.addFlashAttribute("notice", "Đã thêm " + created + " từ thủ công.");
         } catch (RuntimeException exception) {
             redirectAttributes.addFlashAttribute("error", errorMessage(exception));
@@ -246,7 +246,7 @@ public class VocabularyController {
             return "redirect:/login?redirect=/vocab%3Ftab%3Dmy";
         }
         try {
-            int created = vocabService.importWords(user.id(), targetSetId, file);
+            int created = vocabService.importWords(user.firebaseUid(), targetSetId, file);
             redirectAttributes.addFlashAttribute("notice", "Đã nhập " + created + " từ từ file.");
         } catch (RuntimeException exception) {
             redirectAttributes.addFlashAttribute("error", errorMessage(exception));
@@ -263,7 +263,7 @@ public class VocabularyController {
             return "redirect:/login?redirect=/vocab%3Ftab%3Dmy";
         }
         try {
-            vocabService.createMyFolder(user.id(), name);
+            vocabService.createMyFolder(user.firebaseUid(), name);
             redirectAttributes.addFlashAttribute("notice", "Đã tạo folder.");
         } catch (RuntimeException exception) {
             redirectAttributes.addFlashAttribute("error", errorMessage(exception));
@@ -281,7 +281,7 @@ public class VocabularyController {
             return "redirect:/login?redirect=/vocab%3Ftab%3Dmy";
         }
         try {
-            vocabService.assignMySetToFolder(user.id(), setId, folderId);
+            vocabService.assignMySetToFolder(user.firebaseUid(), setId, folderId);
             redirectAttributes.addFlashAttribute("notice", folderId == null ? "Đã bỏ bộ từ khỏi folder." : "Đã thêm bộ từ vào folder.");
         } catch (RuntimeException exception) {
             redirectAttributes.addFlashAttribute("error", errorMessage(exception));
@@ -298,7 +298,7 @@ public class VocabularyController {
             return "redirect:/login?redirect=/vocab%3Ftab%3Dmy";
         }
         try {
-            vocabService.shareMyFolder(user.id(), folderId);
+            vocabService.shareMyFolder(user.firebaseUid(), folderId);
             redirectAttributes.addFlashAttribute("notice", "Đã chia sẻ folder lên cộng đồng.");
         } catch (RuntimeException exception) {
             redirectAttributes.addFlashAttribute("error", errorMessage(exception));
@@ -316,7 +316,7 @@ public class VocabularyController {
             return "redirect:/login?redirect=/vocab%3Ftab%3Dmy";
         }
         try {
-            vocabService.renameMyFolder(user.id(), folderId, name);
+            vocabService.renameMyFolder(user.firebaseUid(), folderId, name);
             redirectAttributes.addFlashAttribute("notice", "Đã đổi tên folder.");
         } catch (RuntimeException exception) {
             redirectAttributes.addFlashAttribute("error", errorMessage(exception));
@@ -333,7 +333,7 @@ public class VocabularyController {
             return "redirect:/login?redirect=/vocab%3Ftab%3Dmy";
         }
         try {
-            vocabService.deleteMyFolder(user.id(), folderId);
+            vocabService.deleteMyFolder(user.firebaseUid(), folderId);
             redirectAttributes.addFlashAttribute("notice", "Đã xóa folder.");
         } catch (RuntimeException exception) {
             redirectAttributes.addFlashAttribute("error", errorMessage(exception));
@@ -350,7 +350,7 @@ public class VocabularyController {
             return "redirect:/login?redirect=/vocab%3Ftab%3Dcommunity";
         }
         try {
-            vocabService.copyCommunityFolder(user.id(), folderId);
+            vocabService.copyCommunityFolder(user.firebaseUid(), folderId);
             redirectAttributes.addFlashAttribute("notice", "Đã sao chép folder vào bộ từ của bạn.");
         } catch (RuntimeException exception) {
             redirectAttributes.addFlashAttribute("error", errorMessage(exception));
@@ -368,7 +368,7 @@ public class VocabularyController {
             return "redirect:/login?redirect=/vocab%3Ftab%3Dcommunity";
         }
         try {
-            int copied = vocabService.copyCommunitySet(user.id(), setId, targetSetId);
+            int copied = vocabService.copyCommunitySet(user.firebaseUid(), setId, targetSetId);
             redirectAttributes.addFlashAttribute("notice", "Đã sao chép " + copied + " từ.");
         } catch (RuntimeException exception) {
             redirectAttributes.addFlashAttribute("error", errorMessage(exception));
@@ -386,7 +386,7 @@ public class VocabularyController {
             return "redirect:/login?redirect=/vocab%3Ftab%3Dmy";
         }
         try {
-            vocabService.renameMySet(user.id(), setId, title);
+            vocabService.renameMySet(user.firebaseUid(), setId, title);
             redirectAttributes.addFlashAttribute("notice", "Đã đổi tên bộ từ.");
         } catch (RuntimeException exception) {
             redirectAttributes.addFlashAttribute("error", errorMessage(exception));
@@ -403,7 +403,7 @@ public class VocabularyController {
             return "redirect:/login?redirect=/vocab%3Ftab%3Dmy";
         }
         try {
-            vocabService.deleteMySet(user.id(), setId);
+            vocabService.deleteMySet(user.firebaseUid(), setId);
             redirectAttributes.addFlashAttribute("notice", "Đã xóa bộ từ.");
         } catch (RuntimeException exception) {
             redirectAttributes.addFlashAttribute("error", errorMessage(exception));
@@ -418,20 +418,20 @@ public class VocabularyController {
         };
     }
 
-    private void addProgressTabModel(Long userId, Model model) {
-        if (userId == null) {
+    private void addProgressTabModel(String uid, Model model) {
+        if (uid == null) {
             return;
         }
-        model.addAttribute("totalWords", vocabService.totalWords(userId));
-        model.addAttribute("learnedWords", vocabService.learnedWords(userId));
-        model.addAttribute("masteredWords", vocabService.masteredWords(userId));
-        model.addAttribute("dueWords", vocabService.dueWords(userId));
-        long studiedToday = vocabService.studiedWordsToday(userId);
+        model.addAttribute("totalWords", vocabService.totalWords(uid));
+        model.addAttribute("learnedWords", vocabService.learnedWords(uid));
+        model.addAttribute("masteredWords", vocabService.masteredWords(uid));
+        model.addAttribute("dueWords", vocabService.dueWords(uid));
+        long studiedToday = vocabService.studiedWordsToday(uid);
         int dailyNewGoal = vocabService.dailyNewWordGoal();
         model.addAttribute("studiedToday", studiedToday);
         model.addAttribute("dailyNewGoal", dailyNewGoal);
         model.addAttribute("dailyNewPercent", dailyNewGoal == 0 ? 0 : Math.min(100, Math.round((studiedToday * 100.0f) / dailyNewGoal)));
-        model.addAttribute("progressSets", vocabService.findProgressSetCards(userId));
+        model.addAttribute("progressSets", vocabService.findProgressSetCards(uid));
     }
 
     private String normalizeMode(String mode) {

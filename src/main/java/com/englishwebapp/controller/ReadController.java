@@ -88,7 +88,7 @@ public class ReadController {
             var levels = dauToeicClientService.listReadingDifficultyLevels(readingPartNumber(activeId));
             try {
                 model.addAttribute("dauToeicReadingLevels", readingProgressService.applyProgress(
-                        user == null ? null : user.id(),
+                        user == null ? null : user.firebaseUid(),
                         levels));
             } catch (RuntimeException exception) {
                 model.addAttribute("dauToeicReadingLevels", levels);

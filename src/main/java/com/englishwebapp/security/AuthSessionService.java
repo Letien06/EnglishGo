@@ -14,6 +14,7 @@ import org.springframework.stereotype.Service;
 @Service
 public class AuthSessionService {
 
+    @Deprecated(forRemoval = true)
     private static final String USER_ID = "AUTH_USER_ID";
     private static final String FIREBASE_UID = "AUTH_FIREBASE_UID";
     private static final String EMAIL = "AUTH_EMAIL";
@@ -22,7 +23,11 @@ public class AuthSessionService {
 
     public void storeAuthenticatedUser(HttpServletRequest request, User user) {
         HttpSession session = request.getSession(true);
-        session.setAttribute(USER_ID, user.getId());
+        if (user.getId() != null) {
+            session.setAttribute(USER_ID, user.getId());
+        } else {
+            session.removeAttribute(USER_ID);
+        }
         session.setAttribute(FIREBASE_UID, user.getFirebaseUid());
         session.setAttribute(EMAIL, user.getEmail());
         session.setAttribute(DISPLAY_NAME, user.getDisplayName());
@@ -31,7 +36,7 @@ public class AuthSessionService {
 
     public Optional<Authentication> getAuthentication(HttpServletRequest request) {
         HttpSession session = request.getSession(false);
-        if (session == null || session.getAttribute(USER_ID) == null || session.getAttribute(ROLE) == null) {
+        if (session == null || session.getAttribute(FIREBASE_UID) == null || session.getAttribute(ROLE) == null) {
             return Optional.empty();
         }
 

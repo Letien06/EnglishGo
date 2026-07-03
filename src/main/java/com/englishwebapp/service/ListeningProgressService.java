@@ -5,15 +5,13 @@ import com.englishwebapp.dto.ListeningProgressRequest;
 import com.englishwebapp.dto.ListeningProgressResponse;
 import com.englishwebapp.dto.ListeningProgressSummary;
 import com.englishwebapp.entity.ListeningProgress;
-import com.englishwebapp.repository.ListeningProgressRepository;
-import com.englishwebapp.repository.UserRepository;
+import com.englishwebapp.service.firestore.FirestoreListeningStore;
 import java.time.Instant;
 import java.util.List;
 import java.util.Locale;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.StringUtils;
 import org.springframework.web.server.ResponseStatusException;
 
@@ -21,18 +19,17 @@ import org.springframework.web.server.ResponseStatusException;
 @RequiredArgsConstructor
 public class ListeningProgressService {
 
-    private final ListeningProgressRepository listeningProgressRepository;
-    private final UserRepository userRepository;
+    private final FirestoreListeningStore listeningStore;
 
     public List<DauToeicDifficultyLevelResponse> applyProgress(
-            Long userId,
+            String uid,
             List<DauToeicDifficultyLevelResponse> levels) {
-        if (userId == null) {
+        if (!StringUtils.hasText(uid)) {
             return levels;
         }
         return levels.stream()
                 .map(level -> {
-                    ListeningProgressSummary summary = summarize(userId, level.part(), level.level());
+                    ListeningProgressSummary summary = summarize(uid, level.part(), level.level());
                     int remaining = Math.max(0, nullToZero(level.total()) - summary.done());
                     return new DauToeicDifficultyLevelResponse(
                             level.part(),
@@ -51,31 +48,25 @@ public class ListeningProgressService {
                 .toList();
     }
 
-    public ListeningProgressSummary summarize(Long userId, Integer part, Integer level) {
-        if (userId == null) {
+    public ListeningProgressSummary summarize(String uid, Integer part, Integer level) {
+        if (!StringUtils.hasText(uid)) {
             return new ListeningProgressSummary(part, level, 0, 0, 0);
         }
-        List<ListeningProgress> rows = listeningProgressRepository.findByUserIdAndPartAndLevel(userId, part, level);
+        List<ListeningProgress> rows = listeningStore.findProgressByPartAndLevel(uid, part, level);
         int correct = (int) rows.stream().filter(ListeningProgress::isCorrect).count();
         int wrong = rows.size() - correct;
         long distinctItems = rows.stream().map(ListeningProgress::getItemId).distinct().count();
         return new ListeningProgressSummary(part, level, (int) distinctItems, correct, wrong);
     }
 
-    @Transactional
-    public ListeningProgressResponse record(Long userId, ListeningProgressRequest request) {
+    public ListeningProgressResponse record(String uid, ListeningProgressRequest request) {
         boolean isCorrect = normalize(request.selectedAnswer()).equals(normalize(request.correctAnswer()));
-        if (userId == null) {
+        if (!StringUtils.hasText(uid)) {
             return new ListeningProgressResponse(false, false, isCorrect);
         }
         validate(request);
-        ListeningProgress progress = listeningProgressRepository
-                .findByUserIdAndQuestionId(userId, request.questionId().trim())
+        ListeningProgress progress = listeningStore.findProgress(uid, request.questionId().trim())
                 .orElseGet(ListeningProgress::new);
-        if (progress.getUser() == null) {
-            progress.setUser(userRepository.findById(userId)
-                    .orElseThrow(() -> new ResponseStatusException(HttpStatus.UNAUTHORIZED, "User not found")));
-        }
         progress.setSource("DAUTOEIC");
         progress.setPart(request.part());
         progress.setLevel(request.level());
@@ -90,7 +81,7 @@ public class ListeningProgressService {
         progress.setElapsedSeconds(request.elapsedSeconds() == null ? 0 : Math.max(0, request.elapsedSeconds()));
         progress.setScore(isCorrect ? request.level() * 10 : 0);
         progress.setCompletedAt(Instant.now());
-        listeningProgressRepository.save(progress);
+        listeningStore.saveProgress(uid, progress);
         return new ListeningProgressResponse(true, true, isCorrect);
     }
 

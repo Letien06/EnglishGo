@@ -4,8 +4,6 @@ import com.englishwebapp.config.AppProperties;
 import com.englishwebapp.dto.MediaUploadResponse;
 import com.englishwebapp.entity.MediaAsset;
 import com.englishwebapp.entity.MediaType;
-import com.englishwebapp.repository.MediaAssetRepository;
-import com.englishwebapp.repository.UserRepository;
 import com.englishwebapp.security.AppUserPrincipal;
 import java.io.IOException;
 import java.nio.file.Files;
@@ -16,7 +14,6 @@ import java.util.Set;
 import java.util.UUID;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.StringUtils;
 import org.springframework.web.multipart.MultipartFile;
 
@@ -28,13 +25,10 @@ public class MediaStorageService {
     private static final Set<String> IMAGE_TYPES = Set.of("image/jpeg", "image/png");
 
     private final AppProperties appProperties;
-    private final MediaAssetRepository mediaAssetRepository;
-    private final UserRepository userRepository;
 
-    @Transactional
     public MediaUploadResponse store(MultipartFile file, MediaType mediaType, AppUserPrincipal principal) {
         if (file == null || file.isEmpty()) {
-            throw new IllegalArgumentException("File upload không được để trống.");
+            throw new IllegalArgumentException("File upload khong duoc de trong.");
         }
 
         String contentType = file.getContentType() == null ? "" : file.getContentType().toLowerCase(Locale.ROOT);
@@ -51,29 +45,24 @@ public class MediaStorageService {
         Path targetDir = root.resolve(folder).normalize();
         Path targetFile = targetDir.resolve(storedFileName).normalize();
         if (!targetFile.startsWith(targetDir)) {
-            throw new IllegalArgumentException("Tên file không hợp lệ.");
+            throw new IllegalArgumentException("Ten file khong hop le.");
         }
 
         try {
             Files.createDirectories(targetDir);
             Files.copy(file.getInputStream(), targetFile, StandardCopyOption.REPLACE_EXISTING);
         } catch (IOException ex) {
-            throw new IllegalStateException("Không thể lưu file upload.", ex);
+            throw new IllegalStateException("Khong the luu file upload.", ex);
         }
 
-        MediaAsset asset = new MediaAsset();
-        asset.setOriginalFileName(originalName);
-        asset.setStoredFileName(storedFileName);
-        asset.setContentType(contentType);
-        asset.setFileSize(file.getSize());
-        asset.setStoragePath(targetFile.toString());
-        asset.setPublicUrl("/media/" + folder + "/" + storedFileName);
-        asset.setMediaType(mediaType);
-        if (principal != null && principal.id() != null) {
-            asset.setUploadedBy(userRepository.getReferenceById(principal.id()));
-        }
-
-        return toResponse(mediaAssetRepository.save(asset));
+        long id = Math.abs(storedFileName.hashCode());
+        return new MediaUploadResponse(
+                id,
+                mediaType,
+                originalName,
+                "/media/" + folder + "/" + storedFileName,
+                contentType,
+                file.getSize());
     }
 
     public MediaUploadResponse toResponse(MediaAsset asset) {
@@ -88,10 +77,10 @@ public class MediaStorageService {
 
     private void validateContentType(MediaType mediaType, String contentType) {
         if (mediaType == MediaType.AUDIO && !AUDIO_TYPES.contains(contentType)) {
-            throw new IllegalArgumentException("Chỉ hỗ trợ audio mp3.");
+            throw new IllegalArgumentException("Chi ho tro audio mp3.");
         }
         if (mediaType == MediaType.IMAGE && !IMAGE_TYPES.contains(contentType)) {
-            throw new IllegalArgumentException("Chỉ hỗ trợ ảnh jpg hoặc png.");
+            throw new IllegalArgumentException("Chi ho tro anh jpg hoac png.");
         }
     }
 

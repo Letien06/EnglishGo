@@ -35,7 +35,13 @@ public class CommunityController {
     public String comment(
             @AuthenticationPrincipal AppUserPrincipal user,
             @RequestParam String content) {
-        communityService.addComment(user.id(), "GENERAL", 1L, content);
+        communityService.addComment(
+                user.firebaseUid(),
+                user.email(),
+                user.displayName(),
+                "GENERAL",
+                1L,
+                content);
         return "redirect:/community";
     }
 }

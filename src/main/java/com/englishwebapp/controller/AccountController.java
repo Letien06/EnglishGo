@@ -38,7 +38,7 @@ public class AccountController {
             @RequestParam(defaultValue = "profile") String tab,
             HttpServletRequest request,
             Model model) {
-        addSettingsModel(user.id(), model, null, null, tab, request);
+        addSettingsModel(user.firebaseUid(), model, null, null, tab, request);
         return "account/index";
     }
 
@@ -51,11 +51,11 @@ public class AccountController {
             RedirectAttributes redirectAttributes,
             Model model) {
         if (bindingResult.hasErrors()) {
-            addSettingsModel(user.id(), model, form, null, "profile", request);
+            addSettingsModel(user.firebaseUid(), model, form, null, "profile", request);
             return "account/index";
         }
 
-        User updatedUser = accountService.updateSettings(user.id(), form);
+        User updatedUser = accountService.updateSettings(user.firebaseUid(), form);
         authSessionService.storeAuthenticatedUser(request, updatedUser);
         redirectAttributes.addFlashAttribute("message", "Da luu thay doi.");
         return "redirect:/account?tab=profile";
@@ -70,15 +70,15 @@ public class AccountController {
             RedirectAttributes redirectAttributes,
             Model model) {
         if (bindingResult.hasErrors()) {
-            addSettingsModel(user.id(), model, null, passwordForm, "password", request);
+            addSettingsModel(user.firebaseUid(), model, null, passwordForm, "password", request);
             return "account/index";
         }
 
         try {
-            accountService.changePassword(user.id(), passwordForm);
+            accountService.changePassword(user.firebaseUid(), passwordForm);
         } catch (ResponseStatusException ex) {
             bindingResult.reject("passwordUpdate", ex.getReason());
-            addSettingsModel(user.id(), model, null, passwordForm, "password", request);
+            addSettingsModel(user.firebaseUid(), model, null, passwordForm, "password", request);
             return "account/index";
         }
         redirectAttributes.addFlashAttribute("message", "Da doi mat khau.");
@@ -86,13 +86,13 @@ public class AccountController {
     }
 
     private void addSettingsModel(
-            Long userId,
+            String uid,
             Model model,
             AccountSettingsForm profileFormOverride,
             PasswordChangeForm passwordFormOverride,
             String activeTab,
             HttpServletRequest request) {
-        AccountSettingsView settings = accountService.getSettings(userId);
+        AccountSettingsView settings = accountService.getSettings(uid);
         model.addAttribute("settings", settings);
         model.addAttribute("activeTab", normalizeTab(activeTab));
         model.addAttribute("devices", currentDevices(request));

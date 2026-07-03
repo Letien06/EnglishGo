@@ -19,7 +19,7 @@ public class AiWritingController {
 
     @GetMapping("/ai/writing")
     public String writing(@AuthenticationPrincipal AppUserPrincipal user, Model model) {
-        model.addAttribute("jobs", aiWritingService.recentJobs(user.id()));
+        model.addAttribute("jobs", aiWritingService.recentJobs(user.firebaseUid()));
         return "ai/writing";
     }
 
@@ -28,7 +28,7 @@ public class AiWritingController {
             @AuthenticationPrincipal AppUserPrincipal user,
             @RequestParam @NotBlank String prompt,
             @RequestParam @NotBlank String responseText) {
-        aiWritingService.submit(user.id(), prompt, responseText);
+        aiWritingService.submit(user.firebaseUid(), prompt, responseText);
         return "redirect:/ai/writing";
     }
 }

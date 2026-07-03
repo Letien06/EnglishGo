@@ -27,7 +27,7 @@ public class LayoutControllerAdvice {
             return 0;
         }
         try {
-            return vocabService.streakDays(user.id());
+            return vocabService.streakDays(user.firebaseUid());
         } catch (RuntimeException exception) {
             return 0;
         }

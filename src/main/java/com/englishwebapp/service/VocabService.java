@@ -72,7 +72,7 @@ public class VocabService {
     private static final String SETS = "vocabSets";
     private static final String WORDS = "vocabWords";
     private static final String FOLDERS = "vocabFolders";
-    private static final String PROGRESS = "userVocabProgress";
+    private static final String PROGRESS = "vocabProgress";
     private static final String COUNTERS = "counters";
 
     private final ObjectProvider<Firestore> firestoreProvider;
@@ -95,11 +95,11 @@ public class VocabService {
         return findSets(topic, pageable).map(this::toSetCard);
     }
 
-    public List<VocabSetCard> findPracticeSetOptions(Long userId) {
+    public List<VocabSetCard> findPracticeSetOptions(String uid) {
         Map<Long, VocabSetCard> options = new LinkedHashMap<>();
-        if (userId != null) {
+        if (uid != null) {
             publishedSets().stream()
-                    .filter(set -> isOwner(set, userId))
+                    .filter(set -> isOwner(set, uid))
                     .sorted(updatedDesc())
                     .map(this::toSetCard)
                     .forEach(card -> options.putIfAbsent(card.id(), card));
@@ -113,43 +113,43 @@ public class VocabService {
         return List.copyOf(options.values());
     }
 
-    public List<MyVocabSetCard> findMySetCards(Long userId) {
-        return findMySetCards(userId, null);
+    public List<MyVocabSetCard> findMySetCards(String uid) {
+        return findMySetCards(uid, null);
     }
 
-    public List<MyVocabSetCard> findMySetCards(Long userId, Long folderId) {
-        if (userId == null) {
+    public List<MyVocabSetCard> findMySetCards(String uid, Long folderId) {
+        if (uid == null) {
             return List.of();
         }
         if (folderId != null) {
-            requireOwnedFolder(userId, folderId);
+            requireOwnedFolder(uid, folderId);
         }
         return publishedSets().stream()
-                .filter(set -> isOwner(set, userId))
+                .filter(set -> isOwner(set, uid))
                 .filter(set -> folderId == null || folderId.equals(folderId(set)))
                 .sorted(updatedDesc())
-                .map(set -> toMySetCard(userId, set))
+                .map(set -> toMySetCard(uid, set))
                 .toList();
     }
 
-    public List<MyVocabFolderCard> findMyFolderCards(Long userId) {
-        return findMyFolderCards(userId, null);
+    public List<MyVocabFolderCard> findMyFolderCards(String uid) {
+        return findMyFolderCards(uid, null);
     }
 
-    public List<MyVocabFolderCard> findMyFolderCards(Long userId, String search) {
-        if (userId == null) {
+    public List<MyVocabFolderCard> findMyFolderCards(String uid, String search) {
+        if (uid == null) {
             return List.of();
         }
         return liveFolders().stream()
-                .filter(folder -> userId.equals(folder.getUser().getId()))
+                .filter(folder -> uid.equals(folder.getUser().getFirebaseUid()))
                 .filter(folder -> !StringUtils.hasText(search) || containsIgnoreCase(folder.getName(), search))
                 .sorted(folderUpdatedDesc())
                 .map(folder -> {
                     long setCount = publishedSets().stream()
-                            .filter(set -> isOwner(set, userId) && folder.getId().equals(folderId(set)))
+                            .filter(set -> isOwner(set, uid) && folder.getId().equals(folderId(set)))
                             .count();
                     long wordCount = publishedSets().stream()
-                            .filter(set -> isOwner(set, userId) && folder.getId().equals(folderId(set)))
+                            .filter(set -> isOwner(set, uid) && folder.getId().equals(folderId(set)))
                             .mapToLong(set -> wordsForSet(set.getId()).size())
                             .sum();
                     return new MyVocabFolderCard(folder.getId(), folder.getName(), setCount, wordCount, folder.isPublicShared());
@@ -188,27 +188,27 @@ public class VocabService {
         return totalWords(null);
     }
 
-    public long totalWords(Long userId) {
+    public long totalWords(String uid) {
         Map<Long, VocabSet> setsById = publishedSets().stream()
                 .collect(Collectors.toMap(VocabSet::getId, set -> set));
         return publishedWords().stream()
-                .filter(word -> isSetAccessible(setsById.get(folderlessSetId(word)), userId))
+                .filter(word -> isSetAccessible(setsById.get(folderlessSetId(word)), uid))
                 .count();
     }
 
-    public long learnedWords(Long userId) {
-        return userId == null ? 0 : progressForUser(userId).size();
+    public long learnedWords(String uid) {
+        return uid == null ? 0 : progressForUser(uid).size();
     }
 
-    public long masteredWords(Long userId) {
-        return userId == null ? 0 : progressForUser(userId).stream()
+    public long masteredWords(String uid) {
+        return uid == null ? 0 : progressForUser(uid).stream()
                 .filter(progress -> progress.status() == VocabProgressStatus.MASTERED)
                 .count();
     }
 
-    public long dueWords(Long userId) {
+    public long dueWords(String uid) {
         Instant now = Instant.now();
-        return userId == null ? 0 : progressForUser(userId).stream()
+        return uid == null ? 0 : progressForUser(uid).stream()
                 .filter(progress -> progress.nextReviewAt() != null && !progress.nextReviewAt().isAfter(now))
                 .count();
     }
@@ -217,23 +217,23 @@ public class VocabService {
         return DAILY_NEW_WORD_GOAL;
     }
 
-    public long studiedWordsToday(Long userId) {
-        if (userId == null) {
+    public long studiedWordsToday(String uid) {
+        if (uid == null) {
             return 0;
         }
         Instant startOfDay = LocalDate.now(ZoneId.systemDefault())
                 .atStartOfDay(ZoneId.systemDefault())
                 .toInstant();
-        return progressForUser(userId).stream()
+        return progressForUser(uid).stream()
                 .filter(progress -> progress.lastReviewedAt() != null && !progress.lastReviewedAt().isBefore(startOfDay))
                 .count();
     }
 
-    public int streakDays(Long userId) {
-        if (userId == null) {
+    public int streakDays(String uid) {
+        if (uid == null) {
             return 0;
         }
-        List<LocalDate> days = progressForUser(userId).stream()
+        List<LocalDate> days = progressForUser(uid).stream()
                 .map(ProgressDoc::lastReviewedAt)
                 .filter(java.util.Objects::nonNull)
                 .map(instant -> LocalDate.ofInstant(instant, ZoneId.systemDefault()))
@@ -259,13 +259,13 @@ public class VocabService {
         return streak;
     }
 
-    public List<VocabProgressSetCard> findProgressSetCards(Long userId) {
-        if (userId == null) {
+    public List<VocabProgressSetCard> findProgressSetCards(String uid) {
+        if (uid == null) {
             return List.of();
         }
         Map<Long, VocabSet> setsById = new LinkedHashMap<>();
         publishedSets().stream()
-                .filter(set -> isOwner(set, userId))
+                .filter(set -> isOwner(set, uid))
                 .sorted(updatedDesc())
                 .forEach(set -> setsById.putIfAbsent(set.getId(), set));
         publishedSets().stream()
@@ -274,7 +274,7 @@ public class VocabService {
                 .limit(100)
                 .forEach(set -> setsById.putIfAbsent(set.getId(), set));
         return setsById.values().stream()
-                .map(set -> toProgressSetCard(userId, set))
+                .map(set -> toProgressSetCard(uid, set))
                 .sorted((left, right) -> {
                     int dueCompare = Long.compare(right.dueWords(), left.dueWords());
                     if (dueCompare != 0) {
@@ -294,10 +294,10 @@ public class VocabService {
         return new VocabSetSession(set, wordCards(wordsForSet(setId)));
     }
 
-    public VocabSetSession getFilteredSession(Long setId, Long userId, String mastery, String order, String amount) {
+    public VocabSetSession getFilteredSession(Long setId, String uid, String mastery, String order, String amount) {
         VocabSet set = requirePublishedSet(setId);
-        assertSetAccessible(set, userId);
-        Map<Long, ProgressDoc> progressByWordId = progressForSet(userId, setId).stream()
+        assertSetAccessible(set, uid);
+        Map<Long, ProgressDoc> progressByWordId = progressForSet(uid, setId).stream()
                 .collect(Collectors.toMap(ProgressDoc::wordId, progress -> progress));
         String safeMastery = normalizeMastery(mastery);
         Instant now = Instant.now();
@@ -312,13 +312,14 @@ public class VocabService {
         return new VocabSetSession(set, cards.stream().limit(limit).toList());
     }
 
-    public VocabSet createMySet(Long userId, String title, String description, String icon) {
-        requireUserId(userId);
+    public VocabSet createMySet(String uid, String title, String description, String icon) {
+        requireUid(uid);
         long id = nextId(SETS);
         Instant now = Instant.now();
         Map<String, Object> data = new LinkedHashMap<>();
         data.put("id", id);
-        data.put("createdById", userId);
+        data.put("ownerUid", uid);
+        data.put("ownerName", userLabel(uid));
         data.put("title", StringUtils.hasText(title) ? title.trim() : "My vocabulary set");
         data.put("topic", "My vocabulary set");
         data.put("description", cleanOptional(description));
@@ -332,8 +333,8 @@ public class VocabService {
         return requirePublishedSet(id);
     }
 
-    public VocabFolder createMyFolder(Long userId, String name) {
-        requireUserId(userId);
+    public VocabFolder createMyFolder(String uid, String name) {
+        requireUid(uid);
         if (!StringUtils.hasText(name)) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Folder name is required");
         }
@@ -341,20 +342,20 @@ public class VocabService {
         Instant now = Instant.now();
         Map<String, Object> data = new LinkedHashMap<>();
         data.put("id", id);
-        data.put("userId", userId);
-        data.put("ownerName", userLabel(userId));
+        data.put("ownerUid", uid);
+        data.put("ownerName", userLabel(uid));
         data.put("name", name.trim());
         data.put("publicShared", false);
         data.put("createdAtMillis", now.toEpochMilli());
         data.put("updatedAtMillis", now.toEpochMilli());
         setDoc(FOLDERS, id, data);
-        return requireOwnedFolder(userId, id);
+        return requireOwnedFolder(uid, id);
     }
 
-    public void assignMySetToFolder(Long userId, Long setId, Long folderId) {
-        requireUserId(userId);
-        VocabSet set = requireOwnedSet(userId, setId);
-        VocabFolder folder = folderId == null ? null : requireOwnedFolder(userId, folderId);
+    public void assignMySetToFolder(String uid, Long setId, Long folderId) {
+        requireUid(uid);
+        VocabSet set = requireOwnedSet(uid, setId);
+        VocabFolder folder = folderId == null ? null : requireOwnedFolder(uid, folderId);
         Map<String, Object> data = new LinkedHashMap<>();
         data.put("folderId", folder == null ? null : folder.getId());
         data.put("folderName", folder == null ? null : folder.getName());
@@ -366,8 +367,8 @@ public class VocabService {
         }
     }
 
-    public void shareMyFolder(Long userId, Long folderId) {
-        VocabFolder folder = requireOwnedFolder(userId, folderId);
+    public void shareMyFolder(String uid, Long folderId) {
+        VocabFolder folder = requireOwnedFolder(uid, folderId);
         Instant now = Instant.now();
         Map<String, Object> data = new LinkedHashMap<>();
         data.put("publicShared", true);
@@ -379,8 +380,8 @@ public class VocabService {
                 .forEach(set -> setDoc(SETS, set.getId(), Map.of("folderPublicShared", true)));
     }
 
-    public void renameMyFolder(Long userId, Long folderId, String name) {
-        VocabFolder folder = requireOwnedFolder(userId, folderId);
+    public void renameMyFolder(String uid, Long folderId, String name) {
+        VocabFolder folder = requireOwnedFolder(uid, folderId);
         if (!StringUtils.hasText(name)) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Folder name is required");
         }
@@ -391,8 +392,8 @@ public class VocabService {
                 .forEach(set -> setDoc(SETS, set.getId(), Map.of("folderName", cleanName)));
     }
 
-    public void deleteMyFolder(Long userId, Long folderId) {
-        VocabFolder folder = requireOwnedFolder(userId, folderId);
+    public void deleteMyFolder(String uid, Long folderId) {
+        VocabFolder folder = requireOwnedFolder(uid, folderId);
         setDoc(FOLDERS, folder.getId(), Map.of("deletedAtMillis", Instant.now().toEpochMilli()));
         publishedSets().stream()
                 .filter(set -> folder.getId().equals(folderId(set)))
@@ -406,49 +407,49 @@ public class VocabService {
                 });
     }
 
-    public VocabFolder copyCommunityFolder(Long userId, Long folderId) {
-        requireUserId(userId);
+    public VocabFolder copyCommunityFolder(String uid, Long folderId) {
+        requireUid(uid);
         VocabFolder sourceFolder = requirePublicFolder(folderId);
-        VocabFolder targetFolder = createMyFolder(userId, uniqueFolderName(userId, sourceFolder.getName()));
+        VocabFolder targetFolder = createMyFolder(uid, uniqueFolderName(uid, sourceFolder.getName()));
         publishedSets().stream()
                 .filter(set -> folderId.equals(folderId(set)))
-                .forEach(sourceSet -> copySetAsNew(userId, sourceSet, targetFolder));
+                .forEach(sourceSet -> copySetAsNew(uid, sourceSet, targetFolder));
         return targetFolder;
     }
 
-    public int copyCommunitySet(Long userId, Long sourceSetId, Long targetSetId) {
-        requireUserId(userId);
+    public int copyCommunitySet(String uid, Long sourceSetId, Long targetSetId) {
+        requireUid(uid);
         VocabSet sourceSet = requirePublishedSet(sourceSetId);
         if (!isSetPublicShared(sourceSet)) {
             throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Vocabulary set not found");
         }
         VocabSet targetSet = targetSetId == null
-                ? copySetShell(userId, sourceSet, null)
-                : requireOwnedSet(userId, targetSetId);
+                ? copySetShell(uid, sourceSet, null)
+                : requireOwnedSet(uid, targetSetId);
         return copyWords(sourceSet, targetSet);
     }
 
-    public void renameMySet(Long userId, Long setId, String title) {
-        VocabSet set = requireOwnedSet(userId, setId);
+    public void renameMySet(String uid, Long setId, String title) {
+        VocabSet set = requireOwnedSet(uid, setId);
         if (!StringUtils.hasText(title)) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Set title is required");
         }
         setDoc(SETS, set.getId(), Map.of("title", title.trim(), "updatedAtMillis", Instant.now().toEpochMilli()));
     }
 
-    public void deleteMySet(Long userId, Long setId) {
-        VocabSet set = requireOwnedSet(userId, setId);
+    public void deleteMySet(String uid, Long setId) {
+        VocabSet set = requireOwnedSet(uid, setId);
         setDoc(SETS, set.getId(), Map.of("deletedAtMillis", Instant.now().toEpochMilli()));
     }
 
-    public int addManualWords(Long userId, Long setId, String rowsText) {
-        requireOwnedSet(userId, setId);
+    public int addManualWords(String uid, Long setId, String rowsText) {
+        requireOwnedSet(uid, setId);
         List<AiVocabCandidate> candidates = parseDelimitedWords(rowsText);
         return saveCandidates(setId, candidates, SourceType.MANUAL, "Added manually by the learner.", 300);
     }
 
-    public int importWords(Long userId, Long setId, MultipartFile file) {
-        requireOwnedSet(userId, setId);
+    public int importWords(String uid, Long setId, MultipartFile file) {
+        requireOwnedSet(uid, setId);
         if (file == null || file.isEmpty()) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Import file is required");
         }
@@ -468,11 +469,11 @@ public class VocabService {
         return saveCandidates(setId, candidates, sourceType, "Imported from " + (StringUtils.hasText(filename) ? filename : "uploaded file") + ".", 500);
     }
 
-    public VocabSetDetail getSetDetail(Long setId, Long userId) {
+    public VocabSetDetail getSetDetail(Long setId, String uid) {
         VocabSet set = requirePublishedSet(setId);
-        assertSetAccessible(set, userId);
+        assertSetAccessible(set, uid);
         List<VocabWord> words = wordsForSet(setId);
-        Map<Long, ProgressDoc> progressByWordId = progressForSet(userId, setId).stream()
+        Map<Long, ProgressDoc> progressByWordId = progressForSet(uid, setId).stream()
                 .collect(Collectors.toMap(ProgressDoc::wordId, progress -> progress));
         long mastered = progressByWordId.values().stream()
                 .filter(progress -> progress.status() == VocabProgressStatus.MASTERED)
@@ -501,7 +502,8 @@ public class VocabService {
                         .toList());
     }
 
-    public int generateWordsWithAi(Long setId, Long userId, String mode, String input, int count, MultipartFile image) {
+    public int generateWordsWithAi(Long setId, String uid, String mode, String input, int count, MultipartFile image) {
+        requireOwnedSet(uid, setId);
         return saveAiWords(setId, previewAiWords(setId, mode, input, count, image));
     }
 
@@ -575,8 +577,8 @@ public class VocabService {
         return created;
     }
 
-    public VocabSetSession getReviewSession(Long userId, int size) {
-        if (userId == null) {
+    public VocabSetSession getReviewSession(String uid, int size) {
+        if (uid == null) {
             throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Login required");
         }
         VocabSet virtualSet = new VocabSet();
@@ -585,7 +587,7 @@ public class VocabService {
         virtualSet.setTopic("SM-2 Review");
         virtualSet.setLevel("Personal");
         Instant now = Instant.now();
-        List<VocabWordCard> cards = progressForUser(userId).stream()
+        List<VocabWordCard> cards = progressForUser(uid).stream()
                 .filter(progress -> progress.nextReviewAt() != null && !progress.nextReviewAt().isAfter(now))
                 .sorted(Comparator.comparing(ProgressDoc::nextReviewAt))
                 .limit(Math.max(1, Math.min(size, 100)))
@@ -596,14 +598,14 @@ public class VocabService {
         return new VocabSetSession(virtualSet, cards);
     }
 
-    public VocabReviewResponse review(Long userId, Long wordId, int quality) {
-        if (userId == null) {
+    public VocabReviewResponse review(String uid, Long wordId, int quality) {
+        if (uid == null) {
             throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Login required");
         }
         VocabWord word = findWord(wordId)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Vocabulary word not found"));
-        ProgressDoc progress = findProgress(userId, wordId)
-                .orElseGet(() -> new ProgressDoc(userId, wordId, folderlessSetId(word), VocabProgressStatus.NEW,
+        ProgressDoc progress = findProgress(uid, wordId)
+                .orElseGet(() -> new ProgressDoc(uid, wordId, folderlessSetId(word), VocabProgressStatus.NEW,
                         0, BigDecimal.valueOf(2.50), 0, null, null));
         progress = applySm2(progress, quality);
         saveProgress(progress);
@@ -654,7 +656,7 @@ public class VocabService {
         }
 
         return new ProgressDoc(
-                progress.userId(),
+                progress.uid(),
                 progress.wordId(),
                 progress.setId(),
                 status,
@@ -675,9 +677,9 @@ public class VocabService {
                 false);
     }
 
-    private MyVocabSetCard toMySetCard(Long userId, VocabSet set) {
+    private MyVocabSetCard toMySetCard(String uid, VocabSet set) {
         long total = wordsForSet(set.getId()).size();
-        long mastered = progressForSet(userId, set.getId()).stream()
+        long mastered = progressForSet(uid, set.getId()).stream()
                 .filter(progress -> progress.status() == VocabProgressStatus.MASTERED)
                 .count();
         int percent = total == 0 ? 0 : (int) Math.round((mastered * 100.0) / total);
@@ -694,8 +696,8 @@ public class VocabService {
                 percent);
     }
 
-    private VocabProgressSetCard toProgressSetCard(Long userId, VocabSet set) {
-        List<ProgressDoc> progress = progressForSet(userId, set.getId());
+    private VocabProgressSetCard toProgressSetCard(String uid, VocabSet set) {
+        List<ProgressDoc> progress = progressForSet(uid, set.getId());
         long total = wordsForSet(set.getId()).size();
         long learned = progress.size();
         long mastered = progress.stream().filter(item -> item.status() == VocabProgressStatus.MASTERED).count();
@@ -737,14 +739,14 @@ public class VocabService {
                 .sum();
         String ownerName = StringUtils.hasText(folder.getUser().getDisplayName())
                 ? folder.getUser().getDisplayName()
-                : userLabel(folder.getUser().getId());
+                : userLabel(folder.getUser().getFirebaseUid());
         return new CommunityVocabFolderCard(folder.getId(), folder.getName(), ownerName, setCount, wordCount);
     }
 
-    private String uniqueFolderName(Long userId, String sourceName) {
+    private String uniqueFolderName(String uid, String sourceName) {
         String base = StringUtils.hasText(sourceName) ? sourceName.trim() : "Copied folder";
         List<String> existing = liveFolders().stream()
-                .filter(folder -> userId.equals(folder.getUser().getId()))
+                .filter(folder -> uid.equals(folder.getUser().getFirebaseUid()))
                 .map(folder -> folder.getName().trim().toLowerCase(Locale.ROOT))
                 .toList();
         if (!existing.contains(base.toLowerCase(Locale.ROOT))) {
@@ -759,18 +761,19 @@ public class VocabService {
         return base + " copy";
     }
 
-    private VocabSet copySetAsNew(Long userId, VocabSet sourceSet, VocabFolder targetFolder) {
-        VocabSet targetSet = copySetShell(userId, sourceSet, targetFolder);
+    private VocabSet copySetAsNew(String uid, VocabSet sourceSet, VocabFolder targetFolder) {
+        VocabSet targetSet = copySetShell(uid, sourceSet, targetFolder);
         copyWords(sourceSet, targetSet);
         return targetSet;
     }
 
-    private VocabSet copySetShell(Long userId, VocabSet sourceSet, VocabFolder targetFolder) {
+    private VocabSet copySetShell(String uid, VocabSet sourceSet, VocabFolder targetFolder) {
         long id = nextId(SETS);
         Instant now = Instant.now();
         Map<String, Object> data = new LinkedHashMap<>();
         data.put("id", id);
-        data.put("createdById", userId);
+        data.put("ownerUid", uid);
+        data.put("ownerName", userLabel(uid));
         data.put("folderId", targetFolder == null ? null : targetFolder.getId());
         data.put("folderName", targetFolder == null ? null : targetFolder.getName());
         data.put("folderPublicShared", targetFolder != null && targetFolder.isPublicShared());
@@ -1021,14 +1024,14 @@ public class VocabService {
         return "mastered".equals(mastery) ? mastered : !mastered;
     }
 
-    private void assertSetAccessible(VocabSet set, Long userId) {
-        if (isSetAccessible(set, userId)) {
+    private void assertSetAccessible(VocabSet set, String uid) {
+        if (isSetAccessible(set, uid)) {
             return;
         }
         throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Vocabulary set not found");
     }
 
-    private boolean isSetAccessible(VocabSet set, Long userId) {
+    private boolean isSetAccessible(VocabSet set, String uid) {
         if (set == null) {
             return false;
         }
@@ -1038,7 +1041,7 @@ public class VocabService {
         if (isSetPublicShared(set)) {
             return true;
         }
-        return userId != null && set.getCreatedBy().getId().equals(userId);
+        return uid != null && uid.equals(set.getCreatedBy().getFirebaseUid());
     }
 
     private boolean isSetPublicShared(VocabSet set) {
@@ -1068,8 +1071,8 @@ public class VocabService {
         return cleaned == null || cleaned.length() > 8 ? "*" : cleaned;
     }
 
-    private void requireUserId(Long userId) {
-        if (userId == null) {
+    private void requireUid(String uid) {
+        if (!StringUtils.hasText(uid)) {
             throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Login required");
         }
     }
@@ -1208,17 +1211,17 @@ public class VocabService {
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Vocabulary set not found"));
     }
 
-    private VocabSet requireOwnedSet(Long userId, Long setId) {
+    private VocabSet requireOwnedSet(String uid, Long setId) {
         VocabSet set = requirePublishedSet(setId);
-        if (!isOwner(set, userId)) {
+        if (!isOwner(set, uid)) {
             throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Vocabulary set not found");
         }
         return set;
     }
 
-    private VocabFolder requireOwnedFolder(Long userId, Long folderId) {
+    private VocabFolder requireOwnedFolder(String uid, Long folderId) {
         return liveFolders().stream()
-                .filter(folder -> folderId.equals(folder.getId()) && userId.equals(folder.getUser().getId()))
+                .filter(folder -> folderId.equals(folder.getId()) && uid.equals(folder.getUser().getFirebaseUid()))
                 .findFirst()
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Folder not found"));
     }
@@ -1230,8 +1233,8 @@ public class VocabService {
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Folder not found"));
     }
 
-    private boolean isOwner(VocabSet set, Long userId) {
-        return userId != null && set.getCreatedBy() != null && userId.equals(set.getCreatedBy().getId());
+    private boolean isOwner(VocabSet set, String uid) {
+        return uid != null && set.getCreatedBy() != null && uid.equals(set.getCreatedBy().getFirebaseUid());
     }
 
     private Long folderId(VocabSet set) {
@@ -1250,34 +1253,40 @@ public class VocabService {
         return Comparator.comparing(VocabFolder::getUpdatedAt, Comparator.nullsLast(Comparator.reverseOrder()));
     }
 
-    private List<ProgressDoc> progressForUser(Long userId) {
-        if (userId == null) {
+    private List<ProgressDoc> progressForUser(String uid) {
+        if (uid == null) {
             return List.of();
         }
-        return documents(PROGRESS).stream()
-                .filter(doc -> userId.equals(longValue(doc, "userId")))
+        List<ProgressDoc> progress = userProgressDocuments(uid).stream()
+                .map(this::toProgress)
+                .toList();
+        if (!progress.isEmpty()) {
+            return progress;
+        }
+        return documents("userVocabProgress").stream()
+                .filter(doc -> uid.equals(stringValue(doc, "uid")))
                 .map(this::toProgress)
                 .toList();
     }
 
-    private List<ProgressDoc> progressForSet(Long userId, Long setId) {
-        if (userId == null) {
+    private List<ProgressDoc> progressForSet(String uid, Long setId) {
+        if (uid == null) {
             return List.of();
         }
-        return progressForUser(userId).stream()
+        return progressForUser(uid).stream()
                 .filter(progress -> setId.equals(progress.setId()))
                 .toList();
     }
 
-    private Optional<ProgressDoc> findProgress(Long userId, Long wordId) {
-        return progressForUser(userId).stream()
+    private Optional<ProgressDoc> findProgress(String uid, Long wordId) {
+        return progressForUser(uid).stream()
                 .filter(progress -> wordId.equals(progress.wordId()))
                 .findFirst();
     }
 
     private void saveProgress(ProgressDoc progress) {
         Map<String, Object> data = new LinkedHashMap<>();
-        data.put("userId", progress.userId());
+        data.put("uid", progress.uid());
         data.put("wordId", progress.wordId());
         data.put("setId", progress.setId());
         data.put("status", progress.status().name());
@@ -1286,7 +1295,28 @@ public class VocabService {
         data.put("repetitions", progress.repetitions());
         data.put("nextReviewAtMillis", millis(progress.nextReviewAt()));
         data.put("lastReviewedAtMillis", millis(progress.lastReviewedAt()));
-        setDoc(PROGRESS, progress.userId() + "_" + progress.wordId(), data);
+        try {
+            await(firestore()
+                    .collection("users")
+                    .document(progress.uid())
+                    .collection(PROGRESS)
+                    .document(String.valueOf(progress.wordId()))
+                    .set(data, SetOptions.merge()));
+        } catch (Exception ex) {
+            throw firestoreFailure(ex);
+        }
+    }
+
+    private List<DocumentSnapshot> userProgressDocuments(String uid) {
+        try {
+            return new ArrayList<>(await(firestore()
+                    .collection("users")
+                    .document(uid)
+                    .collection(PROGRESS)
+                    .get()).getDocuments());
+        } catch (Exception ex) {
+            throw firestoreFailure(ex);
+        }
     }
 
     private boolean wordExists(Long setId, String normalizedWord) {
@@ -1305,9 +1335,13 @@ public class VocabService {
         VocabSet set = new VocabSet();
         Long id = longValue(doc, "id");
         set.setId(id == null ? Long.parseLong(doc.getId()) : id);
-        Long createdById = longValue(doc, "createdById");
-        if (createdById != null) {
-            set.setCreatedBy(stubUser(createdById, null));
+        String ownerUid = stringValue(doc, "ownerUid");
+        if (!StringUtils.hasText(ownerUid)) {
+            Long createdById = longValue(doc, "createdById");
+            ownerUid = createdById == null ? null : "legacy-" + createdById;
+        }
+        if (StringUtils.hasText(ownerUid)) {
+            set.setCreatedBy(stubUser(ownerUid, stringValue(doc, "ownerName")));
         }
         Long folderId = longValue(doc, "folderId");
         if (folderId != null) {
@@ -1357,9 +1391,13 @@ public class VocabService {
     private VocabFolder toFolder(DocumentSnapshot doc) {
         VocabFolder folder = new VocabFolder();
         Long id = longValue(doc, "id");
-        Long userId = longValue(doc, "userId");
+        String ownerUid = stringValue(doc, "ownerUid");
+        if (!StringUtils.hasText(ownerUid)) {
+            Long legacyOwnerId = longValue(doc, "userId");
+            ownerUid = legacyOwnerId == null ? null : "legacy-" + legacyOwnerId;
+        }
         folder.setId(id == null ? Long.parseLong(doc.getId()) : id);
-        folder.setUser(stubUser(userId, stringValue(doc, "ownerName")));
+        folder.setUser(stubUser(ownerUid, stringValue(doc, "ownerName")));
         folder.setName(defaultString(stringValue(doc, "name"), "Folder"));
         folder.setPublicShared(boolValue(doc, "publicShared"));
         folder.setSharedAt(instantValue(doc, "sharedAtMillis"));
@@ -1371,7 +1409,7 @@ public class VocabService {
 
     private ProgressDoc toProgress(DocumentSnapshot doc) {
         return new ProgressDoc(
-                longValue(doc, "userId"),
+                stringValue(doc, "uid"),
                 longValue(doc, "wordId"),
                 longValue(doc, "setId"),
                 enumValue(VocabProgressStatus.class, stringValue(doc, "status"), VocabProgressStatus.NEW),
@@ -1382,11 +1420,10 @@ public class VocabService {
                 instantValue(doc, "lastReviewedAtMillis"));
     }
 
-    private User stubUser(Long id, String displayName) {
+    private User stubUser(String uid, String displayName) {
         User user = new User();
-        user.setId(id);
-        user.setFirebaseUid(id == null ? null : "firestore-user-" + id);
-        user.setEmail(id == null ? "unknown@firebase.local" : "user-" + id + "@firebase.local");
+        user.setFirebaseUid(uid);
+        user.setEmail(uid == null ? "unknown@firebase.local" : uid + "@firebase.local");
         user.setDisplayName(displayName);
         user.setRole(UserRole.STUDENT);
         return user;
@@ -1549,8 +1586,8 @@ public class VocabService {
                 && value.toLowerCase(Locale.ROOT).contains(query.trim().toLowerCase(Locale.ROOT));
     }
 
-    private String userLabel(Long userId) {
-        return userId == null ? "Unknown user" : "User #" + userId;
+    private String userLabel(String uid) {
+        return uid == null ? "Unknown user" : "User " + uid;
     }
 
     private String defaultString(String value, String fallback) {
@@ -1621,7 +1658,7 @@ public class VocabService {
     }
 
     private record ProgressDoc(
-            Long userId,
+            String uid,
             Long wordId,
             Long setId,
             VocabProgressStatus status,

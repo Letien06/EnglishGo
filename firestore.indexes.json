@@ -1,0 +1,167 @@
+{
+  "indexes": [
+    {
+      "collectionGroup": "practiceAttempts",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "submittedAtMillis", "order": "DESCENDING" },
+        { "fieldPath": "__name__", "order": "DESCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "vocabFolders",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "deletedAtMillis", "order": "ASCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "dauToeicTestIndex",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "orderIndexSort", "order": "ASCENDING" },
+        { "fieldPath": "__name__", "order": "ASCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "dauToeicTestIndex",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "difficultyLevel", "order": "ASCENDING" },
+        { "fieldPath": "orderIndexSort", "order": "ASCENDING" },
+        { "fieldPath": "__name__", "order": "ASCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "dauToeicTestIndex",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "searchTokens", "arrayConfig": "CONTAINS" },
+        { "fieldPath": "orderIndexSort", "order": "ASCENDING" },
+        { "fieldPath": "__name__", "order": "ASCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "dauToeicTestIndex",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "searchTokens", "arrayConfig": "CONTAINS" },
+        { "fieldPath": "difficultyLevel", "order": "ASCENDING" },
+        { "fieldPath": "orderIndexSort", "order": "ASCENDING" },
+        { "fieldPath": "__name__", "order": "ASCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "userVocabProgress",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "setId", "order": "ASCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "userVocabProgress",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "status", "order": "ASCENDING" },
+        { "fieldPath": "nextReviewAtMillis", "order": "ASCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "userVocabProgress",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "lastReviewedAtMillis", "order": "DESCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "aiWritingJobs",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "createdAtMillis", "order": "DESCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "listeningProgress",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "part", "order": "ASCENDING" },
+        { "fieldPath": "level", "order": "ASCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "readingProgress",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "part", "order": "ASCENDING" },
+        { "fieldPath": "level", "order": "ASCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "entries",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "score", "order": "DESCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "comments",
+      "queryScope": "COLLECTION_GROUP",
+      "fields": [
+        { "fieldPath": "deletedAtMillis", "order": "ASCENDING" },
+        { "fieldPath": "createdAtMillis", "order": "DESCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "contentAuditLogs",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "status", "order": "ASCENDING" },
+        { "fieldPath": "createdAtMillis", "order": "DESCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "mediaAssets",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "createdAtMillis", "order": "DESCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "listeningProgress",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "part", "order": "ASCENDING" },
+        { "fieldPath": "level", "order": "ASCENDING" },
+        { "fieldPath": "itemId", "order": "ASCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "readingProgress",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "part", "order": "ASCENDING" },
+        { "fieldPath": "level", "order": "ASCENDING" },
+        { "fieldPath": "itemId", "order": "ASCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "vocabSets",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "status", "order": "ASCENDING" },
+        { "fieldPath": "deletedAtMillis", "order": "ASCENDING" },
+        { "fieldPath": "updatedAtMillis", "order": "DESCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "vocabWords",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "setId", "order": "ASCENDING" },
+        { "fieldPath": "status", "order": "ASCENDING" },
+        { "fieldPath": "deletedAtMillis", "order": "ASCENDING" }
+      ]
+    }
+  ],
+  "fieldOverrides": []
+}

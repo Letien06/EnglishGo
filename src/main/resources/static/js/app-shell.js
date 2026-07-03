@@ -74,7 +74,16 @@
         return url.pathname === "/listen"
             || url.pathname.startsWith("/listen/")
             || url.pathname === "/read"
-            || url.pathname.startsWith("/read/");
+            || url.pathname.startsWith("/read/")
+            || url.pathname === "/vocab"
+            || url.pathname.startsWith("/vocab/")
+            || url.pathname === "/vocabulary"
+            || url.pathname.startsWith("/vocabulary/")
+            || url.pathname === "/mock-test"
+            || url.pathname === "/tests"
+            || url.pathname.startsWith("/tests/")
+            || url.pathname === "/hub"
+            || url.pathname === "/";
     }
 
     function buildLoadingOverlay() {
@@ -126,7 +135,13 @@
             if (url.pathname === window.location.pathname && url.search === window.location.search) {
                 return;
             }
-            showRouteLoading(url.pathname.startsWith("/read") ? "Đang mở phần Đọc" : "Đang mở phần Nghe");
+            var label = "Đang chuyển trang...";
+            if (url.pathname.startsWith("/read")) label = "Đang mở phần Đọc";
+            else if (url.pathname.startsWith("/listen")) label = "Đang mở phần Nghe";
+            else if (url.pathname.startsWith("/vocab") || url.pathname.startsWith("/vocabulary")) label = "Đang mở Từ vựng";
+            else if (url.pathname === "/mock-test" || url.pathname.startsWith("/tests")) label = "Đang mở Đề thi";
+            else if (url.pathname === "/" || url.pathname === "/hub") label = "Đang mở Trang chủ";
+            showRouteLoading(label);
         });
     }
 

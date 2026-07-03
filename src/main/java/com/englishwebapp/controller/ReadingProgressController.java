@@ -29,7 +29,7 @@ public class ReadingProgressController {
             @AuthenticationPrincipal AppUserPrincipal user,
             @RequestBody ReadingProgressRequest request) {
         return ResponseEntity.ok(ApiResponse.ok(readingProgressService.record(
-                user == null ? null : user.id(),
+                user == null ? null : user.firebaseUid(),
                 request)));
     }
 
@@ -37,27 +37,27 @@ public class ReadingProgressController {
     public ResponseEntity<ApiResponse<ReadingToolResponse>> notes(
             @AuthenticationPrincipal AppUserPrincipal user,
             @RequestBody ReadingToolRequest request) {
-        return ResponseEntity.ok(ApiResponse.ok(readingToolService.saveNote(user == null ? null : user.id(), request)));
+        return ResponseEntity.ok(ApiResponse.ok(readingToolService.saveNote(user == null ? null : user.firebaseUid(), request)));
     }
 
     @PostMapping("/favorites")
     public ResponseEntity<ApiResponse<ReadingToolResponse>> favorites(
             @AuthenticationPrincipal AppUserPrincipal user,
             @RequestBody ReadingToolRequest request) {
-        return ResponseEntity.ok(ApiResponse.ok(readingToolService.toggleFavorite(user == null ? null : user.id(), request)));
+        return ResponseEntity.ok(ApiResponse.ok(readingToolService.toggleFavorite(user == null ? null : user.firebaseUid(), request)));
     }
 
     @PostMapping("/vocab-basket")
     public ResponseEntity<ApiResponse<ReadingToolResponse>> vocabBasket(
             @AuthenticationPrincipal AppUserPrincipal user,
             @RequestBody ReadingToolRequest request) {
-        return ResponseEntity.ok(ApiResponse.ok(readingToolService.addVocab(user == null ? null : user.id(), request)));
+        return ResponseEntity.ok(ApiResponse.ok(readingToolService.addVocab(user == null ? null : user.firebaseUid(), request)));
     }
 
     @PostMapping("/reset")
     public ResponseEntity<ApiResponse<ReadingToolResponse>> reset(
             @AuthenticationPrincipal AppUserPrincipal user,
             @RequestBody ReadingToolRequest request) {
-        return ResponseEntity.ok(ApiResponse.ok(readingToolService.resetLevel(user == null ? null : user.id(), request)));
+        return ResponseEntity.ok(ApiResponse.ok(readingToolService.resetLevel(user == null ? null : user.firebaseUid(), request)));
     }
 }
