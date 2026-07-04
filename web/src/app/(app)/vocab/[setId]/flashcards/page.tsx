@@ -48,6 +48,9 @@ export default async function FlashcardsPage({ params, searchParams }: Props) {
       initialMode={mode}
       practiceOptions={practiceOptions}
       reviewMode={false}
+      selectedMastery={mastery ?? "learning"}
+      selectedOrder={order ?? "random"}
+      selectedAmount={amount ?? "20"}
     />
   );
 }
