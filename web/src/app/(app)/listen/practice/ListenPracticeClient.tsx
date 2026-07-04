@@ -23,6 +23,14 @@ interface Props {
 
 type PracticeMode = "normal" | "bilingual" | "fill" | "flip";
 type Token = { type: "word" | "space" | "punct"; value: string };
+type VocabularyEntry = {
+  id: string;
+  word: string;
+  meaning: string;
+  partOfSpeech: string | undefined;
+  level: string | undefined;
+  raw: string;
+};
 
 const modes: Array<[PracticeMode, string, string]> = [
   ["normal", "▦", "Bình thường"],
@@ -533,28 +541,199 @@ function QuestionCard({
       )}
 
       {answered && (
-        <section className="mt-5 rounded-2xl border border-slate-200 bg-slate-50 p-4 text-sm text-ink">
-          <strong>Kết quả</strong>
-          <p className="mt-1">
-            {correct
-              ? `Bạn chọn ${answered}. Đáp án đúng.`
-              : `Bạn chọn ${answered}. Đáp án đúng là ${correctAnswer}.`}
-          </p>
+        <section className="mt-5 space-y-4 text-sm text-ink">
+          <ResultCard
+            correct={correct}
+            value={correct ? `Bạn chọn ${answered}. Đáp án đúng.` : `Bạn chọn ${answered}. Đáp án đúng là ${correctAnswer}.`}
+          />
+          {firstText(question.explanationVi, question.explanationEn) && (
+            <SolutionBlock
+              title="Giải thích"
+              value={firstText(question.explanationVi, question.explanationEn)}
+              tone="blue"
+            />
+          )}
           {firstText(question.answerTranslationVi, question.translationVi, item.translation) && (
-            <div className="mt-4">
-              <strong>Dịch nghĩa câu hỏi</strong>
-              <p className="mt-1 whitespace-pre-wrap">{firstText(question.answerTranslationVi, question.translationVi, item.translation)}</p>
-            </div>
+            <SolutionBlock
+              title="Dịch nghĩa câu hỏi"
+              value={firstText(question.answerTranslationVi, question.translationVi, item.translation)}
+              tone="sky"
+            />
           )}
           {firstText(question.vocabulary, item.vocabulary) && (
-            <div className="mt-4">
-              <strong>Từ vựng nên học</strong>
-              <pre className="mt-1 whitespace-pre-wrap font-sans text-sm">{firstText(question.vocabulary, item.vocabulary)}</pre>
-            </div>
+            <VocabularyStudyBlock
+              item={item}
+              question={question}
+              value={firstText(question.vocabulary, item.vocabulary)}
+            />
           )}
         </section>
       )}
     </article>
+  );
+}
+
+function ResultCard({ correct, value }: { correct: boolean; value: string }) {
+  return (
+    <section
+      className={`rounded-2xl border p-4 ${
+        correct ? "border-emerald-300 bg-emerald-50 text-emerald-800" : "border-red-300 bg-red-50 text-red-800"
+      }`}
+    >
+      <div className="flex items-start gap-3">
+        <span className="inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-white text-base font-extrabold">
+          {correct ? "✓" : "!"}
+        </span>
+        <div>
+          <strong className="block text-base">Kết quả</strong>
+          <p className="mt-1 font-bold">{value}</p>
+        </div>
+      </div>
+    </section>
+  );
+}
+
+function SolutionBlock({ title, value, tone }: { title: string; value: string; tone: "blue" | "sky" }) {
+  const toneClass = tone === "sky"
+    ? "border-sky-300 bg-sky-50 text-sky-900"
+    : "border-blue-300 bg-blue-50 text-blue-900";
+  const iconClass = tone === "sky" ? "bg-sky-100 text-sky-700" : "bg-blue-100 text-blue-700";
+
+  return (
+    <section className={`rounded-2xl border p-4 ${toneClass}`}>
+      <div className="mb-3 flex items-center gap-3">
+        <span className={`inline-flex h-7 w-7 items-center justify-center rounded-full text-sm font-extrabold ${iconClass}`}>
+          文
+        </span>
+        <strong className="text-base">{title}</strong>
+      </div>
+      <p className="whitespace-pre-wrap leading-relaxed">{value}</p>
+    </section>
+  );
+}
+
+function VocabularyStudyBlock({
+  item,
+  question,
+  value,
+}: {
+  item: DauToeicPracticeItem;
+  question: DauToeicQuestion;
+  value: string;
+}) {
+  const entries = useMemo(() => parseVocabularyEntries(value), [value]);
+  const [selected, setSelected] = useState<Set<string>>(new Set());
+  const [saving, setSaving] = useState(false);
+  const [showDetails, setShowDetails] = useState(false);
+  const [status, setStatus] = useState("");
+
+  const allSelected = entries.length > 0 && selected.size === entries.length;
+
+  const toggleAll = () => {
+    setSelected(allSelected ? new Set() : new Set(entries.map((entry) => entry.id)));
+  };
+
+  const toggleEntry = (id: string) => {
+    setSelected((previous) => {
+      const next = new Set(previous);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  };
+
+  const addSelected = async () => {
+    const targets = entries.filter((entry) => selected.has(entry.id));
+    if (targets.length === 0) return;
+    setSaving(true);
+    setStatus("");
+    try {
+      await Promise.all(targets.map((entry) => postTool("/api/listening/vocab-basket", {
+        itemId: item.id,
+        questionId: question.id,
+        word: entry.word,
+        meaning: entry.meaning,
+        example: currentListeningSnippet(item, question),
+      })));
+      setStatus(`Đã thêm ${targets.length} từ vào giỏ từ.`);
+    } catch {
+      setStatus("Không thêm được từ vựng.");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <section className="overflow-hidden rounded-2xl border border-amber-300 bg-amber-50 text-amber-950">
+      <div className="flex items-center justify-between gap-3 border-b border-amber-200 px-4 py-3">
+        <div className="flex items-center gap-3">
+          <span className="inline-flex h-7 w-7 items-center justify-center rounded-full bg-amber-100 text-sm font-extrabold text-amber-700">
+            □
+          </span>
+          <strong className="text-base">Từ vựng nên học</strong>
+        </div>
+        <button
+          type="button"
+          onClick={() => setShowDetails((open) => !open)}
+          className="rounded-full border border-amber-300 bg-white px-3 py-1 text-xs font-extrabold text-amber-800"
+        >
+          {showDetails ? "Ẩn chi tiết" : "Xem chi tiết"}
+        </button>
+      </div>
+
+      <div className="m-3 overflow-hidden rounded-xl border border-amber-200 bg-white">
+        <div className="flex flex-wrap items-center gap-2 border-b border-amber-100 p-3">
+          <button
+            type="button"
+            onClick={toggleAll}
+            className="rounded-xl border border-amber-300 bg-white px-4 py-2 text-sm font-extrabold text-amber-800"
+          >
+            {allSelected ? "Bỏ chọn" : "Chọn tất cả"}
+          </button>
+          <button
+            type="button"
+            onClick={addSelected}
+            disabled={selected.size === 0 || saving}
+            className="rounded-xl bg-orange-400 px-4 py-2 text-sm font-extrabold text-white disabled:cursor-not-allowed disabled:opacity-50"
+          >
+            {saving ? "Đang thêm..." : "Thêm vào giỏ từ"}
+          </button>
+          <button
+            type="button"
+            disabled
+            className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-2 text-sm font-extrabold text-amber-400"
+            title="Sẽ nối với bộ từ của tôi ở bước sau"
+          >
+            Học phần khác
+          </button>
+          {status && <span className="text-sm font-bold text-amber-800">{status}</span>}
+        </div>
+
+        <div className="divide-y divide-slate-100">
+          {entries.map((entry) => (
+            <label key={entry.id} className="flex cursor-pointer items-start gap-3 px-4 py-4">
+              <input
+                type="checkbox"
+                checked={selected.has(entry.id)}
+                onChange={() => toggleEntry(entry.id)}
+                className="mt-1 h-5 w-5 rounded border-amber-300"
+              />
+              <span className="min-w-0 flex-1">
+                <span className="flex flex-wrap items-center gap-2">
+                  <strong className="text-base text-ink">{entry.word}</strong>
+                  {entry.partOfSpeech && <em className="text-sm text-orange-700">({entry.partOfSpeech})</em>}
+                  {entry.level && <span className="rounded-md bg-sky-100 px-2 py-0.5 text-xs font-extrabold text-sky-700">{entry.level}</span>}
+                </span>
+                <span className="mt-1 block text-sm leading-relaxed text-ink">{entry.meaning}</span>
+                {showDetails && entry.raw !== `${entry.word} ${entry.meaning}` && (
+                  <span className="mt-2 block whitespace-pre-wrap text-xs text-muted">{entry.raw}</span>
+                )}
+              </span>
+            </label>
+          ))}
+        </div>
+      </div>
+    </section>
   );
 }
 
@@ -963,6 +1142,45 @@ async function postTool(url: string, body: Record<string, unknown>) {
   } catch {
     return { data: { saved: false, message: "Không lưu được." } };
   }
+}
+
+function currentListeningSnippet(item: DauToeicPracticeItem, question: DauToeicQuestion) {
+  return firstText(item.transcript, question.questionText, question.optionA)?.slice(0, 1000);
+}
+
+function parseVocabularyEntries(value: string): VocabularyEntry[] {
+  const parts = value
+    .replace(/\r/g, "\n")
+    .split(/\n+|;+/g)
+    .map((part) => part.trim().replace(/^[-•]\s*/, ""))
+    .filter(Boolean);
+
+  const source = parts.length > 0 ? parts : [value.trim()].filter(Boolean);
+
+  return source.map((raw, index) => {
+    const colonMatch = raw.match(/^(.+?)(?:\s*[:：–-]\s+)(.+)$/);
+    const compactMatch = raw.match(/^([A-Za-z][A-Za-z'’\-\s]*?)(?:\s*\(([^)]+)\))?\s+(.+)$/);
+    const match = colonMatch || compactMatch;
+    const word = firstText(match?.[1], raw.split(/\s+/)[0]);
+    const partOfSpeech = colonMatch ? undefined : firstText(match?.[2]);
+    let meaning = firstText(colonMatch ? match?.[2] : match?.[3], raw.replace(word, ""));
+    let level: string | undefined;
+
+    const levelMatch = meaning.match(/^(A1|A2|B1|B2|C1|C2)\s+(.+)$/i);
+    if (levelMatch) {
+      level = levelMatch[1].toUpperCase();
+      meaning = levelMatch[2].trim();
+    }
+
+    return {
+      id: `${word.toLowerCase().replace(/[^a-z0-9]+/g, "-")}-${index}`,
+      word,
+      meaning: meaning || raw,
+      partOfSpeech,
+      level,
+      raw,
+    };
+  });
 }
 
 function rewindAudio(audio: HTMLAudioElement, seconds: number) {
