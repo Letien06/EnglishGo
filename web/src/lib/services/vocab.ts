@@ -7,6 +7,7 @@
  * User progress: users/{uid}/userVocabProgress/{wordId}
  */
 import { adminDb } from "@/lib/firestore/db";
+import { cache } from "react";
 import { FieldValue } from "firebase-admin/firestore";
 import { randomInt } from "crypto";
 import { BadRequest, Forbidden, NotFound, Unauthorized } from "@/lib/api/response";
@@ -52,7 +53,11 @@ const DAILY_NEW_WORD_GOAL = 20;
 /*  Query helpers                                                      */
 /* ------------------------------------------------------------------ */
 
-async function publishedSets(): Promise<VocabSetDoc[]> {
+// Deduped per request via React cache(): when a single page render calls
+// publishedSets() from several code paths (e.g. findMySetCards + LearnTab),
+// Firestore is hit only once. Stays fresh on every navigation, so data is
+// always correct immediately after a mutation.
+const publishedSets = cache(async (): Promise<VocabSetDoc[]> => {
   const snap = await adminDb
     .collection(SETS)
     .where("status", "==", "PUBLISHED")
@@ -60,7 +65,7 @@ async function publishedSets(): Promise<VocabSetDoc[]> {
   return snap.docs
     .map(toSetDoc)
     .filter((s) => s.status === "PUBLISHED" && !s.deletedAtMillis);
-}
+});
 
 async function liveFolders(): Promise<VocabFolderDoc[]> {
   const snap = await adminDb

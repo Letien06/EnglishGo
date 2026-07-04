@@ -9,6 +9,7 @@
  * IMPORTANT: These helpers use Firebase Admin SDK and must only be called
  * from server components or route handlers — never from middleware (Edge).
  */
+import { cache } from "react";
 import { cookies, headers } from "next/headers";
 import { FieldValue } from "firebase-admin/firestore";
 import { adminAuth, adminDb } from "../firebase/admin";
@@ -110,14 +111,26 @@ export async function provisionUser(decoded: {
   const existingRole = (data.role as string) || "STUDENT";
   const role = adminEmails.includes(email.toLowerCase()) ? "ADMIN" : existingRole;
 
-  await userRef.update({
-    email,
-    displayName,
-    avatarUrl,
-    role,
-    updatedAtMillis: Date.now(),
-    updatedAt: FieldValue.serverTimestamp(),
-  });
+  // Only write back to Firestore when something actually changed. Provisioning
+  // used to run an `update()` on EVERY page load / navigation, which added a
+  // Firestore round-trip (and cost) to every server render and made tab
+  // switching feel slow. Skipping the no-op write removes that latency.
+  const profileChanged =
+    data.email !== email ||
+    data.displayName !== displayName ||
+    (data.avatarUrl ?? null) !== avatarUrl ||
+    data.role !== role;
+
+  if (profileChanged) {
+    await userRef.update({
+      email,
+      displayName,
+      avatarUrl,
+      role,
+      updatedAtMillis: Date.now(),
+      updatedAt: FieldValue.serverTimestamp(),
+    });
+  }
 
   return {
     uid,
@@ -129,7 +142,7 @@ export async function provisionUser(decoded: {
     level: (data.level as string) ?? null,
     targetScore: (data.targetScore as number) ?? null,
     createdAtMillis: (data.createdAtMillis as number) ?? null,
-    updatedAtMillis: Date.now(),
+    updatedAtMillis: (data.updatedAtMillis as number) ?? null,
   } as AppUser;
 }
 
@@ -144,7 +157,7 @@ export async function provisionUser(decoded: {
  *
  * Returns `null` when no token is present (anonymous visitor).
  */
-export async function getCurrentUser(): Promise<AppUser | null> {
+export const getCurrentUser = cache(async (): Promise<AppUser | null> => {
   /* --- 1. Try session cookie ------------------------------------------- */
   const cookieStore = await cookies();
   const sessionCookie = cookieStore.get("session");
@@ -171,7 +184,7 @@ export async function getCurrentUser(): Promise<AppUser | null> {
   }
 
   return null;
-}
+});
 
 /* ------------------------------------------------------------------ */
 /*  Guard helpers                                                      */
