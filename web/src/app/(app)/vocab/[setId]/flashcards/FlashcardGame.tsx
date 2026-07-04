@@ -3,7 +3,7 @@
 /**
  * FlashcardGame — Full flashcard game with multiple modes.
  *
- * Modes: flashcard, quiz, typing, listening.
+ * Modes: flashcard, quiz, matching, typing, listening, mixed.
  * Port of flashcards.html game logic.
  */
 import Link from "next/link";
@@ -17,13 +17,15 @@ interface Props {
   reviewMode: boolean;
 }
 
-type GameMode = "flashcard" | "quiz" | "typing" | "listening";
+type GameMode = "flashcard" | "quiz" | "matching" | "typing" | "listening" | "mixed";
 
 const MODES: { key: GameMode; label: string; icon: string }[] = [
   { key: "flashcard", label: "Flashcard", icon: "🃏" },
   { key: "quiz", label: "Quiz", icon: "📝" },
+  { key: "matching", label: "Nối từ", icon: "▦" },
   { key: "typing", label: "Typing", icon: "⌨️" },
   { key: "listening", label: "Listening", icon: "🎧" },
+  { key: "mixed", label: "Tổng hợp", icon: "↗" },
 ];
 
 export default function FlashcardGame({
@@ -97,8 +99,10 @@ export default function FlashcardGame({
       <section className="min-h-[400px]">
         {mode === "flashcard" && <FlashcardMode words={words} />}
         {mode === "quiz" && <QuizMode words={words} />}
+        {mode === "matching" && <MatchingMode words={words} />}
         {mode === "typing" && <TypingMode words={words} />}
         {mode === "listening" && <ListeningMode words={words} />}
+        {mode === "mixed" && <MixedMode words={words} />}
       </section>
     </main>
   );
@@ -239,15 +243,11 @@ function QuizMode({ words }: { words: VocabWordCard[] }) {
   const options = useMemo(() => {
     if (!word) return [];
     const correct = word.meaning;
-    const others = words
-      .filter((w) => w.id !== word.id)
-      .sort(() => Math.random() - 0.5)
+    const others = stableShuffle(words.filter((w) => w.id !== word.id), word.id)
       .slice(0, 3)
       .map((w) => w.meaning);
-    const all = [correct, ...others].sort(() => Math.random() - 0.5);
-    return all;
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [index, words]);
+    return stableShuffle([correct, ...others], word.id + index);
+  }, [index, word, words]);
 
   function answer(choice: number) {
     if (answered !== null) return;
@@ -350,6 +350,120 @@ function QuizMode({ words }: { words: VocabWordCard[] }) {
             </button>
           );
         })}
+      </div>
+    </div>
+  );
+}
+
+/* ================================================================== */
+/*  Matching Mode                                                      */
+/* ================================================================== */
+
+function MatchingMode({ words }: { words: VocabWordCard[] }) {
+  const pairs = useMemo(() => stableShuffle(words, words.length).slice(0, Math.min(8, words.length)), [words]);
+  const meanings = useMemo(() => stableShuffle(pairs, pairs.length + 17), [pairs]);
+  const [selectedWord, setSelectedWord] = useState<number | null>(null);
+  const [selectedMeaning, setSelectedMeaning] = useState<number | null>(null);
+  const [matched, setMatched] = useState<Set<number>>(new Set());
+  const [mistakes, setMistakes] = useState(0);
+  const [message, setMessage] = useState("");
+
+  function clearSelectionSoon() {
+    window.setTimeout(() => {
+      setSelectedWord(null);
+      setSelectedMeaning(null);
+    }, 500);
+  }
+
+  function resolveMatch(wordId: number, meaningId: number) {
+    if (wordId === meaningId) {
+      setMatched((prev) => new Set(prev).add(wordId));
+      setMessage("Ghép đúng.");
+      void submitReview(wordId, 4);
+    } else {
+      setMistakes((value) => value + 1);
+      setMessage("Chưa khớp, thử lại.");
+      void submitReview(wordId, 1);
+    }
+    clearSelectionSoon();
+  }
+
+  function chooseWord(id: number) {
+    setSelectedWord(id);
+    if (selectedMeaning != null) resolveMatch(id, selectedMeaning);
+  }
+
+  function chooseMeaning(id: number) {
+    setSelectedMeaning(id);
+    if (selectedWord != null) resolveMatch(selectedWord, id);
+  }
+
+  const finished = matched.size === pairs.length;
+
+  if (finished) {
+    return (
+      <div className="text-center py-16">
+        <p className="text-4xl mb-4">🎉</p>
+        <p className="text-2xl font-bold text-ink">Hoàn thành nối từ</p>
+        <p className="text-muted mt-2">Bạn ghép đúng {matched.size}/{pairs.length}, sai {mistakes} lượt.</p>
+        <button
+          onClick={() => {
+            setMatched(new Set());
+            setMistakes(0);
+            setMessage("");
+          }}
+          className="mt-4 px-6 py-2 rounded-lg bg-accent text-white font-semibold"
+        >
+          Chơi lại
+        </button>
+      </div>
+    );
+  }
+
+  return (
+    <div className="mx-auto max-w-4xl space-y-5">
+      <div className="flex items-center justify-between text-sm text-muted">
+        <span>Đã ghép {matched.size}/{pairs.length}</span>
+        <span>Sai {mistakes}</span>
+      </div>
+      {message && <p className="rounded-xl bg-surface-soft px-4 py-2 text-sm font-semibold text-ink">{message}</p>}
+      <div className="grid gap-4 md:grid-cols-2">
+        <div className="space-y-2">
+          {pairs.map((word) => (
+            <button
+              key={word.id}
+              disabled={matched.has(word.id)}
+              onClick={() => chooseWord(word.id)}
+              className={`w-full rounded-xl border px-4 py-3 text-left font-semibold transition-colors ${
+                matched.has(word.id)
+                  ? "border-green-400 bg-green-500/10 text-green-500"
+                  : selectedWord === word.id
+                    ? "border-accent bg-accent/10 text-accent"
+                    : "border-line bg-surface text-ink hover:bg-surface-soft"
+              }`}
+            >
+              {word.word}
+            </button>
+          ))}
+        </div>
+        <div className="space-y-2">
+          {meanings.map((word) => (
+            <button
+              key={word.id}
+              disabled={matched.has(word.id)}
+              onClick={() => chooseMeaning(word.id)}
+              className={`w-full rounded-xl border px-4 py-3 text-left text-sm transition-colors ${
+                matched.has(word.id)
+                  ? "border-green-400 bg-green-500/10 text-green-500"
+                  : selectedMeaning === word.id
+                    ? "border-accent bg-accent/10 text-accent"
+                    : "border-line bg-surface text-ink hover:bg-surface-soft"
+              }`}
+            >
+              {word.meaning}
+            </button>
+          ))}
+        </div>
       </div>
     </div>
   );
@@ -625,6 +739,142 @@ function ListeningMode({ words }: { words: VocabWordCard[] }) {
 }
 
 /* ================================================================== */
+/*  Mixed Mode                                                         */
+/* ================================================================== */
+
+function MixedMode({ words }: { words: VocabWordCard[] }) {
+  const sequence = useMemo(() => stableShuffle(words, words.length + 101), [words]);
+  const challengeModes = ["flashcard", "quiz", "typing", "listening"] as const;
+  const [index, setIndex] = useState(0);
+  const [input, setInput] = useState("");
+  const [flipped, setFlipped] = useState(false);
+  const [answered, setAnswered] = useState<string | null>(null);
+  const [score, setScore] = useState(0);
+  const [finished, setFinished] = useState(false);
+
+  const word = sequence[index];
+  const challenge = challengeModes[index % challengeModes.length];
+  const options = useMemo(() => {
+    const others = stableShuffle(sequence.filter((w) => w.id !== word.id), word.id).slice(0, 3).map((w) => w.meaning);
+    return stableShuffle([word.meaning, ...others], word.id + index);
+  }, [index, sequence, word]);
+
+  function advance(correct: boolean) {
+    setScore((value) => value + (correct ? 1 : 0));
+    void submitReview(word.id, correct ? 4 : 1);
+    window.setTimeout(() => {
+      setInput("");
+      setFlipped(false);
+      setAnswered(null);
+      if (index < sequence.length - 1) setIndex(index + 1);
+      else setFinished(true);
+    }, 700);
+  }
+
+  if (finished) {
+    return (
+      <div className="text-center py-16">
+        <p className="text-4xl mb-4">🎉</p>
+        <p className="text-2xl font-bold text-ink">{score}/{sequence.length} thử thách đúng</p>
+        <button
+          onClick={() => {
+            setIndex(0);
+            setScore(0);
+            setFinished(false);
+          }}
+          className="mt-4 px-6 py-2 rounded-lg bg-accent text-white font-semibold"
+        >
+          Chơi lại
+        </button>
+      </div>
+    );
+  }
+
+  const progress = ((index + 1) / sequence.length) * 100;
+
+  return (
+    <div className="mx-auto max-w-xl space-y-6">
+      <div className="flex items-center gap-3">
+        <div className="flex-1 h-2 rounded-full bg-surface-soft overflow-hidden">
+          <div className="h-full rounded-full bg-accent transition-all" style={{ width: `${progress}%` }} />
+        </div>
+        <span className="text-xs text-muted">{score} ✓ · {index + 1}/{sequence.length}</span>
+      </div>
+
+      <div className="rounded-2xl border border-line bg-surface p-6 text-center">
+        <p className="mb-2 text-xs uppercase tracking-wider text-muted">Tổng hợp · {challenge}</p>
+        {challenge === "flashcard" && (
+          <button type="button" onClick={() => setFlipped((value) => !value)} className="block w-full">
+            <p className="text-3xl font-bold text-ink">{flipped ? word.meaning : word.word}</p>
+            <p className="mt-3 text-xs text-muted">Nhấn để lật thẻ</p>
+          </button>
+        )}
+        {challenge === "quiz" && (
+          <>
+            <p className="mb-4 text-2xl font-bold text-ink">{word.word}</p>
+            <div className="grid gap-2">
+              {options.map((option) => (
+                <button
+                  key={option}
+                  type="button"
+                  disabled={answered != null}
+                  onClick={() => {
+                    setAnswered(option);
+                    advance(option === word.meaning);
+                  }}
+                  className="rounded-xl border border-line px-4 py-3 text-left text-sm hover:bg-surface-soft disabled:opacity-70"
+                >
+                  {option}
+                </button>
+              ))}
+            </div>
+          </>
+        )}
+        {challenge === "typing" && (
+          <>
+            <p className="mb-4 text-xl font-bold text-accent">{word.meaning}</p>
+            <input
+              value={input}
+              onChange={(event) => setInput(event.target.value)}
+              placeholder="Nhập từ tiếng Anh..."
+              className="w-full rounded-xl border border-line bg-surface-soft px-4 py-3 text-center text-ink"
+            />
+          </>
+        )}
+        {challenge === "listening" && (
+          <>
+            <button type="button" onClick={() => speak(word.word)} className="mb-4 text-5xl">🔊</button>
+            <input
+              value={input}
+              onChange={(event) => setInput(event.target.value)}
+              placeholder="Gõ từ bạn nghe được..."
+              className="w-full rounded-xl border border-line bg-surface-soft px-4 py-3 text-center text-ink"
+            />
+          </>
+        )}
+      </div>
+
+      {challenge === "flashcard" ? (
+        <div className="flex justify-center gap-3">
+          <button onClick={() => advance(false)} className="rounded-xl bg-red-500/20 px-5 py-3 font-semibold text-red-400">Chưa nhớ</button>
+          <button onClick={() => advance(true)} className="rounded-xl bg-green-500/20 px-5 py-3 font-semibold text-green-400">Đã nhớ</button>
+        </div>
+      ) : (challenge === "typing" || challenge === "listening") ? (
+        <div className="flex justify-center">
+          <button
+            onClick={() => advance(input.trim().toLowerCase() === word.word.toLowerCase())}
+            disabled={!input.trim()}
+            className="rounded-xl bg-accent px-6 py-3 font-semibold text-white disabled:opacity-50"
+          >
+            Kiểm tra
+          </button>
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
+/* ================================================================== */
 /*  Helpers                                                            */
 /* ================================================================== */
 
@@ -636,7 +886,31 @@ function speak(text: string) {
   }
 }
 
+async function submitReview(wordId: number, quality: number) {
+  try {
+    await fetch(`/api/vocab/words/${wordId}/review`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ quality }),
+    });
+  } catch {
+    // Review progress is best-effort in the game UI.
+  }
+}
+
+function stableShuffle<T>(items: T[], seed: number): T[] {
+  return [...items].sort((left, right) => stableHash(`${JSON.stringify(left)}:${seed}`) - stableHash(`${JSON.stringify(right)}:${seed}`));
+}
+
+function stableHash(value: string): number {
+  let hash = 0;
+  for (let index = 0; index < value.length; index += 1) {
+    hash = (hash * 31 + value.charCodeAt(index)) >>> 0;
+  }
+  return hash;
+}
+
 function normalizeMode(raw: string): GameMode {
-  const valid: GameMode[] = ["flashcard", "quiz", "typing", "listening"];
+  const valid: GameMode[] = ["flashcard", "quiz", "matching", "typing", "listening", "mixed"];
   return valid.includes(raw as GameMode) ? (raw as GameMode) : "flashcard";
 }

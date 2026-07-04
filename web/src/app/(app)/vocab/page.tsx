@@ -1,4 +1,6 @@
 import Link from "next/link";
+import { getCurrentUser } from "@/lib/auth/session";
+import VocabMyTab from "./VocabMyTab";
 
 const tabs = [
   { key: "learn", label: "Học (demo)", icon: "▦" },
@@ -15,6 +17,9 @@ export default async function VocabPage({
 }) {
   const params = await searchParams;
   const active = typeof params.tab === "string" ? params.tab : "learn";
+  const user = await getCurrentUser();
+  const folderId = typeof params.folderId === "string" ? Number(params.folderId) : undefined;
+  const folderSearch = typeof params.q === "string" ? params.q : undefined;
 
   return (
     <main className="min-h-[calc(100dvh-4rem)] bg-[#f1f5fb] px-5 py-10">
@@ -57,18 +62,25 @@ export default async function VocabPage({
           })}
         </nav>
 
-        <section className="flex min-h-52 items-center justify-center rounded-xl border border-amber-100 bg-white p-8 text-center shadow-sm">
-          <div>
-            <div className="mx-auto mb-5 text-3xl text-amber-200">▦</div>
-            <h2 className="text-xl font-extrabold text-ink">
-              Học từ vựng đang ở chế độ demo
-            </h2>
-            <p className="mt-3 text-sm text-muted">
-              Các bộ học gợi ý chưa mở sử dụng. Hiện tại chỉ dùng các mục Tiến độ, Từ vựng của tôi,
-              Thuật toán học từ và Cộng đồng.
-            </p>
-          </div>
-        </section>
+        {active === "my" ? (
+          <VocabMyTab
+            uid={user?.uid ?? ""}
+            folderId={Number.isFinite(folderId) ? folderId : undefined}
+            folderSearch={folderSearch}
+          />
+        ) : (
+          <section className="flex min-h-52 items-center justify-center rounded-xl border border-amber-100 bg-white p-8 text-center shadow-sm">
+            <div>
+              <div className="mx-auto mb-5 text-3xl text-amber-200">▦</div>
+              <h2 className="text-xl font-extrabold text-ink">
+                Học từ vựng đang ở chế độ demo
+              </h2>
+              <p className="mt-3 text-sm text-muted">
+                Mục Bộ từ của tôi đã mở lại để tạo bộ, thêm từ, import file và vào game luyện tập.
+              </p>
+            </div>
+          </section>
+        )}
       </div>
     </main>
   );
