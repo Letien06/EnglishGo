@@ -47,7 +47,6 @@ export default function ReadPracticeClient({
   const [currentIndex, setCurrentIndex] = useState(0);
   const [answeredMap, setAnsweredMap] = useState<Record<string, string>>({});
   const [showNote, setShowNote] = useState(false);
-  const [showVocab, setShowVocab] = useState(false);
   const [auto, setAuto] = useState(false);
   const [elapsed, setElapsed] = useState(0);
   const [favorite, setFavorite] = useState(false);
@@ -91,7 +90,6 @@ export default function ReadPracticeClient({
     if (index < 0 || index >= items.length) return;
     setCurrentIndex(index);
     setShowNote(false);
-    setShowVocab(false);
     setFavorite(false);
     window.scrollTo({ top: 0, behavior: "smooth" });
   }, [items.length]);
@@ -291,39 +289,11 @@ export default function ReadPracticeClient({
               }}
             />
           )}
-          {showVocab && firstQuestion && (
-            <ToolBox
-              title="Giỏ từ"
-              textareaName="word"
-              placeholder="Nhập từ hoặc cụm từ cần nhớ..."
-              status={toolStatus}
-              secondaryInput
-              onSubmit={async (form) => {
-                const payload = await postTool("/api/reading/vocab-basket", {
-                  itemId: item.id,
-                  questionId: firstQuestion.id,
-                  word: String(form.get("word") ?? ""),
-                  meaning: String(form.get("meaning") ?? ""),
-                  example: currentReadingSnippet(item, firstQuestion),
-                });
-                setToolStatus(payload?.data?.message ?? "Đã xử lý.");
-              }}
-            />
-          )}
         </section>
       </div>
 
       <footer className="sticky bottom-0 z-40 flex h-16 items-center justify-between gap-2 bg-gradient-to-r from-cyan-500 to-blue-800 px-3 text-white sm:px-7">
         <div className="flex gap-2 sm:gap-3">
-          <a
-            href="mailto:support@quyngu.vn?subject=B%C3%A1o%20l%E1%BB%97i%20c%C3%A2u%20luy%E1%BB%87n%20%C4%91%E1%BB%8Dc"
-            className="rounded-xl bg-white px-3 py-2 text-sm font-extrabold text-red-500 sm:px-5"
-          >
-            ⚑<span className="hidden sm:inline"> Báo lỗi</span>
-          </a>
-          <button onClick={() => setShowVocab((value) => !value)} className="rounded-xl bg-white px-3 py-2 text-sm font-extrabold text-primary sm:px-5">
-            ☷<span className="hidden sm:inline"> Giỏ từ</span>
-          </button>
           <button onClick={() => setShowNote((value) => !value)} className="rounded-xl bg-white px-3 py-2 text-sm font-extrabold text-primary sm:px-5">
             ✎<span className="hidden sm:inline"> Ghi chú</span>
           </button>
@@ -776,9 +746,6 @@ function readingInstruction(partNum: number) {
   return "Read the passage and choose the best answer.";
 }
 
-function currentReadingSnippet(item: DauToeicPracticeItem, question: DauToeicQuestion) {
-  return firstText(item.transcript, question.questionText, question.optionA)?.slice(0, 1000);
-}
 
 function parseVocabularyEntries(value: string): VocabularyEntry[] {
   const parts = value

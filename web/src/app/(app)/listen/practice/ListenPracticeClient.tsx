@@ -64,7 +64,6 @@ export default function ListenPracticeClient({
   const [revealedMap, setRevealedMap] = useState<Record<string, number[]>>({});
   const [fillValues, setFillValues] = useState<Record<string, string>>({});
   const [showNote, setShowNote] = useState(false);
-  const [showVocab, setShowVocab] = useState(false);
   const [auto, setAuto] = useState(false);
   const [elapsed, setElapsed] = useState(0);
   const [playbackRate, setPlaybackRate] = useState(1);
@@ -144,7 +143,6 @@ export default function ListenPracticeClient({
     audioRef.current?.pause();
     setCurrentIndex(index);
     setShowNote(false);
-    setShowVocab(false);
     setFavorite(false);
     replayCountRef.current = 0;
     window.scrollTo({ top: 0, behavior: "smooth" });
@@ -402,40 +400,11 @@ export default function ListenPracticeClient({
               }}
             />
           )}
-          {showVocab && currentQuestion && (
-            <ToolBox
-              title="Giỏ từ"
-              textareaName="word"
-              placeholder="Nhập từ hoặc cụm từ cần nhớ..."
-              status={toolStatus}
-              onSubmit={async (form) => {
-                const payload = await postTool("/api/listening/vocab-basket", {
-                  itemId: item.id,
-                  questionId: currentQuestion.id,
-                  word: String(form.get("word") ?? ""),
-                  meaning: String(form.get("meaning") ?? ""),
-                  example: currentQuestion.questionText ?? item.transcript ?? "",
-                });
-                setToolStatus(payload?.data?.message ?? "Đã xử lý.");
-              }}
-              secondaryInput
-            />
-          )}
         </section>
       </div>
 
       <footer className="sticky bottom-0 z-40 flex h-16 items-center justify-between gap-2 bg-gradient-to-r from-cyan-500 to-blue-800 px-3 text-white sm:px-7">
         <div className="flex gap-2 sm:gap-3">
-          <a
-            href="mailto:support@quyngu.vn?subject=B%C3%A1o%20l%E1%BB%97i%20c%C3%A2u%20luy%E1%BB%87n%20nghe"
-            className="rounded-xl bg-white px-3 py-2 text-sm font-extrabold text-red-500 sm:px-5"
-            aria-label="Báo lỗi"
-          >
-            ⚑<span className="hidden sm:inline"> Báo lỗi</span>
-          </a>
-          <button onClick={() => setShowVocab((value) => !value)} className="rounded-xl bg-white px-3 py-2 text-sm font-extrabold text-primary sm:px-5" aria-label="Giỏ từ">
-            ☷<span className="hidden sm:inline"> Giỏ từ</span>
-          </button>
           <button onClick={() => setShowNote((value) => !value)} className="rounded-xl bg-white px-3 py-2 text-sm font-extrabold text-primary sm:px-5" aria-label="Ghi chú">
             ✎<span className="hidden sm:inline"> Ghi chú</span>
           </button>
