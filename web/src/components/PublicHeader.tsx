@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import { useEffect, useState } from "react";
 import ThemeToggle from "./ThemeToggle";
 
 const navItems = [
@@ -17,6 +18,22 @@ interface PublicHeaderProps {
 
 export default function PublicHeader({ user }: PublicHeaderProps) {
   const pathname = usePathname();
+  const [menuOpen, setMenuOpen] = useState(false);
+
+  // Close the mobile menu whenever the route changes.
+  useEffect(() => {
+    setMenuOpen(false);
+  }, [pathname]);
+
+  // Lock body scroll while the mobile menu is open.
+  useEffect(() => {
+    if (!menuOpen) return;
+    const previous = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    return () => {
+      document.body.style.overflow = previous;
+    };
+  }, [menuOpen]);
 
   return (
     <header className="sticky top-0 z-50 border-b border-line bg-glass backdrop-blur-xl">
@@ -48,7 +65,20 @@ export default function PublicHeader({ user }: PublicHeaderProps) {
           })}
         </nav>
 
-        <div className="flex items-center gap-3">
+        <div className="flex items-center gap-2 sm:gap-3">
+          <button
+            type="button"
+            onClick={() => setMenuOpen((open) => !open)}
+            className="inline-flex h-12 w-12 items-center justify-center rounded-xl border border-line bg-surface-soft text-ink md:hidden"
+            aria-label="Menu"
+            aria-expanded={menuOpen}
+          >
+            <span className="flex flex-col gap-[5px]">
+              <span className="block h-0.5 w-6 rounded bg-current" />
+              <span className="block h-0.5 w-6 rounded bg-current" />
+              <span className="block h-0.5 w-6 rounded bg-current" />
+            </span>
+          </button>
           <ThemeToggle className="h-12 w-12 border border-line bg-surface-soft text-ink" />
           {user ? (
             <Link
@@ -76,6 +106,61 @@ export default function PublicHeader({ user }: PublicHeaderProps) {
           )}
         </div>
       </div>
+
+      {/* Mobile slide-down menu (< md) */}
+      {menuOpen && (
+        <div className="md:hidden">
+          <button
+            type="button"
+            aria-label="Đóng menu"
+            onClick={() => setMenuOpen(false)}
+            className="fixed inset-0 top-20 z-40 bg-slate-900/40 backdrop-blur-sm"
+          />
+          <nav
+            className="absolute inset-x-0 top-20 z-50 border-b border-line bg-surface px-5 pb-6 pt-2 shadow-xl"
+            aria-label="Mobile navigation"
+          >
+            <ul className="flex flex-col gap-1">
+              {navItems.map((item) => {
+                const isActive = pathname.startsWith(item.href);
+                return (
+                  <li key={item.key}>
+                    <Link
+                      href={item.href}
+                      onClick={() => setMenuOpen(false)}
+                      className={`flex items-center gap-3 rounded-xl px-4 py-3 text-lg font-extrabold transition-colors ${
+                        isActive ? "bg-primary/10 text-primary" : "text-ink hover:bg-surface-soft"
+                      }`}
+                    >
+                      <span className={`text-xl ${item.color}`}>{item.icon}</span>
+                      <span>{item.label}</span>
+                    </Link>
+                  </li>
+                );
+              })}
+            </ul>
+
+            {!user && (
+              <div className="mt-4 flex flex-col gap-2 border-t border-line pt-4">
+                <Link
+                  href="/login"
+                  onClick={() => setMenuOpen(false)}
+                  className="flex items-center justify-center rounded-xl border border-line px-4 py-3 text-base font-extrabold text-ink"
+                >
+                  Đăng nhập
+                </Link>
+                <Link
+                  href="/login"
+                  onClick={() => setMenuOpen(false)}
+                  className="flex items-center justify-center rounded-xl bg-primary px-4 py-3 text-base font-extrabold text-gold-ink"
+                >
+                  Đăng ký
+                </Link>
+              </div>
+            )}
+          </nav>
+        </div>
+      )}
     </header>
   );
 }
