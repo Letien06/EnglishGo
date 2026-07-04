@@ -23,7 +23,7 @@ function partNumber(partId: string): number {
 export default async function ReadPracticePage({
   searchParams,
 }: {
-  searchParams: Promise<{ part?: string; level?: string; mode?: string; assist?: string }>;
+  searchParams: Promise<{ part?: string; level?: string; mode?: string }>;
 }) {
   const params = await searchParams;
   const partId = params.part && ["part5", "part6", "part7"].includes(params.part)
@@ -35,23 +35,9 @@ export default async function ReadPracticePage({
   const mode = (() => {
     switch (params.mode) {
       case "bilingual":
-      case "fill":
-      case "flip":
         return params.mode;
       default:
         return "normal";
-    }
-  })();
-
-  const assist = (() => {
-    const v = Number(params.assist);
-    switch (v) {
-      case 30:
-      case 50:
-      case 100:
-        return v;
-      default:
-        return 30;
     }
   })();
 
@@ -75,7 +61,6 @@ export default async function ReadPracticePage({
       partNum={pNum}
       level={level}
       mode={mode}
-      assist={assist}
       userLoggedIn={!!user}
     />
   );

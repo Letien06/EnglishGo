@@ -8,8 +8,8 @@
     const state = {
         part: Number(page.dataset.part || 5),
         level: Number(page.dataset.level || 1),
-        mode: page.dataset.mode || "normal",
-        assist: Number(page.dataset.assist || 30),
+        mode: normalizeMode(page.dataset.mode),
+        assist: 0,
         startedAt: Date.now(),
         auto: false,
         currentIndex: 0
@@ -85,29 +85,6 @@
         if (state.mode === "bilingual") {
             setupBilingualAnswers(question);
         }
-        if (state.mode !== "fill" && state.mode !== "flip") {
-            return;
-        }
-        question.classList.add(`uses-${state.mode}`);
-        maskTargetsFor(question).forEach((span) => setupMaskedAnswer(span, state.mode));
-        question.querySelectorAll("[data-action]").forEach((button) => {
-            button.addEventListener("click", () => {
-                const action = button.dataset.action;
-                if (action === "reveal-all") {
-                    revealAll(question);
-                } else if (action === "flip-three") {
-                    revealNextWords(question, 3);
-                } else {
-                    revealNextWords(question, 1);
-                }
-            });
-        });
-        question.addEventListener("input", (event) => {
-            const input = event.target.closest("input[data-answer]");
-            if (input) {
-                checkInput(input);
-            }
-        });
     }
 
     function setupBilingualAnswers(question) {
@@ -123,98 +100,6 @@
             text.className = "answer-option-translation";
             text.textContent = translation;
             label.append(text);
-        });
-    }
-
-    function setupMaskedAnswer(span, mode) {
-        const tokens = tokenize(span.dataset.originalText || span.textContent || "");
-        const hiddenIndexes = chooseHiddenIndexes(tokens, state.assist);
-        span._maskState = {mode, tokens, hiddenIndexes, revealed: new Set()};
-        renderMaskedAnswer(span);
-    }
-
-    function revealNextWords(question, count) {
-        let remaining = count;
-        maskTargetsFor(question).forEach((span) => {
-            if (remaining <= 0 || !span._maskState) {
-                return;
-            }
-            const mask = span._maskState;
-            mask.hiddenIndexes
-                .filter((index) => !mask.revealed.has(index))
-                .slice(0, remaining)
-                .forEach((index) => {
-                    mask.revealed.add(index);
-                    remaining -= 1;
-                });
-            renderMaskedAnswer(span);
-        });
-    }
-
-    function revealAll(question) {
-        maskTargetsFor(question).forEach((span) => {
-            if (!span._maskState) {
-                return;
-            }
-            span._maskState.hiddenIndexes.forEach((index) => span._maskState.revealed.add(index));
-            renderMaskedAnswer(span);
-        });
-    }
-
-    function maskTargetsFor(question) {
-        const item = question.closest(".practice-item") || question;
-        return Array.from(item.querySelectorAll("[data-mask-target='passage'], .answer-option-text"));
-    }
-
-    function renderMaskedAnswer(span) {
-        const mask = span._maskState;
-        if (!mask) {
-            return;
-        }
-        const hiddenSet = new Set(mask.hiddenIndexes);
-        span.replaceChildren();
-        mask.tokens.forEach((token, index) => {
-            if (token.type === "space" || !hiddenSet.has(index)) {
-                span.append(document.createTextNode(token.value));
-                return;
-            }
-            if (mask.revealed.has(index)) {
-                span.append(document.createTextNode(token.value));
-                return;
-            }
-            if (mask.mode === "fill") {
-                const input = document.createElement("input");
-                input.className = "hidden-word-input";
-                input.type = "text";
-                input.autocomplete = "off";
-                input.spellcheck = false;
-                input.dataset.answer = token.value;
-                input.style.width = `${Math.max(48, token.value.length * 12)}px`;
-                input.setAttribute("aria-label", "Dien tu con thieu");
-                input.addEventListener("click", (event) => event.stopPropagation());
-                span.append(input);
-                return;
-            }
-            const chip = document.createElement("span");
-            chip.className = "hidden-word-chip";
-            chip.tabIndex = 0;
-            chip.role = "button";
-            chip.textContent = "•".repeat(Math.max(3, Math.min(token.value.length, 10)));
-            chip.addEventListener("click", (event) => {
-                event.preventDefault();
-                event.stopPropagation();
-                mask.revealed.add(index);
-                renderMaskedAnswer(span);
-            });
-            chip.addEventListener("keydown", (event) => {
-                if (event.key !== "Enter" && event.key !== " ") {
-                    return;
-                }
-                event.preventDefault();
-                mask.revealed.add(index);
-                renderMaskedAnswer(span);
-            });
-            span.append(chip);
         });
     }
 
@@ -459,32 +344,6 @@
         return items[state.currentIndex] || document;
     }
 
-    function checkInput(input) {
-        const expected = normalizeWord(input.dataset.answer);
-        const actual = normalizeWord(input.value);
-        input.classList.toggle("is-correct", actual.length > 0 && actual === expected);
-        input.classList.toggle("is-wrong", actual.length > 0 && actual !== expected);
-    }
-
-    function chooseHiddenIndexes(tokens, percent) {
-        const eligible = tokens
-            .map((token, index) => ({token, index}))
-            .filter(({token}) => token.type === "word" && normalizeWord(token.value).length > 3);
-        if (eligible.length === 0) {
-            return [];
-        }
-        const count = Math.min(eligible.length, Math.max(1, Math.ceil(eligible.length * (percent / 100))));
-        if (count >= eligible.length) {
-            return eligible.map(({index}) => index);
-        }
-        const selected = new Set();
-        for (let step = 0; step < count; step += 1) {
-            const position = Math.round(step * ((eligible.length - 1) / Math.max(1, count - 1)));
-            selected.add(eligible[position].index);
-        }
-        return Array.from(selected).sort((left, right) => left - right);
-    }
-
     function parseOptionTranslations(text) {
         const result = {};
         if (!text) {
@@ -503,14 +362,6 @@
         return result;
     }
 
-    function tokenize(text) {
-        const matches = text.match(/[A-Za-z]+(?:['’\-][A-Za-z]+)?|\s+|./g) || [];
-        return matches.map((value) => ({
-            value,
-            type: /^\s+$/.test(value) ? "space" : /^[A-Za-z]+(?:['’\-][A-Za-z]+)?$/.test(value) ? "word" : "punct"
-        }));
-    }
-
     function isTypingTarget(target) {
         return target && ["INPUT", "TEXTAREA", "SELECT"].includes(target.tagName);
     }
@@ -520,11 +371,11 @@
         return value == null ? "" : String(value).trim();
     }
 
-    function normalizeWord(value) {
-        return (value || "").trim().toLowerCase().replace(/^[^a-z]+|[^a-z]+$/g, "");
-    }
-
     function normalizeAnswer(value) {
         return (value || "").trim().toUpperCase();
+    }
+
+    function normalizeMode(value) {
+        return value === "bilingual" ? value : "normal";
     }
 })();

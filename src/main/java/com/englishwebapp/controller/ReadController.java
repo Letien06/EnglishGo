@@ -48,7 +48,6 @@ public class ReadController {
             @RequestParam(defaultValue = "5") int part,
             @RequestParam(defaultValue = "1") int level,
             @RequestParam(defaultValue = "normal") String mode,
-            @RequestParam(defaultValue = "30") int assist,
             @AuthenticationPrincipal AppUserPrincipal user,
             Model model) {
         if (user == null) {
@@ -66,8 +65,6 @@ public class ReadController {
         model.addAttribute("selectedPartNumber", readingPartNumber(activeId));
         model.addAttribute("selectedLevel", normalizeLevel(level));
         model.addAttribute("selectedMode", normalizeMode(mode));
-        model.addAttribute("assistPercent", normalizeAssist(assist));
-        model.addAttribute("assistOptions", List.of(30, 50, 100));
         model.addAttribute("readingUserAuthenticated", user != null);
         try {
             model.addAttribute("practiceSession", dauToeicClientService.getReadingDifficultySession(
@@ -119,15 +116,8 @@ public class ReadController {
 
     private String normalizeMode(String mode) {
         return switch (mode) {
-            case "bilingual", "fill", "flip" -> mode;
+            case "bilingual" -> mode;
             default -> "normal";
-        };
-    }
-
-    private int normalizeAssist(int assist) {
-        return switch (assist) {
-            case 30, 50, 100 -> assist;
-            default -> 30;
         };
     }
 

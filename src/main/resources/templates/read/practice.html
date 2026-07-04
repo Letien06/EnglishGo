@@ -9,7 +9,7 @@
 </head>
 <body class="practice-body qn-practice">
 <main class="listen-practice-page read-practice-page"
-      th:attr="data-part=${selectedPartNumber},data-level=${selectedLevel},data-mode=${selectedMode},data-assist=${assistPercent},data-authenticated=${readingUserAuthenticated}">
+      th:attr="data-part=${selectedPartNumber},data-level=${selectedLevel},data-mode=${selectedMode},data-assist=0,data-authenticated=${readingUserAuthenticated}">
     <header class="practice-topbar">
         <div class="practice-topbar-left">
             <a class="practice-exit" th:href="@{/read(part=${activePart.id()})}" aria-label="Thoát">←</a>
@@ -20,31 +20,15 @@
 
         <button class="qn-tools-more" type="button" data-tools-drawer aria-label="Mở công cụ học" aria-expanded="false">…</button>
         <nav class="practice-tools" aria-label="Công cụ học">
-            <a th:href="@{/read/practice(part=${selectedPartNumber},level=${selectedLevel},mode='normal',assist=${assistPercent})}"
+            <a th:href="@{/read/practice(part=${selectedPartNumber},level=${selectedLevel},mode='normal')}"
                th:classappend="${selectedMode == 'normal'} ? ' is-active'"><span class="qn-tool-icon" aria-hidden="true">▥</span>Bình thường</a>
-            <a th:href="@{/read/practice(part=${selectedPartNumber},level=${selectedLevel},mode='bilingual',assist=${assistPercent})}"
+            <a th:href="@{/read/practice(part=${selectedPartNumber},level=${selectedLevel},mode='bilingual')}"
                th:classappend="${selectedMode == 'bilingual'} ? ' is-active'"><span class="qn-tool-icon" aria-hidden="true">文</span>Song ngữ</a>
-            <a th:href="@{/read/practice(part=${selectedPartNumber},level=${selectedLevel},mode='fill',assist=${assistPercent})}"
-               th:classappend="${selectedMode == 'fill'} ? ' is-active'"><span class="qn-tool-icon" aria-hidden="true">✍</span>Điền từ</a>
-            <a th:href="@{/read/practice(part=${selectedPartNumber},level=${selectedLevel},mode='flip',assist=${assistPercent})}"
-               th:classappend="${selectedMode == 'flip'} ? ' is-active'"><span class="qn-tool-icon" aria-hidden="true">⇄</span>Lật từ</a>
         </nav>
 
         <div class="practice-status" aria-label="Trạng thái luyện tập">
             <button type="button" data-auto-toggle title="Tự chuyển bài khi trả lời đúng">Auto</button>
             <span class="practice-elapsed" data-elapsed-time>00:00</span>
-            <form class="assist-select" method="get" action="/read/practice">
-                <input type="hidden" name="part" th:value="${selectedPartNumber}">
-                <input type="hidden" name="level" th:value="${selectedLevel}">
-                <input type="hidden" name="mode" th:value="${selectedMode}">
-                <input type="hidden" name="q" value="0" data-q-field>
-                <select name="assist" onchange="this.form.submit()" aria-label="Tỉ lệ hỗ trợ">
-                    <option th:each="value : ${assistOptions}"
-                            th:value="${value}"
-                            th:selected="${value == assistPercent}"
-                            th:text="${value + '%'}">30%</option>
-                </select>
-            </form>
         </div>
     </header>
 
@@ -117,24 +101,6 @@
                         <p class="practice-reading-stem"
                            th:if="${selectedPartNumber == 5 and item.transcript() != null}"
                            th:text="${item.transcript()}">Question stem</p>
-
-                        <div class="practice-inline-mode-tools is-fill"
-                             th:if="${selectedMode == 'fill'}">
-                            <strong th:text="${'Đọc & Điền từ - ' + assistPercent + '%'}">Đọc & Điền từ</strong>
-                            <div class="qn-segmented" role="group" aria-label="Điều khiển điền từ">
-                                <button type="button" data-action="hint">Gợi ý</button>
-                                <button type="button" data-action="reveal-all">Mở tất cả</button>
-                            </div>
-                        </div>
-                        <div class="practice-inline-mode-tools is-flip"
-                             th:if="${selectedMode == 'flip'}">
-                            <strong th:text="${'Đọc & Lật từ - ' + assistPercent + '%'}">Đọc & Lật từ</strong>
-                            <div class="qn-segmented" role="group" aria-label="Điều khiển lật từ">
-                                <button type="button" data-action="flip-next">Lật từ tiếp</button>
-                                <button type="button" data-action="flip-three">Lật 3 từ</button>
-                                <button type="button" data-action="reveal-all">Mở tất cả</button>
-                            </div>
-                        </div>
 
                         <label th:if="${question.optionA() != null}" data-answer-option="A">
                             <input type="radio" th:name="${'q-' + question.id()}" value="A">

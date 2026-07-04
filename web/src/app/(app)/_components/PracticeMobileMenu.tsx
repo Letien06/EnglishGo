@@ -145,26 +145,27 @@ export default function PracticeMobileMenu({
               </span>
             </button>
 
-            {/* Assist selector */}
-            <div>
-              <p className="mb-2 text-sm font-extrabold text-muted">Tỉ lệ hỗ trợ</p>
-              <div className="grid grid-cols-3 gap-2">
-                {assistOptions.map((value) => (
-                  <Link
-                    key={value}
-                    href={assistHref(value)}
-                    onClick={() => setOpen(false)}
-                    className={`inline-flex items-center justify-center rounded-xl border px-3 py-3 text-sm font-extrabold ${
-                      assist === value
-                        ? "border-primary bg-primary/10 text-primary"
-                        : "border-slate-200 text-ink"
-                    }`}
-                  >
-                    {value}%
-                  </Link>
-                ))}
+            {assistOptions.length > 0 && (
+              <div>
+                <p className="mb-2 text-sm font-extrabold text-muted">Tỉ lệ hỗ trợ</p>
+                <div className="grid grid-cols-3 gap-2">
+                  {assistOptions.map((value) => (
+                    <Link
+                      key={value}
+                      href={assistHref(value)}
+                      onClick={() => setOpen(false)}
+                      className={`inline-flex items-center justify-center rounded-xl border px-3 py-3 text-sm font-extrabold ${
+                        assist === value
+                          ? "border-primary bg-primary/10 text-primary"
+                          : "border-slate-200 text-ink"
+                      }`}
+                    >
+                      {value}%
+                    </Link>
+                  ))}
+                </div>
               </div>
-            </div>
+            )}
           </div>
         </div>
       )}

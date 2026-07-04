@@ -16,21 +16,15 @@ interface Props {
   partNum: number;
   level: number;
   mode: string;
-  assist: number;
   userLoggedIn: boolean;
 }
 
-type PracticeMode = "normal" | "bilingual" | "fill" | "flip";
-type Token = { type: "word" | "space" | "punct"; value: string };
+type PracticeMode = "normal" | "bilingual";
 
 const modes: Array<[PracticeMode, string, string]> = [
   ["normal", "▦", "Bình thường"],
   ["bilingual", "文", "Song ngữ"],
-  ["fill", "✍", "Điền từ"],
-  ["flip", "⇄", "Lật từ"],
 ];
-
-const assistOptions = [30, 50, 100];
 
 export default function ReadPracticeClient({
   session,
@@ -38,14 +32,11 @@ export default function ReadPracticeClient({
   partNum,
   level,
   mode,
-  assist,
 }: Props) {
   const activeMode = normalizeMode(mode);
   const items = session.items;
   const [currentIndex, setCurrentIndex] = useState(0);
   const [answeredMap, setAnsweredMap] = useState<Record<string, string>>({});
-  const [revealedMap, setRevealedMap] = useState<Record<string, number[]>>({});
-  const [fillValues, setFillValues] = useState<Record<string, string>>({});
   const [showNote, setShowNote] = useState(false);
   const [showVocab, setShowVocab] = useState(false);
   const [auto, setAuto] = useState(false);
@@ -77,10 +68,9 @@ export default function ReadPracticeClient({
         part: partId,
         level: String(level),
         mode,
-        assist: String(assist),
       }),
     );
-  }, [partId, level, mode, assist]);
+  }, [partId, level, mode]);
 
   useEffect(() => {
     const url = new URL(window.location.href);
@@ -117,7 +107,7 @@ export default function ReadPracticeClient({
           selectedAnswer,
           correctAnswer,
           modeUsed: activeMode,
-          assistPercent: assist,
+          assistPercent: 0,
           elapsedSeconds: elapsed,
         }),
       });
@@ -128,7 +118,7 @@ export default function ReadPracticeClient({
     if (correct && auto && currentIndex < items.length - 1) {
       window.setTimeout(() => goTo(currentIndex + 1), 450);
     }
-  }, [activeMode, answeredMap, assist, auto, currentIndex, elapsed, goTo, item.id, items.length, level, partNum]);
+  }, [activeMode, answeredMap, auto, currentIndex, elapsed, goTo, item.id, items.length, level, partNum]);
 
   useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent) => {
@@ -173,7 +163,7 @@ export default function ReadPracticeClient({
           {modes.map(([key, icon, label]) => (
             <Link
               key={key}
-              href={`/read/practice?part=${partId}&level=${level}&mode=${key}&assist=${assist}&q=${currentIndex}`}
+              href={`/read/practice?part=${partId}&level=${level}&mode=${key}&q=${currentIndex}`}
               className={`inline-flex min-w-36 items-center justify-center gap-2 rounded-lg px-4 py-2 text-sm font-extrabold ${
                 activeMode === key ? "bg-white/20 ring-2 ring-white/35" : "hover:bg-white/10"
               }`}
@@ -195,29 +185,16 @@ export default function ReadPracticeClient({
           Auto
         </button>
         <span className="hidden min-w-14 text-center text-sm font-extrabold tabular-nums lg:inline">{formatElapsed(elapsed)}</span>
-        <select
-          value={assist}
-          className="hidden rounded-xl border border-white/30 bg-white/10 px-4 py-2 text-sm font-extrabold text-white lg:block"
-          onChange={(event) => {
-            window.location.href = `/read/practice?part=${partId}&level=${level}&mode=${activeMode}&assist=${event.target.value}&q=${currentIndex}`;
-          }}
-          aria-label="Tỉ lệ hỗ trợ"
-        >
-          {assistOptions.map((value) => (
-            <option key={value} className="text-ink" value={value}>{value}%</option>
-          ))}
-        </select>
-
         <PracticeMobileMenu
           modes={modes}
           activeMode={activeMode}
           auto={auto}
           onToggleAuto={() => setAuto((value) => !value)}
-          assist={assist}
-          assistOptions={assistOptions}
+          assist={0}
+          assistOptions={[]}
           elapsed={formatElapsed(elapsed)}
-          modeHref={(m) => `/read/practice?part=${partId}&level=${level}&mode=${m}&assist=${assist}&q=${currentIndex}`}
-          assistHref={(value) => `/read/practice?part=${partId}&level=${level}&mode=${activeMode}&assist=${value}&q=${currentIndex}`}
+          modeHref={(m) => `/read/practice?part=${partId}&level=${level}&mode=${m}&q=${currentIndex}`}
+          assistHref={() => `/read/practice?part=${partId}&level=${level}&mode=${activeMode}&q=${currentIndex}`}
         />
       </header>
 
@@ -234,27 +211,7 @@ export default function ReadPracticeClient({
               <h2 className="mb-4 text-xl font-extrabold text-ink">
                 {firstQuestion?.questionText || "Passage"}
               </h2>
-              {activeMode === "fill" || activeMode === "flip" ? (
-                <pre className="whitespace-pre-wrap font-sans text-base leading-relaxed text-ink">
-                  <MaskedText
-                    targetKey={passageKey(item.id)}
-                    text={item.transcript}
-                    assist={assist}
-                    variant={activeMode}
-                    revealedIndexes={revealedMap[passageKey(item.id)] ?? []}
-                    fillValues={fillValues}
-                    onReveal={(indexes) => {
-                      setRevealedMap((prev) => ({
-                        ...prev,
-                        [passageKey(item.id)]: mergeIndexes(prev[passageKey(item.id)], indexes),
-                      }));
-                    }}
-                    onFillValue={(key, value) => setFillValues((prev) => ({ ...prev, [key]: value }))}
-                  />
-                </pre>
-              ) : (
-                <pre className="whitespace-pre-wrap font-sans text-base leading-relaxed text-ink">{item.transcript}</pre>
-              )}
+              <pre className="whitespace-pre-wrap font-sans text-base leading-relaxed text-ink">{item.transcript}</pre>
               {activeMode === "bilingual" && item.translation && (
                 <pre className="mt-5 whitespace-pre-wrap border-t border-slate-200 pt-5 font-sans text-sm leading-relaxed text-muted">
                   {item.translation}
@@ -303,16 +260,7 @@ export default function ReadPracticeClient({
                 index={index}
                 partNum={partNum}
                 mode={activeMode}
-                assist={assist}
                 answered={answeredMap[question.id] ?? null}
-                revealedMap={revealedMap}
-                fillValues={fillValues}
-                onReveal={(targetKey, indexes) => {
-                  setRevealedMap((prev) => ({ ...prev, [targetKey]: mergeIndexes(prev[targetKey], indexes) }));
-                }}
-                onFillValue={(key, value) => setFillValues((prev) => ({ ...prev, [key]: value }))}
-                onHint={(count) => revealNextWords(item, activeMode, assist, revealedMap, setRevealedMap, count)}
-                onRevealAll={() => revealAllWords(item, activeMode, assist, setRevealedMap)}
                 onAnswer={(selected) => handleAnswer(question, selected)}
               />
             ))}
@@ -387,14 +335,7 @@ function QuestionCard({
   index,
   partNum,
   mode,
-  assist,
   answered,
-  revealedMap,
-  fillValues,
-  onReveal,
-  onFillValue,
-  onHint,
-  onRevealAll,
   onAnswer,
 }: {
   item: DauToeicPracticeItem;
@@ -402,14 +343,7 @@ function QuestionCard({
   index: number;
   partNum: number;
   mode: PracticeMode;
-  assist: number;
   answered: string | null;
-  revealedMap: Record<string, number[]>;
-  fillValues: Record<string, string>;
-  onReveal: (targetKey: string, tokenIndexes: number[]) => void;
-  onFillValue: (key: string, value: string) => void;
-  onHint: (count: number) => void;
-  onRevealAll: () => void;
   onAnswer: (selected: string) => void;
 }) {
   const translations = useMemo(
@@ -429,37 +363,17 @@ function QuestionCard({
         <p className="mb-4 rounded-xl bg-slate-50 p-4 text-sm font-bold leading-relaxed text-ink">{item.transcript}</p>
       )}
 
-      {(mode === "fill" || mode === "flip") && (
-        <div className="mb-4 flex items-center justify-between rounded-xl border border-violet-200 bg-violet-50 px-4 py-3">
-          <strong className="text-base text-ink">
-            Đọc & {mode === "fill" ? "Điền từ" : "Lật từ"} - {assist}%
-          </strong>
-          <div className="flex gap-6 text-sm font-extrabold text-ink">
-            <button type="button" onClick={() => onHint(1)}>{mode === "fill" ? "Gợi ý" : "Lật từ tiếp"}</button>
-            {mode === "flip" && <button type="button" onClick={() => onHint(3)}>Lật 3 từ</button>}
-            <button type="button" onClick={onRevealAll}>Mở tất cả</button>
-          </div>
-        </div>
-      )}
-
       <div className="space-y-3">
         {options.map((option) => {
-          const targetKey = optionKey(question.id, option.key);
           return (
             <AnswerOption
               key={option.key}
-              targetKey={targetKey}
               optionKey={option.key}
               text={option.text}
               translation={translations[option.key]}
               correctAnswer={correctAnswer}
               selected={answered}
               mode={mode}
-              assist={assist}
-              revealedIndexes={revealedMap[targetKey] ?? []}
-              fillValues={fillValues}
-              onReveal={(indexes) => onReveal(targetKey, indexes)}
-              onFillValue={onFillValue}
               onAnswer={() => onAnswer(option.key)}
             />
           );
@@ -498,32 +412,20 @@ function QuestionCard({
 }
 
 function AnswerOption({
-  targetKey,
   optionKey: answerKey,
   text,
   translation,
   correctAnswer,
   selected,
   mode,
-  assist,
-  revealedIndexes,
-  fillValues,
-  onReveal,
-  onFillValue,
   onAnswer,
 }: {
-  targetKey: string;
   optionKey: string;
   text: string;
   translation?: string;
   correctAnswer: string;
   selected: string | null;
   mode: PracticeMode;
-  assist: number;
-  revealedIndexes: number[];
-  fillValues: Record<string, string>;
-  onReveal: (tokenIndexes: number[]) => void;
-  onFillValue: (key: string, value: string) => void;
   onAnswer: () => void;
 }) {
   const isSelected = selected === answerKey;
@@ -561,95 +463,8 @@ function AnswerOption({
             {translation && <span className="mt-2 block text-sm font-bold text-ink">{translation}</span>}
           </>
         )}
-        {(mode === "fill" || mode === "flip") && (
-          <MaskedText
-            targetKey={targetKey}
-            text={text}
-            assist={assist}
-            variant={mode}
-            revealedIndexes={revealedIndexes}
-            fillValues={fillValues}
-            onReveal={onReveal}
-            onFillValue={onFillValue}
-          />
-        )}
       </span>
     </div>
-  );
-}
-
-function MaskedText({
-  targetKey,
-  text,
-  assist,
-  variant,
-  revealedIndexes,
-  fillValues,
-  onReveal,
-  onFillValue,
-}: {
-  targetKey: string;
-  text: string;
-  assist: number;
-  variant: "fill" | "flip";
-  revealedIndexes: number[];
-  fillValues: Record<string, string>;
-  onReveal: (tokenIndexes: number[]) => void;
-  onFillValue: (key: string, value: string) => void;
-}) {
-  const tokens = useMemo(() => tokenize(text), [text]);
-  const hiddenIndexes = useMemo(() => chooseHiddenIndexes(tokens, assist), [assist, tokens]);
-  const hiddenSet = useMemo(() => new Set(hiddenIndexes), [hiddenIndexes]);
-  const revealedSet = useMemo(() => new Set(revealedIndexes), [revealedIndexes]);
-
-  return (
-    <span className="inline-flex flex-wrap items-center gap-x-1 gap-y-2 whitespace-pre-wrap">
-      {tokens.map((token, index) => {
-        if (token.type === "space") return <span key={index}> </span>;
-        if (!hiddenSet.has(index)) return <span key={index}>{token.value}</span>;
-        if (revealedSet.has(index)) return <span key={index}>{token.value}</span>;
-        if (variant === "fill") {
-          const key = fillKey(targetKey, index);
-          const value = fillValues[key] ?? "";
-          const actual = normalizeWord(value);
-          const expected = normalizeWord(token.value);
-          const checkedClass = !actual
-            ? "border-slate-300 bg-white"
-            : actual === expected
-              ? "border-emerald-400 bg-emerald-50"
-              : "border-red-300 bg-red-50";
-          return (
-            <input
-              key={index}
-              value={value}
-              onClick={(event) => event.stopPropagation()}
-              onKeyDown={(event) => event.stopPropagation()}
-              onChange={(event) => onFillValue(key, event.target.value)}
-              className={`mx-1 h-8 rounded-lg border px-2 text-sm outline-none ${checkedClass}`}
-              style={{ width: Math.max(48, token.value.length * 12) }}
-              autoComplete="off"
-              spellCheck={false}
-              aria-label="Điền từ còn thiếu"
-            />
-          );
-        }
-        return (
-          <button
-            key={index}
-            type="button"
-            onClick={(event) => {
-              event.preventDefault();
-              event.stopPropagation();
-              onReveal([index]);
-            }}
-            className="mx-1 rounded-lg border border-slate-300 bg-slate-100 px-3 py-1 tracking-[0.25em] text-ink"
-            aria-label="Lật từ"
-          >
-            {"•".repeat(Math.max(3, Math.min(token.value.length, 10)))}
-          </button>
-        );
-      })}
-    </span>
   );
 }
 
@@ -694,63 +509,6 @@ function SolutionBlock({ title, value }: { title: string; value: string }) {
   );
 }
 
-function revealNextWords(
-  item: DauToeicPracticeItem,
-  mode: PracticeMode,
-  assist: number,
-  revealedMap: Record<string, number[]>,
-  setRevealedMap: React.Dispatch<React.SetStateAction<Record<string, number[]>>>,
-  count: number,
-) {
-  if (mode !== "fill" && mode !== "flip") return;
-  let remaining = count;
-  const additions: Record<string, number[]> = {};
-  for (const target of maskTargets(item)) {
-    if (remaining <= 0) break;
-    const already = new Set([...(revealedMap[target.key] ?? []), ...(additions[target.key] ?? [])]);
-    for (const index of chooseHiddenIndexes(tokenize(target.text), assist)) {
-      if (remaining <= 0) break;
-      if (already.has(index)) continue;
-      additions[target.key] = [...(additions[target.key] ?? []), index];
-      already.add(index);
-      remaining -= 1;
-    }
-  }
-  if (Object.keys(additions).length === 0) return;
-  setRevealedMap((prev) => {
-    const next = { ...prev };
-    for (const [key, indexes] of Object.entries(additions)) next[key] = mergeIndexes(next[key], indexes);
-    return next;
-  });
-}
-
-function revealAllWords(
-  item: DauToeicPracticeItem,
-  mode: PracticeMode,
-  assist: number,
-  setRevealedMap: React.Dispatch<React.SetStateAction<Record<string, number[]>>>,
-) {
-  if (mode !== "fill" && mode !== "flip") return;
-  const additions: Record<string, number[]> = {};
-  for (const target of maskTargets(item)) additions[target.key] = chooseHiddenIndexes(tokenize(target.text), assist);
-  setRevealedMap((prev) => {
-    const next = { ...prev };
-    for (const [key, indexes] of Object.entries(additions)) next[key] = mergeIndexes(next[key], indexes);
-    return next;
-  });
-}
-
-function maskTargets(item: DauToeicPracticeItem): Array<{ key: string; text: string }> {
-  const targets: Array<{ key: string; text: string }> = [];
-  if (item.part !== 5 && item.transcript) targets.push({ key: passageKey(item.id), text: item.transcript });
-  for (const question of item.questions) {
-    for (const option of questionOptions(question)) {
-      targets.push({ key: optionKey(question.id, option.key), text: option.text });
-    }
-  }
-  return targets;
-}
-
 function questionOptions(question: DauToeicQuestion): Array<{ key: string; text: string }> {
   return [
     { key: "A", text: question.optionA },
@@ -764,29 +522,6 @@ function initialItemIndex(total: number) {
   const raw = Number.parseInt(new URLSearchParams(window.location.search).get("q") ?? "0", 10);
   if (Number.isNaN(raw)) return 0;
   return Math.max(0, Math.min(Math.max(total - 1, 0), raw));
-}
-
-function chooseHiddenIndexes(tokens: Token[], percent: number) {
-  const eligible = tokens
-    .map((token, index) => ({ token, index }))
-    .filter(({ token }) => token.type === "word" && normalizeWord(token.value).length > 3);
-  if (eligible.length === 0) return [];
-  const count = Math.min(eligible.length, Math.max(1, Math.ceil(eligible.length * (percent / 100))));
-  if (count >= eligible.length) return eligible.map(({ index }) => index);
-  const selected = new Set<number>();
-  for (let step = 0; step < count; step += 1) {
-    const position = Math.round(step * ((eligible.length - 1) / Math.max(1, count - 1)));
-    selected.add(eligible[position].index);
-  }
-  return Array.from(selected).sort((left, right) => left - right);
-}
-
-function tokenize(text: string): Token[] {
-  const matches = text.match(/[A-Za-z]+(?:['’\-][A-Za-z]+)?|\s+|./g) || [];
-  return matches.map((value) => ({
-    value,
-    type: /^\s+$/.test(value) ? "space" : /^[A-Za-z]+(?:['’\-][A-Za-z]+)?$/.test(value) ? "word" : "punct",
-  }));
 }
 
 function parseOptionTranslations(text: string): Record<string, string> {
@@ -831,29 +566,9 @@ function currentReadingSnippet(item: DauToeicPracticeItem, question: DauToeicQue
   return firstText(item.transcript, question.questionText, question.optionA)?.slice(0, 1000);
 }
 
-function mergeIndexes(existing: number[] | undefined, additions: number[]) {
-  return Array.from(new Set([...(existing ?? []), ...additions])).sort((left, right) => left - right);
-}
-
-function fillKey(targetKey: string, tokenIndex: number) {
-  return `${targetKey}:${tokenIndex}`;
-}
-
-function optionKey(questionId: string, answer: string) {
-  return `${questionId}:${answer}`;
-}
-
-function passageKey(itemId: string) {
-  return `${itemId}:passage`;
-}
-
 function firstText(...values: Array<string | null | undefined>) {
   const value = values.find((candidate) => candidate && String(candidate).trim().length > 0);
   return value == null ? "" : String(value).trim();
-}
-
-function normalizeWord(value: string | null | undefined) {
-  return (value || "").trim().toLowerCase().replace(/^[^a-z]+|[^a-z]+$/g, "");
 }
 
 function normalizeAnswer(value: string | null | undefined) {
@@ -861,7 +576,7 @@ function normalizeAnswer(value: string | null | undefined) {
 }
 
 function normalizeMode(value: string): PracticeMode {
-  return value === "bilingual" || value === "fill" || value === "flip" ? value : "normal";
+  return value === "bilingual" ? value : "normal";
 }
 
 function formatElapsed(seconds: number) {
