@@ -31,6 +31,7 @@ type VocabularyEntry = {
   level: string | undefined;
   raw: string;
 };
+type MyVocabSet = { id: number; title: string };
 
 const modes: Array<[PracticeMode, string, string]> = [
   ["normal", "▦", "Bình thường"],
@@ -613,8 +614,6 @@ function SolutionBlock({ title, value, tone }: { title: string; value: string; t
 }
 
 function VocabularyStudyBlock({
-  item,
-  question,
   value,
 }: {
   item: DauToeicPracticeItem;
@@ -626,6 +625,30 @@ function VocabularyStudyBlock({
   const [saving, setSaving] = useState(false);
   const [showDetails, setShowDetails] = useState(false);
   const [status, setStatus] = useState("");
+  const [sets, setSets] = useState<MyVocabSet[]>([]);
+  const [setId, setSetId] = useState<string>("");
+  const [loadingSets, setLoadingSets] = useState(true);
+
+  useEffect(() => {
+    let active = true;
+    (async () => {
+      try {
+        const response = await fetch("/api/vocab/my-sets");
+        const payload = await response.json();
+        const list: MyVocabSet[] = Array.isArray(payload?.data) ? payload.data : [];
+        if (!active) return;
+        setSets(list);
+        if (list.length > 0) setSetId(String(list[0].id));
+      } catch {
+        if (active) setSets([]);
+      } finally {
+        if (active) setLoadingSets(false);
+      }
+    })();
+    return () => {
+      active = false;
+    };
+  }, []);
 
   const allSelected = entries.length > 0 && selected.size === entries.length;
 
@@ -644,18 +667,21 @@ function VocabularyStudyBlock({
 
   const addSelected = async () => {
     const targets = entries.filter((entry) => selected.has(entry.id));
-    if (targets.length === 0) return;
+    if (targets.length === 0 || !setId) return;
     setSaving(true);
     setStatus("");
     try {
-      await Promise.all(targets.map((entry) => postTool("/api/listening/vocab-basket", {
-        itemId: item.id,
-        questionId: question.id,
-        word: entry.word,
-        meaning: entry.meaning,
-        example: currentListeningSnippet(item, question),
-      })));
-      setStatus(`Đã thêm ${targets.length} từ vào giỏ từ.`);
+      const rowsText = targets
+        .map((entry) => `${entry.word}, ${entry.meaning.replace(/[\r\n]+/g, " ").trim()}`)
+        .join("\n");
+      const payload = await postTool(`/api/vocab/my-sets/${setId}`, {
+        action: "manual",
+        rowsText,
+      });
+      const count = payload?.data?.count;
+      const setName = sets.find((set) => String(set.id) === setId)?.title ?? "bộ từ";
+      setStatus(`Đã thêm ${typeof count === "number" ? count : targets.length} từ vào "${setName}".`);
+      setSelected(new Set());
     } catch {
       setStatus("Không thêm được từ vựng.");
     } finally {
@@ -690,22 +716,39 @@ function VocabularyStudyBlock({
           >
             {allSelected ? "Bỏ chọn" : "Chọn tất cả"}
           </button>
-          <button
-            type="button"
-            onClick={addSelected}
-            disabled={selected.size === 0 || saving}
-            className="rounded-xl bg-orange-400 px-4 py-2 text-sm font-extrabold text-white disabled:cursor-not-allowed disabled:opacity-50"
-          >
-            {saving ? "Đang thêm..." : "Thêm vào giỏ từ"}
-          </button>
-          <button
-            type="button"
-            disabled
-            className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-2 text-sm font-extrabold text-amber-400"
-            title="Sẽ nối với bộ từ của tôi ở bước sau"
-          >
-            Học phần khác
-          </button>
+          {loadingSets ? (
+            <span className="text-sm font-bold text-amber-700">Đang tải bộ từ...</span>
+          ) : sets.length === 0 ? (
+            <Link
+              href="/vocab"
+              className="rounded-xl border border-amber-300 bg-white px-4 py-2 text-sm font-extrabold text-amber-800"
+            >
+              Tạo bộ từ của tôi
+            </Link>
+          ) : (
+            <>
+              <select
+                value={setId}
+                onChange={(event) => setSetId(event.target.value)}
+                className="rounded-xl border border-amber-300 bg-white px-3 py-2 text-sm font-extrabold text-amber-800"
+                aria-label="Chọn bộ từ của tôi"
+              >
+                {sets.map((set) => (
+                  <option key={set.id} value={String(set.id)}>
+                    {set.title}
+                  </option>
+                ))}
+              </select>
+              <button
+                type="button"
+                onClick={addSelected}
+                disabled={selected.size === 0 || saving || !setId}
+                className="rounded-xl bg-orange-400 px-4 py-2 text-sm font-extrabold text-white disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                {saving ? "Đang thêm..." : "Thêm vào bộ từ của tôi"}
+              </button>
+            </>
+          )}
           {status && <span className="text-sm font-bold text-amber-800">{status}</span>}
         </div>
 
@@ -1142,10 +1185,6 @@ async function postTool(url: string, body: Record<string, unknown>) {
   } catch {
     return { data: { saved: false, message: "Không lưu được." } };
   }
-}
-
-function currentListeningSnippet(item: DauToeicPracticeItem, question: DauToeicQuestion) {
-  return firstText(item.transcript, question.questionText, question.optionA)?.slice(0, 1000);
 }
 
 function parseVocabularyEntries(value: string): VocabularyEntry[] {
