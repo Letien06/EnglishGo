@@ -154,25 +154,6 @@ function modeLabelFor(mode: PlayMode, quizMode: QuizMode): string {
   );
 }
 
-function gameCardTone(mode: PlayMode): string {
-  switch (mode) {
-    case "flashcard":
-      return "from-indigo-500 to-violet-600";
-    case "quiz":
-      return "from-orange-400 to-orange-600";
-    case "matching":
-      return "from-sky-400 to-cyan-700";
-    case "typing":
-      return "from-green-500 to-emerald-700";
-    case "listening":
-      return "from-cyan-500 to-blue-700";
-    case "mixed":
-      return "from-pink-400 to-rose-500";
-    default:
-      return "from-slate-500 to-slate-700";
-  }
-}
-
 async function submitReview(wordId: number, quality: number): Promise<number> {
   try {
     const res = await fetch(`/api/vocab/words/${wordId}/review`, {
@@ -481,23 +462,23 @@ function Hub({
             onClick={() =>
               card.quiz ? onOpenQuizChooser() : onStartMode(card.key)
             }
-            className={`relative flex min-h-[190px] flex-col items-center justify-center gap-2 overflow-hidden rounded-3xl bg-gradient-to-br ${gameCardTone(card.key)} p-5 text-center text-white shadow-lg transition-all hover:-translate-y-0.5 hover:shadow-xl`}
+            className="relative flex min-h-[170px] flex-col items-center justify-center gap-2 overflow-hidden rounded-2xl border border-line bg-white p-5 text-center shadow-sm transition-all hover:-translate-y-0.5 hover:border-accent/40 hover:shadow-md"
           >
             {card.hot && (
               <em className="absolute right-3 top-3 rounded bg-red-500 px-2 py-0.5 text-[10px] font-bold not-italic text-white">
                 HOT
               </em>
             )}
-            <span className="rounded-full bg-white/15 px-4 py-3 text-3xl">{card.icon}</span>
-            <strong className="text-lg font-extrabold">{card.title}</strong>
-            <small className="text-sm text-white/85">{card.desc}</small>
-            <b className="mt-1 rounded-full bg-white/15 px-3 py-1 text-sm font-bold">{card.points}</b>
+            <span className="rounded-full bg-surface-soft px-4 py-3 text-2xl text-accent">{card.icon}</span>
+            <strong className="text-lg font-extrabold text-ink">{card.title}</strong>
+            <small className="text-sm text-muted">{card.desc}</small>
+            <b className="mt-1 rounded-full bg-amber-50 px-3 py-1 text-sm font-bold text-amber-700">{card.points}</b>
           </button>
         ))}
       </section>
 
       {/* SRS banner */}
-      <section className="flex flex-col items-start gap-3 rounded-3xl bg-gradient-to-r from-pink-400 to-violet-600 p-6 text-white shadow-lg sm:flex-row sm:items-center sm:justify-between">
+      <section className="flex flex-col items-start gap-3 rounded-2xl border border-line bg-white p-5 shadow-sm sm:flex-row sm:items-center sm:justify-between">
         <div>
           <strong className="block text-ink">Ôn tập ngắt quãng (SRS)</strong>
           <span className="text-sm text-muted">
@@ -1178,7 +1159,7 @@ function PlaySurface({
   return (
     <article className="space-y-4">
       {/* Play header */}
-      <section className="mx-auto flex max-w-3xl flex-wrap items-center gap-3 rounded-[2rem] border-2 border-slate-900 bg-white p-5 shadow-sm">
+      <section className="mx-auto flex max-w-3xl flex-wrap items-center gap-3 rounded-2xl border border-line bg-white p-4 shadow-sm">
         <span className="rounded-full bg-amber-400/20 px-3 py-1 text-xs font-bold text-amber-600">
           ~<b>{score}</b> GAME
         </span>
@@ -1288,7 +1269,31 @@ function PlaySurface({
       )}
 
       {status.text && (
-        <p className={`text-sm font-medium ${statusToneClass}`}>{status.text}</p>
+        <p className={`text-center text-sm font-semibold ${statusToneClass}`}>{status.text}</p>
+      )}
+
+      {activeMode === "flashcard" && (
+        <form
+          className="mx-auto flex max-w-2xl flex-col gap-2 sm:flex-row"
+          onSubmit={(event) => {
+            event.preventDefault();
+            checkTyped();
+          }}
+        >
+          <input
+            value={typed}
+            onChange={(event) => setTyped(event.target.value)}
+            placeholder={reverse ? "Gõ từ tiếng Anh" : "Gõ nghĩa tiếng Việt"}
+            className="min-h-12 flex-1 rounded-xl border border-line bg-white px-4 text-base font-semibold text-ink outline-none focus:border-accent"
+          />
+          <button
+            type="submit"
+            disabled={!typed.trim() || !!feedback}
+            className="rounded-xl bg-green-600 px-6 py-3 text-sm font-extrabold text-white disabled:opacity-50"
+          >
+            Check
+          </button>
+        </form>
       )}
 
       {/* Common flashcard actions */}
@@ -1380,14 +1385,14 @@ function FlashcardBody({
   return (
     <div
       onClick={onFlip}
-      className="mx-auto flex min-h-[420px] max-w-2xl cursor-pointer flex-col items-center justify-center rounded-3xl bg-gradient-to-br from-indigo-400 to-violet-700 p-10 text-center text-white shadow-2xl transition-transform hover:-translate-y-0.5"
+      className="mx-auto flex min-h-[360px] max-w-2xl cursor-pointer flex-col items-center justify-center rounded-2xl border border-line bg-white p-10 text-center shadow-lg transition-transform hover:-translate-y-0.5"
     >
       {!flipped ? (
         <>
-          <small className="text-[10px] uppercase tracking-widest text-muted">
+          <small className="text-[10px] font-extrabold uppercase tracking-widest text-muted">
             {frontTitle}
           </small>
-          <strong className="my-2 text-3xl font-bold text-ink">
+          <strong className="my-3 text-4xl font-extrabold text-ink">
             {frontMain}
           </strong>
           <span className="rounded bg-surface-soft px-2 py-0.5 text-xs text-muted">
@@ -1397,7 +1402,7 @@ function FlashcardBody({
             <em className="mt-1 text-sm text-muted">{word.phonetic}</em>
           )}
           {!reverse && (word.phoneticUs || word.phoneticUk) && (
-            <div className="mt-2 flex flex-wrap justify-center gap-2 text-sm text-muted">
+            <div className="mt-2 flex flex-wrap justify-center gap-2 text-sm font-semibold text-muted">
               {word.phoneticUs && <span>US {word.phoneticUs}</span>}
               {word.phoneticUk && <span>UK {word.phoneticUk}</span>}
             </div>
@@ -1438,10 +1443,10 @@ function FlashcardBody({
         </>
       ) : (
         <>
-          <small className="text-[10px] uppercase tracking-widest text-muted">
+          <small className="text-[10px] font-extrabold uppercase tracking-widest text-muted">
             {backTitle}
           </small>
-          <strong className="my-2 text-2xl font-bold text-accent">
+          <strong className="my-3 text-3xl font-extrabold text-ink">
             {backMain}
           </strong>
           <span className="rounded bg-surface-soft px-2 py-0.5 text-xs text-muted">
