@@ -42,7 +42,10 @@ export default async function PracticeHistoryPage({ searchParams }: Props) {
                       <div className="text-xs text-muted">{attempt.correctCount}/{attempt.questionCount} correct</div>
                     </td>
                     <td className="p-3 text-muted">{attempt.mode === "exam" ? "Full Test" : partLabel(attempt.parts)}</td>
-                    <td className="p-3 font-bold text-ink">{attempt.score}%</td>
+                    <td className="p-3">
+                      <div className="font-bold text-ink">{attempt.score}%</div>
+                      <div className="text-xs text-muted">{scoreLabel(attempt.scoreBreakdown)}</div>
+                    </td>
                     <td className="p-3 text-muted">{formatElapsed(attempt.elapsedMillis)}</td>
                     <td className="p-3 text-muted">{formatDate(attempt.submittedAtMillis)}</td>
                     <td className="p-3 text-right space-x-3">
@@ -79,6 +82,11 @@ export default async function PracticeHistoryPage({ searchParams }: Props) {
 
 function formatDate(value: number | null) {
   return value ? new Date(value).toLocaleString() : "-";
+}
+
+function scoreLabel(score: { totalProjectedScore: number | null; maxScore: number; listening: { projectedScaledScore: number } | null; reading: { projectedScaledScore: number } | null }) {
+  if (score.totalProjectedScore != null) return `~${score.totalProjectedScore}/${score.maxScore} TOEIC`;
+  return `~${score.listening?.projectedScaledScore ?? score.reading?.projectedScaledScore ?? 5}/495 TOEIC`;
 }
 
 function formatElapsed(value: number) {

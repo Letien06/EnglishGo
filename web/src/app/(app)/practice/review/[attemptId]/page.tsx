@@ -2,6 +2,7 @@ import Link from "next/link";
 import AppTopbar from "@/components/AppTopbar";
 import { requireUser } from "@/lib/auth/session";
 import { getAttemptReview } from "@/lib/services/practice";
+import type { PracticeSkillBreakdown } from "@/lib/services/practice";
 
 export const dynamic = "force-dynamic";
 
@@ -14,6 +15,7 @@ export default async function PracticeReviewPage({ params }: Props) {
   const { attemptId } = await params;
   const review = await getAttemptReview(user.uid, Number(attemptId));
   const attempt = review.attempt;
+  const scoreBreakdown = attempt.scoreBreakdown;
   const accuracy = attempt.questionCount > 0 ? Math.round((attempt.correctCount * 100) / attempt.questionCount) : 0;
   const retryHref = `/practice/session/${attempt.testId}?mode=${attempt.mode}&parts=${attempt.parts.join(",")}&time=${attempt.durationMinutes}`;
 
@@ -34,12 +36,26 @@ export default async function PracticeReviewPage({ params }: Props) {
             <strong className="text-6xl text-accent">{attempt.correctCount}</strong>
             <p className="mt-2 text-lg text-ink">/ {attempt.questionCount} câu đúng</p>
             <p className="mt-2 text-sm text-muted">({accuracy}% chính xác)</p>
+            <div className="mt-5 rounded-xl bg-surface-soft p-4">
+              <p className="text-xs font-extrabold uppercase text-muted">TOEIC projected score</p>
+              <p className="mt-1 text-3xl font-extrabold text-ink">
+                {scoreBreakdown.totalProjectedScore != null
+                  ? `${scoreBreakdown.totalProjectedScore}/${scoreBreakdown.maxScore}`
+                  : `${scoreBreakdown.listening?.projectedScaledScore ?? scoreBreakdown.reading?.projectedScaledScore ?? 5}/495`}
+              </p>
+              <p className="mt-1 text-xs text-muted">Ước tính theo tỷ lệ đúng; điểm TOEIC thật có thể khác theo form đề.</p>
+            </div>
             <div className="mt-5 flex flex-wrap justify-center gap-2 text-xs font-bold text-muted">
               <span className="rounded-full bg-surface-soft px-3 py-1">{attempt.mode === "exam" ? "Full Test" : `Thi theo ${partLabel(attempt.parts)}`}</span>
               <span className="rounded-full bg-surface-soft px-3 py-1">{attempt.durationMinutes} phút cấu hình</span>
               <span className="rounded-full bg-surface-soft px-3 py-1">{formatElapsed(attempt.elapsedMillis)} đã làm</span>
               {attempt.expired ? <span className="rounded-full bg-red-50 px-3 py-1 text-red-600">Quá giờ</span> : null}
             </div>
+          </section>
+
+          <section className="grid gap-4 md:grid-cols-2">
+            <SkillScoreCard title="Listening" score={scoreBreakdown.listening} />
+            <SkillScoreCard title="Reading" score={scoreBreakdown.reading} />
           </section>
 
           <section className="rounded-xl border border-line bg-surface p-6 shadow-sm">
@@ -52,7 +68,7 @@ export default async function PracticeReviewPage({ params }: Props) {
                     <div key={part.part}>
                       <div className="flex items-center justify-between gap-3 text-sm">
                         <span className="font-bold text-ink">{part.part <= 4 ? "🎧" : "📖"} Part {part.part}</span>
-                        <span className="text-muted">{part.correct}/{part.total} ({percent}%)</span>
+                        <span className="text-muted">{part.correct}/{part.total} ({percent}%) · ~{part.projectedScaledScore}/495 · ~{part.questionWeight}đ/câu</span>
                       </div>
                       <div className="mt-2 h-2 overflow-hidden rounded-full bg-surface-soft">
                         <span className="block h-full rounded-full bg-accent" style={{ width: `${percent}%` }} />
@@ -104,6 +120,42 @@ export default async function PracticeReviewPage({ params }: Props) {
         </div>
       </main>
     </>
+  );
+}
+
+function SkillScoreCard({
+  title,
+  score,
+}: {
+  title: string;
+  score: PracticeSkillBreakdown | null;
+}) {
+  if (!score) {
+    return (
+      <section className="rounded-xl border border-line bg-surface p-5 shadow-sm">
+        <h2 className="font-extrabold text-ink">{title}</h2>
+        <p className="mt-3 text-sm text-muted">Chưa làm section này.</p>
+      </section>
+    );
+  }
+
+  return (
+    <section className="rounded-xl border border-line bg-surface p-5 shadow-sm">
+      <div className="flex items-start justify-between gap-3">
+        <div>
+          <h2 className="font-extrabold text-ink">{title}</h2>
+          <p className="mt-1 text-xs text-muted">Parts {score.selectedParts.join(", ")} · coverage {score.coveragePercent}%</p>
+        </div>
+        <strong className="text-2xl text-accent">~{score.projectedScaledScore}</strong>
+      </div>
+      <p className="mt-4 text-sm text-ink">
+        {score.correct}/{score.total} câu đúng · quy đổi ~{score.equivalentCorrect100}/100 câu section
+      </p>
+      <div className="mt-3 h-2 overflow-hidden rounded-full bg-surface-soft">
+        <span className="block h-full rounded-full bg-accent" style={{ width: `${Math.min(100, Math.max(0, score.projectedScaledScore / 4.95))}%` }} />
+      </div>
+      <p className="mt-3 text-xs text-muted">Mỗi câu trong phần đang làm tương đương khoảng {score.questionWeight} điểm scaled nếu dự phóng toàn section.</p>
+    </section>
   );
 }
 

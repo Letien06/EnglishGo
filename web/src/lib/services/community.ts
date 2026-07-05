@@ -86,19 +86,18 @@ export async function leaderboard(
 export async function addScore(user: Pick<AppUser, "uid" | "email" | "displayName">, score: number): Promise<void> {
   if (!user.uid) return;
   const ref = leaderboardCollection(ALL_TIME).doc(user.uid);
-  await adminDb.runTransaction(async (tx) => {
-    const snap = await tx.get(ref);
-    const current = numberValue(snap.get("score")) ?? 0;
-    tx.set(ref, {
+  await ref.set(
+    {
       uid: user.uid,
       email: user.email,
       displayName: user.displayName,
-      score: current + score,
+      score: FieldValue.increment(score),
       period: ALL_TIME,
       updatedAtMillis: Date.now(),
       updatedAt: FieldValue.serverTimestamp(),
-    });
-  });
+    },
+    { merge: true },
+  );
 }
 
 export async function submitContribution(

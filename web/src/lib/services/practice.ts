@@ -83,13 +83,37 @@ export interface PracticeSubmissionResponse {
   questionCount: number;
   expired: boolean;
   elapsedMillis: number;
+  scoreBreakdown: PracticeScoreBreakdown;
 }
 
 export interface PracticePartBreakdown {
   part: number;
+  skill: "LISTENING" | "READING";
   total: number;
   correct: number;
   percent: number;
+  projectedScaledScore: number;
+  questionWeight: number;
+}
+
+export interface PracticeSkillBreakdown {
+  skill: "LISTENING" | "READING";
+  correct: number;
+  total: number;
+  selectedParts: number[];
+  coverageQuestions: number;
+  coveragePercent: number;
+  equivalentCorrect100: number;
+  projectedScaledScore: number;
+  questionWeight: number;
+}
+
+export interface PracticeScoreBreakdown {
+  listening: PracticeSkillBreakdown | null;
+  reading: PracticeSkillBreakdown | null;
+  totalProjectedScore: number | null;
+  maxScore: number;
+  note: string;
 }
 
 export interface PracticeAttempt {
@@ -108,6 +132,7 @@ export interface PracticeAttempt {
   elapsedMillis: number;
   submittedAtMillis: number | null;
   partBreakdown: PracticePartBreakdown[];
+  scoreBreakdown: PracticeScoreBreakdown;
 }
 
 export interface ReviewAnswer {
@@ -153,6 +178,11 @@ const ALL_PARTS = [1, 2, 3, 4, 5, 6, 7] as const;
 const DEFAULT_FULL_TEST_MINUTES = 120;
 const MIN_DURATION_MINUTES = 1;
 const MAX_DURATION_MINUTES = 180;
+const TOEIC_SECTION_QUESTIONS = 100;
+const TOEIC_SECTION_MIN_SCORE = 5;
+const TOEIC_SECTION_MAX_SCORE = 495;
+const TOEIC_SCORE_NOTE =
+  "TOEIC estimate only: official raw-to-scaled conversion varies by test form.";
 export const PART_DEFAULTS: Record<number, { questionCount: number; suggestedMinutes: number; skill: "LISTENING" | "READING" }> = {
   1: { questionCount: 6, suggestedMinutes: 4, skill: "LISTENING" },
   2: { questionCount: 25, suggestedMinutes: 15, skill: "LISTENING" },
@@ -297,14 +327,19 @@ export async function submit(
   }
 
   const score = round2((correctCount * 100) / content.questions.length);
+  const scoreBreakdown = buildScoreBreakdown(partStats, config.parts);
   const partBreakdown = config.parts
     .map((part) => {
       const stat = partStats.get(part) ?? { total: 0, correct: 0 };
+      const percent = stat.total > 0 ? round2((stat.correct * 100) / stat.total) : 0;
       return {
         part,
+        skill: PART_DEFAULTS[part]?.skill ?? (part <= 4 ? "LISTENING" as const : "READING" as const),
         total: stat.total,
         correct: stat.correct,
-        percent: stat.total > 0 ? round2((stat.correct * 100) / stat.total) : 0,
+        percent,
+        projectedScaledScore: estimateScaledScore(stat.correct, stat.total),
+        questionWeight: questionWeightForPart(part),
       };
     })
     .filter((part) => part.total > 0);
@@ -328,21 +363,25 @@ export async function submit(
     elapsedMillis,
     expired,
     partBreakdown,
+    scoreBreakdown,
     answers: answerDocs,
   };
-  await adminDb
-    .collection("users")
-    .doc(user.uid)
-    .collection("practiceAttempts")
-    .doc(String(attemptId))
-    .set(attempt, { merge: true });
-  await adminDb
-    .collection("users")
-    .doc(user.uid)
-    .collection("practiceDrafts")
-    .doc(config.sessionKey)
-    .delete();
-  await addScore(user, score);
+  await Promise.all([
+    adminDb
+      .collection("users")
+      .doc(user.uid)
+      .collection("practiceAttempts")
+      .doc(String(attemptId))
+      .set(attempt, { merge: true }),
+    adminDb
+      .collection("users")
+      .doc(user.uid)
+      .collection("practiceDrafts")
+      .doc(config.sessionKey)
+      .delete()
+      .catch(() => undefined),
+    addScore(user, score).catch(() => undefined),
+  ]);
   return {
     attemptId,
     score,
@@ -350,6 +389,7 @@ export async function submit(
     questionCount: content.questions.length,
     expired,
     elapsedMillis,
+    scoreBreakdown,
   };
 }
 
@@ -460,8 +500,8 @@ async function loadContent(routeTestId: number, parts: number[] = [...ALL_PARTS]
   const optionsByQuestionId: Record<string, PracticeOption[]> = {};
   const correctAnswerByQuestionId: Record<string, string | null> = {};
 
-  for (const part of parts) {
-    const partContent = await dautoeic.getPart(externalTest.id, part);
+  const partContents = await Promise.all(parts.map((part) => dautoeic.getPart(externalTest.id, part)));
+  for (const partContent of partContents) {
     for (const externalQuestion of partContent.questions) {
       const question = toQuestion(test, externalQuestion);
       questions.push(question);
@@ -546,6 +586,7 @@ function toAttempt(doc: FirebaseFirestore.DocumentSnapshot): PracticeAttempt {
   const parts = arrayValue(doc.get("parts"))
     .map(numberValue)
     .filter((part): part is number => part != null && part >= 1 && part <= 7);
+  const partBreakdown = arrayValue(doc.get("partBreakdown")).map(toPartBreakdown);
   return {
     attemptId: numberValue(doc.get("attemptId")) ?? Number(doc.id),
     testId: numberValue(doc.get("testId")) ?? 0,
@@ -561,24 +602,134 @@ function toAttempt(doc: FirebaseFirestore.DocumentSnapshot): PracticeAttempt {
     expired: Boolean(doc.get("expired")),
     elapsedMillis: numberValue(doc.get("elapsedMillis")) ?? 0,
     submittedAtMillis: numberValue(doc.get("submittedAtMillis")),
-    partBreakdown: arrayValue(doc.get("partBreakdown")).map(toPartBreakdown),
+    partBreakdown,
+    scoreBreakdown: toScoreBreakdown(doc.get("scoreBreakdown"), partBreakdown, parts),
   };
 }
 
 function toPartBreakdown(value: unknown): PracticePartBreakdown {
   const data = recordValue(value);
+  const part = numberValue(data.part) ?? 1;
   const total = numberValue(data.total) ?? 0;
   const correct = numberValue(data.correct) ?? 0;
   return {
-    part: numberValue(data.part) ?? 1,
+    part,
+    skill: data.skill === "READING" ? "READING" : "LISTENING",
     total,
     correct,
     percent: numberValue(data.percent) ?? (total > 0 ? round2((correct * 100) / total) : 0),
+    projectedScaledScore: numberValue(data.projectedScaledScore) ?? estimateScaledScore(correct, total),
+    questionWeight: numberValue(data.questionWeight) ?? questionWeightForPart(part),
   };
 }
 
 function normalizeAttemptMode(value: unknown): PracticeMode {
   return value === "part" ? "part" : "exam";
+}
+
+function buildScoreBreakdown(
+  partStats: Map<number, { total: number; correct: number }>,
+  selectedParts: number[],
+): PracticeScoreBreakdown {
+  const listening = buildSkillBreakdown("LISTENING", partStats, selectedParts);
+  const reading = buildSkillBreakdown("READING", partStats, selectedParts);
+  return {
+    listening,
+    reading,
+    totalProjectedScore:
+      listening && reading
+        ? listening.projectedScaledScore + reading.projectedScaledScore
+        : null,
+    maxScore: listening && reading ? 990 : 495,
+    note: TOEIC_SCORE_NOTE,
+  };
+}
+
+function buildSkillBreakdown(
+  skill: "LISTENING" | "READING",
+  partStats: Map<number, { total: number; correct: number }>,
+  selectedParts: number[],
+): PracticeSkillBreakdown | null {
+  const skillParts = selectedParts.filter((part) => PART_DEFAULTS[part]?.skill === skill);
+  if (skillParts.length === 0) return null;
+  const total = skillParts.reduce((sum, part) => sum + (partStats.get(part)?.total ?? 0), 0);
+  const correct = skillParts.reduce((sum, part) => sum + (partStats.get(part)?.correct ?? 0), 0);
+  const coverageQuestions = skillParts.reduce((sum, part) => sum + (PART_DEFAULTS[part]?.questionCount ?? 0), 0);
+  return {
+    skill,
+    correct,
+    total,
+    selectedParts: skillParts,
+    coverageQuestions,
+    coveragePercent: round2((coverageQuestions * 100) / TOEIC_SECTION_QUESTIONS),
+    equivalentCorrect100: total > 0 ? round2((correct * TOEIC_SECTION_QUESTIONS) / total) : 0,
+    projectedScaledScore: estimateScaledScore(correct, total),
+    questionWeight: total > 0 ? round2((TOEIC_SECTION_MAX_SCORE - TOEIC_SECTION_MIN_SCORE) / total) : 0,
+  };
+}
+
+function toScoreBreakdown(
+  value: unknown,
+  partBreakdown: PracticePartBreakdown[],
+  selectedParts: number[],
+): PracticeScoreBreakdown {
+  const data = recordValue(value);
+  const listening = toSkillBreakdown(data.listening, "LISTENING");
+  const reading = toSkillBreakdown(data.reading, "READING");
+  if (listening || reading) {
+    return {
+      listening,
+      reading,
+      totalProjectedScore: numberValue(data.totalProjectedScore) ?? (listening && reading ? listening.projectedScaledScore + reading.projectedScaledScore : null),
+      maxScore: numberValue(data.maxScore) ?? (listening && reading ? 990 : 495),
+      note: stringValue(data.note) ?? TOEIC_SCORE_NOTE,
+    };
+  }
+
+  const stats = new Map<number, { total: number; correct: number }>();
+  for (const part of partBreakdown) {
+    stats.set(part.part, { total: part.total, correct: part.correct });
+  }
+  return buildScoreBreakdown(stats, selectedParts.length > 0 ? selectedParts : [...ALL_PARTS]);
+}
+
+function toSkillBreakdown(value: unknown, skill: "LISTENING" | "READING"): PracticeSkillBreakdown | null {
+  const data = recordValue(value);
+  const total = numberValue(data.total);
+  if (total == null) return null;
+  const correct = numberValue(data.correct) ?? 0;
+  const selectedParts = arrayValue(data.selectedParts)
+    .map(numberValue)
+    .filter((part): part is number => part != null && part >= 1 && part <= 7);
+  return {
+    skill,
+    correct,
+    total,
+    selectedParts,
+    coverageQuestions: numberValue(data.coverageQuestions) ?? 0,
+    coveragePercent: numberValue(data.coveragePercent) ?? 0,
+    equivalentCorrect100: numberValue(data.equivalentCorrect100) ?? (total > 0 ? round2((correct * TOEIC_SECTION_QUESTIONS) / total) : 0),
+    projectedScaledScore: numberValue(data.projectedScaledScore) ?? estimateScaledScore(correct, total),
+    questionWeight: numberValue(data.questionWeight) ?? (total > 0 ? round2((TOEIC_SECTION_MAX_SCORE - TOEIC_SECTION_MIN_SCORE) / total) : 0),
+  };
+}
+
+function estimateScaledScore(correct: number, total: number): number {
+  if (total <= 0) return TOEIC_SECTION_MIN_SCORE;
+  const equivalentCorrect = Math.min(TOEIC_SECTION_QUESTIONS, Math.max(0, (correct * TOEIC_SECTION_QUESTIONS) / total));
+  const rawScaled = TOEIC_SECTION_MIN_SCORE +
+    ((TOEIC_SECTION_MAX_SCORE - TOEIC_SECTION_MIN_SCORE) * equivalentCorrect) / TOEIC_SECTION_QUESTIONS;
+  return clampToToeicStep(rawScaled);
+}
+
+function questionWeightForPart(part: number): number {
+  const count = PART_DEFAULTS[part]?.questionCount ?? 0;
+  return count > 0 ? round2((TOEIC_SECTION_MAX_SCORE - TOEIC_SECTION_MIN_SCORE) / count) : 0;
+}
+
+function clampToToeicStep(value: number): number {
+  const stepped = Math.round(value / 5) * 5;
+  return Math.min(TOEIC_SECTION_MAX_SCORE, Math.max(TOEIC_SECTION_MIN_SCORE, stepped));
 }
 
 export function normalizeSessionConfig(input?: PracticeSessionInput, testId?: number): PracticeSessionConfig {
