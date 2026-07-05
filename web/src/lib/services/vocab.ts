@@ -75,6 +75,39 @@ async function liveFolders(): Promise<VocabFolderDoc[]> {
   return snap.docs.map(toFolderDoc).filter((f) => !f.deletedAtMillis);
 }
 
+async function liveOwnerSets(uid: string): Promise<VocabSetDoc[]> {
+  const snap = await adminDb
+    .collection(SETS)
+    .where("ownerUid", "==", uid)
+    .where("status", "==", "PUBLISHED")
+    .get();
+  return snap.docs
+    .map(toSetDoc)
+    .filter((s) => s.ownerUid === uid && s.status === "PUBLISHED" && !s.deletedAtMillis);
+}
+
+async function liveOwnerFolders(uid: string): Promise<VocabFolderDoc[]> {
+  const snap = await adminDb
+    .collection(FOLDERS)
+    .where("ownerUid", "==", uid)
+    .get();
+  return snap.docs
+    .map(toFolderDoc)
+    .filter((f) => f.ownerUid === uid && !f.deletedAtMillis);
+}
+
+async function liveSetsByIds(setIds: number[]): Promise<VocabSetDoc[]> {
+  const uniqueIds = [...new Set(setIds)].filter((id) => Number.isFinite(id));
+  if (!uniqueIds.length) return [];
+
+  const refs = uniqueIds.map((id) => adminDb.collection(SETS).doc(String(id)));
+  const snaps = await adminDb.getAll(...refs);
+  return snaps
+    .filter((snap) => snap.exists)
+    .map(toSetDoc)
+    .filter((s) => s.status === "PUBLISHED" && !s.deletedAtMillis);
+}
+
 async function findPublishedSet(setId: number): Promise<VocabSetDoc | null> {
   const doc = await adminDb.collection(SETS).doc(String(setId)).get();
   if (!doc.exists) return null;
@@ -94,22 +127,37 @@ async function wordsForSet(setId: number): Promise<VocabWordDoc[]> {
     .filter((w) => w.setId === setId && w.status === "PUBLISHED" && !w.deletedAtMillis);
 }
 
+async function wordKeysForSet(setId: number): Promise<string[]> {
+  const snap = await adminDb
+    .collection(WORDS)
+    .where("setId", "==", setId)
+    .where("status", "==", "PUBLISHED")
+    .select("word", "setId", "status", "deletedAtMillis")
+    .get();
+  return snap.docs
+    .map((doc) => doc.data() ?? {})
+    .filter((data) => numVal(data, "setId") === setId && !numVal(data, "deletedAtMillis"))
+    .map((data) => strVal(data, "word")?.toLowerCase().trim() ?? "")
+    .filter(Boolean);
+}
+
 async function wordCountBySetId(setIds: number[]): Promise<Map<number, number>> {
   const counts = new Map<number, number>();
   const uniqueIds = [...new Set(setIds)].filter((id) => Number.isFinite(id));
-  for (let i = 0; i < uniqueIds.length; i += 30) {
-    const chunk = uniqueIds.slice(i, i + 30);
-    if (chunk.length === 0) continue;
-    const snap = await adminDb
-      .collection(WORDS)
-      .where("setId", "in", chunk)
-      .where("status", "==", "PUBLISHED")
-      .get();
-    for (const doc of snap.docs) {
-      const word = toWordDoc(doc);
-      if (word.deletedAtMillis) continue;
-      counts.set(word.setId, (counts.get(word.setId) ?? 0) + 1);
-    }
+  for (let i = 0; i < uniqueIds.length; i += 20) {
+    const chunk = uniqueIds.slice(i, i + 20);
+    const results = await Promise.all(
+      chunk.map(async (setId) => {
+        const snap = await adminDb
+          .collection(WORDS)
+          .where("setId", "==", setId)
+          .where("status", "==", "PUBLISHED")
+          .count()
+          .get();
+        return [setId, snap.data().count] as const;
+      }),
+    );
+    for (const [setId, count] of results) counts.set(setId, count);
   }
   return counts;
 }
@@ -311,10 +359,9 @@ export async function findPracticeSetOptions(
   uid: string | null,
 ): Promise<VocabSetCard[]> {
   if (!uid) return [];
-  const sets = await publishedSets();
   const progress = await userProgressDocs(uid);
   const setIds = new Set(progress.map((p) => p.setId));
-  const filteredSets = sets.filter((s) => setIds.has(s.id));
+  const filteredSets = await liveSetsByIds([...setIds]);
   const wordCounts = await wordCountBySetId(filteredSets.map((set) => set.id));
 
   return filteredSets
@@ -333,8 +380,9 @@ export async function findMySetCards(
   folderId?: number | null,
 ): Promise<MyVocabSetCard[]> {
   if (!uid) return [];
-  const sets = await publishedSets();
-  const folders = await liveFolders();
+  const sets = await liveOwnerSets(uid);
+  const folders = await liveOwnerFolders(uid);
+  const foldersById = new Map(folders.map((folder) => [folder.id, folder]));
 
   let mySets = sets.filter((s) => s.ownerUid === uid);
   if (folderId != null) {
@@ -343,7 +391,7 @@ export async function findMySetCards(
   const wordCounts = await wordCountBySetId(mySets.map((set) => set.id));
 
   return mySets.map((set) => {
-    const folder = folders.find((f) => f.id === set.folderId);
+    const folder = set.folderId != null ? foldersById.get(set.folderId) : undefined;
     return {
       id: set.id,
       title: set.title,
@@ -362,22 +410,25 @@ export async function findMyFolderCards(
   search?: string | null,
 ): Promise<MyVocabFolderCard[]> {
   requireUid(uid);
-  const folders = await liveFolders();
-  const sets = await publishedSets();
+  const sets = await liveOwnerSets(uid);
 
-  let myFolders = folders.filter((f) => f.ownerUid === uid);
+  let myFolders = await liveOwnerFolders(uid);
   if (search) {
     const lower = search.toLowerCase();
     myFolders = myFolders.filter((f) => f.name.toLowerCase().includes(lower));
+  }
+
+  const setCountByFolderId = new Map<number, number>();
+  for (const set of sets) {
+    if (set.folderId == null) continue;
+    setCountByFolderId.set(set.folderId, (setCountByFolderId.get(set.folderId) ?? 0) + 1);
   }
 
   return myFolders.map((folder) => ({
     id: folder.id,
     name: folder.name,
     publicShared: folder.publicShared,
-    setCount: sets.filter(
-      (s) => s.folderId === folder.id && s.ownerUid === uid,
-    ).length,
+    setCount: setCountByFolderId.get(folder.id) ?? 0,
   }));
 }
 
@@ -440,12 +491,11 @@ export async function findProgressSetCards(
   uid: string,
 ): Promise<VocabProgressSetCard[]> {
   requireUid(uid);
-  const sets = await publishedSets();
   const progress = await userProgressDocs(uid);
   const now = Date.now();
 
   const setIds = new Set(progress.map((p) => p.setId));
-  const relevantSets = sets.filter((s) => setIds.has(s.id));
+  const relevantSets = await liveSetsByIds([...setIds]);
   const wordCounts = await wordCountBySetId(relevantSets.map((set) => set.id));
 
   return relevantSets
@@ -717,10 +767,8 @@ export async function deleteMyFolder(
 ): Promise<void> {
   requireUid(uid);
   await requireOwnedFolder(uid, folderId);
-  const sets = await publishedSets();
-  const folderSets = sets.filter(
-    (s) => s.folderId === folderId && s.ownerUid === uid,
-  );
+  const sets = await liveOwnerSets(uid);
+  const folderSets = sets.filter((s) => s.folderId === folderId);
   const batch = adminDb.batch();
   for (const set of folderSets) {
     batch.update(adminDb.collection(SETS).doc(String(set.id)), {
@@ -799,29 +847,32 @@ export async function generateWordsWithAi(
   imageBase64?: string,
   imageMimeType?: string,
 ): Promise<number> {
+  requireUid(uid);
   const candidates = await previewAiWords(
     setId,
+    uid,
     mode,
     input,
     count,
     imageBase64,
     imageMimeType,
   );
-  return saveAiWords(setId, candidates);
+  return saveAiWords(setId, uid, candidates);
 }
 
 export async function previewAiWords(
   setId: number,
+  uid: string,
   mode: string,
   input: string,
   count: number,
   imageBase64?: string,
   imageMimeType?: string,
 ): Promise<AiVocabCandidate[]> {
+  requireUid(uid);
+  await requireOwnedSet(uid, setId);
   const clampedCount = Math.min(Math.max(count, 1), 50);
-  const existingWords = (await wordsForSet(setId)).map((w) =>
-    w.word.toLowerCase().trim(),
-  );
+  const existingWords = await wordKeysForSet(setId);
 
   let suggestedWords: string[];
   if (mode === "image" && imageBase64 && imageMimeType) {
@@ -856,8 +907,11 @@ export async function previewAiWords(
 
 export async function saveAiWords(
   setId: number,
+  uid: string,
   candidates: AiVocabCandidate[],
 ): Promise<number> {
+  requireUid(uid);
+  await requireOwnedSet(uid, setId);
   const selected = candidates.filter((c) => c.selected !== false);
   return saveCandidates(setId, selected, "AI", "Gemini + Dictionary", 50);
 }
@@ -1010,9 +1064,7 @@ async function saveCandidates(
   sourceNote: string | null,
   limit: number,
 ): Promise<number> {
-  const existingWords = (await wordsForSet(setId)).map((w) =>
-    w.word.toLowerCase().trim(),
-  );
+  const existingWords = await wordKeysForSet(setId);
   const existingSet = new Set(existingWords);
 
   const writes: Array<{ id: number; data: Record<string, unknown> }> = [];

@@ -20,10 +20,11 @@ export const POST = withErrorHandling(
     const id = Number(setId);
     if (!Number.isInteger(id) || id <= 0) throw BadRequest("Invalid set ID");
 
-    await requireUser();
+    const user = await requireUser();
     const body = await parseBody(req, previewSchema);
     const candidates = await vocab.previewAiWords(
       id,
+      user.uid,
       body.mode ?? "text",
       body.input ?? "",
       body.count ?? 10,

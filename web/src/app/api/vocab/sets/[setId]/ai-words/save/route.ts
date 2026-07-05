@@ -36,9 +36,9 @@ export const POST = withErrorHandling(
     const id = Number(setId);
     if (!Number.isInteger(id) || id <= 0) throw BadRequest("Invalid set ID");
 
-    await requireUser();
+    const user = await requireUser();
     const body = await parseBody(req, saveSchema);
-    const count = await vocab.saveAiWords(id, body.candidates);
+    const count = await vocab.saveAiWords(id, user.uid, body.candidates);
     return ok({ saved: count });
   },
 );

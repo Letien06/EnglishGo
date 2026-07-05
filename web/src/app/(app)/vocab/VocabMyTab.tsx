@@ -8,6 +8,7 @@
 import Link from "next/link";
 import { useEffect, useState, useCallback } from "react";
 import type {
+  AiVocabCandidate,
   MyVocabSetCard,
   MyVocabFolderCard,
 } from "@/types/vocab";
@@ -290,6 +291,17 @@ export default function VocabMyTab({ uid, folderId, folderSearch }: Props) {
       )}
     </section>
   );
+}
+
+async function fileToBase64(file: File): Promise<string> {
+  return new Promise((resolve) => {
+    const reader = new FileReader();
+    reader.onloadend = () => {
+      const result = reader.result as string;
+      resolve(result.split(",")[1] || result);
+    };
+    reader.readAsDataURL(file);
+  });
 }
 
 /* ================================================================== */
@@ -589,13 +601,21 @@ function AddWordsModal({
   onClose: () => void;
   onAdded: () => void;
 }) {
-  const [tab, setTab] = useState<"manual" | "file" | "paste">("manual");
+  const [tab, setTab] = useState<"manual" | "ai" | "file" | "paste">("manual");
   const [targetSetId, setTargetSetId] = useState(setId);
   const [busy, setBusy] = useState(false);
+  const [error, setError] = useState("");
   const [manualRows, setManualRows] = useState([
     { word: "", phonetic: "", meaning: "", partOfSpeech: "", example: "" },
   ]);
   const [pasteText, setPasteText] = useState("");
+  const [aiMode, setAiMode] = useState<"text" | "reading" | "image">("text");
+  const [aiInput, setAiInput] = useState("");
+  const [aiCount, setAiCount] = useState(10);
+  const [aiImageFile, setAiImageFile] = useState<File | null>(null);
+  const [aiStatus, setAiStatus] = useState("");
+  const [aiCandidates, setAiCandidates] = useState<AiVocabCandidate[]>([]);
+  const [aiSelected, setAiSelected] = useState<Set<number>>(new Set());
 
   function addRow() {
     setManualRows((prev) => [
@@ -626,43 +646,143 @@ function AddWordsModal({
       .filter((line) => line.split("|").some((p) => p.trim()));
     if (!rows.length) return;
 
-    setBusy(true);
-    await fetch(`/api/vocab/my-sets/${targetSetId}`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ action: "manual", rowsText: rows.join("\n") }),
-    });
-    setBusy(false);
-    onAdded();
-    onClose();
+    await submitRows(rows.join("\n"));
   }
 
   async function submitPaste() {
     if (!pasteText.trim()) return;
+    await submitRows(pasteText);
+  }
+
+  async function submitRows(rowsText: string) {
     setBusy(true);
-    await fetch(`/api/vocab/my-sets/${targetSetId}`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ action: "manual", rowsText: pasteText }),
-    });
-    setBusy(false);
-    onAdded();
-    onClose();
+    setError("");
+    try {
+      const res = await fetch(`/api/vocab/my-sets/${targetSetId}`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "manual", rowsText }),
+      });
+      const data = await res.json().catch(() => null);
+      if (!res.ok || data?.success === false) {
+        throw new Error(data?.error || "Khong the them tu vung");
+      }
+      onAdded();
+      onClose();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Khong the them tu vung");
+    } finally {
+      setBusy(false);
+    }
   }
 
   async function submitFile(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
     if (!file) return;
     setBusy(true);
+    setError("");
     const form = new FormData();
     form.append("file", file);
-    await fetch(`/api/vocab/my-sets/${targetSetId}`, {
-      method: "POST",
-      body: form,
+    try {
+      const res = await fetch(`/api/vocab/my-sets/${targetSetId}`, {
+        method: "POST",
+        body: form,
+      });
+      const data = await res.json().catch(() => null);
+      if (!res.ok || data?.success === false) {
+        throw new Error(data?.error || "Khong the import file");
+      }
+      onAdded();
+      onClose();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Khong the import file");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function previewAi() {
+    setBusy(true);
+    setError("");
+    setAiStatus("AI dang phan tich...");
+    setAiCandidates([]);
+
+    let image: string | undefined;
+    let imageMimeType: string | undefined;
+    if (aiMode === "image" && aiImageFile) {
+      image = await fileToBase64(aiImageFile);
+      imageMimeType = aiImageFile.type;
+    }
+
+    try {
+      const res = await fetch(`/api/vocab/sets/${targetSetId}/ai-words/preview`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          mode: aiMode,
+          input: aiInput,
+          count: aiCount,
+          image,
+          imageMimeType,
+        }),
+      });
+      const data = await res.json().catch(() => null);
+      if (!res.ok || data?.success === false || !Array.isArray(data?.data)) {
+        throw new Error(data?.error || "AI chua tao duoc tu");
+      }
+      setAiCandidates(data.data);
+      setAiSelected(new Set(data.data.map((_: AiVocabCandidate, index: number) => index)));
+      setAiStatus(`Da tao ${data.data.length} tu, hay chon tu muon luu.`);
+    } catch (err) {
+      setAiStatus("");
+      setError(err instanceof Error ? err.message : "AI chua tao duoc tu");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function saveAi() {
+    const selectedCandidates = aiCandidates.filter((_, index) => aiSelected.has(index));
+    if (!selectedCandidates.length) return;
+
+    setBusy(true);
+    setError("");
+    setAiStatus("Dang luu tu AI...");
+    try {
+      const res = await fetch(`/api/vocab/sets/${targetSetId}/ai-words/save`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ candidates: selectedCandidates }),
+      });
+      const data = await res.json().catch(() => null);
+      if (!res.ok || data?.success === false) {
+        throw new Error(data?.error || "Khong the luu tu AI");
+      }
+      onAdded();
+      onClose();
+    } catch (err) {
+      setAiStatus("");
+      setError(err instanceof Error ? err.message : "Khong the luu tu AI");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  function toggleAiCandidate(index: number) {
+    setAiSelected((prev) => {
+      const next = new Set(prev);
+      if (next.has(index)) next.delete(index);
+      else next.add(index);
+      return next;
     });
-    setBusy(false);
-    onAdded();
-    onClose();
+  }
+
+  function toggleAllAiCandidates() {
+    setAiSelected((prev) =>
+      prev.size === aiCandidates.length
+        ? new Set()
+        : new Set(aiCandidates.map((_, index) => index)),
+    );
   }
 
   return (
@@ -685,11 +805,11 @@ function AddWordsModal({
 
       {/* Add word tabs */}
       <nav className="flex gap-1 mb-4">
-        {(["manual", "file", "paste"] as const).map((t) => (
+        {(["manual", "ai", "file", "paste"] as const).map((t) => (
           <button
             key={t}
             onClick={() => setTab(t)}
-            className={`px-3 py-1.5 rounded-lg text-xs font-semibold ${
+            className={`px-3 py-1.5 rounded-lg text-xs font-semibold ${t === "ai" ? "before:content-['AI'] " : ""}${
               tab === t
                 ? "bg-accent text-white"
                 : "bg-surface-soft text-ink2"
@@ -701,6 +821,12 @@ function AddWordsModal({
           </button>
         ))}
       </nav>
+
+      {error && (
+        <p className="mb-3 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-xs font-semibold text-red-600">
+          {error}
+        </p>
+      )}
 
       {/* Manual tab */}
       {tab === "manual" && (
@@ -736,6 +862,129 @@ function AddWordsModal({
           >
             + Thêm hàng
           </button>
+        </div>
+      )}
+
+      {/* AI tab */}
+      {tab === "ai" && (
+        <div className="space-y-3">
+          <div className="grid grid-cols-3 gap-1">
+            {(["text", "reading", "image"] as const).map((m) => (
+              <button
+                key={m}
+                type="button"
+                onClick={() => {
+                  setAiMode(m);
+                  setAiCandidates([]);
+                  setAiStatus("");
+                }}
+                className={`rounded-lg px-3 py-2 text-xs font-semibold ${
+                  aiMode === m ? "bg-accent text-white" : "bg-surface-soft text-ink2"
+                }`}
+              >
+                {m === "text" && "Chu de"}
+                {m === "reading" && "Doan van"}
+                {m === "image" && "Hinh anh"}
+              </button>
+            ))}
+          </div>
+
+          {aiMode === "image" ? (
+            <label className="block cursor-pointer rounded-xl border-2 border-dashed border-line bg-surface-soft px-4 py-5 text-center hover:border-accent/40">
+              <span className="block text-sm font-semibold text-ink">
+                {aiImageFile ? aiImageFile.name : "Chon anh de AI lay tu vung"}
+              </span>
+              <span className="text-xs text-muted">JPG, PNG, WEBP toi da 5MB</span>
+              <input
+                type="file"
+                accept="image/jpeg,image/png,image/webp"
+                onChange={(e) => setAiImageFile(e.target.files?.[0] ?? null)}
+                className="hidden"
+              />
+            </label>
+          ) : (
+            <textarea
+              value={aiInput}
+              onChange={(e) => setAiInput(e.target.value)}
+              rows={4}
+              placeholder={
+                aiMode === "reading"
+                  ? "Paste doan van tieng Anh de AI trich tu nen hoc..."
+                  : "Nhap chu de, vi du: airport announcements, office meeting..."
+              }
+              className="w-full rounded-lg border border-line bg-surface-soft px-3 py-2 text-sm text-ink"
+            />
+          )}
+
+          <label className="flex items-center gap-2 text-sm text-ink2">
+            So tu:
+            <input
+              type="number"
+              min={1}
+              max={50}
+              value={aiCount}
+              onChange={(e) => setAiCount(Number(e.target.value))}
+              className="w-20 rounded border border-line bg-surface-soft px-2 py-1 text-sm text-ink"
+            />
+          </label>
+
+          {aiStatus && (
+            <p className={`text-xs font-semibold ${busy ? "animate-pulse text-muted" : "text-ink2"}`}>
+              {aiStatus}
+            </p>
+          )}
+
+          {aiCandidates.length > 0 && (
+            <section className="space-y-2">
+              <div className="flex items-center justify-between gap-3">
+                <strong className="text-sm text-ink">
+                  Da chon {aiSelected.size}/{aiCandidates.length}
+                </strong>
+                <button
+                  type="button"
+                  onClick={toggleAllAiCandidates}
+                  className="text-xs font-semibold text-accent"
+                >
+                  {aiSelected.size === aiCandidates.length ? "Bo chon tat ca" : "Chon tat ca"}
+                </button>
+              </div>
+              <div className="max-h-56 space-y-2 overflow-y-auto pr-1">
+                {aiCandidates.map((candidate, index) => (
+                  <label
+                    key={`${candidate.word}-${index}`}
+                    className={`flex cursor-pointer items-start gap-3 rounded-xl border p-3 ${
+                      aiSelected.has(index)
+                        ? "border-accent/40 bg-accent/5"
+                        : "border-line bg-surface-soft opacity-70"
+                    }`}
+                  >
+                    <input
+                      type="checkbox"
+                      checked={aiSelected.has(index)}
+                      onChange={() => toggleAiCandidate(index)}
+                      className="mt-1"
+                    />
+                    <span className="min-w-0">
+                      <span className="block text-sm font-bold text-ink">
+                        {candidate.word}
+                        {candidate.partOfSpeech ? (
+                          <em className="ml-2 text-xs font-semibold not-italic text-muted">
+                            {candidate.partOfSpeech}
+                          </em>
+                        ) : null}
+                      </span>
+                      <span className="block text-sm text-ink2">{candidate.meaning}</span>
+                      {candidate.example ? (
+                        <span className="mt-1 block text-xs italic text-muted">
+                          {candidate.example}
+                        </span>
+                      ) : null}
+                    </span>
+                  </label>
+                ))}
+              </div>
+            </section>
+          )}
         </div>
       )}
 
@@ -789,6 +1038,38 @@ function AddWordsModal({
           >
             {busy ? "Đang lưu..." : "Thêm từ"}
           </button>
+        </footer>
+      )}
+
+      {tab === "ai" && (
+        <footer className="flex justify-end gap-2 mt-4">
+          <button
+            onClick={onClose}
+            className="px-4 py-2 rounded-lg bg-surface-soft text-ink2 text-sm"
+          >
+            Huy
+          </button>
+          {aiCandidates.length === 0 ? (
+            <button
+              onClick={previewAi}
+              disabled={
+                busy ||
+                (aiMode !== "image" && !aiInput.trim()) ||
+                (aiMode === "image" && !aiImageFile)
+              }
+              className="px-4 py-2 rounded-lg bg-accent text-white text-sm font-semibold disabled:opacity-50"
+            >
+              {busy ? "Dang tao..." : "Tao bang AI"}
+            </button>
+          ) : (
+            <button
+              onClick={saveAi}
+              disabled={busy || aiSelected.size === 0}
+              className="px-4 py-2 rounded-lg bg-accent text-white text-sm font-semibold disabled:opacity-50"
+            >
+              {busy ? "Dang luu..." : `Luu ${aiSelected.size} tu`}
+            </button>
+          )}
         </footer>
       )}
 
