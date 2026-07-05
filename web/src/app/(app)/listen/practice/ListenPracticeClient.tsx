@@ -362,6 +362,7 @@ export default function ListenPracticeClient({
                 item={item}
                 question={question}
                 index={index}
+                partNum={partNum}
                 mode={activeMode}
                 assist={assist}
                 answered={answeredMap[question.id] ?? null}
@@ -423,6 +424,7 @@ function QuestionCard({
   item,
   question,
   index,
+  partNum,
   mode,
   assist,
   answered,
@@ -437,6 +439,7 @@ function QuestionCard({
   item: DauToeicPracticeItem;
   question: DauToeicQuestion;
   index: number;
+  partNum: number;
   mode: PracticeMode;
   assist: number;
   answered: string | null;
@@ -449,18 +452,22 @@ function QuestionCard({
   onAnswer: (selected: string) => void;
 }) {
   const translations = useMemo(
-    () => parseOptionTranslations(firstText(question.answerTranslationVi, question.translationVi, item.translation)),
+    () => parseOptionTranslations(cleanDisplayText(firstText(question.answerTranslationVi, question.translationVi, item.translation))),
     [item.translation, question.answerTranslationVi, question.translationVi],
   );
-  const options = questionOptions(question);
+  const options = questionOptions(question, partNum);
   const correctAnswer = normalizeAnswer(question.correctAnswer);
   const correct = answered != null && answered === correctAnswer;
+  const showQuestionText = partNum >= 3;
+  const showOptionText = partNum >= 3;
 
   return (
     <article className="mb-8 last:mb-0">
-      <h3 className="mb-5 text-xl font-extrabold text-ink">
-        {question.questionText || `Question ${index + 1}`}
-      </h3>
+      {showQuestionText ? (
+        <h3 className="mb-5 text-xl font-extrabold text-ink">
+          {normalizeQuestionText(partNum, question.questionText, index + 1)}
+        </h3>
+      ) : null}
 
       {(mode === "fill" || mode === "flip") && (
         <div className="mb-4 flex items-center justify-between rounded-xl border border-violet-200 bg-violet-50 px-4 py-3">
@@ -491,6 +498,7 @@ function QuestionCard({
             optionKey={option.key}
             text={option.text}
             translation={translations[option.key]}
+            showOptionText={showOptionText}
             correctAnswer={correctAnswer}
             selected={answered}
             mode={mode}
@@ -754,6 +762,7 @@ function AnswerOption({
   optionKey,
   text,
   translation,
+  showOptionText,
   correctAnswer,
   selected,
   mode,
@@ -768,6 +777,7 @@ function AnswerOption({
   optionKey: string;
   text: string;
   translation?: string;
+  showOptionText: boolean;
   correctAnswer: string;
   selected: string | null;
   mode: PracticeMode;
@@ -781,7 +791,7 @@ function AnswerOption({
   const isSelected = selected === optionKey;
   const isCorrectChoice = selected != null && correctAnswer === optionKey;
   const isWrongChoice = isSelected && selected !== correctAnswer;
-  const showNormalText = mode === "normal" && selected != null;
+  const showNormalText = showOptionText && (mode === "normal" || selected != null);
   const stateClass = isCorrectChoice
     ? "border-green-400 bg-green-50 text-green-700"
     : isWrongChoice
@@ -815,13 +825,14 @@ function AnswerOption({
       <span className="min-w-10">({optionKey})</span>
       <span className="min-w-0 flex-1">
         {showNormalText && <span>{text}</span>}
-        {mode === "bilingual" && (
+        {!showOptionText && <span className="font-extrabold">{optionKey}</span>}
+        {showOptionText && mode === "bilingual" && (
           <>
             <span>{text}</span>
             {translation && <span className="mt-2 block text-sm font-bold text-ink">{translation}</span>}
           </>
         )}
-        {mode === "fill" && (
+        {showOptionText && mode === "fill" && (
           <MaskedText
             questionId={questionId}
             optionKey={optionKey}
@@ -834,7 +845,7 @@ function AnswerOption({
             onFillValue={onFillValue}
           />
         )}
-        {mode === "flip" && (
+        {showOptionText && mode === "flip" && (
           <MaskedText
             questionId={questionId}
             optionKey={optionKey}
@@ -1035,13 +1046,63 @@ function revealAllWords(
   });
 }
 
-function questionOptions(question: DauToeicQuestion): Array<{ key: string; text: string }> {
+function questionOptions(question: DauToeicQuestion, partNum = question.part ?? 1): Array<{ key: string; text: string }> {
   return [
     { key: "A", text: question.optionA },
     { key: "B", text: question.optionB },
     { key: "C", text: question.optionC },
     { key: "D", text: question.optionD },
-  ].filter((option): option is { key: string; text: string } => Boolean(option.text));
+  ]
+    .filter((option): option is { key: string; text: string } => {
+      if (partNum === 2 && option.key === "D") return false;
+      return Boolean(cleanDisplayText(option.text));
+    })
+    .map((option) => ({ ...option, text: cleanDisplayText(option.text) }));
+}
+
+function normalizeQuestionText(partNum: number, value: string | null | undefined, index: number): string {
+  if (partNum === 1 || partNum === 2) return "";
+  const cleaned = removeScriptBlock(cleanDisplayText(value));
+  return cleaned || `Question ${index}`;
+}
+
+function removeScriptBlock(value: string): string {
+  const text = value.trim();
+  if (!text) return "";
+  const scriptIndex = text.search(/\bSCRIPT\s*:/i);
+  if (scriptIndex < 0) return text;
+  const afterQuestionMarker = text
+    .slice(scriptIndex)
+    .match(/\b(?:QUESTION|QUESTIONS)\s*:?\s*([\s\S]+)/i);
+  if (afterQuestionMarker?.[1]?.trim()) return afterQuestionMarker[1].trim();
+  return text.slice(0, scriptIndex).trim();
+}
+
+function cleanDisplayText(value: string | null | undefined): string {
+  if (!value?.trim()) return "";
+  return decodeHtmlEntities(
+    value
+      .replace(/<\s*br\s*\/?\s*>/gi, "\n")
+      .replace(/<\s*\/p\s*>/gi, "\n")
+      .replace(/<[^>]+>/g, "")
+      .replace(/\r\n/g, "\n")
+      .replace(/[ \t]+\n/g, "\n")
+      .replace(/\n{3,}/g, "\n\n")
+      .replace(/[ \t]{2,}/g, " ")
+      .trim(),
+  );
+}
+
+function decodeHtmlEntities(value: string): string {
+  return value
+    .replace(/&nbsp;/gi, " ")
+    .replace(/&amp;/gi, "&")
+    .replace(/&lt;/gi, "<")
+    .replace(/&gt;/gi, ">")
+    .replace(/&quot;/gi, '"')
+    .replace(/&#39;/gi, "'")
+    .replace(/&#(\d+);/g, (_, code: string) => String.fromCharCode(Number(code)))
+    .replace(/&#x([0-9a-f]+);/gi, (_, code: string) => String.fromCharCode(parseInt(code, 16)));
 }
 
 function normalizeSavedAnswers(

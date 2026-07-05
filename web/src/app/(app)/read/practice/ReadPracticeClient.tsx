@@ -216,12 +216,12 @@ export default function ReadPracticeClient({
           {partNum !== 5 && item.transcript ? (
             <article className="rounded-2xl border border-slate-200 bg-white p-6">
               <h2 className="mb-4 text-xl font-extrabold text-ink">
-                {firstQuestion?.questionText || "Passage"}
+                Passage
               </h2>
-              <pre className="whitespace-pre-wrap font-sans text-base leading-relaxed text-ink">{item.transcript}</pre>
+              <pre className="whitespace-pre-wrap font-sans text-base leading-relaxed text-ink">{cleanDisplayText(item.transcript)}</pre>
               {activeMode === "bilingual" && item.translation && (
                 <pre className="mt-5 whitespace-pre-wrap border-t border-slate-200 pt-5 font-sans text-sm leading-relaxed text-muted">
-                  {item.translation}
+                  {cleanDisplayText(item.translation)}
                 </pre>
               )}
             </article>
@@ -326,20 +326,21 @@ function QuestionCard({
   onAnswer: (selected: string) => void;
 }) {
   const translations = useMemo(
-    () => parseOptionTranslations(firstText(question.answerTranslationVi, question.translationVi)),
+    () => parseOptionTranslations(cleanDisplayText(firstText(question.answerTranslationVi, question.translationVi))),
     [question.answerTranslationVi, question.translationVi],
   );
   const options = questionOptions(question);
   const correctAnswer = normalizeAnswer(question.correctAnswer);
   const correct = answered != null && answered === correctAnswer;
+  const questionText = normalizeQuestionText(question.questionText, index + 1);
 
   return (
     <article className="mb-8 last:mb-0">
       <h3 className="mb-4 text-xl font-extrabold text-ink">
-        {question.questionText || `Question ${index + 1}`}
+        {questionText}
       </h3>
       {partNum === 5 && item.transcript && (
-        <p className="mb-4 rounded-xl bg-slate-50 p-4 text-sm font-bold leading-relaxed text-ink">{item.transcript}</p>
+        <p className="mb-4 rounded-xl bg-slate-50 p-4 text-sm font-bold leading-relaxed text-ink">{cleanDisplayText(item.transcript)}</p>
       )}
 
       <div className="space-y-3">
@@ -699,7 +700,9 @@ function questionOptions(question: DauToeicQuestion): Array<{ key: string; text:
     { key: "B", text: question.optionB },
     { key: "C", text: question.optionC },
     { key: "D", text: question.optionD },
-  ].filter((option): option is { key: string; text: string } => Boolean(option.text));
+  ]
+    .filter((option): option is { key: string; text: string } => Boolean(cleanDisplayText(option.text)))
+    .map((option) => ({ ...option, text: cleanDisplayText(option.text) }));
 }
 
 function initialItemIndex(total: number) {
@@ -738,6 +741,50 @@ async function postTool(url: string, body: Record<string, unknown>) {
 
 function optionText(question: DauToeicQuestion, answer: string) {
   return answer === "A" ? question.optionA : answer === "B" ? question.optionB : answer === "C" ? question.optionC : question.optionD;
+}
+
+function normalizeQuestionText(value: string | null | undefined, index: number): string {
+  const cleaned = removeScriptBlock(cleanDisplayText(value));
+  return cleaned || `Question ${index}`;
+}
+
+function removeScriptBlock(value: string): string {
+  const text = value.trim();
+  if (!text) return "";
+  const scriptIndex = text.search(/\bSCRIPT\s*:/i);
+  if (scriptIndex < 0) return text;
+  const afterQuestionMarker = text
+    .slice(scriptIndex)
+    .match(/\b(?:QUESTION|QUESTIONS)\s*:?\s*([\s\S]+)/i);
+  if (afterQuestionMarker?.[1]?.trim()) return afterQuestionMarker[1].trim();
+  return text.slice(0, scriptIndex).trim();
+}
+
+function cleanDisplayText(value: string | null | undefined): string {
+  if (!value?.trim()) return "";
+  return decodeHtmlEntities(
+    value
+      .replace(/<\s*br\s*\/?\s*>/gi, "\n")
+      .replace(/<\s*\/p\s*>/gi, "\n")
+      .replace(/<[^>]+>/g, "")
+      .replace(/\r\n/g, "\n")
+      .replace(/[ \t]+\n/g, "\n")
+      .replace(/\n{3,}/g, "\n\n")
+      .replace(/[ \t]{2,}/g, " ")
+      .trim(),
+  );
+}
+
+function decodeHtmlEntities(value: string): string {
+  return value
+    .replace(/&nbsp;/gi, " ")
+    .replace(/&amp;/gi, "&")
+    .replace(/&lt;/gi, "<")
+    .replace(/&gt;/gi, ">")
+    .replace(/&quot;/gi, '"')
+    .replace(/&#39;/gi, "'")
+    .replace(/&#(\d+);/g, (_, code: string) => String.fromCharCode(Number(code)))
+    .replace(/&#x([0-9a-f]+);/gi, (_, code: string) => String.fromCharCode(parseInt(code, 16)));
 }
 
 function readingInstruction(partNum: number) {
