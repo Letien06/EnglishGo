@@ -152,21 +152,23 @@ function rowsToCandidates(rows: string[][]): AiVocabCandidate[] {
 
     if (!word.trim()) continue;
 
+    const rowShape = headerMap ? null : inferDelimitedRowShape(row);
+
     const meaning = headerMap
       ? cellByHeader(row, headerMap, "meaning", "nghĩa", "vietnamese", "definition")
-      : row[1] ?? "";
+      : rowShape?.meaning ?? row[1] ?? "";
 
     const partOfSpeech = headerMap
       ? cellByHeader(row, headerMap, "partOfSpeech", "part_of_speech", "pos", "loại từ", "type")
-      : row[2] ?? "";
+      : rowShape?.partOfSpeech ?? row[2] ?? "";
 
     const phonetic = headerMap
       ? cellByHeader(row, headerMap, "phonetic", "ipa", "pronunciation", "phiên âm")
-      : row[3] ?? "";
+      : rowShape?.phonetic ?? row[3] ?? "";
 
     const example = headerMap
       ? cellByHeader(row, headerMap, "example", "ví dụ", "sentence", "câu")
-      : row[4] ?? "";
+      : rowShape?.example ?? row[4] ?? "";
 
     candidates.push({
       word: word.trim(),
@@ -179,6 +181,35 @@ function rowsToCandidates(rows: string[][]): AiVocabCandidate[] {
   }
 
   return candidates;
+}
+
+function inferDelimitedRowShape(row: string[]): {
+  meaning: string;
+  partOfSpeech: string;
+  phonetic: string;
+  example: string;
+} | null {
+  const second = row[1] ?? "";
+  const third = row[2] ?? "";
+  const fourth = row[3] ?? "";
+  if (row.length >= 4 && (looksLikePhonetic(second) || looksLikePartOfSpeech(third))) {
+    return {
+      phonetic: second,
+      partOfSpeech: third,
+      meaning: fourth,
+      example: row[4] ?? "",
+    };
+  }
+  return null;
+}
+
+function looksLikePhonetic(value: string): boolean {
+  const trimmed = value.trim();
+  return /^\/.+\/$/.test(trimmed) || /[ˈˌəɪʊɔɑæɛɜʃʒθðŋ]/i.test(trimmed);
+}
+
+function looksLikePartOfSpeech(value: string): boolean {
+  return /^(n|noun|v|verb|adj|adjective|adv|adverb|other)$/i.test(value.trim());
 }
 
 function looksLikeHeader(row: string[]): boolean {

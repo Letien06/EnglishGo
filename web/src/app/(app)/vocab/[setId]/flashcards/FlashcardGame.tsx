@@ -50,8 +50,12 @@ interface AnswerRecord {
   meaning: string;
   partOfSpeech?: string;
   phonetic?: string;
+  phoneticUs?: string;
+  phoneticUk?: string;
   example?: string;
   audioUrl?: string;
+  audioUsUrl?: string;
+  audioUkUrl?: string;
   correct: boolean;
   selected: string;
   expected: string;
@@ -111,9 +115,22 @@ function shuffle<T>(items: T[]): T[] {
 function speak(text: string) {
   if (typeof window === "undefined" || !("speechSynthesis" in window)) return;
   window.speechSynthesis.cancel();
-  const u = new SpeechSynthesisUtterance(text);
+  const u = new SpeechSynthesisUtterance(cleanSpeechText(text));
   u.lang = "en-US";
   window.speechSynthesis.speak(u);
+}
+
+function cleanSpeechText(value: string): string {
+  return value
+    .trim()
+    .replace(/\s*\((?:n|noun|v|verb|adj|adjective|adv|adverb|prep|preposition)\)\s*$/i, "")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function audioUrlFor(item: VocabWordCard | AnswerRecord, accent: "us" | "uk" = "us"): string | undefined {
+  if (accent === "uk") return item.audioUkUrl || item.audioUrl || item.audioUsUrl;
+  return item.audioUsUrl || item.audioUrl || item.audioUkUrl;
 }
 
 function modeLabelFor(mode: PlayMode, quizMode: QuizMode): string {
@@ -135,6 +152,25 @@ function modeLabelFor(mode: PlayMode, quizMode: QuizMode): string {
       quiz: "Trắc nghiệm",
     }[mode] || "Tổng hợp"
   );
+}
+
+function gameCardTone(mode: PlayMode): string {
+  switch (mode) {
+    case "flashcard":
+      return "from-indigo-500 to-violet-600";
+    case "quiz":
+      return "from-orange-400 to-orange-600";
+    case "matching":
+      return "from-sky-400 to-cyan-700";
+    case "typing":
+      return "from-green-500 to-emerald-700";
+    case "listening":
+      return "from-cyan-500 to-blue-700";
+    case "mixed":
+      return "from-pink-400 to-rose-500";
+    default:
+      return "from-slate-500 to-slate-700";
+  }
 }
 
 async function submitReview(wordId: number, quality: number): Promise<number> {
@@ -445,23 +481,23 @@ function Hub({
             onClick={() =>
               card.quiz ? onOpenQuizChooser() : onStartMode(card.key)
             }
-            className="relative flex flex-col items-start gap-1 rounded-2xl border border-line bg-surface p-5 text-left transition-all hover:border-accent/40 hover:shadow-md"
+            className={`relative flex min-h-[190px] flex-col items-center justify-center gap-2 overflow-hidden rounded-3xl bg-gradient-to-br ${gameCardTone(card.key)} p-5 text-center text-white shadow-lg transition-all hover:-translate-y-0.5 hover:shadow-xl`}
           >
             {card.hot && (
               <em className="absolute right-3 top-3 rounded bg-red-500 px-2 py-0.5 text-[10px] font-bold not-italic text-white">
                 HOT
               </em>
             )}
-            <span className="text-3xl">{card.icon}</span>
-            <strong className="text-base font-bold text-ink">{card.title}</strong>
-            <small className="text-xs text-muted">{card.desc}</small>
-            <b className="mt-1 text-sm font-bold text-accent">{card.points}</b>
+            <span className="rounded-full bg-white/15 px-4 py-3 text-3xl">{card.icon}</span>
+            <strong className="text-lg font-extrabold">{card.title}</strong>
+            <small className="text-sm text-white/85">{card.desc}</small>
+            <b className="mt-1 rounded-full bg-white/15 px-3 py-1 text-sm font-bold">{card.points}</b>
           </button>
         ))}
       </section>
 
       {/* SRS banner */}
-      <section className="flex flex-col items-start gap-3 rounded-2xl border border-accent/30 bg-accent/10 p-5 sm:flex-row sm:items-center sm:justify-between">
+      <section className="flex flex-col items-start gap-3 rounded-3xl bg-gradient-to-r from-pink-400 to-violet-600 p-6 text-white shadow-lg sm:flex-row sm:items-center sm:justify-between">
         <div>
           <strong className="block text-ink">Ôn tập ngắt quãng (SRS)</strong>
           <span className="text-sm text-muted">
@@ -680,10 +716,11 @@ function PlaySurface({
   const usesTimer = activeMode === "quiz" || activeMode === "matching";
 
   const speakItem = useCallback(
-    (item?: VocabWordCard) => {
+    (item?: VocabWordCard | AnswerRecord, accent: "us" | "uk" = "us") => {
       if (muted || !item) return;
-      if (item.audioUrl) {
-        new Audio(item.audioUrl).play().catch(() => {});
+      const audioUrl = audioUrlFor(item, accent);
+      if (audioUrl) {
+        new Audio(audioUrl).play().catch(() => {});
         return;
       }
       speak(item.word);
@@ -691,7 +728,8 @@ function PlaySurface({
     [muted],
   );
 
-  const speakWord = useCallback(() => speakItem(word), [speakItem, word]);
+  const speakWord = useCallback(() => speakItem(word, "us"), [speakItem, word]);
+  const speakWordUk = useCallback(() => speakItem(word, "uk"), [speakItem, word]);
   const speakExample = useCallback(() => {
     if (!muted && word?.example) speak(word.example);
   }, [muted, word]);
@@ -809,8 +847,12 @@ function PlaySurface({
         meaning: item.meaning,
         partOfSpeech: item.partOfSpeech,
         phonetic: item.phonetic,
+        phoneticUs: item.phoneticUs,
+        phoneticUk: item.phoneticUk,
         example: item.example,
         audioUrl: item.audioUrl,
+        audioUsUrl: item.audioUsUrl,
+        audioUkUrl: item.audioUkUrl,
         correct: isCorrect,
         selected: sel,
         expected,
@@ -1136,7 +1178,7 @@ function PlaySurface({
   return (
     <article className="space-y-4">
       {/* Play header */}
-      <section className="flex flex-wrap items-center gap-3 rounded-2xl border border-line bg-surface p-4">
+      <section className="mx-auto flex max-w-3xl flex-wrap items-center gap-3 rounded-[2rem] border-2 border-slate-900 bg-white p-5 shadow-sm">
         <span className="rounded-full bg-amber-400/20 px-3 py-1 text-xs font-bold text-amber-600">
           ~<b>{score}</b> GAME
         </span>
@@ -1193,6 +1235,7 @@ function PlaySurface({
           flipped={flipped}
           onFlip={() => setFlipped((f) => !f)}
           onSpeakWord={speakWord}
+          onSpeakWordUk={speakWordUk}
           onSpeakExample={speakExample}
         />
       )}
@@ -1208,6 +1251,7 @@ function PlaySurface({
           score={score}
           timer={timer}
           onSpeakWord={speakWord}
+          onSpeakWordUk={speakWordUk}
           onSpeakExample={speakExample}
           onAnswer={checkQuiz}
         />
@@ -1318,6 +1362,7 @@ function FlashcardBody({
   flipped,
   onFlip,
   onSpeakWord,
+  onSpeakWordUk,
   onSpeakExample,
 }: {
   word: VocabWordCard;
@@ -1325,6 +1370,7 @@ function FlashcardBody({
   flipped: boolean;
   onFlip: () => void;
   onSpeakWord: () => void;
+  onSpeakWordUk: () => void;
   onSpeakExample: () => void;
 }) {
   const frontTitle = reverse ? "NGHĨA TIẾNG VIỆT" : "TỪ TIẾNG ANH";
@@ -1334,7 +1380,7 @@ function FlashcardBody({
   return (
     <div
       onClick={onFlip}
-      className="mx-auto flex min-h-[260px] max-w-lg cursor-pointer flex-col items-center justify-center rounded-2xl border border-line bg-surface p-8 text-center transition-colors hover:border-accent/40"
+      className="mx-auto flex min-h-[420px] max-w-2xl cursor-pointer flex-col items-center justify-center rounded-3xl bg-gradient-to-br from-indigo-400 to-violet-700 p-10 text-center text-white shadow-2xl transition-transform hover:-translate-y-0.5"
     >
       {!flipped ? (
         <>
@@ -1350,6 +1396,34 @@ function FlashcardBody({
           {!reverse && word.phonetic && (
             <em className="mt-1 text-sm text-muted">{word.phonetic}</em>
           )}
+          {!reverse && (word.phoneticUs || word.phoneticUk) && (
+            <div className="mt-2 flex flex-wrap justify-center gap-2 text-sm text-muted">
+              {word.phoneticUs && <span>US {word.phoneticUs}</span>}
+              {word.phoneticUk && <span>UK {word.phoneticUk}</span>}
+            </div>
+          )}
+          <div className="mt-3 flex justify-center gap-2">
+            <button
+              type="button"
+              onClick={(e) => {
+                e.stopPropagation();
+                onSpeakWord();
+              }}
+              className="rounded-full bg-accent px-3 py-1.5 text-xs font-bold text-white"
+            >
+              US
+            </button>
+            <button
+              type="button"
+              onClick={(e) => {
+                e.stopPropagation();
+                onSpeakWordUk();
+              }}
+              className="rounded-full bg-surface-soft px-3 py-1.5 text-xs font-bold text-ink2"
+            >
+              UK
+            </button>
+          </div>
           <button
             type="button"
             onClick={(e) => {
@@ -1404,6 +1478,7 @@ function QuizBody({
   score,
   timer,
   onSpeakWord,
+  onSpeakWordUk,
   onSpeakExample,
   onAnswer,
 }: {
@@ -1417,6 +1492,7 @@ function QuizBody({
   score: number;
   timer: number;
   onSpeakWord: () => void;
+  onSpeakWordUk: () => void;
   onSpeakExample: () => void;
   onAnswer: (option: string) => void;
 }) {
@@ -1465,6 +1541,12 @@ function QuizBody({
       ) : quizMode === "meaningWord" ? (
         <div className="flex items-center justify-center gap-2 text-center">
           <h2 className="text-2xl font-bold text-ink">{word.meaning}</h2>
+          <button type="button" onClick={onSpeakWord} className="rounded-full bg-accent px-3 py-1 text-xs font-bold text-white">
+            US
+          </button>
+          <button type="button" onClick={onSpeakWordUk} className="rounded-full bg-surface-soft px-3 py-1 text-xs font-bold text-ink2">
+            UK
+          </button>
           <button type="button" onClick={onSpeakWord} className="text-accent">
             ♫
           </button>
@@ -1472,6 +1554,12 @@ function QuizBody({
       ) : (
         <div className="flex flex-wrap items-center justify-center gap-2 text-center">
           <h2 className="text-2xl font-bold text-ink">{word.word}</h2>
+          <button type="button" onClick={onSpeakWord} className="rounded-full bg-accent px-3 py-1 text-xs font-bold text-white">
+            US
+          </button>
+          <button type="button" onClick={onSpeakWordUk} className="rounded-full bg-surface-soft px-3 py-1 text-xs font-bold text-ink2">
+            UK
+          </button>
           <button type="button" onClick={onSpeakWord} className="text-accent">
             ♫
           </button>
@@ -1480,6 +1568,12 @@ function QuizBody({
           </span>
           {word.phonetic && (
             <em className="text-sm text-muted">{word.phonetic}</em>
+          )}
+          {(word.phoneticUs || word.phoneticUk) && (
+            <div className="basis-full text-sm text-muted">
+              {word.phoneticUs && <span className="mr-3">US {word.phoneticUs}</span>}
+              {word.phoneticUk && <span>UK {word.phoneticUk}</span>}
+            </div>
           )}
         </div>
       )}

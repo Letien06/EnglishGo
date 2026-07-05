@@ -21,6 +21,11 @@ interface DictionaryEntry {
   word: string;
   partOfSpeech: string;
   phonetic: string;
+  phoneticUs: string;
+  phoneticUk: string;
+  audioUrl: string;
+  audioUsUrl: string;
+  audioUkUrl: string;
   definition: string;
   example?: string;
 }
@@ -65,9 +70,44 @@ export async function enrichWithDictionary(
     meaning: translations[entry.word] ?? entry.definition,
     partOfSpeech: entry.partOfSpeech,
     phonetic: entry.phonetic || undefined,
+    phoneticUs: entry.phoneticUs || undefined,
+    phoneticUk: entry.phoneticUk || undefined,
+    audioUrl: entry.audioUrl || undefined,
+    audioUsUrl: entry.audioUsUrl || undefined,
+    audioUkUrl: entry.audioUkUrl || undefined,
     example: exampleFor(entry, generatedExamples),
     selected: true,
   }));
+}
+
+export async function enrichCandidatePronunciation(
+  candidate: AiVocabCandidate,
+): Promise<AiVocabCandidate> {
+  const lookupWord = cleanLookupWord(candidate.word);
+  if (!lookupWord) return candidate;
+  const entry = await lookup(lookupWord);
+  if (!entry) {
+    return {
+      ...candidate,
+      word: lookupWord,
+    };
+  }
+
+  return {
+    ...candidate,
+    word: entry.word || lookupWord,
+    partOfSpeech:
+      !candidate.partOfSpeech || candidate.partOfSpeech === "OTHER"
+        ? entry.partOfSpeech
+        : candidate.partOfSpeech,
+    phonetic: candidate.phonetic || entry.phonetic || undefined,
+    phoneticUs: candidate.phoneticUs || entry.phoneticUs || undefined,
+    phoneticUk: candidate.phoneticUk || entry.phoneticUk || undefined,
+    audioUrl: candidate.audioUrl || entry.audioUrl || undefined,
+    audioUsUrl: candidate.audioUsUrl || entry.audioUsUrl || undefined,
+    audioUkUrl: candidate.audioUkUrl || entry.audioUkUrl || undefined,
+    example: candidate.example || entry.example || undefined,
+  };
 }
 
 /* ------------------------------------------------------------------ */
@@ -99,11 +139,17 @@ function parseEntry(
   if (!defPick) return null;
 
   const phonetics = response.phonetics as Array<Record<string, unknown>> | undefined;
+  const pronunciation = pronunciationFor(phonetics);
 
   return {
     word,
     partOfSpeech: normalizePartOfSpeech(defPick.partOfSpeech),
-    phonetic: firstPhonetic(phonetics),
+    phonetic: pronunciation.phonetic,
+    phoneticUs: pronunciation.phoneticUs,
+    phoneticUk: pronunciation.phoneticUk,
+    audioUrl: pronunciation.audioUrl,
+    audioUsUrl: pronunciation.audioUsUrl,
+    audioUkUrl: pronunciation.audioUkUrl,
     definition: defPick.definition,
     example: defPick.example,
   };
@@ -137,15 +183,61 @@ function firstDefinition(
   return null;
 }
 
-function firstPhonetic(
+interface PronunciationPick {
+  phonetic: string;
+  phoneticUs: string;
+  phoneticUk: string;
+  audioUrl: string;
+  audioUsUrl: string;
+  audioUkUrl: string;
+}
+
+function pronunciationFor(
   phonetics?: Array<Record<string, unknown>>,
-): string {
-  if (!phonetics) return "";
+): PronunciationPick {
+  const result: PronunciationPick = {
+    phonetic: "",
+    phoneticUs: "",
+    phoneticUk: "",
+    audioUrl: "",
+    audioUsUrl: "",
+    audioUkUrl: "",
+  };
+  if (!phonetics) return result;
+
   for (const p of phonetics) {
     const text = String(p.text ?? "").trim();
-    if (text) return text;
+    const audio = String(p.audio ?? "").trim();
+    const sourceUrl = String(p.sourceUrl ?? "").trim();
+    const licenseName = String((p.license as Record<string, unknown> | undefined)?.name ?? "").trim();
+    const accent = inferAccent(`${audio} ${sourceUrl} ${licenseName}`);
+
+    if (text && !result.phonetic) result.phonetic = text;
+    if (audio && !result.audioUrl) result.audioUrl = audio;
+
+    if (accent === "us") {
+      if (text && !result.phoneticUs) result.phoneticUs = text;
+      if (audio && !result.audioUsUrl) result.audioUsUrl = audio;
+    }
+    if (accent === "uk") {
+      if (text && !result.phoneticUk) result.phoneticUk = text;
+      if (audio && !result.audioUkUrl) result.audioUkUrl = audio;
+    }
   }
-  return "";
+
+  result.phoneticUs ||= result.phonetic;
+  result.phoneticUk ||= result.phonetic;
+  result.audioUrl ||= result.audioUsUrl || result.audioUkUrl;
+  return result;
+}
+
+function inferAccent(value: string): "us" | "uk" | null {
+  const lower = value.toLowerCase();
+  if (/(^|[^a-z])(us|usa|american|en-us)([^a-z]|$)/.test(lower)) return "us";
+  if (/(^|[^a-z])(uk|gb|british|en-gb)([^a-z]|$)/.test(lower)) return "uk";
+  if (lower.includes("-us.") || lower.includes("_us.")) return "us";
+  if (lower.includes("-uk.") || lower.includes("_uk.")) return "uk";
+  return null;
 }
 
 /* ------------------------------------------------------------------ */
@@ -262,13 +354,21 @@ function uniqueWords(words: string[]): string[] {
   const seen = new Set<string>();
   const result: string[] = [];
   for (const word of words) {
-    const normalized = word.trim().toLowerCase();
+    const normalized = cleanLookupWord(word).toLowerCase();
     if (normalized && !seen.has(normalized)) {
       seen.add(normalized);
       result.push(normalized);
     }
   }
   return result;
+}
+
+function cleanLookupWord(value: string): string {
+  return value
+    .trim()
+    .replace(/\s*\((?:n|noun|v|verb|adj|adjective|adv|adverb|prep|preposition)\)\s*$/i, "")
+    .replace(/\s+/g, " ")
+    .trim();
 }
 
 function normalizePartOfSpeech(value: string): string {

@@ -43,8 +43,12 @@ export interface VocabWordDoc {
   meaning: string;
   partOfSpeech?: string;
   phonetic?: string;
+  phoneticUs?: string;
+  phoneticUk?: string;
   example?: string;
   audioUrl?: string;
+  audioUsUrl?: string;
+  audioUkUrl?: string;
   status: ContentStatus;
   sourceType: SourceType;
   sourceNote?: string;
@@ -134,8 +138,12 @@ export interface VocabWordCard {
   meaning: string;
   partOfSpeech?: string;
   phonetic?: string;
+  phoneticUs?: string;
+  phoneticUk?: string;
   example?: string;
   audioUrl?: string;
+  audioUsUrl?: string;
+  audioUkUrl?: string;
   mastered: boolean;
 }
 
@@ -163,7 +171,12 @@ export interface AiVocabCandidate {
   meaning: string;
   partOfSpeech: string;
   phonetic?: string;
+  phoneticUs?: string;
+  phoneticUk?: string;
   example?: string;
+  audioUrl?: string;
+  audioUsUrl?: string;
+  audioUkUrl?: string;
   selected?: boolean;
 }
 
@@ -178,5 +191,10 @@ export interface GeneratedVocabWord {
   meaning: string;
   partOfSpeech: string;
   phonetic?: string;
+  phoneticUs?: string;
+  phoneticUk?: string;
   example?: string;
+  audioUrl?: string;
+  audioUsUrl?: string;
+  audioUkUrl?: string;
 }

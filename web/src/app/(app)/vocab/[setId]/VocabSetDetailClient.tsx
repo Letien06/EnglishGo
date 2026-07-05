@@ -37,8 +37,20 @@ export default function VocabSetDetailClient({ setId, words: initialWords, isOwn
 
   function speak(text: string) {
     if ("speechSynthesis" in window) {
-      window.speechSynthesis.speak(new SpeechSynthesisUtterance(text));
+      window.speechSynthesis.speak(new SpeechSynthesisUtterance(cleanSpeechText(text)));
     }
+  }
+
+  function playWord(word: VocabWordCard, accent: "us" | "uk" = "us") {
+    const audioUrl =
+      accent === "uk"
+        ? word.audioUkUrl || word.audioUrl || word.audioUsUrl
+        : word.audioUsUrl || word.audioUrl || word.audioUkUrl;
+    if (audioUrl) {
+      new Audio(audioUrl).play().catch(() => speak(word.word));
+      return;
+    }
+    speak(word.word);
   }
 
   async function toggleMaster(wordId: number) {
@@ -109,21 +121,31 @@ export default function VocabSetDetailClient({ setId, words: initialWords, isOwn
                 <td className="py-3 pr-4">
                   <div className="flex items-center gap-2">
                     <button
-                      onClick={() =>
-                        word.audioUrl
-                          ? new Audio(word.audioUrl).play()
-                          : speak(word.word)
-                      }
+                      onClick={() => playWord(word, "us")}
                       className="text-accent hover:text-accent/80 shrink-0"
                       title="Phát âm"
                     >
                       🔊
                     </button>
                     <span className="font-semibold text-ink">{word.word}</span>
+                    <button
+                      onClick={() => playWord(word, "uk")}
+                      className="text-accent hover:text-accent/80 shrink-0 text-xs font-bold"
+                      title="Phat am UK"
+                    >
+                      UK
+                    </button>
                   </div>
                 </td>
                 <td className="py-3 pr-4 text-muted text-xs">
-                  {word.phonetic}
+                  {word.phoneticUs || word.phoneticUk ? (
+                    <span className="space-y-1">
+                      {word.phoneticUs && <span className="block">US {word.phoneticUs}</span>}
+                      {word.phoneticUk && <span className="block">UK {word.phoneticUk}</span>}
+                    </span>
+                  ) : (
+                    word.phonetic
+                  )}
                 </td>
                 <td className="py-3 pr-4 text-ink2">{word.meaning}</td>
                 <td className="py-3 pr-4">
@@ -252,7 +274,12 @@ function AiWordModal({
           meaning: c.meaning,
           partOfSpeech: c.partOfSpeech,
           phonetic: c.phonetic,
+          phoneticUs: c.phoneticUs,
+          phoneticUk: c.phoneticUk,
           example: c.example,
+          audioUrl: c.audioUrl,
+          audioUsUrl: c.audioUsUrl,
+          audioUkUrl: c.audioUkUrl,
           mastered: false,
         }));
         onSaved(newCards);
@@ -285,7 +312,7 @@ function AiWordModal({
 
   function speak(word: string) {
     if ("speechSynthesis" in window) {
-      window.speechSynthesis.speak(new SpeechSynthesisUtterance(word));
+      window.speechSynthesis.speak(new SpeechSynthesisUtterance(cleanSpeechText(word)));
     }
   }
 
@@ -476,6 +503,14 @@ function AiWordModal({
       </div>
     </div>
   );
+}
+
+function cleanSpeechText(value: string): string {
+  return value
+    .trim()
+    .replace(/\s*\((?:n|noun|v|verb|adj|adjective|adv|adverb|prep|preposition)\)\s*$/i, "")
+    .replace(/\s+/g, " ")
+    .trim();
 }
 
 async function fileToBase64(file: File): Promise<string> {

@@ -36,7 +36,7 @@ import {
   suggestWordsFromReading,
   suggestWordsFromImage,
 } from "./gemini";
-import { enrichWithDictionary } from "./dictionary";
+import { enrichCandidatePronunciation, enrichWithDictionary } from "./dictionary";
 import { parseImportFile, parseDelimitedWords } from "@/lib/parsers/vocab-import";
 
 /* ------------------------------------------------------------------ */
@@ -1070,7 +1070,8 @@ async function saveCandidates(
   const writes: Array<{ id: number; data: Record<string, unknown> }> = [];
   for (const candidate of candidates) {
     if (writes.length >= limit) break;
-    const normalized = candidate.word.toLowerCase().trim();
+    const normalizedCandidate = await normalizeCandidateForSave(candidate);
+    const normalized = normalizedCandidate.word.toLowerCase().trim();
     if (!normalized || existingSet.has(normalized)) continue;
 
     const wordId = await newNumericId(WORDS);
@@ -1080,11 +1081,16 @@ async function saveCandidates(
       data: {
         id: wordId,
         setId,
-        word: candidate.word.trim(),
-        meaning: candidate.meaning?.trim() || "",
-        partOfSpeech: candidate.partOfSpeech || "OTHER",
-        phonetic: candidate.phonetic || null,
-        example: candidate.example || null,
+        word: normalizedCandidate.word,
+        meaning: normalizedCandidate.meaning?.trim() || "",
+        partOfSpeech: normalizedCandidate.partOfSpeech || "OTHER",
+        phonetic: normalizedCandidate.phonetic || null,
+        phoneticUs: normalizedCandidate.phoneticUs || null,
+        phoneticUk: normalizedCandidate.phoneticUk || null,
+        example: normalizedCandidate.example || null,
+        audioUrl: normalizedCandidate.audioUrl || null,
+        audioUsUrl: normalizedCandidate.audioUsUrl || null,
+        audioUkUrl: normalizedCandidate.audioUkUrl || null,
         status: "PUBLISHED" satisfies ContentStatus,
         sourceType,
         sourceNote,
@@ -1135,6 +1141,67 @@ async function copySetAsNew(
   return { id };
 }
 
+async function normalizeCandidateForSave(
+  candidate: AiVocabCandidate,
+): Promise<AiVocabCandidate> {
+  const wordInfo = extractWordAndPartOfSpeech(candidate.word);
+  const baseCandidate: AiVocabCandidate = {
+    ...candidate,
+    word: wordInfo.word,
+    partOfSpeech:
+      candidate.partOfSpeech && candidate.partOfSpeech !== "OTHER"
+        ? candidate.partOfSpeech
+        : wordInfo.partOfSpeech ?? candidate.partOfSpeech ?? "OTHER",
+  };
+
+  if (
+    baseCandidate.audioUrl ||
+    baseCandidate.audioUsUrl ||
+    baseCandidate.audioUkUrl ||
+    baseCandidate.phoneticUs ||
+    baseCandidate.phoneticUk
+  ) {
+    return baseCandidate;
+  }
+
+  return enrichCandidatePronunciation(baseCandidate);
+}
+
+function extractWordAndPartOfSpeech(value: string): {
+  word: string;
+  partOfSpeech?: string;
+} {
+  const trimmed = value.trim().replace(/\s+/g, " ");
+  const match = trimmed.match(
+    /\s*\((n|noun|v|verb|adj|adjective|adv|adverb)\)\s*$/i,
+  );
+  if (!match) return { word: trimmed };
+
+  return {
+    word: trimmed.slice(0, match.index).trim(),
+    partOfSpeech: normalizePartOfSpeechMarker(match[1]),
+  };
+}
+
+function normalizePartOfSpeechMarker(value: string): string {
+  switch (value.toLowerCase()) {
+    case "n":
+    case "noun":
+      return "NOUN";
+    case "v":
+    case "verb":
+      return "VERB";
+    case "adj":
+    case "adjective":
+      return "ADJ";
+    case "adv":
+    case "adverb":
+      return "ADV";
+    default:
+      return "OTHER";
+  }
+}
+
 async function copyWords(
   sourceSetId: number,
   targetSetId: number,
@@ -1161,8 +1228,12 @@ async function copyWords(
         meaning: word.meaning,
         partOfSpeech: word.partOfSpeech,
         phonetic: word.phonetic,
+        phoneticUs: word.phoneticUs,
+        phoneticUk: word.phoneticUk,
         example: word.example,
         audioUrl: word.audioUrl,
+        audioUsUrl: word.audioUsUrl,
+        audioUkUrl: word.audioUkUrl,
         status: "PUBLISHED" satisfies ContentStatus,
         sourceType: "COMMUNITY" satisfies SourceType,
         publishedAtMillis: now,
@@ -1338,8 +1409,12 @@ function toWordDoc(
     meaning: strVal(d, "meaning") || "",
     partOfSpeech: strVal(d, "partOfSpeech"),
     phonetic: strVal(d, "phonetic"),
+    phoneticUs: strVal(d, "phoneticUs"),
+    phoneticUk: strVal(d, "phoneticUk"),
     example: strVal(d, "example"),
     audioUrl: strVal(d, "audioUrl"),
+    audioUsUrl: strVal(d, "audioUsUrl"),
+    audioUkUrl: strVal(d, "audioUkUrl"),
     status: (strVal(d, "status") as ContentStatus) || "PUBLISHED",
     sourceType: (strVal(d, "sourceType") as SourceType) || "MANUAL",
     sourceNote: strVal(d, "sourceNote"),
@@ -1391,8 +1466,12 @@ function toWordCard(word: VocabWordDoc, mastered: boolean): VocabWordCard {
     meaning: word.meaning,
     partOfSpeech: word.partOfSpeech,
     phonetic: word.phonetic,
+    phoneticUs: word.phoneticUs,
+    phoneticUk: word.phoneticUk,
     example: word.example,
     audioUrl: word.audioUrl,
+    audioUsUrl: word.audioUsUrl,
+    audioUkUrl: word.audioUkUrl,
     mastered,
   };
 }
