@@ -499,20 +499,21 @@ function toQuestion(
   externalQuestion: DauToeicQuestion,
 ): PracticeQuestion {
   const id = dautoeic.routeQuestionId(externalQuestion.id);
+  const part = externalQuestion.part ?? 1;
   return {
     id,
-    part: externalQuestion.part ?? 1,
-    skillType: (externalQuestion.part ?? 1) <= 4 ? "LISTENING" : "READING",
+    part,
+    skillType: part <= 4 ? "LISTENING" : "READING",
     type: "MULTIPLE_CHOICE",
-    content: externalQuestion.questionText || `Question ${id}`,
+    content: normalizeQuestionContent(part, externalQuestion.questionText, id),
     audioUrl: externalQuestion.audioUrl,
     imageUrl: externalQuestion.imageUrl,
-    explanation: externalQuestion.explanationVi || externalQuestion.explanationEn,
+    explanation: cleanDisplayText(externalQuestion.explanationVi || externalQuestion.explanationEn),
     group: externalQuestion.passageText
       ? {
           id: dautoeic.routeQuestionId(externalQuestion.passageId || externalQuestion.id),
-          title: `Part ${externalQuestion.part ?? ""}`.trim(),
-          passageText: externalQuestion.passageText,
+          title: `Part ${part}`.trim(),
+          passageText: cleanDisplayText(externalQuestion.passageText),
         }
       : null,
   };
@@ -529,10 +530,14 @@ function toOptions(
     ["C", externalQuestion.optionC],
     ["D", externalQuestion.optionD],
   ]
-    .filter((entry): entry is [string, string] => Boolean(entry[1]?.trim()))
+    .filter((entry): entry is [string, string] => {
+      const [letter, content] = entry;
+      if (question.part === 2 && letter === "D") return false;
+      return Boolean(cleanDisplayText(content).trim());
+    })
     .map(([letter, content]) => ({
       id: dautoeic.optionId(question.id, letter),
-      content: `${letter}. ${content}`,
+      content: `${letter}. ${cleanDisplayText(content)}`,
       correct: letter === correct,
     }));
 }
@@ -625,6 +630,54 @@ export function suggestedMinutes(parts: number[]): number {
 function makeSessionKey(mode: PracticeMode, parts: number[], durationMinutes: number, testId?: number): string {
   const testSegment = Number.isFinite(testId) ? String(testId) : "unknown";
   return `practice-${testSegment}-${mode}-parts-${parts.join("-")}-time-${durationMinutes}`;
+}
+
+function normalizeQuestionContent(part: number, value: string | null, questionId: number): string {
+  if (part === 1 || part === 2) return "";
+  const cleaned = removeScriptBlock(cleanDisplayText(value));
+  return cleaned || `Question ${questionId}`;
+}
+
+function removeScriptBlock(value: string): string {
+  const text = value.trim();
+  if (!text) return "";
+  const scriptIndex = text.search(/\bSCRIPT\s*:/i);
+  if (scriptIndex < 0) return text;
+
+  const afterQuestionMarker = text
+    .slice(scriptIndex)
+    .match(/\b(?:QUESTION|QUESTIONS)\s*:?\s*([\s\S]+)/i);
+  if (afterQuestionMarker?.[1]?.trim()) return afterQuestionMarker[1].trim();
+
+  const beforeScript = text.slice(0, scriptIndex).trim();
+  return beforeScript;
+}
+
+function cleanDisplayText(value: string | null | undefined): string {
+  if (!value?.trim()) return "";
+  return decodeHtmlEntities(
+    value
+      .replace(/<\s*br\s*\/?\s*>/gi, "\n")
+      .replace(/<\s*\/p\s*>/gi, "\n")
+      .replace(/<[^>]+>/g, "")
+      .replace(/\r\n/g, "\n")
+      .replace(/[ \t]+\n/g, "\n")
+      .replace(/\n{3,}/g, "\n\n")
+      .replace(/[ \t]{2,}/g, " ")
+      .trim(),
+  );
+}
+
+function decodeHtmlEntities(value: string): string {
+  return value
+    .replace(/&nbsp;/gi, " ")
+    .replace(/&amp;/gi, "&")
+    .replace(/&lt;/gi, "<")
+    .replace(/&gt;/gi, ">")
+    .replace(/&quot;/gi, '"')
+    .replace(/&#39;/gi, "'")
+    .replace(/&#(\d+);/g, (_, code: string) => String.fromCharCode(Number(code)))
+    .replace(/&#x([0-9a-f]+);/gi, (_, code: string) => String.fromCharCode(parseInt(code, 16)));
 }
 
 function toReviewAnswer(value: unknown): ReviewAnswer {

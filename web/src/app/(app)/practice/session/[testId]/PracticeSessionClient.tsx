@@ -405,6 +405,10 @@ function QuestionCard({
   previousDisabled: boolean;
   nextDisabled: boolean;
 }) {
+  const showPassage = Boolean(question.group && question.part >= 6);
+  const showQuestionText = shouldShowQuestionText(question.part) && question.content.trim().length > 0;
+  const showOptionText = shouldShowOptionText(question.part);
+  const imageFirst = question.part === 1;
   return (
     <article
       id={`q-${question.id}`}
@@ -434,18 +438,19 @@ function QuestionCard({
         </div>
       </header>
 
-      {question.group ? (
+      {showPassage && question.group ? (
         <div className="mt-4 rounded-lg bg-surface-soft p-4 text-sm leading-relaxed text-ink2 whitespace-pre-wrap">
           {question.group.passageText}
         </div>
       ) : null}
-      <p className="mt-4 whitespace-pre-wrap text-sm font-semibold text-ink">{question.content}</p>
+      {showQuestionText ? <p className="mt-4 whitespace-pre-wrap text-sm font-semibold text-ink">{question.content}</p> : null}
+      {imageFirst && question.imageUrl ? <img src={question.imageUrl} alt="Question media" className="mt-4 max-h-[520px] max-w-full rounded-lg border border-line object-contain" /> : null}
       {question.audioUrl ? <audio controls src={question.audioUrl} className="mt-4 w-full" /> : null}
-      {question.imageUrl ? <img src={question.imageUrl} alt="Question media" className="mt-4 max-h-[520px] max-w-full rounded-lg border border-line object-contain" /> : null}
+      {!imageFirst && question.imageUrl ? <img src={question.imageUrl} alt="Question media" className="mt-4 max-h-[520px] max-w-full rounded-lg border border-line object-contain" /> : null}
 
       {options.length > 0 ? (
         <div className="mt-5 space-y-3">
-          {options.map((option) => {
+          {options.map((option, optionIndex) => {
             const selected = answer.selectedOptionId === option.id;
             return (
               <label
@@ -461,7 +466,9 @@ function QuestionCard({
                   disabled={disabled}
                   className="mt-1"
                 />
-                <span className="text-sm text-ink">{option.content}</span>
+                <span className={`text-sm text-ink ${showOptionText ? "" : "font-extrabold"}`}>
+                  {showOptionText ? option.content : optionLabel(option.content, optionIndex)}
+                </span>
               </label>
             );
           })}
@@ -526,4 +533,18 @@ function hasAnswer(answer: { selectedOptionId: number | null; textResponse: stri
 function partLabel(parts: number[]): string {
   if (parts.length === 1) return `Part ${parts[0]}`;
   return `Parts ${parts.join(", ")}`;
+}
+
+function shouldShowQuestionText(part: number): boolean {
+  return part >= 3;
+}
+
+function shouldShowOptionText(part: number): boolean {
+  return part >= 3;
+}
+
+function optionLabel(content: string, index: number): string {
+  const match = content.trim().match(/^([A-D])(?:[.)]\s*|\s+)/i);
+  if (match?.[1]) return match[1].toUpperCase();
+  return String.fromCharCode(65 + index);
 }
