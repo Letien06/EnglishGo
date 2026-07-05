@@ -32,12 +32,13 @@ const themeInitScript = `
 (function(){
   try {
     var t = localStorage.getItem("englishgo-theme");
-    if (t !== "dark" && t !== "light") {
-      t = window.matchMedia && window.matchMedia("(prefers-color-scheme: light)").matches ? "light" : "dark";
+    var manual = localStorage.getItem("englishgo-theme-manual") === "1";
+    if (!manual || (t !== "dark" && t !== "light")) {
+      t = "light";
     }
     document.documentElement.dataset.theme = t;
   } catch(e) {
-    document.documentElement.dataset.theme = "dark";
+    document.documentElement.dataset.theme = "light";
   }
 })();
 `;
@@ -46,7 +47,7 @@ export default function RootLayout({
   children,
 }: Readonly<{ children: React.ReactNode }>) {
   return (
-    <html lang="vi" data-theme="dark" suppressHydrationWarning>
+    <html lang="vi" data-theme="light" suppressHydrationWarning>
       <head>
         <script dangerouslySetInnerHTML={{ __html: themeInitScript }} />
       </head>

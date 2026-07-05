@@ -3,18 +3,18 @@
 import { useCallback, useState } from "react";
 
 const STORAGE_KEY = "englishgo-theme";
+const MANUAL_STORAGE_KEY = "englishgo-theme-manual";
 
 function readTheme(): "dark" | "light" {
-  if (typeof window === "undefined") return "dark";
+  if (typeof window === "undefined") return "light";
   try {
     const saved = localStorage.getItem(STORAGE_KEY);
-    if (saved === "dark" || saved === "light") return saved;
+    const hasManualChoice = localStorage.getItem(MANUAL_STORAGE_KEY) === "1";
+    if (hasManualChoice && (saved === "dark" || saved === "light")) return saved;
   } catch {
     /* ignore */
   }
-  return window.matchMedia?.("(prefers-color-scheme: light)").matches
-    ? "light"
-    : "dark";
+  return "light";
 }
 
 export default function ThemeToggle({ className }: { className?: string }) {
@@ -25,6 +25,7 @@ export default function ThemeToggle({ className }: { className?: string }) {
     document.documentElement.dataset.theme = next;
     try {
       localStorage.setItem(STORAGE_KEY, next);
+      localStorage.setItem(MANUAL_STORAGE_KEY, "1");
     } catch {
       /* ignore */
     }
