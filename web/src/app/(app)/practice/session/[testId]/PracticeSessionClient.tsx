@@ -65,7 +65,20 @@ export default function PracticeSessionClient({ session }: { session: PracticeSe
     [answers, session.questions],
   );
   const totalQuestions = session.questions.length;
-  const activeIndex = Math.max(0, session.questions.findIndex((question) => question.id === activeQuestionId));
+  const questionIndexById = useMemo(
+    () => new Map(session.questions.map((question, index) => [question.id, index])),
+    [session.questions],
+  );
+  const questionsByPart = useMemo(() => {
+    const grouped = new Map<number, PracticeQuestion[]>();
+    for (const question of session.questions) {
+      const items = grouped.get(question.part) ?? [];
+      items.push(question);
+      grouped.set(question.part, items);
+    }
+    return grouped;
+  }, [session.questions]);
+  const activeIndex = Math.max(0, questionIndexById.get(activeQuestionId) ?? 0);
   const activeQuestion = session.questions[activeIndex] ?? session.questions[0];
   const currentAudioUrl = activeQuestion?.audioUrl || null;
   const hasListening = session.questions.some((question) => question.part <= 4);
@@ -195,7 +208,9 @@ export default function PracticeSessionClient({ session }: { session: PracticeSe
 
   function goToQuestion(questionId: number) {
     setActiveQuestionId(questionId);
-    document.getElementById(`q-${questionId}`)?.scrollIntoView({ behavior: "smooth", block: "start" });
+    window.requestAnimationFrame(() => {
+      document.getElementById(`q-${questionId}`)?.scrollIntoView({ behavior: "smooth", block: "start" });
+    });
   }
 
   function goByOffset(offset: number) {
@@ -286,27 +301,27 @@ export default function PracticeSessionClient({ session }: { session: PracticeSe
 
       <div className="grid grid-cols-1 gap-6 px-4 py-6 xl:grid-cols-[minmax(0,1fr)_320px]">
         <section className="space-y-5">
-          {session.questions.map((question, index) => (
+          {activeQuestion ? (
             <QuestionCard
-              key={question.id}
-              question={question}
-              index={index}
-              answer={answers[String(question.id)] ?? { selectedOptionId: null, textResponse: null }}
-              marked={markedQuestionIds.has(question.id)}
-              active={question.id === activeQuestionId}
-              options={session.optionsByQuestionId[String(question.id)] ?? []}
+              key={activeQuestion.id}
+              question={activeQuestion}
+              index={activeIndex}
+              answer={answers[String(activeQuestion.id)] ?? { selectedOptionId: null, textResponse: null }}
+              marked={markedQuestionIds.has(activeQuestion.id)}
+              active
+              options={session.optionsByQuestionId[String(activeQuestion.id)] ?? []}
               disabled={submitting}
-              onFocus={() => setActiveQuestionId(question.id)}
-              onAnswer={(selectedOptionId) => setAnswer(question.id, { selectedOptionId })}
-              onTextAnswer={(textResponse) => setAnswer(question.id, { textResponse })}
-              onClear={() => clearAnswer(question.id)}
-              onToggleMarked={() => toggleMarked(question.id)}
+              onFocus={() => setActiveQuestionId(activeQuestion.id)}
+              onAnswer={(selectedOptionId) => setAnswer(activeQuestion.id, { selectedOptionId })}
+              onTextAnswer={(textResponse) => setAnswer(activeQuestion.id, { textResponse })}
+              onClear={() => clearAnswer(activeQuestion.id)}
+              onToggleMarked={() => toggleMarked(activeQuestion.id)}
               onPrevious={() => goByOffset(-1)}
               onNext={() => goByOffset(1)}
-              previousDisabled={index === 0}
-              nextDisabled={index === session.questions.length - 1}
+              previousDisabled={activeIndex === 0}
+              nextDisabled={activeIndex === session.questions.length - 1}
             />
-          ))}
+          ) : null}
         </section>
 
         <aside className="h-fit rounded-xl border border-line bg-surface p-5 shadow-sm xl:sticky xl:top-24">
@@ -316,7 +331,7 @@ export default function PracticeSessionClient({ session }: { session: PracticeSe
           </div>
           <div className="mt-4 space-y-4">
             {session.config.parts.map((part) => {
-              const questions = session.questions.filter((question) => question.part === part);
+              const questions = questionsByPart.get(part) ?? [];
               if (questions.length === 0) return null;
               return (
                 <section key={part}>
@@ -325,7 +340,7 @@ export default function PracticeSessionClient({ session }: { session: PracticeSe
                   </button>
                   <div className="grid grid-cols-5 gap-2">
                     {questions.map((question) => {
-                      const globalIndex = session.questions.findIndex((item) => item.id === question.id) + 1;
+                      const globalIndex = (questionIndexById.get(question.id) ?? 0) + 1;
                       const answered = hasAnswer(answers[String(question.id)]);
                       const marked = markedQuestionIds.has(question.id);
                       const active = question.id === activeQuestionId;

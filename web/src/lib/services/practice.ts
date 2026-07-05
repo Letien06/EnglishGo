@@ -161,6 +161,18 @@ interface PracticeContent {
   correctAnswerByQuestionId: Record<string, string | null>;
 }
 
+interface PracticeAnswerKeyContent {
+  test: PracticeTestCard;
+  questions: Array<{ id: number; part: number }>;
+  correctAnswerByQuestionId: Record<string, string | null>;
+}
+
+interface PracticePartContentSnapshot {
+  questions: PracticeQuestion[];
+  optionsByQuestionId: Record<string, PracticeOption[]>;
+  correctAnswerByQuestionId: Record<string, string | null>;
+}
+
 interface PracticeDraftState {
   payload: string;
   startedAtMillis: number;
@@ -184,6 +196,8 @@ const TOEIC_SECTION_MIN_SCORE = 5;
 const TOEIC_SECTION_MAX_SCORE = 495;
 const TOEIC_SCORE_NOTE =
   "TOEIC estimate only: official raw-to-scaled conversion varies by test form.";
+const PRACTICE_CACHE_VERSION = "v5";
+const PRACTICE_CACHE_TTL_MILLIS = 24 * 60 * 60 * 1000;
 export const PART_DEFAULTS: Record<number, { questionCount: number; suggestedMinutes: number; skill: "LISTENING" | "READING" }> = {
   1: { questionCount: 6, suggestedMinutes: 4, skill: "LISTENING" },
   2: { questionCount: 25, suggestedMinutes: 15, skill: "LISTENING" },
@@ -234,7 +248,9 @@ export async function getPracticeSession(
   const draft = await getOrCreateDraft(uid, testId, config);
   const serverNowMillis = Date.now();
   return {
-    ...content,
+    test: content.test,
+    questions: content.questions,
+    optionsByQuestionId: publicOptionsByQuestionId(content.optionsByQuestionId),
     config,
     draftPayload: draft.payload,
     startedAtMillis: draft.startedAtMillis,
@@ -278,6 +294,37 @@ export async function saveDraft(
   return { id: testId, payload: safePayload, updatedAtMillis };
 }
 
+export async function warmupPracticeContent(
+  testId: number,
+  input?: PracticeSessionInput,
+): Promise<{
+  testId: number;
+  mode: PracticeMode;
+  parts: number[];
+  durationMinutes: number;
+  questionCount: number;
+  audioCount: number;
+  imageCount: number;
+  answerKeyCount: number;
+  warmedAtMillis: number;
+}> {
+  const config = normalizeSessionConfig(input, testId);
+  const content = await loadContent(testId, config.parts);
+  const answerKey = buildAnswerKeyFromContent(content);
+  await writeAnswerKeyCache(testId, config.parts, answerKey);
+  return {
+    testId,
+    mode: config.mode,
+    parts: config.parts,
+    durationMinutes: config.durationMinutes,
+    questionCount: content.questions.length,
+    audioCount: content.questions.filter((question) => question.audioUrl).length,
+    imageCount: content.questions.filter((question) => question.imageUrl).length,
+    answerKeyCount: answerKey.questions.length,
+    warmedAtMillis: Date.now(),
+  };
+}
+
 export async function submit(
   user: AppUser,
   testId: number,
@@ -285,8 +332,8 @@ export async function submit(
   input?: PracticeSessionInput,
 ): Promise<PracticeSubmissionResponse> {
   const config = normalizeSessionConfig(input, testId);
-  const content = await loadContent(testId, config.parts);
-  if (content.questions.length === 0) {
+  const answerKey = await loadAnswerKey(testId, config.parts);
+  if (answerKey.questions.length === 0) {
     throw BadRequest("Test has no questions");
   }
   const submittedAtMillis = Date.now();
@@ -302,11 +349,11 @@ export async function submit(
   const answerDocs: ReviewAnswer[] = [];
   const partStats = new Map<number, { total: number; correct: number }>();
 
-  for (const question of content.questions) {
+  for (const question of answerKey.questions) {
     const submitted =
       answersByQuestionId.get(question.id) ?? ({ questionId: question.id } satisfies PracticeAnswerRequest);
     const selectedAnswer = dautoeic.optionLetter(submitted.selectedOptionId);
-    const correctAnswer = content.correctAnswerByQuestionId[String(question.id)] ?? null;
+    const correctAnswer = answerKey.correctAnswerByQuestionId[String(question.id)] ?? null;
     const correct = Boolean(correctAnswer && correctAnswer === selectedAnswer);
     if (correct) correctCount++;
     const currentPartStats = partStats.get(question.part) ?? { total: 0, correct: 0 };
@@ -316,18 +363,18 @@ export async function submit(
     answerDocs.push({
       questionId: question.id,
       part: question.part,
-      questionText: question.content,
-      explanation: question.explanation,
+      questionText: "",
+      explanation: null,
       selectedOptionId: submitted.selectedOptionId ?? null,
       selectedAnswer,
       correctAnswer,
       correct,
       textResponse: submitted.textResponse ?? null,
-      options: content.optionsByQuestionId[String(question.id)] ?? [],
+      options: [],
     });
   }
 
-  const score = round2((correctCount * 100) / content.questions.length);
+  const score = round2((correctCount * 100) / answerKey.questions.length);
   const scoreBreakdown = buildScoreBreakdown(partStats, config.parts);
   const partBreakdown = config.parts
     .map((part) => {
@@ -349,16 +396,16 @@ export async function submit(
     source: "DAUTOEIC",
     attemptId,
     testId,
-    title: content.test.title,
-    type: content.test.type,
-    difficulty: content.test.difficulty,
+    title: answerKey.test.title,
+    type: answerKey.test.type,
+    difficulty: answerKey.test.difficulty,
     mode: config.mode,
     parts: config.parts,
     durationMinutes: config.durationMinutes,
     sessionKey: config.sessionKey,
     score,
     correctCount,
-    questionCount: content.questions.length,
+    questionCount: answerKey.questions.length,
     startedAtMillis,
     submittedAtMillis,
     elapsedMillis,
@@ -387,7 +434,7 @@ export async function submit(
     attemptId,
     score,
     correctCount,
-    questionCount: content.questions.length,
+    questionCount: answerKey.questions.length,
     expired,
     elapsedMillis,
     scoreBreakdown,
@@ -406,7 +453,10 @@ export async function getAttemptReview(
     .get();
   if (!snap.exists) throw NotFound("Attempt not found");
   const attempt = toAttempt(snap);
-  const answers = arrayValue(snap.get("answers")).map(toReviewAnswer);
+  const answers = await enrichReviewAnswers(
+    attempt,
+    arrayValue(snap.get("answers")).map(toReviewAnswer),
+  );
   return { attempt, answers };
 }
 
@@ -456,6 +506,18 @@ function practiceDraftRef(uid: string, sessionKey: string) {
     .doc(uid)
     .collection("practiceDrafts")
     .doc(sessionKey);
+}
+
+function practicePartContentCacheRef(routeTestId: number, part: number) {
+  return adminDb
+    .collection("practicePartContentCache")
+    .doc(`${PRACTICE_CACHE_VERSION}_${routeTestId}_part_${part}`);
+}
+
+function practiceAnswerKeyCacheRef(routeTestId: number, parts: number[]) {
+  return adminDb
+    .collection("practiceAnswerKeyCache")
+    .doc(`${PRACTICE_CACHE_VERSION}_${routeTestId}_parts_${normalizeParts(parts).join("-")}`);
 }
 
 async function getOrCreateDraft(
@@ -515,19 +577,57 @@ async function loadContentUncached(routeTestId: number, parts: number[]): Promis
   const optionsByQuestionId: Record<string, PracticeOption[]> = {};
   const correctAnswerByQuestionId: Record<string, string | null> = {};
 
-  const partContents = await Promise.all(parts.map((part) => dautoeic.getPart(externalTest.id, part)));
+  const partContents = await Promise.all(parts.map((part) => loadPartContentSnapshot(routeTestId, externalTest, part)));
   for (const partContent of partContents) {
-    for (const externalQuestion of partContent.questions) {
-      const question = toQuestion(test, externalQuestion);
-      questions.push(question);
-      const options = toOptions(question, externalQuestion);
-      optionsByQuestionId[String(question.id)] = options;
-      correctAnswerByQuestionId[String(question.id)] = cleanAnswer(externalQuestion.correctAnswer);
-    }
+    questions.push(...partContent.questions);
+    Object.assign(optionsByQuestionId, partContent.optionsByQuestionId);
+    Object.assign(correctAnswerByQuestionId, partContent.correctAnswerByQuestionId);
   }
 
   questions.sort((a, b) => a.part - b.part || a.id - b.id);
   return { test, questions, optionsByQuestionId, correctAnswerByQuestionId };
+}
+
+async function loadPartContentSnapshot(
+  routeTestId: number,
+  externalTest: DauToeicTest,
+  part: number,
+): Promise<PracticePartContentSnapshot> {
+  const ref = practicePartContentCacheRef(routeTestId, part);
+  const snap = await ref.get();
+  if (isFreshCacheSnapshot(snap)) {
+    return {
+      questions: arrayValue(snap.get("questions")).map(toCachedQuestion),
+      optionsByQuestionId: toCachedOptionsByQuestionId(snap.get("optionsByQuestionId")),
+      correctAnswerByQuestionId: toCachedAnswerMap(snap.get("correctAnswerByQuestionId")),
+    };
+  }
+
+  const partContent = await dautoeic.getPart(externalTest.id, part);
+  const questions: PracticeQuestion[] = [];
+  const optionsByQuestionId: Record<string, PracticeOption[]> = {};
+  const correctAnswerByQuestionId: Record<string, string | null> = {};
+  const test = toTestCard(externalTest);
+  for (const externalQuestion of partContent.questions) {
+    const question = toQuestion(test, externalQuestion);
+    questions.push(question);
+    optionsByQuestionId[String(question.id)] = toOptions(question, externalQuestion);
+    correctAnswerByQuestionId[String(question.id)] = cleanAnswer(externalQuestion.correctAnswer);
+  }
+  const snapshot = { questions, optionsByQuestionId, correctAnswerByQuestionId };
+  await ref.set(
+    {
+      schemaVersion: PRACTICE_CACHE_VERSION,
+      source: "DAUTOEIC",
+      routeTestId,
+      externalTestId: externalTest.id,
+      part,
+      ...snapshot,
+      updatedAtMillis: Date.now(),
+    },
+    { merge: true },
+  ).catch(() => undefined);
+  return snapshot;
 }
 
 async function resolveExternalTest(routeId: number): Promise<DauToeicTest> {
@@ -547,6 +647,87 @@ function toTestCard(test: DauToeicTest): PracticeTestCard {
     duration: 120,
     totalQuestions: test.totalQuestions ?? 200,
   };
+}
+
+async function loadAnswerKey(routeTestId: number, parts: number[]): Promise<PracticeAnswerKeyContent> {
+  const normalizedParts = normalizeParts(parts);
+  const ref = practiceAnswerKeyCacheRef(routeTestId, normalizedParts);
+  const snap = await ref.get();
+  if (isFreshCacheSnapshot(snap)) {
+    const data = recordValue(snap.data());
+    const test = toCachedTestCard(data.test);
+    const questions = arrayValue(data.questions)
+      .map((value) => {
+        const item = recordValue(value);
+        return {
+          id: numberValue(item.id) ?? 0,
+          part: numberValue(item.part) ?? 1,
+        };
+      })
+      .filter((question) => question.id > 0);
+    if (test && questions.length > 0) {
+      return {
+        test,
+        questions,
+        correctAnswerByQuestionId: toCachedAnswerMap(data.correctAnswerByQuestionId),
+      };
+    }
+  }
+
+  const content = await loadContent(routeTestId, normalizedParts);
+  const answerKey = buildAnswerKeyFromContent(content);
+  await writeAnswerKeyCache(routeTestId, normalizedParts, answerKey);
+  return answerKey;
+}
+
+function buildAnswerKeyFromContent(content: PracticeContent): PracticeAnswerKeyContent {
+  return {
+    test: content.test,
+    questions: content.questions.map((question) => ({ id: question.id, part: question.part })),
+    correctAnswerByQuestionId: content.correctAnswerByQuestionId,
+  };
+}
+
+async function writeAnswerKeyCache(
+  routeTestId: number,
+  parts: number[],
+  answerKey: PracticeAnswerKeyContent,
+): Promise<void> {
+  await practiceAnswerKeyCacheRef(routeTestId, parts).set(
+    {
+      schemaVersion: PRACTICE_CACHE_VERSION,
+      routeTestId,
+      parts,
+      ...answerKey,
+      updatedAtMillis: Date.now(),
+    },
+    { merge: true },
+  ).catch(() => undefined);
+}
+
+async function enrichReviewAnswers(attempt: PracticeAttempt, answers: ReviewAnswer[]): Promise<ReviewAnswer[]> {
+  const content = await loadContent(attempt.testId, attempt.parts).catch(() => null);
+  if (!content) return answers;
+  const questionById = new Map(content.questions.map((question) => [question.id, question]));
+  return answers.map((answer) => {
+    const question = questionById.get(answer.questionId);
+    return {
+      ...answer,
+      part: question?.part ?? answer.part,
+      questionText: answer.questionText || question?.content || `Question ${answer.questionId}`,
+      explanation: answer.explanation || question?.explanation || null,
+      options: answer.options.length > 0 ? answer.options : content.optionsByQuestionId[String(answer.questionId)] ?? [],
+    };
+  });
+}
+
+function publicOptionsByQuestionId(optionsByQuestionId: Record<string, PracticeOption[]>): Record<string, PracticeOption[]> {
+  return Object.fromEntries(
+    Object.entries(optionsByQuestionId).map(([questionId, options]) => [
+      questionId,
+      options.map((option) => ({ id: option.id, content: option.content, correct: false })),
+    ]),
+  );
 }
 
 function toQuestion(
@@ -636,6 +817,76 @@ function toPartBreakdown(value: unknown): PracticePartBreakdown {
     projectedScaledScore: numberValue(data.projectedScaledScore) ?? estimateScaledScore(correct, total),
     questionWeight: numberValue(data.questionWeight) ?? questionWeightForPart(part),
   };
+}
+
+function isFreshCacheSnapshot(snap: FirebaseFirestore.DocumentSnapshot): boolean {
+  if (!snap.exists) return false;
+  if (snap.get("schemaVersion") !== PRACTICE_CACHE_VERSION) return false;
+  const updatedAtMillis = numberValue(snap.get("updatedAtMillis")) ?? 0;
+  return Date.now() - updatedAtMillis <= PRACTICE_CACHE_TTL_MILLIS;
+}
+
+function toCachedTestCard(value: unknown): PracticeTestCard | null {
+  const data = recordValue(value);
+  const id = numberValue(data.id);
+  const externalId = stringValue(data.externalId);
+  if (id == null || !externalId) return null;
+  return {
+    id,
+    externalId,
+    title: stringValue(data.title) ?? "Dau TOEIC test",
+    type: stringValue(data.type) ?? "DAUTOEIC",
+    difficulty: stringValue(data.difficulty),
+    duration: numberValue(data.duration) ?? DEFAULT_FULL_TEST_MINUTES,
+    totalQuestions: numberValue(data.totalQuestions) ?? 200,
+  };
+}
+
+function toCachedQuestion(value: unknown): PracticeQuestion {
+  const data = recordValue(value);
+  const group = recordValue(data.group);
+  const groupId = numberValue(group.id);
+  return {
+    id: numberValue(data.id) ?? 0,
+    part: numberValue(data.part) ?? 1,
+    skillType: data.skillType === "READING" ? "READING" : "LISTENING",
+    type: "MULTIPLE_CHOICE",
+    content: stringValue(data.content) ?? "",
+    audioUrl: stringValue(data.audioUrl),
+    imageUrl: stringValue(data.imageUrl),
+    explanation: stringValue(data.explanation),
+    group: groupId == null
+      ? null
+      : {
+          id: groupId,
+          title: stringValue(group.title) ?? "",
+          passageText: stringValue(group.passageText) ?? "",
+        },
+  };
+}
+
+function toCachedOptionsByQuestionId(value: unknown): Record<string, PracticeOption[]> {
+  const data = recordValue(value);
+  return Object.fromEntries(
+    Object.entries(data).map(([questionId, options]) => [
+      questionId,
+      arrayValue(options).map((option) => {
+        const item = recordValue(option);
+        return {
+          id: numberValue(item.id) ?? 0,
+          content: stringValue(item.content) ?? "",
+          correct: Boolean(item.correct),
+        };
+      }),
+    ]),
+  );
+}
+
+function toCachedAnswerMap(value: unknown): Record<string, string | null> {
+  const data = recordValue(value);
+  return Object.fromEntries(
+    Object.entries(data).map(([questionId, answer]) => [questionId, stringValue(answer)]),
+  );
 }
 
 function normalizeAttemptMode(value: unknown): PracticeMode {

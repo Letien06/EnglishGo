@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import type { PracticeTestCard } from "@/lib/services/practice";
@@ -31,6 +31,7 @@ export default function PracticeTestLauncher({ tests }: Props) {
   const [selectedParts, setSelectedParts] = useState<number[]>(ALL_PARTS);
   const [durationMinutes, setDurationMinutes] = useState(FULL_TEST_MINUTES);
   const [startingLabel, setStartingLabel] = useState("");
+  const lastWarmupKey = useRef("");
 
   function openModal(test: PracticeTestCard, nextTab: ModalTab) {
     setSelectedTest(test);
@@ -87,9 +88,7 @@ export default function PracticeTestLauncher({ tests }: Props) {
   const currentSessionKey = selectedTest && !startDisabled
     ? makeSessionKey(selectedTest.id, currentMode, selectedParts, durationMinutes)
     : "";
-  const currentSessionHref = selectedTest && !startDisabled
-    ? sessionHref(selectedTest.id, currentMode, selectedParts, durationMinutes)
-    : "";
+  const selectedPartsKey = selectedParts.join(",");
   const hasLocalDraft = useMemo(() => {
     if (!currentSessionKey || typeof window === "undefined") return false;
     return window.localStorage.getItem(`practice:${currentSessionKey}`) != null;
@@ -99,9 +98,28 @@ export default function PracticeTestLauncher({ tests }: Props) {
     : "";
 
   useEffect(() => {
-    if (!currentSessionHref) return;
-    router.prefetch(currentSessionHref);
-  }, [currentSessionHref, router]);
+    if (!selectedTest || startDisabled) return;
+    const warmupKey = `${selectedTest.id}:${currentMode}:${selectedPartsKey}:${durationMinutes}`;
+    if (lastWarmupKey.current === warmupKey) return;
+    lastWarmupKey.current = warmupKey;
+    const controller = new AbortController();
+    const timer = window.setTimeout(() => {
+      void fetch(`/api/practice/tests/${selectedTest.id}/warmup`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          mode: currentMode,
+          parts: selectedParts,
+          durationMinutes,
+        }),
+        signal: controller.signal,
+      }).catch(() => undefined);
+    }, 350);
+    return () => {
+      window.clearTimeout(timer);
+      controller.abort();
+    };
+  }, [currentMode, durationMinutes, selectedParts, selectedPartsKey, selectedTest, startDisabled]);
 
   function start(resetDraft = false) {
     if (!selectedTest || startDisabled || startingLabel) return;
