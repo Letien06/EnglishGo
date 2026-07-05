@@ -113,13 +113,16 @@ export default function LevelDashboardClient({
     markVisited(routeKey(dashboardPath, { part: partId }));
     // Always revalidate silently in the background on mount (or with an overlay
     // when we truly have nothing to display).
-    void revalidate(levels.length === 0 && !error);
+    const revalidateTimer = window.setTimeout(() => {
+      void revalidate(levels.length === 0 && !error);
+    }, 0);
     // Refresh when the user comes back to the tab (e.g. returning from a
     // practice session) so progress numbers stay current.
     const onFocus = () => void revalidate(false);
     window.addEventListener("focus", onFocus);
     return () => {
       mounted.current = false;
+      window.clearTimeout(revalidateTimer);
       window.removeEventListener("focus", onFocus);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps

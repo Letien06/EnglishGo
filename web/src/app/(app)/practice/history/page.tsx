@@ -27,7 +27,9 @@ export default async function PracticeHistoryPage({ searchParams }: Props) {
               <thead className="bg-surface-soft text-muted">
                 <tr>
                   <th className="text-left p-3">Test</th>
+                  <th className="text-left p-3">Mode</th>
                   <th className="text-left p-3">Score</th>
+                  <th className="text-left p-3">Time</th>
                   <th className="text-left p-3">Submitted</th>
                   <th className="p-3" />
                 </tr>
@@ -35,12 +37,23 @@ export default async function PracticeHistoryPage({ searchParams }: Props) {
               <tbody>
                 {history.items.map((attempt) => (
                   <tr key={attempt.attemptId} className="border-t border-line">
-                    <td className="p-3 text-ink">{attempt.title}</td>
-                    <td className="p-3 font-bold text-ink">{attempt.score}</td>
+                    <td className="p-3 text-ink">
+                      <div className="font-bold">{attempt.title}</div>
+                      <div className="text-xs text-muted">{attempt.correctCount}/{attempt.questionCount} correct</div>
+                    </td>
+                    <td className="p-3 text-muted">{attempt.mode === "exam" ? "Full Test" : partLabel(attempt.parts)}</td>
+                    <td className="p-3 font-bold text-ink">{attempt.score}%</td>
+                    <td className="p-3 text-muted">{formatElapsed(attempt.elapsedMillis)}</td>
                     <td className="p-3 text-muted">{formatDate(attempt.submittedAtMillis)}</td>
-                    <td className="p-3 text-right">
+                    <td className="p-3 text-right space-x-3">
                       <Link href={`/practice/review/${attempt.attemptId}`} className="text-accent font-semibold">
                         Review
+                      </Link>
+                      <Link
+                        href={`/practice/session/${attempt.testId}?mode=${attempt.mode}&parts=${attempt.parts.join(",")}&time=${attempt.durationMinutes}`}
+                        className="text-muted font-semibold"
+                      >
+                        Retry
                       </Link>
                     </td>
                   </tr>
@@ -66,4 +79,16 @@ export default async function PracticeHistoryPage({ searchParams }: Props) {
 
 function formatDate(value: number | null) {
   return value ? new Date(value).toLocaleString() : "-";
+}
+
+function formatElapsed(value: number) {
+  const totalSeconds = Math.max(0, Math.round(value / 1000));
+  const minutes = Math.floor(totalSeconds / 60);
+  const seconds = totalSeconds % 60;
+  return `${minutes}m ${seconds}s`;
+}
+
+function partLabel(parts: number[]) {
+  if (parts.length === 1) return `Part ${parts[0]}`;
+  return `Parts ${parts.join(", ")}`;
 }

@@ -7,6 +7,9 @@ import { saveDraft } from "@/lib/services/practice";
 
 const schema = z.object({
   payload: z.string().optional().nullable(),
+  mode: z.string().optional().nullable(),
+  parts: z.array(z.coerce.number()).optional().nullable(),
+  durationMinutes: z.coerce.number().optional().nullable(),
 });
 
 export const POST = withErrorHandling(async (req, ctx) => {
@@ -14,5 +17,5 @@ export const POST = withErrorHandling(async (req, ctx) => {
   const params = await ctx.params;
   const testId = Number(params.testId);
   const body = await parseBody(req, schema);
-  return ok(await saveDraft(user.uid, testId, body.payload ?? "{}"));
+  return ok(await saveDraft(user.uid, testId, body.payload ?? "{}", body));
 });

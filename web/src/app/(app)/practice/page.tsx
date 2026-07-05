@@ -2,6 +2,7 @@ import Link from "next/link";
 import AppTopbar from "@/components/AppTopbar";
 import { getCurrentUser } from "@/lib/auth/session";
 import { findTests } from "@/lib/services/practice";
+import PracticeTestLauncher from "./PracticeTestLauncher";
 
 export const dynamic = "force-dynamic";
 
@@ -39,36 +40,7 @@ export default async function PracticePage({ searchParams }: Props) {
           </p>
         </section>
 
-        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
-          {tests.items.map((test) => (
-            <article key={test.id} className="p-5 rounded-xl bg-surface border border-line">
-              <header className="space-y-1">
-                <h2 className="font-bold text-ink">{test.title}</h2>
-                <p className="text-xs text-muted">
-                  {test.type} / Difficulty {test.difficulty ?? "Any"}
-                </p>
-              </header>
-              <div className="flex gap-3 text-sm text-muted mt-4">
-                <span>{test.totalQuestions} questions</span>
-                <span>{test.duration} min</span>
-              </div>
-              <div className="flex gap-2 mt-5">
-                <Link
-                  href={`/practice/session/${test.id}`}
-                  className="px-4 py-2 rounded-lg bg-accent text-white text-sm font-semibold"
-                >
-                  Start
-                </Link>
-                <Link
-                  href="/practice/history"
-                  className="px-4 py-2 rounded-lg bg-surface-soft text-ink text-sm font-semibold"
-                >
-                  History
-                </Link>
-              </div>
-            </article>
-          ))}
-        </div>
+        <PracticeTestLauncher tests={tests.items} />
 
         {tests.items.length === 0 && (
           <section className="p-8 rounded-xl bg-surface border border-line text-center text-muted">

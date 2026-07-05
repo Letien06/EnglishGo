@@ -207,16 +207,16 @@ function exampleFor(
   generatedExamples: Record<string, string>,
 ): string {
   if (isUsableExample(entry.example, entry.word)) {
-    return cleanExample(entry.example!, entry.word);
+    return cleanExample(entry.example!);
   }
   const generated = generatedExamples[entry.word];
   if (generated && isUsableExample(generated, entry.word)) {
-    return cleanExample(generated, entry.word);
+    return cleanExample(generated);
   }
   return fallbackExample(entry.word, entry.partOfSpeech);
 }
 
-function cleanExample(value: string, word: string): string {
+function cleanExample(value: string): string {
   let cleaned = value.trim();
   // Remove leading quotes
   if (cleaned.startsWith('"') && cleaned.endsWith('"')) {

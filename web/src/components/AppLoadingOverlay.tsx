@@ -42,8 +42,8 @@ export default function AppLoadingOverlay() {
     const key = routeKey(pathname, search);
     // Already seen this destination this session — never flash the overlay.
     if (hasVisited(key)) {
-      setVisible(false);
-      return;
+      const hideTimer = window.setTimeout(() => setVisible(false), 0);
+      return () => window.clearTimeout(hideTimer);
     }
     // First time this session: only reveal if loading actually takes a while.
     const timer = window.setTimeout(() => setVisible(true), GRACE_MS);

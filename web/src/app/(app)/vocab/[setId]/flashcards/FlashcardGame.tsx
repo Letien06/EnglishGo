@@ -179,12 +179,15 @@ export default function FlashcardGame({
 
   // Load history from localStorage after mount (avoids hydration mismatch).
   useEffect(() => {
-    try {
-      const raw = localStorage.getItem(`englishgo-vocab-history-${setId}`);
-      setHistory(raw ? (JSON.parse(raw) as HistoryEntry[]) : []);
-    } catch {
-      setHistory([]);
-    }
+    const timer = window.setTimeout(() => {
+      try {
+        const raw = localStorage.getItem(`englishgo-vocab-history-${setId}`);
+        setHistory(raw ? (JSON.parse(raw) as HistoryEntry[]) : []);
+      } catch {
+        setHistory([]);
+      }
+    }, 0);
+    return () => window.clearTimeout(timer);
   }, [setId]);
 
   const persistHistory = useCallback(
@@ -305,8 +308,6 @@ export default function FlashcardGame({
           mode={mode}
           quizMode={quizMode}
           muted={muted}
-          reviewMode={reviewMode}
-          setId={setId}
           onExit={goHub}
           onFinish={(record) => {
             recordHistory(record);
@@ -629,8 +630,6 @@ function PlaySurface({
   mode,
   quizMode,
   muted,
-  reviewMode,
-  setId,
   onExit,
   onFinish,
 }: {
@@ -638,8 +637,6 @@ function PlaySurface({
   mode: PlayMode;
   quizMode: QuizMode;
   muted: boolean;
-  reviewMode: boolean;
-  setId: number;
   onExit: () => void;
   onFinish: (record: { mode: string; accuracy: number; score: number }) => void;
 }) {
@@ -653,7 +650,7 @@ function PlaySurface({
     tone: "",
   });
   const [score, setScore] = useState(0);
-  const [correct, setCorrect] = useState(0);
+  const [, setCorrect] = useState(0);
   const [attempts, setAttempts] = useState(0);
   const [selected, setSelected] = useState("");
   const [answers, setAnswers] = useState<AnswerRecord[]>([]);
@@ -717,18 +714,21 @@ function PlaySurface({
   /* ---- Matching board ---- */
   useEffect(() => {
     if (activeMode !== "matching") return;
-    const chosen = shuffle(words).slice(0, Math.min(8, words.length));
-    const items: MatchItem[] = chosen.map((w) => ({
-      id: w.id,
-      word: w.word,
-      meaning: w.meaning,
-    }));
-    setMatchWords(items);
-    setMatchMeanings(shuffle(items));
-    setMatchedIds([]);
-    setLives(5);
-    setSelWord(null);
-    setSelMeaning(null);
+    const timer = window.setTimeout(() => {
+      const chosen = shuffle(words).slice(0, Math.min(8, words.length));
+      const items: MatchItem[] = chosen.map((w) => ({
+        id: w.id,
+        word: w.word,
+        meaning: w.meaning,
+      }));
+      setMatchWords(items);
+      setMatchMeanings(shuffle(items));
+      setMatchedIds([]);
+      setLives(5);
+      setSelWord(null);
+      setSelMeaning(null);
+    }, 0);
+    return () => window.clearTimeout(timer);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeMode]);
 
@@ -756,9 +756,14 @@ function PlaySurface({
 
   // Start / restart timer per question for timed modes.
   useEffect(() => {
-    if (usesTimer && !feedback && !showResult) startTimer();
-    else stopTimer();
-    return stopTimer;
+    const timer = window.setTimeout(() => {
+      if (usesTimer && !feedback && !showResult) startTimer();
+      else stopTimer();
+    }, 0);
+    return () => {
+      window.clearTimeout(timer);
+      stopTimer();
+    };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [index, activeMode, feedback, showResult]);
 
@@ -773,16 +778,19 @@ function PlaySurface({
   // Handle timeout for quiz/matching.
   useEffect(() => {
     if (timer !== 0 || feedback || showResult || !usesTimer) return;
-    if (activeMode === "quiz") {
-      pushAnswer(word, false, "Hết giờ", quizCorrect);
-      setStatus({ text: `Hết giờ. Đáp án đúng: ${quizCorrect}`, tone: "wrong" });
-      setFeedback({ correct: false, selected: "Hết giờ", expected: quizCorrect, item: word });
-    } else if (activeMode === "matching") {
-      matchWords
-        .filter((m) => !matchedIds.includes(m.id))
-        .forEach((m) => pushAnswer({ ...m } as VocabWordCard, false, "Hết giờ", m.meaning));
-      finishToResult();
-    }
+    const timeoutHandler = window.setTimeout(() => {
+      if (activeMode === "quiz") {
+        pushAnswer(word, false, "Hết giờ", quizCorrect);
+        setStatus({ text: `Hết giờ. Đáp án đúng: ${quizCorrect}`, tone: "wrong" });
+        setFeedback({ correct: false, selected: "Hết giờ", expected: quizCorrect, item: word });
+      } else if (activeMode === "matching") {
+        matchWords
+          .filter((m) => !matchedIds.includes(m.id))
+          .forEach((m) => pushAnswer({ ...m } as VocabWordCard, false, "Hết giờ", m.meaning));
+        finishToResult();
+      }
+    }, 0);
+    return () => window.clearTimeout(timeoutHandler);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [timer]);
 

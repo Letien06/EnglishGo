@@ -21,6 +21,22 @@ export interface PracticeTestCard {
   totalQuestions: number;
 }
 
+export type PracticeMode = "exam" | "part";
+
+export interface PracticeSessionConfig {
+  mode: PracticeMode;
+  parts: number[];
+  durationMinutes: number;
+  sessionKey: string;
+}
+
+export interface PracticeSessionInput {
+  mode?: string | null;
+  parts?: string | number[] | null;
+  durationMinutes?: number | string | null;
+  resetDraft?: boolean | string | null;
+}
+
 export interface PracticeOption {
   id: number;
   content: string;
@@ -45,6 +61,7 @@ export interface PracticeQuestion {
 
 export interface PracticeSessionView {
   test: PracticeTestCard;
+  config: PracticeSessionConfig;
   questions: PracticeQuestion[];
   optionsByQuestionId: Record<string, PracticeOption[]>;
   draftPayload: string;
@@ -68,17 +85,29 @@ export interface PracticeSubmissionResponse {
   elapsedMillis: number;
 }
 
+export interface PracticePartBreakdown {
+  part: number;
+  total: number;
+  correct: number;
+  percent: number;
+}
+
 export interface PracticeAttempt {
   attemptId: number;
   testId: number;
   title: string;
   type: string;
   difficulty: string | null;
+  mode: PracticeMode;
+  parts: number[];
+  durationMinutes: number;
   score: number;
   correctCount: number;
   questionCount: number;
   expired: boolean;
+  elapsedMillis: number;
   submittedAtMillis: number | null;
+  partBreakdown: PracticePartBreakdown[];
 }
 
 export interface ReviewAnswer {
@@ -120,6 +149,19 @@ export interface PracticeHistoryPage {
 }
 
 const SUBMIT_GRACE_MILLIS = 30_000;
+const ALL_PARTS = [1, 2, 3, 4, 5, 6, 7] as const;
+const DEFAULT_FULL_TEST_MINUTES = 120;
+const MIN_DURATION_MINUTES = 1;
+const MAX_DURATION_MINUTES = 180;
+export const PART_DEFAULTS: Record<number, { questionCount: number; suggestedMinutes: number; skill: "LISTENING" | "READING" }> = {
+  1: { questionCount: 6, suggestedMinutes: 4, skill: "LISTENING" },
+  2: { questionCount: 25, suggestedMinutes: 15, skill: "LISTENING" },
+  3: { questionCount: 39, suggestedMinutes: 25, skill: "LISTENING" },
+  4: { questionCount: 30, suggestedMinutes: 20, skill: "LISTENING" },
+  5: { questionCount: 30, suggestedMinutes: 18, skill: "READING" },
+  6: { questionCount: 16, suggestedMinutes: 10, skill: "READING" },
+  7: { questionCount: 54, suggestedMinutes: 42, skill: "READING" },
+};
 
 export async function findTests(
   type?: string | null,
@@ -148,16 +190,25 @@ export async function findTests(
 export async function getPracticeSession(
   testId: number,
   uid: string,
+  input?: PracticeSessionInput,
 ): Promise<PracticeSessionView> {
-  const content = await loadContent(testId);
-  const draft = await getOrCreateDraft(uid, testId);
+  const config = normalizeSessionConfig(input, testId);
+  const content = await loadContent(testId, config.parts);
+  if (content.questions.length === 0) {
+    throw BadRequest("Selected test parts have no questions");
+  }
+  if (input?.resetDraft === true || input?.resetDraft === "1") {
+    await practiceDraftRef(uid, config.sessionKey).delete();
+  }
+  const draft = await getOrCreateDraft(uid, testId, config);
   const serverNowMillis = Date.now();
   return {
     ...content,
+    config,
     draftPayload: draft.payload,
     startedAtMillis: draft.startedAtMillis,
     serverNowMillis,
-    expiresAtMillis: draft.startedAtMillis + content.test.duration * 60_000,
+    expiresAtMillis: draft.startedAtMillis + config.durationMinutes * 60_000,
   };
 }
 
@@ -165,10 +216,12 @@ export async function saveDraft(
   uid: string,
   testId: number,
   payload: string | null,
+  input?: PracticeSessionInput,
 ): Promise<{ id: number; payload: string; updatedAtMillis: number }> {
+  const config = normalizeSessionConfig(input, testId);
   const safePayload = payload || "{}";
   const updatedAtMillis = Date.now();
-  const draftRef = practiceDraftRef(uid, testId);
+  const draftRef = practiceDraftRef(uid, config.sessionKey);
   const snap = await draftRef.get();
   const startedAtMillis =
     numberValue(snap.get("startedAtMillis")) ?? updatedAtMillis;
@@ -176,11 +229,15 @@ export async function saveDraft(
     .collection("users")
     .doc(uid)
     .collection("practiceDrafts")
-    .doc(String(testId))
+    .doc(config.sessionKey)
     .set(
       {
         source: "DAUTOEIC",
         testId,
+        mode: config.mode,
+        parts: config.parts,
+        durationMinutes: config.durationMinutes,
+        sessionKey: config.sessionKey,
         payload: safePayload,
         startedAtMillis,
         updatedAtMillis,
@@ -194,22 +251,25 @@ export async function submit(
   user: AppUser,
   testId: number,
   answers: PracticeAnswerRequest[],
+  input?: PracticeSessionInput,
 ): Promise<PracticeSubmissionResponse> {
-  const content = await loadContent(testId);
+  const config = normalizeSessionConfig(input, testId);
+  const content = await loadContent(testId, config.parts);
   if (content.questions.length === 0) {
     throw BadRequest("Test has no questions");
   }
   const submittedAtMillis = Date.now();
-  const draftSnap = await practiceDraftRef(user.uid, testId).get();
+  const draftSnap = await practiceDraftRef(user.uid, config.sessionKey).get();
   const startedAtMillis =
     numberValue(draftSnap.get("startedAtMillis")) ?? submittedAtMillis;
   const elapsedMillis = Math.max(submittedAtMillis - startedAtMillis, 0);
   const expired =
-    elapsedMillis > content.test.duration * 60_000 + SUBMIT_GRACE_MILLIS;
+    elapsedMillis > config.durationMinutes * 60_000 + SUBMIT_GRACE_MILLIS;
 
   const answersByQuestionId = new Map(answers.map((a) => [a.questionId, a]));
   let correctCount = 0;
   const answerDocs: ReviewAnswer[] = [];
+  const partStats = new Map<number, { total: number; correct: number }>();
 
   for (const question of content.questions) {
     const submitted =
@@ -218,6 +278,10 @@ export async function submit(
     const correctAnswer = content.correctAnswerByQuestionId[String(question.id)] ?? null;
     const correct = Boolean(correctAnswer && correctAnswer === selectedAnswer);
     if (correct) correctCount++;
+    const currentPartStats = partStats.get(question.part) ?? { total: 0, correct: 0 };
+    currentPartStats.total += 1;
+    if (correct) currentPartStats.correct += 1;
+    partStats.set(question.part, currentPartStats);
     answerDocs.push({
       questionId: question.id,
       part: question.part,
@@ -233,6 +297,17 @@ export async function submit(
   }
 
   const score = round2((correctCount * 100) / content.questions.length);
+  const partBreakdown = config.parts
+    .map((part) => {
+      const stat = partStats.get(part) ?? { total: 0, correct: 0 };
+      return {
+        part,
+        total: stat.total,
+        correct: stat.correct,
+        percent: stat.total > 0 ? round2((stat.correct * 100) / stat.total) : 0,
+      };
+    })
+    .filter((part) => part.total > 0);
   const attemptId = submittedAtMillis;
   const attempt = {
     source: "DAUTOEIC",
@@ -241,6 +316,10 @@ export async function submit(
     title: content.test.title,
     type: content.test.type,
     difficulty: content.test.difficulty,
+    mode: config.mode,
+    parts: config.parts,
+    durationMinutes: config.durationMinutes,
+    sessionKey: config.sessionKey,
     score,
     correctCount,
     questionCount: content.questions.length,
@@ -248,6 +327,7 @@ export async function submit(
     submittedAtMillis,
     elapsedMillis,
     expired,
+    partBreakdown,
     answers: answerDocs,
   };
   await adminDb
@@ -260,7 +340,7 @@ export async function submit(
     .collection("users")
     .doc(user.uid)
     .collection("practiceDrafts")
-    .doc(String(testId))
+    .doc(config.sessionKey)
     .delete();
   await addScore(user, score);
   return {
@@ -329,19 +409,20 @@ export async function getHistory(
   };
 }
 
-function practiceDraftRef(uid: string, testId: number) {
+function practiceDraftRef(uid: string, sessionKey: string) {
   return adminDb
     .collection("users")
     .doc(uid)
     .collection("practiceDrafts")
-    .doc(String(testId));
+    .doc(sessionKey);
 }
 
 async function getOrCreateDraft(
   uid: string,
   testId: number,
+  config: PracticeSessionConfig,
 ): Promise<PracticeDraftState> {
-  const ref = practiceDraftRef(uid, testId);
+  const ref = practiceDraftRef(uid, config.sessionKey);
   const now = Date.now();
   const snap = await ref.get();
   if (snap.exists) {
@@ -360,6 +441,10 @@ async function getOrCreateDraft(
   const draft = {
     source: "DAUTOEIC",
     testId,
+    mode: config.mode,
+    parts: config.parts,
+    durationMinutes: config.durationMinutes,
+    sessionKey: config.sessionKey,
     payload: "{}",
     startedAtMillis: now,
     updatedAtMillis: now,
@@ -368,14 +453,14 @@ async function getOrCreateDraft(
   return draft;
 }
 
-async function loadContent(routeTestId: number): Promise<PracticeContent> {
+async function loadContent(routeTestId: number, parts: number[] = [...ALL_PARTS]): Promise<PracticeContent> {
   const externalTest = await resolveExternalTest(routeTestId);
   const test = toTestCard(externalTest);
   const questions: PracticeQuestion[] = [];
   const optionsByQuestionId: Record<string, PracticeOption[]> = {};
   const correctAnswerByQuestionId: Record<string, string | null> = {};
 
-  for (let part = 1; part <= 7; part++) {
+  for (const part of parts) {
     const partContent = await dautoeic.getPart(externalTest.id, part);
     for (const externalQuestion of partContent.questions) {
       const question = toQuestion(test, externalQuestion);
@@ -453,18 +538,93 @@ function toOptions(
 }
 
 function toAttempt(doc: FirebaseFirestore.DocumentSnapshot): PracticeAttempt {
+  const parts = arrayValue(doc.get("parts"))
+    .map(numberValue)
+    .filter((part): part is number => part != null && part >= 1 && part <= 7);
   return {
     attemptId: numberValue(doc.get("attemptId")) ?? Number(doc.id),
     testId: numberValue(doc.get("testId")) ?? 0,
     title: stringValue(doc.get("title")) ?? "Dau TOEIC test",
     type: stringValue(doc.get("type")) ?? "DAUTOEIC",
     difficulty: stringValue(doc.get("difficulty")),
+    mode: normalizeAttemptMode(doc.get("mode")),
+    parts: parts.length > 0 ? parts : [...ALL_PARTS],
+    durationMinutes: numberValue(doc.get("durationMinutes")) ?? DEFAULT_FULL_TEST_MINUTES,
     score: numberValue(doc.get("score")) ?? 0,
     correctCount: numberValue(doc.get("correctCount")) ?? 0,
     questionCount: numberValue(doc.get("questionCount")) ?? 0,
     expired: Boolean(doc.get("expired")),
+    elapsedMillis: numberValue(doc.get("elapsedMillis")) ?? 0,
     submittedAtMillis: numberValue(doc.get("submittedAtMillis")),
+    partBreakdown: arrayValue(doc.get("partBreakdown")).map(toPartBreakdown),
   };
+}
+
+function toPartBreakdown(value: unknown): PracticePartBreakdown {
+  const data = recordValue(value);
+  const total = numberValue(data.total) ?? 0;
+  const correct = numberValue(data.correct) ?? 0;
+  return {
+    part: numberValue(data.part) ?? 1,
+    total,
+    correct,
+    percent: numberValue(data.percent) ?? (total > 0 ? round2((correct * 100) / total) : 0),
+  };
+}
+
+function normalizeAttemptMode(value: unknown): PracticeMode {
+  return value === "part" ? "part" : "exam";
+}
+
+export function normalizeSessionConfig(input?: PracticeSessionInput, testId?: number): PracticeSessionConfig {
+  const parts = normalizeParts(input?.parts);
+  const requestedMode = input?.mode === "part" || input?.mode === "practice" ? "part" : "exam";
+  const mode: PracticeMode = parts.length === ALL_PARTS.length ? "exam" : requestedMode;
+  const durationMinutes = normalizeDuration(input?.durationMinutes, parts);
+  return {
+    mode,
+    parts,
+    durationMinutes,
+    sessionKey: makeSessionKey(mode, parts, durationMinutes, testId),
+  };
+}
+
+function normalizeParts(value: PracticeSessionInput["parts"]): number[] {
+  const rawParts = Array.isArray(value)
+    ? value
+    : typeof value === "string"
+      ? value.split(",")
+      : [];
+  const parsed = rawParts
+    .map((part) => Number(part))
+    .filter((part) => Number.isInteger(part) && part >= 1 && part <= 7);
+  const unique = [...new Set(parsed)].sort((a, b) => a - b);
+  return unique.length > 0 ? unique : [...ALL_PARTS];
+}
+
+function normalizeDuration(value: PracticeSessionInput["durationMinutes"], parts: number[]): number {
+  const parsed = Number(value);
+  if (Number.isFinite(parsed)) {
+    return Math.min(MAX_DURATION_MINUTES, Math.max(MIN_DURATION_MINUTES, Math.round(parsed)));
+  }
+  return suggestedMinutes(parts);
+}
+
+export function suggestedMinutes(parts: number[]): number {
+  const normalized = normalizeParts(parts);
+  if (normalized.length === ALL_PARTS.length) return DEFAULT_FULL_TEST_MINUTES;
+  return Math.min(
+    MAX_DURATION_MINUTES,
+    Math.max(
+      MIN_DURATION_MINUTES,
+      normalized.reduce((total, part) => total + (PART_DEFAULTS[part]?.suggestedMinutes ?? 0), 0),
+    ),
+  );
+}
+
+function makeSessionKey(mode: PracticeMode, parts: number[], durationMinutes: number, testId?: number): string {
+  const testSegment = Number.isFinite(testId) ? String(testId) : "unknown";
+  return `practice-${testSegment}-${mode}-parts-${parts.join("-")}-time-${durationMinutes}`;
 }
 
 function toReviewAnswer(value: unknown): ReviewAnswer {

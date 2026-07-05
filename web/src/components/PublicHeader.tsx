@@ -9,7 +9,7 @@ const navItems = [
   { href: "/listen", icon: "♪", label: "Nghe", key: "listen", color: "text-plum" },
   { href: "/read", icon: "▥", label: "Đọc", key: "read", color: "text-azure" },
   { href: "/vocab", icon: "A", label: "Từ vựng", key: "vocab", color: "text-jade" },
-  { href: "/practice", icon: "▧", label: "Đề thi (demo)", key: "practice", color: "text-terracotta" },
+  { href: "/practice", icon: "▧", label: "Đề thi", key: "practice", color: "text-terracotta" },
 ] as const;
 
 interface PublicHeaderProps {
@@ -22,7 +22,8 @@ export default function PublicHeader({ user }: PublicHeaderProps) {
 
   // Close the mobile menu whenever the route changes.
   useEffect(() => {
-    setMenuOpen(false);
+    const timer = window.setTimeout(() => setMenuOpen(false), 0);
+    return () => window.clearTimeout(timer);
   }, [pathname]);
 
   // Lock body scroll while the mobile menu is open.

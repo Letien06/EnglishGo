@@ -9,17 +9,20 @@ const navItems = [
   { href: "/listen", icon: "♫", label: "Nghe", color: "text-plum" },
   { href: "/read", icon: "▥", label: "Đọc", color: "text-azure" },
   { href: "/vocab", icon: "A", label: "Từ vựng", color: "text-jade" },
-  { href: "/practice", icon: "▧", label: "Đề thi (demo)", color: "text-terracotta" },
+  { href: "/practice", icon: "▧", label: "Đề thi", color: "text-terracotta" },
 ] as const;
 
 export default function AppShell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
   const [pendingLabel, setPendingLabel] = useState<string | null>(null);
   const isPracticeWorkspace =
-    pathname.startsWith("/listen/practice") || pathname.startsWith("/read/practice");
+    pathname.startsWith("/listen/practice") ||
+    pathname.startsWith("/read/practice") ||
+    pathname.startsWith("/practice/session");
 
   useEffect(() => {
-    setPendingLabel(null);
+    const timer = window.setTimeout(() => setPendingLabel(null), 0);
+    return () => window.clearTimeout(timer);
   }, [pathname]);
 
   if (isPracticeWorkspace) {
