@@ -17,6 +17,12 @@ import {
   writeSyncStatus,
   type SyncStatus,
 } from "./dautoeic-mirror";
+import {
+  writeCanonicalPart,
+  writeCanonicalSets,
+  writeCanonicalTest,
+  writeCanonicalTests,
+} from "./dautoeic-canonical";
 
 const SYNC_INTERVAL_MS = 7 * 24 * 60 * 60 * 1000;
 const DEFAULT_BUDGET_MS = 45_000;
@@ -172,6 +178,7 @@ async function buildSyncTasks(): Promise<SyncTask[]> {
       run: async () => {
         const sets = await fetchSetsFromSource();
         await writeMirrorJson(mirrorKey("sets", "all"), "sets", sets);
+        await writeCanonicalSets(sets);
       },
     },
     {
@@ -180,6 +187,7 @@ async function buildSyncTasks(): Promise<SyncTask[]> {
         const freshTests = await fetchListTestsFromSource(null);
         await writeMirrorJson(mirrorKey("tests", null), "tests", freshTests);
         await writeTestIndex(freshTests);
+        await writeCanonicalTests(freshTests, { markComplete: true });
       },
     },
   ];
@@ -190,6 +198,7 @@ async function buildSyncTasks(): Promise<SyncTask[]> {
       run: async () => {
         const payload = await fetchTestFromSource(test.id);
         await writeMirrorJson(mirrorKey("test", test.id), "test", payload);
+        await writeCanonicalTest(payload);
       },
     });
     for (const part of TEST_PARTS) {
@@ -198,6 +207,7 @@ async function buildSyncTasks(): Promise<SyncTask[]> {
         run: async () => {
           const payload = await fetchPartFromSource(test.id, part);
           await writeMirrorJson(mirrorKey("test-part", test.id, part), "test-part", payload);
+          await writeCanonicalPart(payload);
         },
       });
     }

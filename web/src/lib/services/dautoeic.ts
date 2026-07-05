@@ -26,6 +26,16 @@ import {
   writeMirrorJson,
   writeMirrorSession,
 } from "./dautoeic-mirror";
+import {
+  readCanonicalPart,
+  readCanonicalSets,
+  readCanonicalTestByRouteId,
+  readCanonicalTests,
+  writeCanonicalPart,
+  writeCanonicalSets,
+  writeCanonicalTest,
+  writeCanonicalTests,
+} from "./dautoeic-canonical";
 
 /* ------------------------------------------------------------------ */
 /*  Public API                                                         */
@@ -38,14 +48,22 @@ export async function listDifficultyLevels(part: number): Promise<DauToeicDiffic
 }
 
 export async function listSets(): Promise<DauToeicSet[]> {
+  const canonical = await readCanonicalSets().catch(() => []);
+  if (canonical.length > 0) return canonical;
   const key = mirrorKey("sets", "all");
-  return mirrorJsonFirst(key, () => cachedListSets(), "sets");
+  const sets = await mirrorJsonFirst(key, () => cachedListSets(), "sets");
+  await writeCanonicalSets(sets).catch(() => undefined);
+  return sets;
 }
 
 export async function listTests(setId?: string | null): Promise<DauToeicTest[]> {
   const cleanSetId = setId?.trim() || null;
+  const canonical = await readCanonicalTests(cleanSetId).catch(() => []);
+  if (canonical.length > 0) return canonical;
   const key = mirrorKey("tests", cleanSetId);
-  return mirrorJsonFirst(key, () => cachedListTests(cleanSetId), "tests");
+  const tests = await mirrorJsonFirst(key, () => cachedListTests(cleanSetId), "tests");
+  await writeCanonicalTests(tests, { markComplete: cleanSetId == null }).catch(() => undefined);
+  return tests;
 }
 
 async function uncachedListSets(): Promise<DauToeicSet[]> {
@@ -82,8 +100,12 @@ export async function getTest(testId: string): Promise<DauToeicTest> {
     throw new ApiError("testId is required", 400);
   }
   const cleanTestId = testId.trim();
+  const canonical = await readCanonicalTestByRouteId(routeTestId(cleanTestId)).catch(() => null);
+  if (canonical) return canonical;
   const key = mirrorKey("test", cleanTestId);
-  return mirrorJsonFirst(key, () => cachedGetTest(cleanTestId), "test");
+  const test = await mirrorJsonFirst(key, () => cachedGetTest(cleanTestId), "test");
+  await writeCanonicalTest(test).catch(() => undefined);
+  return test;
 }
 
 async function uncachedGetTest(testId: string): Promise<DauToeicTest> {
@@ -109,8 +131,12 @@ export async function getPart(testId: string, part: number): Promise<{
     throw new ApiError("TOEIC part must be between 1 and 7", 400);
   }
   const cleanTestId = testId.trim();
+  const canonical = await readCanonicalPart(routeTestId(cleanTestId), part).catch(() => null);
+  if (canonical) return canonical;
   const key = mirrorKey("test-part", cleanTestId, part);
-  return mirrorJsonFirst(key, () => cachedGetPart(cleanTestId, part), "test-part");
+  const partContent = await mirrorJsonFirst(key, () => cachedGetPart(cleanTestId, part), "test-part");
+  await writeCanonicalPart(partContent).catch(() => undefined);
+  return partContent;
 }
 
 async function uncachedGetPart(testId: string, part: number) {

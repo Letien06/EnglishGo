@@ -17,6 +17,7 @@ export const COLLECTIONS = {
 
   // --- Tests & Practice ---
   tests: "tests",
+  dauToeicSets: "dauToeicSets",
   testQuestions: "testQuestions",
   questionGroups: "questionGroups",
   answerOptions: "answerOptions",
