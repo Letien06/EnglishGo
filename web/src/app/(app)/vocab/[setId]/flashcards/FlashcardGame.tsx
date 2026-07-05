@@ -77,6 +77,12 @@ interface FeedbackState {
   item: VocabWordCard;
 }
 
+interface ModeTone {
+  card: string;
+  icon: string;
+  badge: string;
+}
+
 const MODE_CARDS: {
   key: PlayMode;
   icon: string;
@@ -93,6 +99,39 @@ const MODE_CARDS: {
   { key: "listening", icon: "♫", title: "Nghe viết", desc: "Nghe phát âm và viết từ", points: "+15" },
   { key: "mixed", icon: "↗", title: "Tổng hợp", desc: "Trộn flashcard, quiz, gõ và nghe", points: "+20", hot: true },
 ];
+
+const MODE_TONES: Record<PlayMode, ModeTone> = {
+  flashcard: {
+    card: "border-indigo-200 bg-indigo-50/80 hover:border-indigo-400",
+    icon: "bg-indigo-100 text-indigo-700",
+    badge: "bg-indigo-100 text-indigo-700",
+  },
+  quiz: {
+    card: "border-orange-200 bg-orange-50/80 hover:border-orange-400",
+    icon: "bg-orange-100 text-orange-700",
+    badge: "bg-orange-100 text-orange-700",
+  },
+  matching: {
+    card: "border-sky-200 bg-sky-50/80 hover:border-sky-400",
+    icon: "bg-sky-100 text-sky-700",
+    badge: "bg-sky-100 text-sky-700",
+  },
+  typing: {
+    card: "border-emerald-200 bg-emerald-50/80 hover:border-emerald-400",
+    icon: "bg-emerald-100 text-emerald-700",
+    badge: "bg-emerald-100 text-emerald-700",
+  },
+  listening: {
+    card: "border-cyan-200 bg-cyan-50/80 hover:border-cyan-400",
+    icon: "bg-cyan-100 text-cyan-700",
+    badge: "bg-cyan-100 text-cyan-700",
+  },
+  mixed: {
+    card: "border-fuchsia-200 bg-fuchsia-50/80 hover:border-fuchsia-400",
+    icon: "bg-fuchsia-100 text-fuchsia-700",
+    badge: "bg-fuchsia-100 text-fuchsia-700",
+  },
+};
 
 /* ================================================================== */
 /*  Helpers                                                            */
@@ -455,30 +494,33 @@ function Hub({
 
       {/* Game cards */}
       <section className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-        {MODE_CARDS.map((card) => (
-          <button
-            key={card.key}
-            type="button"
-            onClick={() =>
-              card.quiz ? onOpenQuizChooser() : onStartMode(card.key)
-            }
-            className="relative flex min-h-[170px] flex-col items-center justify-center gap-2 overflow-hidden rounded-2xl border border-line bg-white p-5 text-center shadow-sm transition-all hover:-translate-y-0.5 hover:border-accent/40 hover:shadow-md"
-          >
-            {card.hot && (
-              <em className="absolute right-3 top-3 rounded bg-red-500 px-2 py-0.5 text-[10px] font-bold not-italic text-white">
-                HOT
-              </em>
-            )}
-            <span className="rounded-full bg-surface-soft px-4 py-3 text-2xl text-accent">{card.icon}</span>
-            <strong className="text-lg font-extrabold text-ink">{card.title}</strong>
-            <small className="text-sm text-muted">{card.desc}</small>
-            <b className="mt-1 rounded-full bg-amber-50 px-3 py-1 text-sm font-bold text-amber-700">{card.points}</b>
-          </button>
-        ))}
+        {MODE_CARDS.map((card) => {
+          const tone = MODE_TONES[card.key];
+          return (
+            <button
+              key={card.key}
+              type="button"
+              onClick={() =>
+                card.quiz ? onOpenQuizChooser() : onStartMode(card.key)
+              }
+              className={`relative flex min-h-[170px] flex-col items-center justify-center gap-2 overflow-hidden rounded-2xl border p-5 text-center shadow-sm transition-all hover:-translate-y-0.5 hover:shadow-md ${tone.card}`}
+            >
+              {card.hot && (
+                <em className="absolute right-3 top-3 rounded bg-red-500 px-2 py-0.5 text-[10px] font-bold not-italic text-white">
+                  HOT
+                </em>
+              )}
+              <span className={`rounded-full px-4 py-3 text-2xl ${tone.icon}`}>{card.icon}</span>
+              <strong className="text-lg font-extrabold text-ink">{card.title}</strong>
+              <small className="text-sm font-medium text-ink2">{card.desc}</small>
+              <b className={`mt-1 rounded-full px-3 py-1 text-sm font-bold ${tone.badge}`}>{card.points}</b>
+            </button>
+          );
+        })}
       </section>
 
       {/* SRS banner */}
-      <section className="flex flex-col items-start gap-3 rounded-2xl border border-line bg-white p-5 shadow-sm sm:flex-row sm:items-center sm:justify-between">
+      <section className="flex flex-col items-start gap-3 rounded-2xl border border-violet-200 bg-violet-50/80 p-5 shadow-sm sm:flex-row sm:items-center sm:justify-between">
         <div>
           <strong className="block text-ink">Ôn tập ngắt quãng (SRS)</strong>
           <span className="text-sm text-muted">
@@ -488,7 +530,7 @@ function Hub({
         <button
           type="button"
           onClick={() => onStartMode("flashcard")}
-          className="shrink-0 rounded-xl bg-accent px-5 py-2.5 text-sm font-semibold text-white hover:bg-accent/90"
+          className="shrink-0 rounded-xl bg-violet-600 px-5 py-2.5 text-sm font-semibold text-white hover:bg-violet-700"
         >
           Bắt đầu ôn tập
         </button>
@@ -1927,10 +1969,19 @@ function ResultScreen({
   const percent = Math.round((correctItems.length / total) * 100);
   const title = percent >= 80 ? "Tốt lắm!" : percent >= 50 ? "Khá ổn!" : "Cố gắng!";
 
+  const resultTone =
+    percent >= 80
+      ? "border-emerald-200 bg-emerald-50"
+      : percent >= 50
+        ? "border-amber-200 bg-amber-50"
+        : "border-rose-200 bg-rose-50";
+  const resultTextTone =
+    percent >= 80 ? "text-emerald-700" : percent >= 50 ? "text-amber-700" : "text-rose-700";
+
   return (
     <section className="space-y-5">
-      <article className="flex flex-col items-center gap-4 rounded-2xl border border-line bg-surface p-6 sm:flex-row">
-        <div className="text-5xl font-bold text-accent">{percent}%</div>
+      <article className={`flex flex-col items-center gap-4 rounded-2xl border p-6 shadow-sm sm:flex-row ${resultTone}`}>
+        <div className={`text-5xl font-extrabold ${resultTextTone}`}>{percent}%</div>
         <div className="flex-1 text-center sm:text-left">
           <h2 className="text-xl font-bold text-ink">💪 {title}</h2>
           <p className="text-sm text-muted">
@@ -1938,7 +1989,7 @@ function ResultScreen({
             {score} điểm
           </p>
         </div>
-        <aside className="rounded-xl bg-amber-400/10 px-4 py-3 text-center">
+        <aside className="rounded-xl border border-amber-200 bg-white/80 px-4 py-3 text-center">
           <strong className="block text-xs text-amber-600">🪙 Dự kiến</strong>
           <p className="text-[10px] text-muted">Số dư coin nếu lưu ngay</p>
           <b className="text-lg text-amber-600">~ +{score}</b>
@@ -1970,7 +2021,7 @@ function ResultScreen({
         type="button"
         onClick={onSave}
         disabled={saving}
-        className="w-full rounded-xl bg-accent py-3 text-sm font-semibold text-white hover:bg-accent/90 disabled:opacity-60"
+        className="w-full rounded-xl bg-emerald-600 py-3 text-sm font-extrabold text-white hover:bg-emerald-700 disabled:opacity-60"
       >
         {saving ? "Đang lưu..." : "✓ 💾 Lưu & Hoàn thành"}
       </button>
@@ -1999,14 +2050,14 @@ function ResultColumn({
     <section
       className={`space-y-3 rounded-2xl border p-4 ${
         tone === "correct"
-          ? "border-green-500/30 bg-green-500/5"
-          : "border-red-500/30 bg-red-500/5"
+          ? "border-emerald-300 bg-emerald-50/80"
+          : "border-rose-300 bg-rose-50/80"
       }`}
     >
       <header className="flex items-center gap-3">
         <span
           className={`flex h-8 w-8 items-center justify-center rounded-full text-white ${
-            tone === "correct" ? "bg-green-500" : "bg-red-500"
+            tone === "correct" ? "bg-emerald-600" : "bg-rose-600"
           }`}
         >
           {icon}
