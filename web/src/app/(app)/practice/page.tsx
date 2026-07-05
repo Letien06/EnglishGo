@@ -29,17 +29,7 @@ export default async function PracticePage({ searchParams }: Props) {
         userName={user?.displayName}
         userEmail={user?.email}
       />
-      <main className="flex-1 overflow-y-auto px-4 py-6 lg:px-8 space-y-6">
-        <section className="p-6 rounded-2xl bg-surface border border-line">
-          <span className="text-xs font-semibold text-primary uppercase tracking-wider">
-            TOEIC mock tests
-          </span>
-          <h1 className="text-2xl font-bold text-ink mt-1">Practice real TOEIC sets</h1>
-          <p className="text-sm text-muted mt-1">
-            Draft answers are saved automatically. Submit when you are ready to review score and explanations.
-          </p>
-        </section>
-
+      <main className="flex-1 overflow-y-auto bg-white px-4 py-6 lg:px-8 space-y-6">
         <PracticeTestLauncher tests={tests.items} />
 
         {tests.items.length === 0 && (

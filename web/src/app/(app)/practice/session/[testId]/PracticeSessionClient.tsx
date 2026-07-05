@@ -203,7 +203,7 @@ export default function PracticeSessionClient({ session }: { session: PracticeSe
       return;
     }
     window.localStorage.removeItem(storageKey);
-    router.push(`/practice/review/${result.data!.attemptId}`);
+    router.replace(`/practice/review/${result.data!.attemptId}`);
   }
 
   function goToQuestion(questionId: number) {
@@ -252,7 +252,7 @@ export default function PracticeSessionClient({ session }: { session: PracticeSe
   }, []);
 
   return (
-    <main className="min-h-[calc(100dvh-4rem)] bg-[#f6f8fb]">
+    <main className="min-h-[calc(100dvh-4rem)] bg-white">
       <header className="sticky top-0 z-40 flex min-h-16 flex-wrap items-center justify-between gap-3 bg-[#1e3f68] px-4 py-3 text-white shadow">
         <button
           type="button"

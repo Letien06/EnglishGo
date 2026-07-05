@@ -3,6 +3,7 @@ import AppTopbar from "@/components/AppTopbar";
 import { requireUser } from "@/lib/auth/session";
 import { getAttemptReview } from "@/lib/services/practice";
 import type { PracticeSkillBreakdown } from "@/lib/services/practice";
+import ReviewBackGuard from "../ReviewBackGuard";
 
 export const dynamic = "force-dynamic";
 
@@ -21,8 +22,9 @@ export default async function PracticeReviewPage({ params }: Props) {
 
   return (
     <>
+      <ReviewBackGuard />
       <AppTopbar pageTitle="Kết quả bài thi" pageSubtitle={attempt.title} userName={user.displayName} userEmail={user.email} />
-      <main className="flex-1 overflow-y-auto bg-[#f6f8fb] px-4 py-8 lg:px-8">
+      <main className="flex-1 overflow-y-auto bg-white px-4 py-8 lg:px-8">
         <div className="mx-auto max-w-4xl space-y-6">
           <section className="text-center">
             <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-full bg-sky-100 text-3xl text-sky-600">
