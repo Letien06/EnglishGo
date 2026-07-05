@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import type { PracticeTestCard } from "@/lib/services/practice";
@@ -30,6 +30,7 @@ export default function PracticeTestLauncher({ tests }: Props) {
   const [tab, setTab] = useState<ModalTab>("exam");
   const [selectedParts, setSelectedParts] = useState<number[]>(ALL_PARTS);
   const [durationMinutes, setDurationMinutes] = useState(FULL_TEST_MINUTES);
+  const [startingLabel, setStartingLabel] = useState("");
 
   function openModal(test: PracticeTestCard, nextTab: ModalTab) {
     setSelectedTest(test);
@@ -86,6 +87,9 @@ export default function PracticeTestLauncher({ tests }: Props) {
   const currentSessionKey = selectedTest && !startDisabled
     ? makeSessionKey(selectedTest.id, currentMode, selectedParts, durationMinutes)
     : "";
+  const currentSessionHref = selectedTest && !startDisabled
+    ? sessionHref(selectedTest.id, currentMode, selectedParts, durationMinutes)
+    : "";
   const hasLocalDraft = useMemo(() => {
     if (!currentSessionKey || typeof window === "undefined") return false;
     return window.localStorage.getItem(`practice:${currentSessionKey}`) != null;
@@ -94,18 +98,21 @@ export default function PracticeTestLauncher({ tests }: Props) {
     ? `Thời gian khá ngắn cho ${totalQuestions} câu.`
     : "";
 
+  useEffect(() => {
+    if (!currentSessionHref) return;
+    router.prefetch(currentSessionHref);
+  }, [currentSessionHref, router]);
+
   function start(resetDraft = false) {
-    if (!selectedTest || startDisabled) return;
-    const params = new URLSearchParams({
-      mode: currentMode,
-      parts: selectedParts.join(","),
-      time: String(durationMinutes),
-    });
+    if (!selectedTest || startDisabled || startingLabel) return;
+    const nextHref = sessionHref(selectedTest.id, currentMode, selectedParts, durationMinutes);
+    setStartingLabel(resetDraft ? "Đang tạo lại bài thi..." : "Đang mở bài thi...");
     if (resetDraft) {
       if (currentSessionKey) window.localStorage.removeItem(`practice:${currentSessionKey}`);
-      params.set("reset", "1");
+      router.push(`${nextHref}&reset=1`);
+      return;
     }
-    router.push(`/practice/session/${selectedTest.id}?${params.toString()}`);
+    router.push(nextHref);
   }
 
   return (
@@ -149,6 +156,8 @@ export default function PracticeTestLauncher({ tests }: Props) {
           </article>
         ))}
       </div>
+
+      {startingLabel ? <PracticeBusyOverlay title={startingLabel} description="Đang tải dữ liệu đề, audio và ảnh..." /> : null}
 
       {selectedTest ? (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4">
@@ -273,19 +282,19 @@ export default function PracticeTestLauncher({ tests }: Props) {
                 <button
                   type="button"
                   onClick={() => start(false)}
-                  disabled={startDisabled}
+                  disabled={startDisabled || Boolean(startingLabel)}
                   className="rounded-lg bg-accent px-5 py-2 text-sm font-extrabold text-white disabled:cursor-not-allowed disabled:opacity-50"
                 >
-                  {hasLocalDraft ? "Tiếp tục bài đang làm" : "Bắt đầu"}
+                  {startingLabel ? "Đang mở..." : hasLocalDraft ? "Tiếp tục bài đang làm" : "Bắt đầu"}
                 </button>
                 {hasLocalDraft ? (
                   <button
                     type="button"
                     onClick={() => start(true)}
-                    disabled={startDisabled}
+                    disabled={startDisabled || Boolean(startingLabel)}
                     className="rounded-lg bg-surface-soft px-5 py-2 text-sm font-extrabold text-ink disabled:cursor-not-allowed disabled:opacity-50"
                   >
-                    Làm lại
+                    {startingLabel ? "Đang mở..." : "Làm lại"}
                   </button>
                 ) : null}
               </div>
@@ -341,4 +350,27 @@ function suggestedMinutes(parts: number[]): number {
 
 function makeSessionKey(testId: number, mode: "exam" | "part", parts: number[], durationMinutes: number): string {
   return `practice-${testId}-${mode}-parts-${parts.join("-")}-time-${durationMinutes}`;
+}
+
+function sessionHref(testId: number, mode: "exam" | "part", parts: number[], durationMinutes: number): string {
+  const params = new URLSearchParams({
+    mode,
+    parts: parts.join(","),
+    time: String(durationMinutes),
+  });
+  return `/practice/session/${testId}?${params.toString()}`;
+}
+
+function PracticeBusyOverlay({ title, description }: { title: string; description: string }) {
+  return (
+    <div className="fixed inset-0 z-[90] flex items-center justify-center bg-slate-950/45 p-4 backdrop-blur-sm">
+      <section className="flex w-full max-w-md items-center gap-5 rounded-2xl border border-accent/30 bg-surface p-6 shadow-2xl">
+        <span className="h-14 w-14 shrink-0 animate-spin rounded-full border-[7px] border-accent/25 border-t-accent" />
+        <div>
+          <h2 className="text-lg font-extrabold text-ink">{title}</h2>
+          <p className="mt-1 text-sm text-muted">{description}</p>
+        </div>
+      </section>
+    </div>
+  );
 }

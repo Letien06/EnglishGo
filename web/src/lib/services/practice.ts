@@ -1,6 +1,7 @@
 import { adminDb } from "@/lib/firestore/db";
 import { BadRequest, NotFound } from "@/lib/api/response";
 import { FieldPath } from "firebase-admin/firestore";
+import { unstable_cache } from "next/cache";
 import type { AppUser } from "@/types";
 import type { DauToeicQuestion, DauToeicTest } from "@/types/dautoeic";
 import * as dautoeic from "./dautoeic";
@@ -494,6 +495,20 @@ async function getOrCreateDraft(
 }
 
 async function loadContent(routeTestId: number, parts: number[] = [...ALL_PARTS]): Promise<PracticeContent> {
+  const normalizedParts = normalizeParts(parts);
+  return cachedLoadContent(routeTestId, normalizedParts.join(","));
+}
+
+const cachedLoadContent = unstable_cache(
+  async (routeTestId: number, partsKey: string): Promise<PracticeContent> => {
+    const parts = normalizeParts(partsKey);
+    return loadContentUncached(routeTestId, parts);
+  },
+  ["practice-content-v3"],
+  { revalidate: 3600 },
+);
+
+async function loadContentUncached(routeTestId: number, parts: number[]): Promise<PracticeContent> {
   const externalTest = await resolveExternalTest(routeTestId);
   const test = toTestCard(externalTest);
   const questions: PracticeQuestion[] = [];

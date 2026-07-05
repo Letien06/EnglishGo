@@ -151,28 +151,38 @@ export default function PracticeSessionClient({ session }: { session: PracticeSe
     submittingRef.current = true;
     setSubmitting(true);
     setConfirmSubmit(false);
-    setStatus(reason === "timeout" ? "Time is up. Submitting..." : "Submitting...");
+    setStatus(reason === "timeout" ? "Hết giờ, đang nộp bài..." : "Đang nộp bài...");
     if (saveTimer.current) {
       clearTimeout(saveTimer.current);
       saveTimer.current = null;
     }
-    await saveNow();
+    persistLocal();
     const payload = Object.entries(answersRef.current).map(([questionId, answer]) => ({
       questionId: Number(questionId),
       selectedOptionId: answer.selectedOptionId,
       textResponse: answer.textResponse,
     }));
-    const response = await fetch(`/api/practice/tests/${session.test.id}/submit`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        mode: session.config.mode,
-        parts: session.config.parts,
-        durationMinutes: session.config.durationMinutes,
-        answers: payload,
-      }),
-    });
-    const result = await response.json();
+    setStatus("Đang chấm điểm và tạo kết quả...");
+    let response: Response;
+    let result: { success?: boolean; data?: { attemptId: number }; error?: string };
+    try {
+      response = await fetch(`/api/practice/tests/${session.test.id}/submit`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          mode: session.config.mode,
+          parts: session.config.parts,
+          durationMinutes: session.config.durationMinutes,
+          answers: payload,
+        }),
+      });
+      result = await response.json();
+    } catch {
+      setStatus("Không thể nộp bài. Vui lòng kiểm tra kết nối và thử lại.");
+      submittingRef.current = false;
+      setSubmitting(false);
+      return;
+    }
     if (!response.ok || !result.success) {
       setStatus(result.error || "Submit failed");
       submittingRef.current = false;
@@ -180,7 +190,7 @@ export default function PracticeSessionClient({ session }: { session: PracticeSe
       return;
     }
     window.localStorage.removeItem(storageKey);
-    router.push(`/practice/review/${result.data.attemptId}`);
+    router.push(`/practice/review/${result.data!.attemptId}`);
   }
 
   function goToQuestion(questionId: number) {
@@ -267,6 +277,12 @@ export default function PracticeSessionClient({ session }: { session: PracticeSe
       </header>
 
       {currentAudioUrl ? <audio ref={audioRef} src={currentAudioUrl} /> : null}
+      {submitting ? (
+        <PracticeBusyOverlay
+          title={remaining === 0 ? "Hết giờ, đang nộp bài..." : "Đang nộp bài..."}
+          description={status || "Đang chấm điểm và tạo kết quả."}
+        />
+      ) : null}
 
       <div className="grid grid-cols-1 gap-6 px-4 py-6 xl:grid-cols-[minmax(0,1fr)_320px]">
         <section className="space-y-5">
@@ -520,6 +536,20 @@ function ConfirmDialog({
           <button type="button" onClick={onConfirm} className="rounded-lg bg-accent px-4 py-2 text-sm font-extrabold text-white">
             {confirmLabel}
           </button>
+        </div>
+      </section>
+    </div>
+  );
+}
+
+function PracticeBusyOverlay({ title, description }: { title: string; description: string }) {
+  return (
+    <div className="fixed inset-0 z-[90] flex items-center justify-center bg-slate-950/45 p-4 backdrop-blur-sm">
+      <section className="flex w-full max-w-md items-center gap-5 rounded-2xl border border-accent/30 bg-surface p-6 shadow-2xl">
+        <span className="h-14 w-14 shrink-0 animate-spin rounded-full border-[7px] border-accent/25 border-t-accent" />
+        <div>
+          <h2 className="text-lg font-extrabold text-ink">{title}</h2>
+          <p className="mt-1 text-sm text-muted">{description}</p>
         </div>
       </section>
     </div>
