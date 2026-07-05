@@ -204,36 +204,36 @@ export default function VocabMyTab({ uid, folderId, folderSearch }: Props) {
                     {set.topic} • {set.wordCount} từ
                   </p>
                 </Link>
-                <div className="flex gap-1 shrink-0">
-                  <button
-                    onClick={() =>
-                      setRenameSet({ id: set.id, title: set.title })
-                    }
-                    className="text-xs text-muted hover:text-ink p-1"
-                    title="Đổi tên"
-                  >
-                    ✏️
-                  </button>
-                  <button
-                    onClick={() => {
-                      setAddWordsSetId(set.id);
-                      setShowAddWords(true);
-                    }}
-                    className="text-xs text-muted hover:text-ink p-1"
-                    title="Thêm từ"
-                  >
-                    ➕
-                  </button>
-                </div>
+                <span
+                  className="h-5 w-5 shrink-0 rounded-full border-2 border-line"
+                  aria-hidden="true"
+                />
               </header>
 
-              <footer className="flex items-center justify-between">
+              <footer className="flex items-center gap-2 border-t border-line pt-3">
                 <Link
-                  href={`/vocab/${set.id}/flashcards`}
-                  className="text-xs text-accent font-semibold no-underline"
+                  href={`/vocab/${set.id}`}
+                  className="rounded-full bg-accent px-4 py-2 text-sm font-bold text-white no-underline"
                 >
-                  Flashcards →
+                  Xem
                 </Link>
+                <Link
+                  href={`/vocab/${set.id}/flashcards?mode=menu`}
+                  className="rounded-full px-3 py-2 text-sm font-bold text-ink2 no-underline hover:bg-surface-soft"
+                  title="Chọn 6 game và lịch sử chơi"
+                >
+                  Play
+                </Link>
+                <button
+                  type="button"
+                  onClick={() =>
+                    setRenameSet({ id: set.id, title: set.title })
+                  }
+                  className="rounded-full px-3 py-2 text-sm font-bold text-ink2 hover:bg-surface-soft"
+                  title="Chỉnh sửa bộ từ"
+                >
+                  Sửa
+                </button>
                 <button
                   onClick={async () => {
                     if (!confirm("Xóa bộ từ này?")) return;
@@ -242,7 +242,8 @@ export default function VocabMyTab({ uid, folderId, folderSearch }: Props) {
                     });
                     reload();
                   }}
-                  className="text-xs text-red-400 hover:text-red-300"
+                  className="ml-auto rounded-full px-3 py-2 text-sm font-bold text-red-500 hover:bg-red-50"
+                  title="Xóa bộ từ"
                 >
                   Xóa
                 </button>
