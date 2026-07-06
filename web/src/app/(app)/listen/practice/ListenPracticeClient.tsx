@@ -131,12 +131,12 @@ export default function ListenPracticeClient({
         const firstQuestion = item.questions[0];
         if (!firstQuestion) return;
         event.preventDefault();
-        revealNextWords(firstQuestion, activeMode, assist, revealedMap, setRevealedMap, 1);
+        revealNextWords(firstQuestion, partNum, activeMode, assist, revealedMap, setRevealedMap, 1);
       }
     };
     document.addEventListener("keydown", handleKeyDown);
     return () => document.removeEventListener("keydown", handleKeyDown);
-  }, [activeMode, assist, item, revealedMap]);
+  }, [activeMode, assist, item, partNum, revealedMap]);
 
   const goTo = useCallback((index: number, options: { play?: boolean } = {}) => {
     if (index < 0 || index >= items.length) return;
@@ -378,8 +378,8 @@ export default function ListenPracticeClient({
                 onFillValue={(key, value) => {
                   setFillValues((prev) => ({ ...prev, [key]: value }));
                 }}
-                onHint={(count) => revealNextWords(question, activeMode, assist, revealedMap, setRevealedMap, count)}
-                onRevealAll={() => revealAllWords(question, assist, setRevealedMap)}
+                onHint={(count) => revealNextWords(question, partNum, activeMode, assist, revealedMap, setRevealedMap, count)}
+                onRevealAll={() => revealAllWords(question, partNum, assist, setRevealedMap)}
                 onAnswer={(selected) => handleAnswer(question, selected)}
               />
             ))}
@@ -459,7 +459,8 @@ function QuestionCard({
   const correctAnswer = normalizeAnswer(question.correctAnswer);
   const correct = answered != null && answered === correctAnswer;
   const showQuestionText = partNum >= 3;
-  const showOptionText = partNum >= 3;
+  const showOptionText = shouldShowOptionText(partNum, mode);
+  const hasMaskableOptionText = options.some((option) => hasMeaningfulOptionText(option.text, option.key));
 
   return (
     <article className="mb-8 last:mb-0">
@@ -469,7 +470,7 @@ function QuestionCard({
         </h3>
       ) : null}
 
-      {(mode === "fill" || mode === "flip") && (
+      {(mode === "fill" || mode === "flip") && hasMaskableOptionText && (
         <div className="mb-4 flex items-center justify-between rounded-xl border border-violet-200 bg-violet-50 px-4 py-3">
           <strong className="text-base text-ink">
             Nghe & {mode === "fill" ? "Điền từ" : "Lật từ"} - {assist}%
@@ -791,7 +792,11 @@ function AnswerOption({
   const isSelected = selected === optionKey;
   const isCorrectChoice = selected != null && correctAnswer === optionKey;
   const isWrongChoice = isSelected && selected !== correctAnswer;
-  const showNormalText = showOptionText && (mode === "normal" || selected != null);
+  const hasOptionText = hasMeaningfulOptionText(text, optionKey);
+  const isAnswered = selected != null;
+  const showNormalText = showOptionText && hasOptionText && (mode === "normal" || isAnswered);
+  const showBilingualText = showOptionText && !isAnswered && mode === "bilingual" && (hasOptionText || Boolean(translation));
+  const showMaskedText = showOptionText && !isAnswered && hasOptionText && (mode === "fill" || mode === "flip");
   const stateClass = isCorrectChoice
     ? "border-green-400 bg-green-50 text-green-700"
     : isWrongChoice
@@ -825,14 +830,13 @@ function AnswerOption({
       <span className="min-w-10">({optionKey})</span>
       <span className="min-w-0 flex-1">
         {showNormalText && <span>{text}</span>}
-        {!showOptionText && <span className="font-extrabold">{optionKey}</span>}
-        {showOptionText && mode === "bilingual" && (
+        {showBilingualText && (
           <>
-            <span>{text}</span>
+            {hasOptionText && <span>{text}</span>}
             {translation && <span className="mt-2 block text-sm font-bold text-ink">{translation}</span>}
           </>
         )}
-        {showOptionText && mode === "fill" && (
+        {showMaskedText && mode === "fill" && (
           <MaskedText
             questionId={questionId}
             optionKey={optionKey}
@@ -845,7 +849,7 @@ function AnswerOption({
             onFillValue={onFillValue}
           />
         )}
-        {showOptionText && mode === "flip" && (
+        {showMaskedText && mode === "flip" && (
           <MaskedText
             questionId={questionId}
             optionKey={optionKey}
@@ -996,6 +1000,7 @@ function ToolBox({
 
 function revealNextWords(
   question: DauToeicQuestion,
+  partNum: number,
   mode: PracticeMode,
   assist: number,
   revealedMap: Record<string, number[]>,
@@ -1005,7 +1010,8 @@ function revealNextWords(
   if (mode !== "fill" && mode !== "flip") return;
   let remaining = count;
   const additions: Record<string, number[]> = {};
-  for (const option of questionOptions(question)) {
+  for (const option of questionOptions(question, partNum)) {
+    if (!hasMeaningfulOptionText(option.text, option.key)) continue;
     if (remaining <= 0) break;
     const key = maskKey(question.id, option.key);
     const already = new Set([...(revealedMap[key] ?? []), ...(additions[key] ?? [])]);
@@ -1030,11 +1036,13 @@ function revealNextWords(
 
 function revealAllWords(
   question: DauToeicQuestion,
+  partNum: number,
   assist: number,
   setRevealedMap: React.Dispatch<React.SetStateAction<Record<string, number[]>>>,
 ) {
   const additions: Record<string, number[]> = {};
-  for (const option of questionOptions(question)) {
+  for (const option of questionOptions(question, partNum)) {
+    if (!hasMeaningfulOptionText(option.text, option.key)) continue;
     additions[maskKey(question.id, option.key)] = chooseHiddenIndexes(tokenize(option.text), assist);
   }
   setRevealedMap((prev) => {
@@ -1058,6 +1066,18 @@ function questionOptions(question: DauToeicQuestion, partNum = question.part ?? 
       return Boolean(cleanDisplayText(option.text));
     })
     .map((option) => ({ ...option, text: cleanDisplayText(option.text) }));
+}
+
+function shouldShowOptionText(partNum: number, mode: PracticeMode) {
+  if (partNum >= 3) return true;
+  return mode === "bilingual" || mode === "fill" || mode === "flip";
+}
+
+function hasMeaningfulOptionText(text: string, optionKey: string) {
+  const cleaned = cleanDisplayText(text);
+  if (!cleaned) return false;
+  const normalized = cleaned.replace(/[().\s]/g, "").toUpperCase();
+  return normalized !== optionKey;
 }
 
 function normalizeQuestionText(partNum: number, value: string | null | undefined, index: number): string {
