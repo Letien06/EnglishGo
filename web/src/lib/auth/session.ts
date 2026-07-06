@@ -67,7 +67,7 @@ export async function provisionUser(decoded: {
   const uid = decoded.uid;
   const email = decoded.email || `${uid}@firebase.local`;
   const displayName = decoded.name || email;
-  const avatarUrl = decoded.picture || null;
+  const providerAvatarUrl = decoded.picture || null;
 
   const userRef = adminDb.collection(USERS_COLLECTION).doc(uid);
   const snap = await userRef.get();
@@ -81,7 +81,8 @@ export async function provisionUser(decoded: {
       firebaseUid: uid,
       email,
       displayName,
-      avatarUrl,
+      avatarUrl: providerAvatarUrl,
+      avatarSource: providerAvatarUrl ? "provider" : "none",
       role,
       level: null,
       targetScore: null,
@@ -97,7 +98,7 @@ export async function provisionUser(decoded: {
       firebaseUid: uid,
       email,
       displayName,
-      avatarUrl,
+      avatarUrl: providerAvatarUrl,
       role,
       level: null,
       targetScore: null,
@@ -110,6 +111,17 @@ export async function provisionUser(decoded: {
   const data = snap.data()!;
   const existingRole = (data.role as string) || "STUDENT";
   const role = adminEmails.includes(email.toLowerCase()) ? "ADMIN" : existingRole;
+  const existingAvatarUrl = typeof data.avatarUrl === "string" && data.avatarUrl.trim()
+    ? data.avatarUrl
+    : null;
+  const existingAvatarSource = typeof data.avatarSource === "string" ? data.avatarSource : null;
+  const avatarLockedByUser = existingAvatarSource === "custom" || existingAvatarSource === "none";
+  const nextAvatarUrl = avatarLockedByUser ? existingAvatarUrl : providerAvatarUrl ?? existingAvatarUrl;
+  const nextAvatarSource = avatarLockedByUser
+    ? existingAvatarSource
+    : providerAvatarUrl
+      ? "provider"
+      : existingAvatarSource ?? "none";
 
   // Only write back to Firestore when something actually changed. Provisioning
   // used to run an `update()` on EVERY page load / navigation, which added a
@@ -118,14 +130,16 @@ export async function provisionUser(decoded: {
   const profileChanged =
     data.email !== email ||
     data.displayName !== displayName ||
-    (data.avatarUrl ?? null) !== avatarUrl ||
+    (data.avatarUrl ?? null) !== nextAvatarUrl ||
+    (data.avatarSource ?? null) !== nextAvatarSource ||
     data.role !== role;
 
   if (profileChanged) {
     await userRef.update({
       email,
       displayName,
-      avatarUrl,
+      avatarUrl: nextAvatarUrl,
+      avatarSource: nextAvatarSource,
       role,
       updatedAtMillis: Date.now(),
       updatedAt: FieldValue.serverTimestamp(),
@@ -137,7 +151,7 @@ export async function provisionUser(decoded: {
     firebaseUid: uid,
     email,
     displayName,
-    avatarUrl,
+    avatarUrl: nextAvatarUrl,
     role,
     level: (data.level as string) ?? null,
     targetScore: (data.targetScore as number) ?? null,

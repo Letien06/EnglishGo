@@ -3,6 +3,10 @@ import { adminAuth, adminDb } from "@/lib/firebase/admin";
 import { BadRequest, Unauthorized } from "@/lib/api/response";
 import type { AppUser } from "@/types";
 
+const MAX_AVATAR_DATA_URL_LENGTH = 240_000;
+const MAX_REMOTE_AVATAR_URL_LENGTH = 2_048;
+const AVATAR_DATA_URL_PATTERN = /^data:image\/(?:jpeg|jpg|png|webp);base64,[a-z0-9+/]+=*$/i;
+
 export interface AccountSettingsView {
   email: string;
   role: string;
@@ -31,12 +35,13 @@ export async function updateSettings(
   const user = await findUser(uid);
   const displayName = form.displayName?.trim();
   if (!displayName) throw BadRequest("Display name is required");
-  const avatarUrl = form.avatarUrl?.trim() || null;
+  const avatarUrl = normalizeAvatarUrl(form.avatarUrl);
 
   await adminDb.collection("users").doc(uid).set(
     {
       displayName,
       avatarUrl,
+      avatarSource: avatarUrl ? "custom" : "none",
       updatedAtMillis: Date.now(),
       updatedAt: FieldValue.serverTimestamp(),
     },
@@ -90,4 +95,30 @@ function numberValue(value: unknown): number | null {
   if (value == null) return null;
   const parsed = Number(value);
   return Number.isFinite(parsed) ? parsed : null;
+}
+
+function normalizeAvatarUrl(value: string | null | undefined): string | null {
+  const avatarUrl = value?.trim() || null;
+  if (!avatarUrl) return null;
+
+  if (avatarUrl.startsWith("data:image/")) {
+    if (avatarUrl.length > MAX_AVATAR_DATA_URL_LENGTH || !AVATAR_DATA_URL_PATTERN.test(avatarUrl)) {
+      throw BadRequest("Avatar image is too large or invalid");
+    }
+    return avatarUrl;
+  }
+
+  if (avatarUrl.length > MAX_REMOTE_AVATAR_URL_LENGTH) {
+    throw BadRequest("Avatar URL is too long");
+  }
+  let parsed: URL;
+  try {
+    parsed = new URL(avatarUrl);
+  } catch {
+    throw BadRequest("Avatar URL is invalid");
+  }
+  if (parsed.protocol !== "https:" && parsed.protocol !== "http:") {
+    throw BadRequest("Avatar URL must be http or https");
+  }
+  return avatarUrl;
 }

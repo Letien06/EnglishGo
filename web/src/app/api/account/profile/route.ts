@@ -7,7 +7,7 @@ import { updateSettings } from "@/lib/services/account";
 
 const schema = z.object({
   displayName: z.string().min(1).max(150),
-  avatarUrl: z.string().nullable().optional(),
+  avatarUrl: z.string().max(260_000).nullable().optional(),
 });
 
 export const POST = withErrorHandling(async (req) => {
