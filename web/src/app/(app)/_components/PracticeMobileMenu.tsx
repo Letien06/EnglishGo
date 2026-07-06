@@ -21,6 +21,8 @@ interface Props {
   activeMode: string;
   auto: boolean;
   onToggleAuto: () => void;
+  onModeChange?: (mode: PracticeMode) => void;
+  onAssistChange?: (value: number) => void;
   assist: number;
   assistOptions: number[];
   elapsed: string;
@@ -35,6 +37,8 @@ export default function PracticeMobileMenu({
   activeMode,
   auto,
   onToggleAuto,
+  onModeChange,
+  onAssistChange,
   assist,
   assistOptions,
   elapsed,
@@ -103,21 +107,40 @@ export default function PracticeMobileMenu({
             <div>
               <p className="mb-2 text-sm font-extrabold text-muted">Chế độ</p>
               <div className="grid grid-cols-2 gap-2">
-                {modes.map(([key, icon, label]) => (
-                  <Link
-                    key={key}
-                    href={modeHref(key)}
-                    onClick={() => setOpen(false)}
-                    className={`inline-flex items-center justify-center gap-2 rounded-xl border px-3 py-3 text-sm font-extrabold ${
-                      activeMode === key
-                        ? "border-primary bg-primary/10 text-primary"
-                        : "border-slate-200 text-ink"
-                    }`}
-                  >
-                    <span>{icon}</span>
-                    {label}
-                  </Link>
-                ))}
+                {modes.map(([key, icon, label]) => {
+                  const className = `inline-flex items-center justify-center gap-2 rounded-xl border px-3 py-3 text-sm font-extrabold ${
+                    activeMode === key
+                      ? "border-primary bg-primary/10 text-primary"
+                      : "border-slate-200 text-ink"
+                  }`;
+                  if (onModeChange) {
+                    return (
+                      <button
+                        key={key}
+                        type="button"
+                        onClick={() => {
+                          onModeChange(key);
+                          setOpen(false);
+                        }}
+                        className={className}
+                      >
+                        <span>{icon}</span>
+                        {label}
+                      </button>
+                    );
+                  }
+                  return (
+                    <Link
+                      key={key}
+                      href={modeHref(key)}
+                      onClick={() => setOpen(false)}
+                      className={className}
+                    >
+                      <span>{icon}</span>
+                      {label}
+                    </Link>
+                  );
+                })}
               </div>
             </div>
 
@@ -149,20 +172,38 @@ export default function PracticeMobileMenu({
               <div>
                 <p className="mb-2 text-sm font-extrabold text-muted">Tỉ lệ hỗ trợ</p>
                 <div className="grid grid-cols-3 gap-2">
-                  {assistOptions.map((value) => (
-                    <Link
-                      key={value}
-                      href={assistHref(value)}
-                      onClick={() => setOpen(false)}
-                      className={`inline-flex items-center justify-center rounded-xl border px-3 py-3 text-sm font-extrabold ${
-                        assist === value
-                          ? "border-primary bg-primary/10 text-primary"
-                          : "border-slate-200 text-ink"
-                      }`}
-                    >
-                      {value}%
-                    </Link>
-                  ))}
+                  {assistOptions.map((value) => {
+                    const className = `inline-flex items-center justify-center rounded-xl border px-3 py-3 text-sm font-extrabold ${
+                      assist === value
+                        ? "border-primary bg-primary/10 text-primary"
+                        : "border-slate-200 text-ink"
+                    }`;
+                    if (onAssistChange) {
+                      return (
+                        <button
+                          key={value}
+                          type="button"
+                          onClick={() => {
+                            onAssistChange(value);
+                            setOpen(false);
+                          }}
+                          className={className}
+                        >
+                          {value}%
+                        </button>
+                      );
+                    }
+                    return (
+                      <Link
+                        key={value}
+                        href={assistHref(value)}
+                        onClick={() => setOpen(false)}
+                        className={className}
+                      >
+                        {value}%
+                      </Link>
+                    );
+                  })}
                 </div>
               </div>
             )}

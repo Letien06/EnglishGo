@@ -42,7 +42,8 @@ export default function ReadPracticeClient({
   level,
   mode,
 }: Props) {
-  const activeMode = normalizeMode(mode);
+  const initialMode = normalizeMode(mode);
+  const [activeMode, setActiveMode] = useState<PracticeMode>(initialMode);
   const items = session.items;
   const [currentIndex, setCurrentIndex] = useState(0);
   const [answeredMap, setAnsweredMap] = useState<Record<string, string>>({});
@@ -54,6 +55,26 @@ export default function ReadPracticeClient({
   const startedAtRef = useRef(0);
   const item = items[currentIndex] ?? items[0];
   const firstQuestion = item.questions[0];
+
+  useEffect(() => {
+    setActiveMode(normalizeMode(mode));
+  }, [mode]);
+
+  const updatePracticeUrl = useCallback((next: { mode?: PracticeMode; q?: number }) => {
+    if (typeof window === "undefined") return;
+    const url = new URL(window.location.href);
+    url.searchParams.set("part", partId);
+    url.searchParams.set("level", String(level));
+    url.searchParams.set("mode", next.mode ?? activeMode);
+    url.searchParams.set("q", String(next.q ?? currentIndex));
+    window.history.replaceState(null, "", `${url.pathname}${url.search}`);
+  }, [activeMode, currentIndex, level, partId]);
+
+  const switchMode = useCallback((nextMode: PracticeMode) => {
+    if (nextMode === activeMode) return;
+    setActiveMode(nextMode);
+    updatePracticeUrl({ mode: nextMode });
+  }, [activeMode, updatePracticeUrl]);
 
   useEffect(() => {
     const timer = window.setTimeout(() => setCurrentIndex(initialItemIndex(items.length)), 0);
@@ -75,16 +96,14 @@ export default function ReadPracticeClient({
       routeKey("/read/practice", {
         part: partId,
         level: String(level),
-        mode,
+        mode: activeMode,
       }),
     );
-  }, [partId, level, mode]);
+  }, [activeMode, partId, level]);
 
   useEffect(() => {
-    const url = new URL(window.location.href);
-    url.searchParams.set("q", String(currentIndex));
-    window.history.replaceState(null, "", `${url.pathname}${url.search}`);
-  }, [currentIndex]);
+    updatePracticeUrl({ q: currentIndex });
+  }, [currentIndex, updatePracticeUrl]);
 
   const goTo = useCallback((index: number) => {
     if (index < 0 || index >= items.length) return;
@@ -168,16 +187,17 @@ export default function ReadPracticeClient({
 
         <nav className="hidden flex-1 items-center justify-center rounded-xl border border-white/25 bg-white/10 p-1 lg:flex">
           {modes.map(([key, icon, label]) => (
-            <Link
+            <button
               key={key}
-              href={`/read/practice?part=${partId}&level=${level}&mode=${key}&q=${currentIndex}`}
+              type="button"
+              onClick={() => switchMode(key)}
               className={`inline-flex min-w-36 items-center justify-center gap-2 rounded-lg px-4 py-2 text-sm font-extrabold ${
                 activeMode === key ? "bg-white/20 ring-2 ring-white/35" : "hover:bg-white/10"
               }`}
             >
               <span>{icon}</span>
               {label}
-            </Link>
+            </button>
           ))}
         </nav>
 
@@ -197,6 +217,11 @@ export default function ReadPracticeClient({
           activeMode={activeMode}
           auto={auto}
           onToggleAuto={() => setAuto((value) => !value)}
+          onModeChange={(nextMode) => {
+            if (nextMode === "normal" || nextMode === "bilingual") {
+              switchMode(nextMode);
+            }
+          }}
           assist={0}
           assistOptions={[]}
           elapsed={formatElapsed(elapsed)}

@@ -51,7 +51,9 @@ export default function ListenPracticeClient({
   assist,
   savedAnswers,
 }: Props) {
-  const activeMode = normalizeMode(mode);
+  const initialMode = normalizeMode(mode);
+  const [activeMode, setActiveMode] = useState<PracticeMode>(initialMode);
+  const [activeAssist, setActiveAssist] = useState(assist);
   const items = session.items;
   const initialAnswers = useMemo(
     () => normalizeSavedAnswers(savedAnswers),
@@ -75,6 +77,37 @@ export default function ListenPracticeClient({
   const item = items[currentIndex] ?? items[0];
 
   useEffect(() => {
+    setActiveMode(normalizeMode(mode));
+  }, [mode]);
+
+  useEffect(() => {
+    setActiveAssist(assist);
+  }, [assist]);
+
+  const updatePracticeUrl = useCallback((next: { mode?: PracticeMode; assist?: number; q?: number }) => {
+    if (typeof window === "undefined") return;
+    const url = new URL(window.location.href);
+    url.searchParams.set("part", partId);
+    url.searchParams.set("level", String(level));
+    url.searchParams.set("mode", next.mode ?? activeMode);
+    url.searchParams.set("assist", String(next.assist ?? activeAssist));
+    url.searchParams.set("q", String(next.q ?? currentIndex));
+    window.history.replaceState(null, "", `${url.pathname}${url.search}`);
+  }, [activeAssist, activeMode, currentIndex, level, partId]);
+
+  const switchMode = useCallback((nextMode: PracticeMode) => {
+    if (nextMode === activeMode) return;
+    setActiveMode(nextMode);
+    updatePracticeUrl({ mode: nextMode });
+  }, [activeMode, updatePracticeUrl]);
+
+  const switchAssist = useCallback((nextAssist: number) => {
+    if (nextAssist === activeAssist) return;
+    setActiveAssist(nextAssist);
+    updatePracticeUrl({ assist: nextAssist });
+  }, [activeAssist, updatePracticeUrl]);
+
+  useEffect(() => {
     const timer = window.setTimeout(() => {
       setCurrentIndex(initialItemIndex(items, initialAnswers));
     }, 0);
@@ -96,18 +129,16 @@ export default function ListenPracticeClient({
       routeKey("/listen/practice", {
         part: partId,
         level: String(level),
-        mode,
-        assist: String(assist),
+        mode: activeMode,
+        assist: String(activeAssist),
       }),
     );
-  }, [partId, level, mode, assist]);
+  }, [activeAssist, activeMode, partId, level]);
 
   useEffect(() => {
     if (typeof window === "undefined") return;
-    const url = new URL(window.location.href);
-    url.searchParams.set("q", String(currentIndex));
-    window.history.replaceState(null, "", `${url.pathname}${url.search}`);
-  }, [currentIndex]);
+    updatePracticeUrl({ q: currentIndex });
+  }, [currentIndex, updatePracticeUrl]);
 
   useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent) => {
@@ -131,12 +162,12 @@ export default function ListenPracticeClient({
         const firstQuestion = item.questions[0];
         if (!firstQuestion) return;
         event.preventDefault();
-        revealNextWords(firstQuestion, partNum, activeMode, assist, revealedMap, setRevealedMap, 1);
+        revealNextWords(firstQuestion, partNum, activeMode, activeAssist, revealedMap, setRevealedMap, 1);
       }
     };
     document.addEventListener("keydown", handleKeyDown);
     return () => document.removeEventListener("keydown", handleKeyDown);
-  }, [activeMode, assist, item, partNum, revealedMap]);
+  }, [activeAssist, activeMode, item, partNum, revealedMap]);
 
   const goTo = useCallback((index: number, options: { play?: boolean } = {}) => {
     if (index < 0 || index >= items.length) return;
@@ -171,7 +202,7 @@ export default function ListenPracticeClient({
           selectedAnswer,
           correctAnswer,
           modeUsed: activeMode,
-          assistPercent: assist,
+          assistPercent: activeAssist,
           replayCount: replayCountRef.current,
           elapsedSeconds: elapsed,
         }),
@@ -183,7 +214,7 @@ export default function ListenPracticeClient({
     if (correct && auto && currentIndex < items.length - 1) {
       window.setTimeout(() => goTo(currentIndex + 1, { play: true }), 450);
     }
-  }, [activeMode, answeredMap, assist, auto, currentIndex, elapsed, goTo, item.id, items.length, level, partNum]);
+  }, [activeAssist, activeMode, answeredMap, auto, currentIndex, elapsed, goTo, item.id, items.length, level, partNum]);
 
   const currentQuestion = item.questions[0];
 
@@ -206,16 +237,17 @@ export default function ListenPracticeClient({
 
         <nav className="hidden flex-1 items-center justify-center rounded-xl border border-white/25 bg-white/10 p-1 lg:flex">
           {modes.map(([key, icon, label]) => (
-            <Link
+            <button
               key={key}
-              href={`/listen/practice?part=${partId}&level=${level}&mode=${key}&assist=${assist}&q=${currentIndex}`}
+              type="button"
+              onClick={() => switchMode(key)}
               className={`inline-flex min-w-36 items-center justify-center gap-2 rounded-lg px-4 py-2 text-sm font-extrabold ${
                 activeMode === key ? "bg-white/20 ring-2 ring-white/35" : "hover:bg-white/10"
               }`}
             >
               <span>{icon}</span>
               {label}
-            </Link>
+            </button>
           ))}
         </nav>
 
@@ -231,10 +263,10 @@ export default function ListenPracticeClient({
         </button>
         <span className="hidden min-w-14 text-center text-sm font-extrabold tabular-nums lg:inline">{formatElapsed(elapsed)}</span>
         <select
-          value={assist}
+          value={activeAssist}
           className="hidden rounded-xl border border-white/30 bg-white/10 px-4 py-2 text-sm font-extrabold text-white lg:block"
           onChange={(event) => {
-            window.location.href = `/listen/practice?part=${partId}&level=${level}&mode=${activeMode}&assist=${event.target.value}&q=${currentIndex}`;
+            switchAssist(Number(event.target.value));
           }}
           aria-label="Tỉ lệ hỗ trợ"
         >
@@ -250,10 +282,12 @@ export default function ListenPracticeClient({
           activeMode={activeMode}
           auto={auto}
           onToggleAuto={() => setAuto((value) => !value)}
-          assist={assist}
+          onModeChange={switchMode}
+          onAssistChange={switchAssist}
+          assist={activeAssist}
           assistOptions={assistOptions}
           elapsed={formatElapsed(elapsed)}
-          modeHref={(m) => `/listen/practice?part=${partId}&level=${level}&mode=${m}&assist=${assist}&q=${currentIndex}`}
+          modeHref={(m) => `/listen/practice?part=${partId}&level=${level}&mode=${m}&assist=${activeAssist}&q=${currentIndex}`}
           assistHref={(v) => `/listen/practice?part=${partId}&level=${level}&mode=${activeMode}&assist=${v}&q=${currentIndex}`}
         />
       </header>
@@ -364,7 +398,7 @@ export default function ListenPracticeClient({
                 index={index}
                 partNum={partNum}
                 mode={activeMode}
-                assist={assist}
+                assist={activeAssist}
                 answered={answeredMap[question.id] ?? null}
                 revealedMap={revealedMap}
                 fillValues={fillValues}
@@ -378,8 +412,8 @@ export default function ListenPracticeClient({
                 onFillValue={(key, value) => {
                   setFillValues((prev) => ({ ...prev, [key]: value }));
                 }}
-                onHint={(count) => revealNextWords(question, partNum, activeMode, assist, revealedMap, setRevealedMap, count)}
-                onRevealAll={() => revealAllWords(question, partNum, assist, setRevealedMap)}
+                onHint={(count) => revealNextWords(question, partNum, activeMode, activeAssist, revealedMap, setRevealedMap, count)}
+                onRevealAll={() => revealAllWords(question, partNum, activeAssist, setRevealedMap)}
                 onAnswer={(selected) => handleAnswer(question, selected)}
               />
             ))}
