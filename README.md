@@ -1,8 +1,6 @@
 # EnglishWebApp
 
-EnglishWebApp is a TOEIC practice web application. The current production target is the Next.js app in `web/`, deployed to Vercel with Firebase Authentication, Cloud Firestore, Firebase Storage, and Gemini.
-
-The legacy Spring Boot code remains in the repository during migration, but new application work should target `web/`.
+EnglishWebApp is a TOEIC practice web application. The production target is the Next.js app in `web/`, deployed to Vercel with Firebase Authentication, Cloud Firestore, Firebase Storage, and Gemini.
 
 ## Current Stack
 
@@ -25,7 +23,6 @@ firestore.indexes.json       Firestore composite indexes
 storage.rules                Firebase Storage rules
 docs/deployment.md           Vercel/Firebase deployment guide
 docs/nextjs-functional-comparison.md
-src/                         Legacy Spring Boot application
 ```
 
 ## Local Development
@@ -123,4 +120,3 @@ firebase deploy --only storage
 - Do not add SQL/Prisma/Supabase application storage to the Next.js app. Application data is stored in Firestore.
 - Do not store uploaded media on the Vercel filesystem. Use Firebase Storage via `web/src/lib/services/media.ts`.
 - Keep secrets out of Git. Use `.env.local` locally and Vercel environment variables in production.
-- The legacy Spring Boot app should be archived or removed only after Vercel production has been stable for several days.
