@@ -23,7 +23,7 @@ export default async function DautoeicVocabTestPage({ params }: Props) {
   return (
     <>
       <AppTopbar
-        pageTitle={view.test.name ?? "Dautoeic Vocabulary"}
+        pageTitle={view.test.name ?? "Từ vựng TOEIC"}
         pageSubtitle={view.setName}
         userName={user.displayName}
         userEmail={user.email}

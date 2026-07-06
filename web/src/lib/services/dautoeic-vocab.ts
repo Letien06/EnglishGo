@@ -33,7 +33,7 @@ export async function getVocabularyCatalogView(
   const catalog = await getVocabularyCatalog();
   const visibleTests = catalog.tests.filter(isPlayableTest);
   const setNameById = new Map(
-    catalog.sets.map((set) => [set.id, cleanName(set.name) || "Dautoeic"]),
+    catalog.sets.map((set) => [set.id, cleanName(set.name) || "TOEIC"]),
   );
   const groupCount = new Map<string, number>();
   for (const test of visibleTests) {
@@ -51,7 +51,7 @@ export async function getVocabularyCatalogView(
   const groups = catalog.sets
     .map((set) => ({
       id: set.id,
-      name: cleanName(set.name) || "Dautoeic",
+      name: cleanName(set.name) || "TOEIC",
       orderIndex: set.orderIndex,
       count: groupCount.get(set.id) ?? 0,
     }))
@@ -64,8 +64,8 @@ export async function getVocabularyCatalogView(
       id: test.testId,
       internalSetId,
       setId: test.setId ?? "",
-      setName: test.setId ? setNameById.get(test.setId) ?? "Dautoeic" : "Dautoeic",
-      title: cleanName(test.name) || "Vocabulary test",
+      setName: test.setId ? setNameById.get(test.setId) ?? "TOEIC" : "TOEIC",
+      title: cleanName(test.name) || "Bộ từ vựng",
       orderIndex: test.orderIndex,
       accessLevel: test.accessLevel,
       partCount: test.partCount,
@@ -91,7 +91,7 @@ export async function getDautoeicVocabTestView(
   const test = await findCatalogTest(testId);
   const catalog = await getVocabularyCatalog();
   const set = catalog.sets.find((item) => item.id === test.setId);
-  const setName = cleanName(set?.name) || "Dautoeic";
+  const setName = cleanName(set?.name) || "TOEIC";
   const parts = await listVocabularyParts(testId);
   const internalSetId = dautoeicVocabSetId(testId);
   const [counts, localStats] = await Promise.all([
@@ -118,7 +118,7 @@ export async function getDautoeicVocabTestView(
     })
     .filter((part) => part.wordCount > 0);
 
-  if (!summaries.length) throw NotFound("Dautoeic vocabulary parts not found");
+  if (!summaries.length) throw NotFound("Không tìm thấy phần từ vựng");
 
   return {
     test,
@@ -144,14 +144,14 @@ export async function syncDautoeicVocabTest(
   const catalog = await getVocabularyCatalog();
   const setName =
     cleanName(catalog.sets.find((item) => item.id === test.setId)?.name) ||
-    "Dautoeic";
+    "TOEIC";
   const allParts = await listVocabularyParts(testId);
-  if (!allParts.length) throw NotFound("Dautoeic vocabulary parts not found");
+  if (!allParts.length) throw NotFound("Không tìm thấy phần từ vựng");
 
   const selectedParts = partId?.trim()
     ? allParts.filter((part) => part.id === partId.trim())
     : allParts;
-  if (!selectedParts.length) throw NotFound("Dautoeic vocabulary part not found");
+  if (!selectedParts.length) throw NotFound("Không tìm thấy phần từ vựng");
 
   const setId = dautoeicVocabSetId(test.testId);
   const expectedCounts = await wordCountsByPart(selectedParts.map((part) => part.id));
@@ -159,9 +159,9 @@ export async function syncDautoeicVocabTest(
   await adminDb.collection(SETS).doc(String(setId)).set(
     {
       id: setId,
-      title: cleanName(test.name) || "Vocabulary test",
+      title: cleanName(test.name) || "Bộ từ vựng",
       topic: setName,
-      description: `Dautoeic vocabulary test_id=${test.testId}`,
+      description: "Bộ từ vựng TOEIC từ nguồn server",
       icon: "book",
       level: test.accessLevel || `${test.partCount} parts`,
       status: "PUBLISHED" satisfies ContentStatus,
@@ -255,7 +255,7 @@ async function findCatalogTest(testId: string): Promise<DauToeicVocabTest> {
   if (!cleanTestId) throw new ApiError("testId is required", 400);
   const catalog = await getVocabularyCatalog();
   const test = catalog.tests.find((item) => item.testId === cleanTestId);
-  if (!test || !isPlayableTest(test)) throw NotFound("Dautoeic vocabulary test not found");
+  if (!test || !isPlayableTest(test)) throw NotFound("Không tìm thấy bộ từ vựng");
   return test;
 }
 
@@ -535,7 +535,7 @@ async function supabasePost(
 async function supabaseFetch(url: string, init: RequestInit): Promise<unknown> {
   const anonKey = serverEnv.dauToeicAnonKey;
   if (!serverEnv.dauToeicSupabaseUrl || !anonKey) {
-    throw new ApiError("Dautoeic vocabulary API is not configured", 400);
+    throw new ApiError("Nguồn từ vựng chưa được cấu hình", 400);
   }
   try {
     const response = await fetch(url, {
@@ -550,12 +550,12 @@ async function supabaseFetch(url: string, init: RequestInit): Promise<unknown> {
       next: { revalidate: 300 },
     });
     if (!response.ok) {
-      throw new ApiError(`Dautoeic vocabulary API error (${response.status})`, 502);
+      throw new ApiError(`Nguồn từ vựng trả lỗi (${response.status})`, 502);
     }
     return response.json();
   } catch (err) {
     if (err instanceof ApiError) throw err;
-    throw new ApiError("Cannot connect to Dautoeic vocabulary API", 502);
+    throw new ApiError("Không kết nối được nguồn từ vựng", 502);
   }
 }
 

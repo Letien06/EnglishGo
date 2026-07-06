@@ -57,7 +57,7 @@ export default function DautoeicPartStudyButton({ testId, partId, setId }: Props
         type="button"
         onClick={startStudy}
         disabled={loading}
-        data-overdelay="Đang nạp từ Dautoeic..."
+        data-overdelay="Đang nạp từ server..."
         data-overdelay-timeout="7000"
         className="inline-flex w-full items-center justify-center rounded-full border border-emerald-300 px-4 py-2 text-xs font-extrabold text-emerald-700 hover:bg-emerald-50 disabled:cursor-wait disabled:opacity-70"
       >

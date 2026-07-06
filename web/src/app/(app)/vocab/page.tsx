@@ -114,7 +114,7 @@ async function LearnTab({ uid, groupId }: { uid: string; groupId?: string }) {
 
     return (
       <section className="space-y-5">
-        <nav className="flex max-w-full gap-2 overflow-x-auto" aria-label="Dautoeic vocabulary groups">
+        <nav className="flex max-w-full gap-2 overflow-x-auto" aria-label="Vocabulary groups">
           {catalog.groups.map((group) => {
             const selected = group.id === selectedGroupId;
             return (
