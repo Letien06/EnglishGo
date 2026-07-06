@@ -19,8 +19,10 @@ export const GET = withErrorHandling(async (req: NextRequest) => {
   if (Number.isNaN(part) || part < 1 || part > 4) {
     throw new ApiError("Listening part must be between 1 and 4", 400);
   }
-  const user = await getCurrentUser();
-  const base = await dautoeic.listDifficultyLevels(part);
+  const [user, base] = await Promise.all([
+    getCurrentUser(),
+    dautoeic.listDifficultyLevels(part),
+  ]);
   const levels = await listening.applyProgress(user?.uid ?? null, base);
   return ok({ levels });
 });

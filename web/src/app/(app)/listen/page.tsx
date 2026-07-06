@@ -1,8 +1,4 @@
 import Link from "next/link";
-import { getCurrentUser } from "@/lib/auth/session";
-import * as dautoeic from "@/lib/services/dautoeic";
-import * as listening from "@/lib/services/listening";
-import type { DauToeicDifficultyLevel } from "@/types/dautoeic";
 import LevelDashboardClient from "../_components/LevelDashboardClient";
 
 const parts = [
@@ -19,16 +15,6 @@ export default async function ListenPage({
 }) {
   const { part: partParam } = await searchParams;
   const activePart = parts.find((part) => part.id === partParam) ?? parts[0];
-  const user = await getCurrentUser();
-
-  let levels: DauToeicDifficultyLevel[] = [];
-  let loadError = false;
-  try {
-    levels = await dautoeic.listDifficultyLevels(activePart.num);
-    levels = await listening.applyProgress(user?.uid ?? null, levels);
-  } catch {
-    loadError = true;
-  }
 
   return (
     <main className="min-h-[calc(100dvh-4rem)] bg-[#eaf0f8] px-5 py-5 lg:px-8">
@@ -54,11 +40,12 @@ export default async function ListenPage({
             </div>
 
             <LevelDashboardClient
+              key={activePart.id}
               skill="listening"
               partId={activePart.id}
               partNum={activePart.num}
-              initialLevels={levels}
-              initialError={loadError}
+              initialLevels={[]}
+              initialError={false}
               levelsEndpoint="/api/listening/levels"
               resetEndpoint="/api/listening/reset"
               practiceHrefBase="/listen/practice"

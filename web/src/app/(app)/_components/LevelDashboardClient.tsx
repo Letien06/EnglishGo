@@ -12,6 +12,8 @@
  *     silently in the background and store the result in the cache.
  *   - Returning to the same part later: render the cached levels INSTANTLY
  *     (no overlay, no reload), then revalidate silently.
+ *   - After a part loads: prefetch sibling parts in the background so switching
+ *     Part 1 -> Part 2 or Part 5 -> Part 6 usually reuses hot client cache.
  *
  * Progress is still kept fresh because we always revalidate in the background
  * and, critically, we refresh when the tab/window regains focus (e.g. after
@@ -74,7 +76,7 @@ export default function LevelDashboardClient({
   );
   const mounted = useRef(true);
 
-  const revalidate = useCallback(
+  const fetchLevels = useCallback(
     async (showOverlay: boolean) => {
       if (showOverlay) setLoading(true);
       try {
@@ -104,6 +106,35 @@ export default function LevelDashboardClient({
     [cacheKey, levelsEndpoint, partNum, levels.length],
   );
 
+  const prefetchSiblingLevels = useCallback(
+    async (signal: AbortSignal) => {
+      const partNums = skill === "listening" ? [1, 2, 3, 4] : [5, 6, 7];
+      for (const nextPartNum of partNums) {
+        if (signal.aborted || nextPartNum === partNum) continue;
+        const nextPartId = `part${nextPartNum}`;
+        const nextCacheKey = `${skill}:${nextPartId}`;
+        if (sessionCache.has(nextCacheKey)) continue;
+
+        try {
+          const res = await fetch(`${levelsEndpoint}?part=${nextPartNum}`, {
+            cache: "no-store",
+            signal,
+          });
+          const json = (await res.json()) as {
+            success: boolean;
+            data: { levels: DauToeicDifficultyLevel[] } | null;
+          };
+          if (json.success && json.data && !signal.aborted) {
+            sessionCache.set(nextCacheKey, json.data.levels);
+          }
+        } catch {
+          // Background prefetch is best-effort; the destination part can fetch on demand.
+        }
+      }
+    },
+    [levelsEndpoint, partNum, skill],
+  );
+
   useEffect(() => {
     mounted.current = true;
     // Mark this dashboard route as visited so the route-level loading overlay
@@ -114,15 +145,21 @@ export default function LevelDashboardClient({
     // Always revalidate silently in the background on mount (or with an overlay
     // when we truly have nothing to display).
     const revalidateTimer = window.setTimeout(() => {
-      void revalidate(levels.length === 0 && !error);
+      void fetchLevels(levels.length === 0 && !error);
     }, 0);
+    const abortController = new AbortController();
+    const prefetchTimer = window.setTimeout(() => {
+      void prefetchSiblingLevels(abortController.signal);
+    }, 450);
     // Refresh when the user comes back to the tab (e.g. returning from a
     // practice session) so progress numbers stay current.
-    const onFocus = () => void revalidate(false);
+    const onFocus = () => void fetchLevels(false);
     window.addEventListener("focus", onFocus);
     return () => {
       mounted.current = false;
       window.clearTimeout(revalidateTimer);
+      window.clearTimeout(prefetchTimer);
+      abortController.abort();
       window.removeEventListener("focus", onFocus);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
