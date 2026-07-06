@@ -6,6 +6,7 @@ import { usePathname, useSearchParams } from "next/navigation";
 const SHOW_DELAY_MS = 180;
 const MIN_VISIBLE_MS = 420;
 const MAX_VISIBLE_MS = 9000;
+const READY_EVENT = "englishgo:overdelay-ready";
 
 function isModifiedClick(event: MouseEvent): boolean {
   return event.metaKey || event.ctrlKey || event.shiftKey || event.altKey || event.button !== 0;
@@ -59,21 +60,29 @@ export default function AppOverdelay() {
   const showTimerRef = useRef<number | null>(null);
   const hideTimerRef = useRef<number | null>(null);
   const maxTimerRef = useRef<number | null>(null);
+  const waitForRef = useRef<string | null>(null);
 
   useEffect(() => {
-    function clearTimers() {
+    function clearTimers(clearWait = true) {
       if (showTimerRef.current) window.clearTimeout(showTimerRef.current);
       if (hideTimerRef.current) window.clearTimeout(hideTimerRef.current);
       if (maxTimerRef.current) window.clearTimeout(maxTimerRef.current);
       showTimerRef.current = null;
       hideTimerRef.current = null;
       maxTimerRef.current = null;
+      if (clearWait) waitForRef.current = null;
     }
 
-    function finish() {
+    function finish(force = false) {
+      if (waitForRef.current && !force) return;
+      waitForRef.current = null;
       if (showTimerRef.current) {
         window.clearTimeout(showTimerRef.current);
         showTimerRef.current = null;
+      }
+      if (maxTimerRef.current) {
+        window.clearTimeout(maxTimerRef.current);
+        maxTimerRef.current = null;
       }
       const elapsed = Date.now() - startedAtRef.current;
       const remaining = Math.max(0, MIN_VISIBLE_MS - elapsed);
@@ -81,15 +90,27 @@ export default function AppOverdelay() {
       hideTimerRef.current = window.setTimeout(() => setVisible(false), remaining);
     }
 
-    function begin(nextLabel: string, maxMs = MAX_VISIBLE_MS) {
+    function begin(nextLabel: string, maxMs = MAX_VISIBLE_MS, waitFor: string | null = null) {
       clearTimers();
+      waitForRef.current = waitFor;
       setLabel(nextLabel);
       startedAtRef.current = Date.now();
       showTimerRef.current = window.setTimeout(() => {
         setVisible(true);
         startedAtRef.current = Date.now();
       }, SHOW_DELAY_MS);
-      maxTimerRef.current = window.setTimeout(finish, maxMs);
+      maxTimerRef.current = window.setTimeout(() => finish(true), maxMs);
+    }
+
+    function handleReady(event: Event) {
+      if (!waitForRef.current) return;
+      const detail = event instanceof CustomEvent ? event.detail as { key?: unknown } | undefined : undefined;
+      const key = typeof detail?.key === "string" ? detail.key : "";
+      if (!key || key === waitForRef.current) finish(true);
+    }
+
+    function handlePageShow() {
+      finish();
     }
 
     function handleClick(event: MouseEvent) {
@@ -103,6 +124,7 @@ export default function AppOverdelay() {
         begin(
           manual.dataset.overdelay || "Đang xử lý...",
           Number.isFinite(timeout) && timeout > 0 ? timeout : 3500,
+          manual.dataset.overdelayWaitFor || null,
         );
         return;
       }
@@ -127,17 +149,20 @@ export default function AppOverdelay() {
 
     document.addEventListener("click", handleClick, true);
     document.addEventListener("submit", handleSubmit, true);
-    window.addEventListener("pageshow", finish);
+    window.addEventListener(READY_EVENT, handleReady);
+    window.addEventListener("pageshow", handlePageShow);
     return () => {
       document.removeEventListener("click", handleClick, true);
       document.removeEventListener("submit", handleSubmit, true);
-      window.removeEventListener("pageshow", finish);
+      window.removeEventListener(READY_EVENT, handleReady);
+      window.removeEventListener("pageshow", handlePageShow);
       clearTimers();
     };
   }, []);
 
   useEffect(() => {
     if (!startedAtRef.current) return;
+    if (waitForRef.current) return;
     const timer = window.setTimeout(() => setVisible(false), MIN_VISIBLE_MS);
     return () => window.clearTimeout(timer);
   }, [routeKey]);

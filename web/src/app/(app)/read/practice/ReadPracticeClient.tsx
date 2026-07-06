@@ -60,6 +60,22 @@ export default function ReadPracticeClient({
     setActiveMode(normalizeMode(mode));
   }, [mode]);
 
+  useEffect(() => {
+    let firstFrame = 0;
+    let secondFrame = 0;
+    firstFrame = window.requestAnimationFrame(() => {
+      secondFrame = window.requestAnimationFrame(() => {
+        window.dispatchEvent(new CustomEvent("englishgo:overdelay-ready", {
+          detail: { key: "practice-ready" },
+        }));
+      });
+    });
+    return () => {
+      if (firstFrame) window.cancelAnimationFrame(firstFrame);
+      if (secondFrame) window.cancelAnimationFrame(secondFrame);
+    };
+  }, []);
+
   const updatePracticeUrl = useCallback((next: { mode?: PracticeMode; q?: number }) => {
     if (typeof window === "undefined") return;
     const url = new URL(window.location.href);

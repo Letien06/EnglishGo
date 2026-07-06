@@ -249,6 +249,7 @@ function LevelCard({
             href={href}
             data-overdelay={skill === "listening" ? "Đang mở bài luyện nghe..." : "Đang mở bài luyện đọc..."}
             data-overdelay-timeout="9000"
+            data-overdelay-wait-for="practice-ready"
             className="rounded-lg bg-primary px-5 py-2 text-sm font-extrabold text-gold-ink shadow-md transition-opacity hover:opacity-90"
           >
             Luyện ngay →
