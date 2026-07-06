@@ -4,9 +4,7 @@ import Link from "next/link";
 import { useCallback, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import {
-  createUserWithEmailAndPassword,
   GoogleAuthProvider,
-  signInWithEmailAndPassword,
   signInWithPopup,
 } from "firebase/auth";
 import ThemeToggle from "@/components/ThemeToggle";
@@ -23,9 +21,6 @@ export default function LoginForm() {
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
   const [mode, setMode] = useState<AuthMode>(initialMode);
-  const [showEmail, setShowEmail] = useState(initialMode === "register");
-  const [email, setEmail] = useState("");
-  const [password, setPassword] = useState("");
 
   const createBackendSession = useCallback(
     async (firebaseUser: { getIdToken: () => Promise<string> }) => {
@@ -72,18 +67,6 @@ export default function LoginForm() {
       await createBackendSession(credential.user);
     });
 
-  const handleEmail = (event: React.FormEvent) => {
-    event.preventDefault();
-    runAuth(async () => {
-      const auth = getClientAuth();
-      const normalizedEmail = email.trim();
-      const credential = mode === "register"
-        ? await createAccountOrSignIn(auth, normalizedEmail, password)
-        : await signInWithEmailAndPassword(auth, normalizedEmail, password);
-      await createBackendSession(credential.user);
-    });
-  };
-
   return (
     <main className="relative flex min-h-dvh flex-col lg:flex-row">
       {busy && <LoginLoadingNotice />}
@@ -104,8 +87,8 @@ export default function LoginForm() {
           </h1>
           <p className="mb-6 text-sm text-muted">
             {mode === "register"
-              ? "Đăng ký miễn phí. Nếu email đã có tài khoản, hệ thống sẽ đăng nhập luôn."
-              : "Đăng nhập nhanh bằng Google để tiếp tục học."}
+              ? "Đăng ký miễn phí bằng Google để bắt đầu lưu tiến độ học."
+              : "Tiếp tục với Google để vào lại tài khoản của bạn."}
           </p>
 
           <div className="mb-4 grid grid-cols-2 rounded-xl border border-line bg-bg p-1 text-sm font-extrabold">
@@ -125,7 +108,6 @@ export default function LoginForm() {
               type="button"
               onClick={() => {
                 setMode("register");
-                setShowEmail(true);
                 setError("");
               }}
               className={`rounded-lg px-3 py-2 ${
@@ -143,61 +125,8 @@ export default function LoginForm() {
             className="flex w-full items-center justify-center gap-3 rounded-xl border border-line bg-surface px-4 py-3 text-sm font-extrabold text-ink transition-colors hover:bg-surface-soft disabled:opacity-50"
           >
             <span className="text-lg font-extrabold text-primary">G</span>
-            <strong>{mode === "register" ? "Tiếp tục với Google" : "Đăng nhập với Google"}</strong>
+            <strong>Tiếp tục với Google</strong>
           </button>
-
-          <button
-            type="button"
-            onClick={() => setShowEmail((value) => !value)}
-            className="mt-3 w-full text-center text-xs text-muted transition-colors hover:text-ink2"
-          >
-            {showEmail
-              ? "Ẩn form email/mật khẩu ⌃"
-              : mode === "register"
-                ? "Đăng ký bằng email/mật khẩu ⌄"
-                : "Đã có tài khoản email? Đăng nhập bằng email/mật khẩu ⌄"}
-          </button>
-
-          {showEmail && (
-            <form onSubmit={handleEmail} className="mt-4 flex flex-col gap-3">
-              <div>
-                <label htmlFor="email" className="mb-1 block text-xs font-semibold text-ink2">
-                  Email
-                </label>
-                <input
-                  id="email"
-                  type="email"
-                  autoComplete="email"
-                  required
-                  value={email}
-                  onChange={(event) => setEmail(event.target.value)}
-                  className="w-full rounded-lg border border-line bg-bg px-3 py-2 text-sm text-ink focus:outline-none focus:ring-2 focus:ring-primary/40"
-                />
-              </div>
-              <div>
-                <label htmlFor="password" className="mb-1 block text-xs font-semibold text-ink2">
-                  Mật khẩu
-                </label>
-                <input
-                  id="password"
-                  type="password"
-                  autoComplete={mode === "register" ? "new-password" : "current-password"}
-                  required
-                  minLength={6}
-                  value={password}
-                  onChange={(event) => setPassword(event.target.value)}
-                  className="w-full rounded-lg border border-line bg-bg px-3 py-2 text-sm text-ink focus:outline-none focus:ring-2 focus:ring-primary/40"
-                />
-              </div>
-              <button
-                type="submit"
-                disabled={busy}
-                className="w-full rounded-xl bg-primary py-2.5 text-sm font-extrabold text-gold-ink transition-opacity hover:opacity-90 disabled:opacity-50"
-              >
-                {mode === "register" ? "Đăng ký / đăng nhập" : "Đăng nhập"}
-              </button>
-            </form>
-          )}
 
           {error && (
             <div className="mt-4 rounded-lg bg-crimson/10 p-3 text-sm text-crimson" role="alert">
@@ -212,7 +141,6 @@ export default function LoginForm() {
               onClick={() => {
                 const nextMode = mode === "register" ? "login" : "register";
                 setMode(nextMode);
-                setShowEmail(nextMode === "register");
                 setError("");
               }}
               className="font-semibold text-primary hover:underline"
@@ -260,21 +188,6 @@ export default function LoginForm() {
   );
 }
 
-async function createAccountOrSignIn(
-  auth: ReturnType<typeof getClientAuth>,
-  email: string,
-  password: string,
-) {
-  try {
-    return await createUserWithEmailAndPassword(auth, email, password);
-  } catch (error) {
-    if (isFirebaseAuthCode(error, "auth/email-already-in-use")) {
-      return signInWithEmailAndPassword(auth, email, password);
-    }
-    throw error;
-  }
-}
-
 function isFirebaseAuthCode(error: unknown, code: string): boolean {
   return typeof error === "object" &&
     error !== null &&
@@ -283,17 +196,14 @@ function isFirebaseAuthCode(error: unknown, code: string): boolean {
 }
 
 function friendlyAuthError(error: unknown): string {
-  if (isFirebaseAuthCode(error, "auth/email-already-in-use")) {
-    return "Email này đã có tài khoản. Vui lòng đăng nhập.";
+  if (isFirebaseAuthCode(error, "auth/popup-closed-by-user")) {
+    return "Bạn đã đóng cửa sổ Google trước khi hoàn tất.";
   }
-  if (isFirebaseAuthCode(error, "auth/invalid-credential") || isFirebaseAuthCode(error, "auth/wrong-password")) {
-    return "Email hoặc mật khẩu không đúng.";
+  if (isFirebaseAuthCode(error, "auth/popup-blocked")) {
+    return "Trình duyệt đang chặn cửa sổ Google. Vui lòng cho phép popup rồi thử lại.";
   }
-  if (isFirebaseAuthCode(error, "auth/weak-password")) {
-    return "Mật khẩu cần ít nhất 6 ký tự.";
-  }
-  if (isFirebaseAuthCode(error, "auth/invalid-email")) {
-    return "Email không hợp lệ.";
+  if (isFirebaseAuthCode(error, "auth/account-exists-with-different-credential")) {
+    return "Tài khoản Google này đã liên kết với phương thức đăng nhập khác.";
   }
   return error instanceof Error ? error.message : "Đã xảy ra lỗi không xác định";
 }
