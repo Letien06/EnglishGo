@@ -1,6 +1,6 @@
 # Deployment
 
-EnglishWebApp now deploys from the `web/` Next.js application to Vercel. The legacy Spring Boot code remains in the repository during the strangler migration, but production traffic should point at the Vercel Next.js app.
+EnglishWebApp deploys from the `web/` Next.js application to Vercel.
 
 ## Architecture
 
@@ -110,8 +110,8 @@ After production deploy, inspect Vercel:
 3. Add the custom domain in Vercel and update DNS records at the DNS provider.
 4. Keep `englishwebapp.vercel.app` as a fallback while DNS propagates.
 5. Monitor Vercel logs, Firebase usage, Firestore indexes, and Storage upload/read behavior for several days.
-6. After production is stable, archive or remove the legacy Spring Boot runtime from a dedicated cleanup branch.
+6. Monitor production metrics and error logs after release.
 
 ## Rollback
 
-Keep the old Spring Boot deployment available until the custom domain has been stable on Vercel for several days. If a critical issue appears, point DNS back to the previous deployment or use Vercel's instant rollback to a known-good deployment.
+If a critical issue appears, use Vercel's instant rollback to a known-good deployment.

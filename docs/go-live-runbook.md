@@ -61,11 +61,6 @@ For the first several days, check:
 - Firebase Storage upload/read errors.
 - Gemini and DauToeic API failures.
 
-## 5. Backend Archive
+## 5. Post-Deploy
 
-Only after the Vercel app is stable:
-
-1. Create a cleanup branch.
-2. Archive or remove Spring Boot files: `src/main/java`, `src/main/resources`, `src/test/java`, `pom.xml`, `mvnw*`, `Dockerfile*`.
-3. Keep Firebase rules, docs, and `web/`.
-4. Run the full verification suite again.
+Run the verification suite again after any production rollback or major environment change.

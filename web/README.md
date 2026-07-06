@@ -1,39 +1,31 @@
-# EnglishGo — Next.js (Vercel)
+# EnglishGo Next.js App
 
-Next.js (App Router, TypeScript, Tailwind) rewrite of the Spring Boot English
-learning app, targeting deployment on **Vercel**. The Supabase PostgreSQL
-database and Firebase (Auth + Firestore) are reused unchanged.
+Next.js App Router application for EnglishGo, targeting deployment on Vercel.
+Firebase Authentication, Cloud Firestore, Firebase Storage, Gemini, and DauToeic
+content APIs provide the application services.
 
 ## Structure
 
-```
+```text
 web/
-├─ src/
-│  ├─ app/                # App Router pages + API route handlers
-│  │  └─ api/health/      # deployment health check
-│  ├─ components/         # shared React components
-│  ├─ lib/
-│  │  ├─ api/             # response envelope + centralized error handling
-│  │  ├─ services/        # business logic ported from Java services
-│  │  └─ env.ts           # env var access (server + public)
-│  └─ types/              # shared TS/domain types
-├─ .env.example           # required env vars (see docs/deployment.md)
-└─ vercel.json            # Vercel project config
+  src/
+    app/            App Router pages and API route handlers
+    components/     Shared React components
+    lib/            API helpers, services, auth, and env access
+    types/          Shared TypeScript/domain types
+  .env.example      Required environment variables
+  vercel.json       Vercel project config
 ```
 
-## Getting started
+## Getting Started
 
 ```bash
 cd web
-cp .env.example .env.local   # fill in values
+cp .env.example .env.local
 npm install
 npm run dev
 ```
 
-## Migration status
+## Production
 
-Tracked incrementally by domain (strangler pattern). See the migration plan.
-
-- [x] Phase 0 — Next.js scaffold + Vercel config
-- [ ] Phase 1 — Prisma data layer, Firebase Admin auth, API envelope
-- [ ] Phase 2+ — Domain-by-domain port
+The Vercel project root directory should be `web`.
