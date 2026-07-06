@@ -101,7 +101,7 @@ export default function PublicHeader({ user }: PublicHeaderProps) {
                 Đăng nhập
               </Link>
               <Link
-                href="/login"
+                href="/login?mode=register"
                 className="inline-flex h-12 items-center rounded-xl bg-primary px-6 text-base font-extrabold text-gold-ink shadow-[0_12px_28px_rgba(224,149,43,0.22)] transition-opacity hover:opacity-90"
               >
                 Đăng ký
@@ -154,7 +154,7 @@ export default function PublicHeader({ user }: PublicHeaderProps) {
                   Đăng nhập
                 </Link>
                 <Link
-                  href="/login"
+                  href="/login?mode=register"
                   onClick={() => setMenuOpen(false)}
                   className="flex items-center justify-center rounded-xl bg-primary px-4 py-3 text-base font-extrabold text-gold-ink"
                 >

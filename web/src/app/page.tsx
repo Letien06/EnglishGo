@@ -97,7 +97,7 @@ export default async function HomePage() {
           </p>
           <div className="mt-12 flex w-full flex-col justify-center gap-4 sm:w-auto sm:flex-row">
             <Link
-              href="/login"
+              href="/login?mode=register"
               className="inline-flex min-h-16 items-center justify-center rounded-xl bg-primary px-10 text-lg font-extrabold text-gold-ink shadow-[0_20px_45px_rgba(224,149,43,0.25)] transition-opacity hover:opacity-90"
             >
               Bắt đầu luyện tập <span className="ml-3">→</span>
@@ -167,7 +167,7 @@ export default async function HomePage() {
             Tham gia cùng cộng đồng người học đang chinh phục TOEIC mỗi ngày.
           </p>
           <Link
-            href="/login"
+            href="/login?mode=register"
             className="inline-flex min-h-14 items-center justify-center rounded-xl bg-primary px-8 text-base font-extrabold text-gold-ink transition-opacity hover:opacity-90"
           >
             Bắt đầu miễn phí <span className="ml-2">→</span>

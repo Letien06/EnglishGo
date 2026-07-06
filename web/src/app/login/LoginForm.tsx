@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useCallback, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import {
+  createUserWithEmailAndPassword,
   GoogleAuthProvider,
   signInWithEmailAndPassword,
   signInWithPopup,
@@ -11,14 +12,18 @@ import {
 import ThemeToggle from "@/components/ThemeToggle";
 import { getClientAuth } from "@/lib/firebase/client";
 
+type AuthMode = "login" | "register";
+
 export default function LoginForm() {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const from = searchParams.get("from") || "/hub";
+  const from = searchParams.get("from") || searchParams.get("redirect") || "/hub";
+  const initialMode: AuthMode = searchParams.get("mode") === "register" ? "register" : "login";
 
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
-  const [showEmail, setShowEmail] = useState(false);
+  const [mode, setMode] = useState<AuthMode>(initialMode);
+  const [showEmail, setShowEmail] = useState(initialMode === "register");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
 
@@ -54,7 +59,7 @@ export default function LoginForm() {
     try {
       await callback();
     } catch (err: unknown) {
-      setError(err instanceof Error ? err.message : "Đã xảy ra lỗi không xác định");
+      setError(friendlyAuthError(err));
     } finally {
       setBusy(false);
     }
@@ -70,11 +75,11 @@ export default function LoginForm() {
   const handleEmail = (event: React.FormEvent) => {
     event.preventDefault();
     runAuth(async () => {
-      const credential = await signInWithEmailAndPassword(
-        getClientAuth(),
-        email,
-        password,
-      );
+      const auth = getClientAuth();
+      const normalizedEmail = email.trim();
+      const credential = mode === "register"
+        ? await createAccountOrSignIn(auth, normalizedEmail, password)
+        : await signInWithEmailAndPassword(auth, normalizedEmail, password);
       await createBackendSession(credential.user);
     });
   };
@@ -94,10 +99,42 @@ export default function LoginForm() {
         </Link>
 
         <div className="w-full max-w-md rounded-2xl border border-line bg-surface-soft p-7 shadow-[0_18px_55px_rgba(15,27,45,0.08)]">
-          <h1 className="mb-1 text-2xl font-extrabold text-ink">Chào mừng trở lại</h1>
+          <h1 className="mb-1 text-2xl font-extrabold text-ink">
+            {mode === "register" ? "Tạo tài khoản ENGLISHGO" : "Chào mừng trở lại"}
+          </h1>
           <p className="mb-6 text-sm text-muted">
-            Đăng nhập nhanh bằng Google để tiếp tục học.
+            {mode === "register"
+              ? "Đăng ký miễn phí. Nếu email đã có tài khoản, hệ thống sẽ đăng nhập luôn."
+              : "Đăng nhập nhanh bằng Google để tiếp tục học."}
           </p>
+
+          <div className="mb-4 grid grid-cols-2 rounded-xl border border-line bg-bg p-1 text-sm font-extrabold">
+            <button
+              type="button"
+              onClick={() => {
+                setMode("login");
+                setError("");
+              }}
+              className={`rounded-lg px-3 py-2 ${
+                mode === "login" ? "bg-primary text-gold-ink" : "text-muted hover:text-ink"
+              }`}
+            >
+              Đăng nhập
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                setMode("register");
+                setShowEmail(true);
+                setError("");
+              }}
+              className={`rounded-lg px-3 py-2 ${
+                mode === "register" ? "bg-primary text-gold-ink" : "text-muted hover:text-ink"
+              }`}
+            >
+              Đăng ký
+            </button>
+          </div>
 
           <button
             type="button"
@@ -106,7 +143,7 @@ export default function LoginForm() {
             className="flex w-full items-center justify-center gap-3 rounded-xl border border-line bg-surface px-4 py-3 text-sm font-extrabold text-ink transition-colors hover:bg-surface-soft disabled:opacity-50"
           >
             <span className="text-lg font-extrabold text-primary">G</span>
-            <strong>Đăng nhập với Google</strong>
+            <strong>{mode === "register" ? "Tiếp tục với Google" : "Đăng nhập với Google"}</strong>
           </button>
 
           <button
@@ -114,7 +151,11 @@ export default function LoginForm() {
             onClick={() => setShowEmail((value) => !value)}
             className="mt-3 w-full text-center text-xs text-muted transition-colors hover:text-ink2"
           >
-            Đã có tài khoản email? Đăng nhập bằng email/mật khẩu ⌄
+            {showEmail
+              ? "Ẩn form email/mật khẩu ⌃"
+              : mode === "register"
+                ? "Đăng ký bằng email/mật khẩu ⌄"
+                : "Đã có tài khoản email? Đăng nhập bằng email/mật khẩu ⌄"}
           </button>
 
           {showEmail && (
@@ -140,8 +181,9 @@ export default function LoginForm() {
                 <input
                   id="password"
                   type="password"
-                  autoComplete="current-password"
+                  autoComplete={mode === "register" ? "new-password" : "current-password"}
                   required
+                  minLength={6}
                   value={password}
                   onChange={(event) => setPassword(event.target.value)}
                   className="w-full rounded-lg border border-line bg-bg px-3 py-2 text-sm text-ink focus:outline-none focus:ring-2 focus:ring-primary/40"
@@ -152,7 +194,7 @@ export default function LoginForm() {
                 disabled={busy}
                 className="w-full rounded-xl bg-primary py-2.5 text-sm font-extrabold text-gold-ink transition-opacity hover:opacity-90 disabled:opacity-50"
               >
-                Đăng nhập
+                {mode === "register" ? "Đăng ký / đăng nhập" : "Đăng nhập"}
               </button>
             </form>
           )}
@@ -164,10 +206,19 @@ export default function LoginForm() {
           )}
 
           <p className="mt-5 text-center text-xs text-muted">
-            Chưa có tài khoản?{" "}
-            <Link href="/login" className="font-semibold text-primary hover:underline">
-              Đăng ký
-            </Link>
+            {mode === "register" ? "Đã có tài khoản?" : "Chưa có tài khoản?"}{" "}
+            <button
+              type="button"
+              onClick={() => {
+                const nextMode = mode === "register" ? "login" : "register";
+                setMode(nextMode);
+                setShowEmail(nextMode === "register");
+                setError("");
+              }}
+              className="font-semibold text-primary hover:underline"
+            >
+              {mode === "register" ? "Đăng nhập" : "Đăng ký"}
+            </button>
           </p>
         </div>
 
@@ -207,6 +258,44 @@ export default function LoginForm() {
       </section>
     </main>
   );
+}
+
+async function createAccountOrSignIn(
+  auth: ReturnType<typeof getClientAuth>,
+  email: string,
+  password: string,
+) {
+  try {
+    return await createUserWithEmailAndPassword(auth, email, password);
+  } catch (error) {
+    if (isFirebaseAuthCode(error, "auth/email-already-in-use")) {
+      return signInWithEmailAndPassword(auth, email, password);
+    }
+    throw error;
+  }
+}
+
+function isFirebaseAuthCode(error: unknown, code: string): boolean {
+  return typeof error === "object" &&
+    error !== null &&
+    "code" in error &&
+    (error as { code?: unknown }).code === code;
+}
+
+function friendlyAuthError(error: unknown): string {
+  if (isFirebaseAuthCode(error, "auth/email-already-in-use")) {
+    return "Email này đã có tài khoản. Vui lòng đăng nhập.";
+  }
+  if (isFirebaseAuthCode(error, "auth/invalid-credential") || isFirebaseAuthCode(error, "auth/wrong-password")) {
+    return "Email hoặc mật khẩu không đúng.";
+  }
+  if (isFirebaseAuthCode(error, "auth/weak-password")) {
+    return "Mật khẩu cần ít nhất 6 ký tự.";
+  }
+  if (isFirebaseAuthCode(error, "auth/invalid-email")) {
+    return "Email không hợp lệ.";
+  }
+  return error instanceof Error ? error.message : "Đã xảy ra lỗi không xác định";
 }
 
 function LoginLoadingNotice() {
