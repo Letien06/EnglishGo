@@ -40,6 +40,95 @@ export interface DauToeicSet {
   orderIndex: number | null;
 }
 
+export interface DauToeicVocabSet {
+  id: string;
+  name: string | null;
+  orderIndex: number | null;
+}
+
+export interface DauToeicVocabTest {
+  testId: string;
+  setId: string | null;
+  name: string | null;
+  partCount: number;
+  wordCount: number;
+  orderIndex: number | null;
+  accessLevel: string | null;
+}
+
+export interface DauToeicVocabCatalog {
+  sets: DauToeicVocabSet[];
+  tests: DauToeicVocabTest[];
+}
+
+export interface DauToeicVocabPart {
+  id: string;
+  testId: string | null;
+  name: string | null;
+  orderIndex: number | null;
+}
+
+export interface DauToeicVocabMeaning {
+  pos?: string | null;
+  part_of_speech?: string | null;
+  meaning?: string | null;
+  definition?: string | null;
+  definition_vi?: string | null;
+  example?: string | null;
+}
+
+export interface DauToeicVocabWord {
+  id: string;
+  partId: string | null;
+  word: string | null;
+  ipa: string | null;
+  audioUrl: string | null;
+  audioUsUrl: string | null;
+  audioUkUrl: string | null;
+  imageUrl: string | null;
+  meanings: DauToeicVocabMeaning[];
+  phrases: unknown[];
+  synonyms: unknown[];
+  orderIndex: number | null;
+  difficultyLevel: number | null;
+}
+
+export interface DauToeicVocabPartSummary {
+  id: string;
+  name: string;
+  orderIndex: number | null;
+  wordCount: number;
+  learnedWords: number;
+  masteredWords: number;
+  dueWords: number;
+  internalSetId: number;
+}
+
+export interface DauToeicVocabTestCard {
+  id: string;
+  internalSetId: number;
+  setId: string;
+  setName: string;
+  title: string;
+  orderIndex: number | null;
+  accessLevel: string | null;
+  partCount: number;
+  wordCount: number;
+  learnedWords: number;
+  masteredWords: number;
+  dueWords: number;
+}
+
+export interface DauToeicVocabCatalogView {
+  groups: Array<{
+    id: string;
+    name: string;
+    orderIndex: number | null;
+    count: number;
+  }>;
+  cards: DauToeicVocabTestCard[];
+}
+
 export interface DauToeicPracticeItem {
   id: string;
   itemType: string | null;

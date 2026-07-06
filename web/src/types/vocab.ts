@@ -8,7 +8,7 @@
 /* ------------------------------------------------------------------ */
 
 export type ContentStatus = "PUBLISHED" | "DRAFT" | "ARCHIVED" | "DELETED";
-export type SourceType = "MANUAL" | "AI" | "IMPORT" | "COMMUNITY";
+export type SourceType = "MANUAL" | "AI" | "IMPORT" | "COMMUNITY" | "DAUTOEIC";
 export type VocabProgressStatus = "NEW" | "LEARNING" | "REVIEWING" | "MASTERED";
 
 /* ------------------------------------------------------------------ */
@@ -31,6 +31,11 @@ export interface VocabSetDoc {
   sourceType: SourceType;
   sourceNote?: string;
   licenseNote?: string;
+  externalSource?: string;
+  externalSetId?: string;
+  externalTestId?: string;
+  externalAccessLevel?: string;
+  externalPartCount?: number;
   publishedAtMillis?: number;
   updatedAtMillis?: number;
   deletedAtMillis?: number;
@@ -53,6 +58,13 @@ export interface VocabWordDoc {
   sourceType: SourceType;
   sourceNote?: string;
   licenseNote?: string;
+  externalSource?: string;
+  externalWordId?: string;
+  externalPartId?: string;
+  externalPartName?: string;
+  externalOrderIndex?: number;
+  toeicPart?: number | null;
+  difficultyLevel?: number | null;
   publishedAtMillis?: number;
   updatedAtMillis?: number;
   deletedAtMillis?: number;
@@ -132,6 +144,35 @@ export interface VocabProgressSetCard {
   dueWords: number;
 }
 
+export interface VocabStudyHistoryDoc {
+  id: string;
+  uid: string;
+  source: "DAUTOEIC" | "LOCAL";
+  setId: number;
+  externalTestId?: string;
+  externalPartId?: string;
+  title: string;
+  mode: string;
+  startedAtMillis: number;
+  finishedAtMillis: number;
+  totalWords: number;
+  correctWords: number;
+  wrongWords: number;
+  accuracy: number;
+  score: number;
+}
+
+export interface VocabStudyHistoryCard {
+  id: string;
+  mode: string;
+  time: string;
+  accuracy: number;
+  score: number;
+  totalWords: number;
+  correctWords: number;
+  wrongWords: number;
+}
+
 export interface VocabWordCard {
   id: number;
   word: string;
@@ -144,6 +185,8 @@ export interface VocabWordCard {
   audioUrl?: string;
   audioUsUrl?: string;
   audioUkUrl?: string;
+  externalPartId?: string;
+  externalPartName?: string;
   mastered: boolean;
 }
 
@@ -162,8 +205,18 @@ export interface VocabSetDetail {
 }
 
 export interface VocabSetSession {
-  set: { id: number; title: string; topic: string };
+  set: {
+    id: number;
+    title: string;
+    topic: string;
+    sourceType?: SourceType;
+    externalTestId?: string;
+    externalPartId?: string;
+  };
   words: VocabWordCard[];
+  history?: VocabStudyHistoryCard[];
+  masteredWords?: number;
+  totalWords?: number;
 }
 
 export interface AiVocabCandidate {

@@ -24,9 +24,19 @@ export default async function FlashcardsPage({ params, searchParams }: Props) {
   const mastery = (sp.mastery as string) ?? undefined;
   const order = (sp.order as string) ?? undefined;
   const amount = (sp.amount as string) ?? undefined;
+  const partId = (sp.partId as string) ?? undefined;
 
   let session;
-  if (mastery || order || amount) {
+  if (partId) {
+    session = await vocab.getFilteredSessionForPart(
+      id,
+      uid,
+      partId,
+      mastery ?? "all",
+      order ?? "random",
+      amount ?? "all",
+    );
+  } else if (mastery || order || amount) {
     session = await vocab.getFilteredSession(
       id,
       uid,

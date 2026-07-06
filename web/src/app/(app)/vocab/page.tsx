@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { getCurrentUser } from "@/lib/auth/session";
 import * as vocab from "@/lib/services/vocab";
+import * as dautoeicVocab from "@/lib/services/dautoeic-vocab";
 import VocabMyTab from "./VocabMyTab";
 
 const tabs = [
@@ -24,6 +25,7 @@ export default async function VocabPage({
   const folderId = typeof params.folderId === "string" ? Number(params.folderId) : undefined;
   const communityFolderId = typeof params.communityFolderId === "string" ? Number(params.communityFolderId) : undefined;
   const folderSearch = typeof params.q === "string" ? params.q : undefined;
+  const groupId = typeof params.group === "string" ? params.group : undefined;
 
   return (
     <main className="min-h-[calc(100dvh-4rem)] bg-[#f1f5fb] px-5 py-10">
@@ -67,7 +69,7 @@ export default async function VocabPage({
         </nav>
 
         {active === "learn" ? (
-          <LearnTab />
+          <LearnTab uid={user?.uid ?? ""} groupId={groupId} />
         ) : active === "progress" ? (
           <ProgressTab uid={user?.uid ?? ""} />
         ) : active === "my" ? (
@@ -93,7 +95,89 @@ function normalizeTab(value: string): VocabTabKey {
   return tabs.some((tab) => tab.key === value) ? (value as VocabTabKey) : "learn";
 }
 
-async function LearnTab() {
+async function LearnTab({ uid, groupId }: { uid: string; groupId?: string }) {
+  let catalog: Awaited<ReturnType<typeof dautoeicVocab.getVocabularyCatalogView>> | null = null;
+  try {
+    catalog = await dautoeicVocab.getVocabularyCatalogView(uid);
+  } catch {
+    catalog = null;
+  }
+
+  if (catalog?.cards.length) {
+    const selectedGroupId =
+      groupId && catalog.groups.some((group) => group.id === groupId)
+        ? groupId
+        : catalog.groups[0]?.id;
+    const cards = selectedGroupId
+      ? catalog.cards.filter((card) => card.setId === selectedGroupId)
+      : catalog.cards;
+
+    return (
+      <section className="space-y-5">
+        <nav className="flex max-w-full gap-2 overflow-x-auto" aria-label="Dautoeic vocabulary groups">
+          {catalog.groups.map((group) => {
+            const selected = group.id === selectedGroupId;
+            return (
+              <Link
+                key={group.id}
+                href={`/vocab?tab=learn&group=${encodeURIComponent(group.id)}`}
+                className={`whitespace-nowrap rounded-full border px-4 py-2 text-xs font-extrabold transition-colors ${
+                  selected
+                    ? "border-primary bg-primary text-gold-ink"
+                    : "border-sky-200 bg-white text-primary hover:bg-sky-50"
+                }`}
+              >
+                {group.name} ({group.count})
+              </Link>
+            );
+          })}
+        </nav>
+
+        <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+          {cards.map((card) => {
+            const percent = card.wordCount > 0
+              ? Math.round((card.masteredWords / card.wordCount) * 100)
+              : 0;
+            const pro = card.accessLevel === "pro";
+            return (
+              <article key={card.id} className="rounded-2xl border border-sky-100 bg-white p-5 shadow-sm">
+                <header className="flex items-start justify-between gap-3">
+                  <div>
+                    <span className="rounded-full bg-indigo-100 px-3 py-1 text-[11px] font-extrabold text-indigo-700">
+                      {card.setName}
+                    </span>
+                    <h2 className="mt-4 line-clamp-2 text-lg font-extrabold text-ink">
+                      {card.title}
+                    </h2>
+                  </div>
+                  {pro ? (
+                    <span className="rounded-full bg-orange-500 px-2 py-1 text-[10px] font-extrabold text-white">
+                      PRO
+                    </span>
+                  ) : null}
+                </header>
+                <p className="mt-3 text-sm text-muted">{card.wordCount} từ vựng</p>
+                <div className="mt-4 h-2 overflow-hidden rounded-full bg-slate-100">
+                  <span className="block h-full rounded-full bg-primary" style={{ width: `${percent}%` }} />
+                </div>
+                <div className="mt-2 flex flex-wrap gap-x-3 gap-y-1 text-xs font-bold text-muted">
+                  <span>{card.masteredWords}/{card.wordCount} từ đã thuộc</span>
+                  {card.dueWords > 0 ? <span className="text-red-600">{card.dueWords} cần ôn</span> : null}
+                </div>
+                <Link
+                  href={`/vocab/dautoeic/${encodeURIComponent(card.id)}`}
+                  className="mt-5 inline-flex w-full items-center justify-center rounded-full border border-emerald-300 px-4 py-2 text-xs font-extrabold text-emerald-700 hover:bg-emerald-50"
+                >
+                  Vào học
+                </Link>
+              </article>
+            );
+          })}
+        </section>
+      </section>
+    );
+  }
+
   let sets: Awaited<ReturnType<typeof vocab.findSetCards>>;
   try {
     sets = await vocab.findSetCards();

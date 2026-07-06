@@ -63,11 +63,14 @@ interface AnswerRecord {
 }
 
 interface HistoryEntry {
-  id: number;
+  id: number | string;
   mode: string;
   time: string;
   accuracy: number;
   score: number;
+  totalWords?: number;
+  correctWords?: number;
+  wrongWords?: number;
 }
 
 interface FeedbackState {
@@ -231,10 +234,11 @@ export default function FlashcardGame({
   const [quizMode, setQuizMode] = useState<QuizMode>("wordMeaning");
   const [quizChooser, setQuizChooser] = useState(initialMode === "quiz");
   const [muted, setMuted] = useState(false);
-  const [history, setHistory] = useState<HistoryEntry[]>([]);
+  const [history, setHistory] = useState<HistoryEntry[]>(() => session.history ?? []);
 
   // Load history from localStorage after mount (avoids hydration mismatch).
   useEffect(() => {
+    if (session.history?.length) return;
     const timer = window.setTimeout(() => {
       try {
         const raw = localStorage.getItem(`englishgo-vocab-history-${setId}`);
@@ -244,7 +248,7 @@ export default function FlashcardGame({
       }
     }, 0);
     return () => window.clearTimeout(timer);
-  }, [setId]);
+  }, [setId, session.history]);
 
   const persistHistory = useCallback(
     (next: HistoryEntry[]) => {
@@ -309,6 +313,9 @@ export default function FlashcardGame({
       order: next.order ?? selectedOrder,
       amount: next.amount ?? selectedAmount,
     });
+    if (session.set.externalPartId && !next.setId) {
+      params.set("partId", session.set.externalPartId);
+    }
     const targetSet = next.setId ?? setId;
     router.push(`/vocab/${targetSet}/flashcards?${params.toString()}`);
   }
@@ -320,7 +327,7 @@ export default function FlashcardGame({
   return (
     <main className="flex-1 overflow-y-auto px-4 py-6 lg:px-8 space-y-6">
       <Link
-        href={reviewMode ? "/vocab?tab=progress" : `/vocab/${setId}`}
+        href={reviewMode || session.set.sourceType === "DAUTOEIC" ? "/vocab?tab=learn" : `/vocab/${setId}`}
         className="text-accent text-sm"
       >
         ← Quay lại
@@ -361,6 +368,10 @@ export default function FlashcardGame({
         <PlaySurface
           key={`${mode}-${quizMode}`}
           words={words}
+          setId={setId}
+          title={session.set.title}
+          externalTestId={session.set.externalTestId}
+          externalPartId={session.set.externalPartId}
           mode={mode}
           quizMode={quizMode}
           muted={muted}
@@ -686,6 +697,10 @@ interface MatchItem {
 
 function PlaySurface({
   words,
+  setId,
+  title,
+  externalTestId,
+  externalPartId,
   mode,
   quizMode,
   muted,
@@ -693,12 +708,25 @@ function PlaySurface({
   onFinish,
 }: {
   words: VocabWordCard[];
+  setId: number;
+  title: string;
+  externalTestId?: string;
+  externalPartId?: string;
   mode: PlayMode;
   quizMode: QuizMode;
   muted: boolean;
   onExit: () => void;
-  onFinish: (record: { mode: string; accuracy: number; score: number }) => void;
+  onFinish: (record: {
+    mode: string;
+    accuracy: number;
+    score: number;
+    startedAtMillis: number;
+    totalWords: number;
+    correctWords: number;
+    wrongWords: number;
+  }) => void;
 }) {
+  const startedAtRef = useRef(Date.now());
   const [index, setIndex] = useState(0);
   const [reverse, setReverse] = useState(mode === "typing");
   const [flipped, setFlipped] = useState(false);
@@ -912,6 +940,7 @@ function PlaySurface({
   }
 
   function restart() {
+    startedAtRef.current = Date.now();
     setIndex(0);
     resetCardState();
     setScore(0);
@@ -1105,12 +1134,44 @@ function PlaySurface({
       return;
     }
     const answered = answers.length || attempts;
+    const correctWords = answers.filter((a) => a.correct).length;
+    const wrongWords = answers.filter((a) => !a.correct).length;
     const accuracy = answered
-      ? Math.round(
-          (answers.filter((a) => a.correct).length / answered) * 100,
-        )
+      ? Math.round((correctWords / answered) * 100)
       : 0;
-    onFinish({ mode: modeLabelFor(mode, quizMode), accuracy, score });
+    const modeLabel = modeLabelFor(mode, quizMode);
+    const historyPayload = {
+      setId,
+      externalTestId,
+      externalPartId,
+      title,
+      mode: modeLabel,
+      startedAtMillis: startedAtRef.current,
+      totalWords: Math.max(words.length, answered),
+      correctWords,
+      wrongWords,
+      accuracy,
+      score,
+    };
+    const historyRes = await fetch("/api/vocab/history", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(historyPayload),
+    });
+    if (!historyRes.ok && historyRes.status !== 401) {
+      setSaving(false);
+      setSaveError("Đã lưu tiến độ từ, nhưng chưa lưu được lịch sử học. Vui lòng thử lại.");
+      return;
+    }
+    onFinish({
+      mode: modeLabel,
+      accuracy,
+      score,
+      startedAtMillis: startedAtRef.current,
+      totalWords: historyPayload.totalWords,
+      correctWords,
+      wrongWords,
+    });
   }
 
   /* ---- Keyboard shortcuts ---- */

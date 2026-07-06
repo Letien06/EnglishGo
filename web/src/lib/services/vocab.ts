@@ -25,6 +25,8 @@ import type {
   VocabWordCard,
   VocabSetDetail,
   VocabSetSession,
+  VocabStudyHistoryCard,
+  VocabStudyHistoryDoc,
   AiVocabCandidate,
   VocabReviewResponse,
   VocabProgressStatus,
@@ -47,6 +49,7 @@ const SETS = "vocabSets";
 const WORDS = "vocabWords";
 const FOLDERS = "vocabFolders";
 const PROGRESS = "userVocabProgress";
+const HISTORY = "vocabStudyHistory";
 const DAILY_NEW_WORD_GOAL = 20;
 
 /* ------------------------------------------------------------------ */
@@ -125,6 +128,16 @@ async function wordsForSet(setId: number): Promise<VocabWordDoc[]> {
   return snap.docs
     .map(toWordDoc)
     .filter((w) => w.setId === setId && w.status === "PUBLISHED" && !w.deletedAtMillis);
+}
+
+async function wordsForSetPart(
+  setId: number,
+  externalPartId?: string | null,
+): Promise<VocabWordDoc[]> {
+  const words = await wordsForSet(setId);
+  const cleanPartId = externalPartId?.trim();
+  if (!cleanPartId) return words;
+  return words.filter((word) => word.externalPartId === cleanPartId);
 }
 
 async function wordKeysForSet(setId: number): Promise<string[]> {
@@ -234,6 +247,10 @@ async function saveProgress(progress: VocabProgressDoc): Promise<void> {
     .collection(PROGRESS)
     .doc(String(progress.wordId))
     .set(data, { merge: true });
+}
+
+function historyCollection(uid: string) {
+  return adminDb.collection("users").doc(uid).collection(HISTORY);
 }
 
 /* ------------------------------------------------------------------ */
@@ -533,7 +550,13 @@ export async function getSession(setId: number): Promise<VocabSetSession> {
   if (!set) throw NotFound("Set not found");
   const words = await wordsForSet(setId);
   return {
-    set: { id: set.id, title: set.title, topic: set.topic },
+    set: {
+      id: set.id,
+      title: set.title,
+      topic: set.topic,
+      sourceType: set.sourceType,
+      externalTestId: set.externalTestId,
+    },
     words: words.map((w) => toWordCard(w, false)),
   };
 }
@@ -569,11 +592,72 @@ export async function getFilteredSession(
   filtered = filtered.slice(0, limit);
 
   return {
-    set: { id: set.id, title: set.title, topic: set.topic },
+    set: {
+      id: set.id,
+      title: set.title,
+      topic: set.topic,
+      sourceType: set.sourceType,
+      externalTestId: set.externalTestId,
+    },
     words: filtered.map((w) => {
       const prog = progressByWordId.get(w.id);
       return toWordCard(w, prog?.status === "MASTERED");
     }),
+    history: uid ? await findStudyHistory(uid, setId) : [],
+    masteredWords: words.filter((word) => progressByWordId.get(word.id)?.status === "MASTERED").length,
+    totalWords: words.length,
+  };
+}
+
+export async function getFilteredSessionForPart(
+  setId: number,
+  uid: string | null,
+  externalPartId: string,
+  mastery: string,
+  order: string,
+  amount: string,
+): Promise<VocabSetSession> {
+  const set = await findPublishedSet(setId);
+  if (!set) throw NotFound("Set not found");
+  const words = await wordsForSetPart(setId, externalPartId);
+  const progress = uid ? await progressForSet(uid, setId) : [];
+  const progressByWordId = new Map(progress.map((p) => [p.wordId, p]));
+  const now = Date.now();
+  const normalizedMastery = normalizeMastery(mastery);
+
+  let filtered = words;
+  if (normalizedMastery !== "all" && uid) {
+    filtered = words.filter((w) =>
+      matchesMastery(w, progressByWordId, normalizedMastery, now),
+    );
+  }
+
+  if (order === "random") {
+    filtered = shuffleArray([...filtered]);
+  }
+
+  const total = filtered.length;
+  const limit = parseAmount(amount, total);
+  filtered = filtered.slice(0, limit);
+  const partName = words.find((word) => word.externalPartId === externalPartId)?.externalPartName;
+  const masteredWords = words.filter((word) => progressByWordId.get(word.id)?.status === "MASTERED").length;
+
+  return {
+    set: {
+      id: set.id,
+      title: partName ? `${set.title} - ${partName}` : set.title,
+      topic: set.topic,
+      sourceType: set.sourceType,
+      externalTestId: set.externalTestId,
+      externalPartId,
+    },
+    words: filtered.map((w) => {
+      const prog = progressByWordId.get(w.id);
+      return toWordCard(w, prog?.status === "MASTERED");
+    }),
+    history: uid ? await findStudyHistory(uid, setId, externalPartId) : [],
+    masteredWords,
+    totalWords: words.length,
   };
 }
 
@@ -660,6 +744,72 @@ export async function getSetDetail(
     masteredWords: mastered,
     progressPercent: total === 0 ? 0 : Math.round((mastered / total) * 100),
   };
+}
+
+/* ------------------------------------------------------------------ */
+/*  Public: Study history                                              */
+/* ------------------------------------------------------------------ */
+
+export async function findStudyHistory(
+  uid: string,
+  setId: number,
+  externalPartId?: string | null,
+  limit = 8,
+): Promise<VocabStudyHistoryCard[]> {
+  requireUid(uid);
+  const cleanPartId = externalPartId?.trim() || null;
+  const snap = await historyCollection(uid)
+    .orderBy("finishedAtMillis", "desc")
+    .limit(100)
+    .get();
+
+  return snap.docs
+    .map(toStudyHistoryDoc)
+    .filter((entry) => entry.setId === setId)
+    .filter((entry) => !cleanPartId || entry.externalPartId === cleanPartId)
+    .slice(0, limit)
+    .map(toStudyHistoryCard);
+}
+
+export async function recordStudyHistory(
+  uid: string,
+  input: {
+    setId: number;
+    externalTestId?: string | null;
+    externalPartId?: string | null;
+    title: string;
+    mode: string;
+    startedAtMillis?: number | null;
+    totalWords: number;
+    correctWords: number;
+    wrongWords: number;
+    accuracy: number;
+    score: number;
+  },
+): Promise<{ id: string }> {
+  requireUid(uid);
+  const finishedAtMillis = Date.now();
+  const id = `${finishedAtMillis}-${randomInt(1000, 9999)}`;
+  const source = input.externalTestId || input.externalPartId ? "DAUTOEIC" : "LOCAL";
+  const data: VocabStudyHistoryDoc = {
+    id,
+    uid,
+    source,
+    setId: input.setId,
+    title: input.title,
+    mode: input.mode,
+    startedAtMillis: input.startedAtMillis ?? finishedAtMillis,
+    finishedAtMillis,
+    totalWords: Math.max(0, input.totalWords),
+    correctWords: Math.max(0, input.correctWords),
+    wrongWords: Math.max(0, input.wrongWords),
+    accuracy: Math.max(0, Math.min(100, input.accuracy)),
+    score: Math.max(0, input.score),
+  };
+  if (input.externalTestId) data.externalTestId = input.externalTestId;
+  if (input.externalPartId) data.externalPartId = input.externalPartId;
+  await historyCollection(uid).doc(id).set(data);
+  return { id };
 }
 
 /* ------------------------------------------------------------------ */
@@ -1392,6 +1542,11 @@ function toSetDoc(
     sourceType: (strVal(d, "sourceType") as SourceType) || "MANUAL",
     sourceNote: strVal(d, "sourceNote"),
     licenseNote: strVal(d, "licenseNote"),
+    externalSource: strVal(d, "externalSource"),
+    externalSetId: strVal(d, "externalSetId"),
+    externalTestId: strVal(d, "externalTestId"),
+    externalAccessLevel: strVal(d, "externalAccessLevel"),
+    externalPartCount: numVal(d, "externalPartCount"),
     publishedAtMillis: numVal(d, "publishedAtMillis"),
     updatedAtMillis: numVal(d, "updatedAtMillis"),
     deletedAtMillis: numVal(d, "deletedAtMillis"),
@@ -1419,6 +1574,13 @@ function toWordDoc(
     sourceType: (strVal(d, "sourceType") as SourceType) || "MANUAL",
     sourceNote: strVal(d, "sourceNote"),
     licenseNote: strVal(d, "licenseNote"),
+    externalSource: strVal(d, "externalSource"),
+    externalWordId: strVal(d, "externalWordId"),
+    externalPartId: strVal(d, "externalPartId"),
+    externalPartName: strVal(d, "externalPartName"),
+    externalOrderIndex: numVal(d, "externalOrderIndex"),
+    toeicPart: numVal(d, "toeicPart"),
+    difficultyLevel: numVal(d, "difficultyLevel"),
     publishedAtMillis: numVal(d, "publishedAtMillis"),
     updatedAtMillis: numVal(d, "updatedAtMillis"),
     deletedAtMillis: numVal(d, "deletedAtMillis"),
@@ -1472,7 +1634,52 @@ function toWordCard(word: VocabWordDoc, mastered: boolean): VocabWordCard {
     audioUrl: word.audioUrl,
     audioUsUrl: word.audioUsUrl,
     audioUkUrl: word.audioUkUrl,
+    externalPartId: word.externalPartId,
+    externalPartName: word.externalPartName,
     mastered,
+  };
+}
+
+function toStudyHistoryDoc(
+  doc: FirebaseFirestore.DocumentSnapshot,
+): VocabStudyHistoryDoc {
+  const d = doc.data() ?? {};
+  const id = strVal(d, "id") || doc.id;
+  return {
+    id,
+    uid: strVal(d, "uid") || "",
+    source: (strVal(d, "source") as "DAUTOEIC" | "LOCAL") || "LOCAL",
+    setId: numVal(d, "setId") ?? 0,
+    externalTestId: strVal(d, "externalTestId"),
+    externalPartId: strVal(d, "externalPartId"),
+    title: strVal(d, "title") || "Vocabulary session",
+    mode: strVal(d, "mode") || "Practice",
+    startedAtMillis: numVal(d, "startedAtMillis") ?? 0,
+    finishedAtMillis: numVal(d, "finishedAtMillis") ?? 0,
+    totalWords: numVal(d, "totalWords") ?? 0,
+    correctWords: numVal(d, "correctWords") ?? 0,
+    wrongWords: numVal(d, "wrongWords") ?? 0,
+    accuracy: numVal(d, "accuracy") ?? 0,
+    score: numVal(d, "score") ?? 0,
+  };
+}
+
+function toStudyHistoryCard(entry: VocabStudyHistoryDoc): VocabStudyHistoryCard {
+  return {
+    id: entry.id,
+    mode: entry.mode,
+    time: new Date(entry.finishedAtMillis || Date.now()).toLocaleString("vi-VN", {
+      day: "2-digit",
+      month: "2-digit",
+      year: "numeric",
+      hour: "2-digit",
+      minute: "2-digit",
+    }),
+    accuracy: entry.accuracy,
+    score: entry.score,
+    totalWords: entry.totalWords,
+    correctWords: entry.correctWords,
+    wrongWords: entry.wrongWords,
   };
 }
 
