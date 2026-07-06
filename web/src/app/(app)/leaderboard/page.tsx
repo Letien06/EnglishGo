@@ -15,30 +15,30 @@ export default async function StreakLeaderboardPage() {
         <header className="flex flex-wrap items-end justify-between gap-4">
           <div>
             <p className="text-xs font-extrabold uppercase tracking-widest text-primary">
-              Streak leaderboard
+              Bảng xếp hạng chuỗi
             </p>
             <h1 className="mt-2 text-3xl font-extrabold text-ink">
-              Bang xep hang chuoi hoc
+              Bảng xếp hạng chuỗi học
             </h1>
             <p className="mt-2 text-sm text-muted">
-              Xep hang toi da 100 nguoi co chuoi hoc lien tiep cao nhat.
+              Xếp hạng tối đa 100 người có chuỗi học liên tiếp cao nhất.
             </p>
           </div>
           <div className="rounded-2xl border border-amber-100 bg-white px-4 py-3 text-sm font-extrabold text-primary shadow-sm">
-            <span aria-hidden="true">&#128293;</span> {entries.length}/100 nguoi
+            <span aria-hidden="true">&#128293;</span> {entries.length}/100 người
           </div>
         </header>
 
         <section className="overflow-hidden rounded-[28px] border border-line bg-white shadow-sm">
           <div className="grid grid-cols-[88px_1fr_112px] border-b border-line bg-slate-50 px-5 py-3 text-xs font-extrabold uppercase tracking-wide text-slate-600">
-            <span>Hang</span>
-            <span>Nguoi dung</span>
+            <span>Hạng</span>
+            <span>Người dùng</span>
             <span className="text-right">Streak</span>
           </div>
 
           {entries.length === 0 ? (
             <div className="p-10 text-center text-muted">
-              Chua co du lieu chuoi hoc. Hay hoc mot bai de xuat hien tren bang xep hang.
+              Chưa có dữ liệu chuỗi học. Hãy học một bài để xuất hiện trên bảng xếp hạng.
             </div>
           ) : (
             <div className="divide-y divide-line">
@@ -60,17 +60,17 @@ export default async function StreakLeaderboardPage() {
                         {entry.displayName ?? entry.email ?? "Learner"}
                         {entry.uid === user?.uid ? (
                           <span className="ml-2 rounded-full bg-primary/10 px-2 py-0.5 text-[10px] font-extrabold text-primary">
-                            Ban
+                            Bạn
                           </span>
                         ) : null}
                       </h2>
                       {entry.studiedToday ? (
                         <p className="mt-0.5 text-xs font-bold text-emerald-600">
-                          Hom nay da hoc {entry.todayActivityCount} hoat dong
+                          Hôm nay đã học {entry.todayActivityCount} hoạt động
                         </p>
                       ) : (
                         <p className="mt-0.5 text-xs font-bold text-muted">
-                          Chua hoc hom nay
+                          Chưa học hôm nay
                         </p>
                       )}
                     </div>
