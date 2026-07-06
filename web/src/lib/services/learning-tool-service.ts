@@ -1,6 +1,7 @@
 import { FieldValue } from "firebase-admin/firestore";
 import { adminDb } from "../firestore/db";
 import { ApiError } from "../api/response";
+import { recordStudyActivity, type StudyModule } from "./study-activity";
 import type { DauToeicDifficultyLevel } from "../../types/dautoeic";
 import type {
   ListeningProgressDoc,
@@ -12,6 +13,7 @@ import type {
 } from "../../types/listening";
 
 interface ToolServiceConfig {
+  module: Extract<StudyModule, "listening" | "reading">;
   minPart: number;
   maxPart: number;
   progressCollection: string;
@@ -191,6 +193,12 @@ export function createLearningToolService(
           },
           { merge: true },
         );
+      await recordStudyActivity(uid, {
+        module: config.module,
+        activityType: "answer",
+        sourceId: questionId,
+        occurredAtMillis: now,
+      }).catch(() => undefined);
       return { saved: true, authenticated: true, correct: isCorrect };
     },
 

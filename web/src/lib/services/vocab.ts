@@ -40,6 +40,7 @@ import {
 } from "./gemini";
 import { enrichCandidatePronunciation, enrichWithDictionary } from "./dictionary";
 import { parseImportFile, parseDelimitedWords } from "@/lib/parsers/vocab-import";
+import { getStudyStreak, recordStudyActivity } from "./study-activity";
 
 /* ------------------------------------------------------------------ */
 /*  Collection constants                                               */
@@ -299,49 +300,8 @@ export async function studiedWordsToday(uid: string): Promise<number> {
 
 export async function streakDays(uid: string): Promise<number> {
   requireUid(uid);
-  const snap = await progressCollection(uid)
-    .orderBy("lastReviewedAtMillis", "desc")
-    .limit(500)
-    .get();
-  const progress = snap.docs.map(toProgressDoc);
-  const reviewDays = [
-    ...new Set(
-      progress
-        .filter((p) => p.lastReviewedAtMillis != null)
-        .map((p) => dayString(p.lastReviewedAtMillis!)),
-    ),
-  ]
-    .sort()
-    .reverse();
-
-  if (reviewDays.length === 0) return 0;
-
-  let streak = 0;
-  const today = new Date();
-  let expected = dayString(today.getTime());
-
-  for (const day of reviewDays) {
-    if (day === expected) {
-      streak++;
-      const prev = new Date(expected);
-      prev.setDate(prev.getDate() - 1);
-      expected = dayString(prev.getTime());
-    } else if (streak === 0) {
-      const yesterday = new Date(today);
-      yesterday.setDate(yesterday.getDate() - 1);
-      if (day === dayString(yesterday.getTime())) {
-        streak = 1;
-        const prev = new Date(yesterday);
-        prev.setDate(prev.getDate() - 1);
-        expected = dayString(prev.getTime());
-      } else {
-        break;
-      }
-    } else {
-      break;
-    }
-  }
-  return streak;
+  const streak = await getStudyStreak(uid);
+  return streak.streakDays;
 }
 
 /* ------------------------------------------------------------------ */
@@ -809,6 +769,12 @@ export async function recordStudyHistory(
   if (input.externalTestId) data.externalTestId = input.externalTestId;
   if (input.externalPartId) data.externalPartId = input.externalPartId;
   await historyCollection(uid).doc(id).set(data);
+  await recordStudyActivity(uid, {
+    module: "vocab",
+    activityType: "vocab_game",
+    sourceId: input.externalPartId ?? input.externalTestId ?? input.setId,
+    occurredAtMillis: finishedAtMillis,
+  }).catch(() => undefined);
   return { id };
 }
 
@@ -1146,6 +1112,12 @@ export async function review(
 
   const updated = applySm2(progress, quality);
   await saveProgress(updated);
+  await recordStudyActivity(uid, {
+    module: "vocab",
+    activityType: "vocab_review",
+    sourceId: wordId,
+    occurredAtMillis: updated.lastReviewedAtMillis,
+  }).catch(() => undefined);
 
   return {
     wordId,
@@ -1729,11 +1701,6 @@ function startOfDay(millis: number): number {
   const d = new Date(millis);
   d.setHours(0, 0, 0, 0);
   return d.getTime();
-}
-
-function dayString(millis: number): string {
-  const d = new Date(millis);
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
 }
 
 function shuffleArray<T>(array: T[]): T[] {

@@ -6,6 +6,7 @@ import type { AppUser } from "@/types";
 import type { DauToeicQuestion, DauToeicTest } from "@/types/dautoeic";
 import * as dautoeic from "./dautoeic";
 import { addScore } from "./community";
+import { recordStudyActivity } from "./study-activity";
 import {
   hasTestIndex,
   queryTestIndex,
@@ -429,6 +430,12 @@ export async function submit(
       .delete()
       .catch(() => undefined),
     addScore(user, score).catch(() => undefined),
+    recordStudyActivity(user.uid, {
+      module: "practice",
+      activityType: config.mode === "exam" ? "practice_exam_submit" : "practice_part_submit",
+      sourceId: attemptId,
+      occurredAtMillis: submittedAtMillis,
+    }).catch(() => undefined),
   ]);
   return {
     attemptId,

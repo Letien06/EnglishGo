@@ -6,6 +6,7 @@
  */
 import { adminDb } from "@/lib/firestore/db";
 import type { AppUser } from "@/types";
+import { getStudyStreak } from "./study-activity";
 
 /* ------------------------------------------------------------------ */
 /*  Types                                                              */
@@ -58,54 +59,6 @@ async function loadSubmittedAttempts(uid: string): Promise<AttemptDoc[]> {
   }
 }
 
-function calculateStreak(attempts: AttemptDoc[]): number {
-  if (attempts.length === 0) return 0;
-
-  const days = [
-    ...new Set(
-      attempts
-        .filter((a) => a.submittedAtMillis !== null)
-        .map((a) => {
-          const d = new Date(a.submittedAtMillis!);
-          return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
-        }),
-    ),
-  ].sort().reverse();
-
-  if (days.length === 0) return 0;
-
-  let streak = 0;
-  const today = new Date();
-  let expected = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, "0")}-${String(today.getDate()).padStart(2, "0")}`;
-
-  for (const day of days) {
-    if (day === expected) {
-      streak++;
-      // Go to previous day
-      const prev = new Date(expected);
-      prev.setDate(prev.getDate() - 1);
-      expected = `${prev.getFullYear()}-${String(prev.getMonth() + 1).padStart(2, "0")}-${String(prev.getDate()).padStart(2, "0")}`;
-    } else if (streak === 0) {
-      // Allow yesterday as start
-      const yesterday = new Date(today);
-      yesterday.setDate(yesterday.getDate() - 1);
-      const yesterdayStr = `${yesterday.getFullYear()}-${String(yesterday.getMonth() + 1).padStart(2, "0")}-${String(yesterday.getDate()).padStart(2, "0")}`;
-      if (day === yesterdayStr) {
-        streak = 1;
-        const prev = new Date(yesterday);
-        prev.setDate(prev.getDate() - 1);
-        expected = `${prev.getFullYear()}-${String(prev.getMonth() + 1).padStart(2, "0")}-${String(prev.getDate()).padStart(2, "0")}`;
-      } else {
-        break;
-      }
-    } else {
-      break;
-    }
-  }
-
-  return streak;
-}
-
 async function countMasteredWords(uid: string): Promise<number> {
   try {
     const snap = await adminDb
@@ -121,23 +74,6 @@ async function countMasteredWords(uid: string): Promise<number> {
   } catch {
     return 0;
   }
-}
-
-function countCompletedToday(attempts: AttemptDoc[]): number {
-  const today = new Date();
-  const startOfDay = new Date(
-    today.getFullYear(),
-    today.getMonth(),
-    today.getDate(),
-  ).getTime();
-  const endOfDay = startOfDay + 86400000;
-
-  return attempts.filter(
-    (a) =>
-      a.submittedAtMillis !== null &&
-      a.submittedAtMillis >= startOfDay &&
-      a.submittedAtMillis < endOfDay,
-  ).length;
 }
 
 /* ------------------------------------------------------------------ */
@@ -167,8 +103,11 @@ export async function getHub(user: AppUser): Promise<HubView> {
   }
 
   // Load attempts
-  const attempts = await loadSubmittedAttempts(uid);
-  const todayCompleted = countCompletedToday(attempts);
+  const [attempts, studyStreak] = await Promise.all([
+    loadSubmittedAttempts(uid),
+    getStudyStreak(uid),
+  ]);
+  const todayCompleted = studyStreak.todayActivityCount;
   const goalPercent = Math.min(
     100,
     Math.round((todayCompleted * 100) / Math.max(DAILY_GOAL_TARGET, 1)),
@@ -183,9 +122,6 @@ export async function getHub(user: AppUser): Promise<HubView> {
         ) / 100
       : 0;
 
-  // Streak
-  const streakDays = calculateStreak(attempts);
-
   // Mastered words
   const masteredWords = await countMasteredWords(uid);
 
@@ -197,7 +133,7 @@ export async function getHub(user: AppUser): Promise<HubView> {
     dailyGoalTarget: DAILY_GOAL_TARGET,
     dailyGoalCompleted: todayCompleted,
     dailyGoalPercent: goalPercent,
-    streakDays,
+    streakDays: studyStreak.streakDays,
     completedTests: attempts.length,
     averageScore: avgScore,
     targetScore,

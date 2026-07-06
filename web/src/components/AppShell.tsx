@@ -4,6 +4,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useEffect, useState } from "react";
 import ThemeToggle from "./ThemeToggle";
+import StudyStreakBadge from "./StudyStreakBadge";
 
 const navItems = [
   { href: "/listen", icon: "♫", label: "Nghe", color: "text-plum" },
@@ -64,9 +65,7 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
           </nav>
 
           <div className="flex items-center gap-3">
-            <span className="hidden h-9 items-center rounded-xl bg-primary/10 px-3 text-sm font-extrabold text-primary sm:inline-flex">
-              ♟ 1
-            </span>
+            <StudyStreakBadge className="hidden sm:inline-flex" />
             <ThemeToggle className="border border-line bg-surface-soft text-ink" />
             <Link
               href="/account"

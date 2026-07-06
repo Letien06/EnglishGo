@@ -1,6 +1,7 @@
 import { createLearningToolService } from "./learning-tool-service";
 
 const service = createLearningToolService({
+  module: "listening",
   minPart: 1,
   maxPart: 4,
   progressCollection: "listeningProgress",
