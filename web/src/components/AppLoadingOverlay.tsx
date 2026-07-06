@@ -55,14 +55,14 @@ export default function AppLoadingOverlay() {
   const label = labelForPath(pathname);
 
   return (
-    <div className="fixed inset-0 z-[80] flex items-center justify-center bg-slate-900/30 backdrop-blur-sm">
-      <div className="flex w-[560px] max-w-[90vw] items-center gap-8 rounded-3xl border border-primary/25 bg-white/95 p-10 shadow-2xl backdrop-blur-xl">
-        <span className="h-24 w-24 shrink-0 animate-spin rounded-full border-[12px] border-[#23c58b] border-r-[#ff4e9d] border-t-[#2879ff]" />
+    <div className="app-busy-overlay">
+      <div className="app-busy-card">
+        <span className="app-busy-spinner" />
         <div>
-          <p className="bg-gradient-to-r from-[#ef4da0] to-[#3177ff] bg-clip-text text-3xl font-extrabold text-transparent">
+          <p className="app-busy-title">
             Đang mở {label}
           </p>
-          <p className="mt-1 text-lg font-bold text-slate-500">
+          <p className="app-busy-description">
             Đang tải dữ liệu luyện tập...
           </p>
         </div>

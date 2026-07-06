@@ -211,14 +211,14 @@ export default function LoginForm() {
 
 function LoginLoadingNotice() {
   return (
-    <div className="fixed right-5 top-5 z-[90] w-[310px] rounded-2xl border border-primary/25 bg-[#151217]/95 p-4 text-white shadow-2xl backdrop-blur-xl">
-      <div className="flex items-center gap-3">
-        <span className="h-10 w-10 shrink-0 animate-spin rounded-full border-4 border-[#23c58b] border-r-[#ff4e9d] border-t-[#2879ff]" />
+    <div className="app-busy-notice">
+      <div className="app-busy-card">
+        <span className="app-busy-spinner" />
         <div>
-          <p className="bg-gradient-to-r from-[#ef4da0] to-[#3177ff] bg-clip-text text-sm font-extrabold text-transparent">
+          <p className="app-busy-title">
             Đang đăng nhập
           </p>
-          <p className="text-xs font-bold text-stone-300">
+          <p className="app-busy-description">
             Đang kết nối máy chủ, vui lòng chờ...
           </p>
         </div>

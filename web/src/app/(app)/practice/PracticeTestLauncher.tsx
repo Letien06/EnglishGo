@@ -381,12 +381,12 @@ function sessionHref(testId: number, mode: "exam" | "part", parts: number[], dur
 
 function PracticeBusyOverlay({ title, description }: { title: string; description: string }) {
   return (
-    <div className="fixed inset-0 z-[90] flex items-center justify-center bg-slate-950/45 p-4 backdrop-blur-sm">
-      <section className="flex w-full max-w-md items-center gap-5 rounded-2xl border border-accent/30 bg-surface p-6 shadow-2xl">
-        <span className="h-14 w-14 shrink-0 animate-spin rounded-full border-[7px] border-accent/25 border-t-accent" />
+    <div className="app-busy-overlay">
+      <section className="app-busy-card">
+        <span className="app-busy-spinner" />
         <div>
-          <h2 className="text-lg font-extrabold text-ink">{title}</h2>
-          <p className="mt-1 text-sm text-muted">{description}</p>
+          <h2 className="app-busy-title">{title}</h2>
+          <p className="app-busy-description">{description}</p>
         </div>
       </section>
     </div>
