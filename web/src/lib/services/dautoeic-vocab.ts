@@ -31,11 +31,12 @@ export async function getVocabularyCatalogView(
   uid?: string | null,
 ): Promise<DauToeicVocabCatalogView> {
   const catalog = await getVocabularyCatalog();
+  const visibleTests = catalog.tests.filter(isPlayableTest);
   const setNameById = new Map(
     catalog.sets.map((set) => [set.id, cleanName(set.name) || "Dautoeic"]),
   );
   const groupCount = new Map<string, number>();
-  for (const test of catalog.tests) {
+  for (const test of visibleTests) {
     if (!test.setId) continue;
     groupCount.set(test.setId, (groupCount.get(test.setId) ?? 0) + 1);
   }
@@ -43,18 +44,20 @@ export async function getVocabularyCatalogView(
   const progressBySetId = uid
     ? await progressStatsForSetIds(
         uid,
-        catalog.tests.map((test) => dautoeicVocabSetId(test.testId)),
+        visibleTests.map((test) => dautoeicVocabSetId(test.testId)),
       )
     : new Map<number, ProgressStats>();
 
-  const groups = catalog.sets.map((set) => ({
-    id: set.id,
-    name: cleanName(set.name) || "Dautoeic",
-    orderIndex: set.orderIndex,
-    count: groupCount.get(set.id) ?? 0,
-  }));
+  const groups = catalog.sets
+    .map((set) => ({
+      id: set.id,
+      name: cleanName(set.name) || "Dautoeic",
+      orderIndex: set.orderIndex,
+      count: groupCount.get(set.id) ?? 0,
+    }))
+    .filter((group) => group.count > 0);
 
-  const cards = catalog.tests.map((test) => {
+  const cards = visibleTests.map((test) => {
     const internalSetId = dautoeicVocabSetId(test.testId);
     const stats = progressBySetId.get(internalSetId) ?? emptyProgress();
     return {
@@ -91,15 +94,16 @@ export async function getDautoeicVocabTestView(
   const setName = cleanName(set?.name) || "Dautoeic";
   const parts = await listVocabularyParts(testId);
   const internalSetId = dautoeicVocabSetId(testId);
-  const counts = await wordCountsByPart(parts.map((part) => part.id));
-  const localStats = uid
-    ? await progressStatsForParts(uid, internalSetId)
-    : new Map<string, ProgressStats>();
+  const [counts, localStats] = await Promise.all([
+    wordCountsByPart(parts.map((part) => part.id)),
+    uid
+      ? progressStatsForParts(uid, internalSetId)
+      : Promise.resolve(new Map<string, ProgressStats>()),
+  ]);
 
-  const summaries = await Promise.all(
-    parts.map(async (part) => {
-      const wordCount =
-        counts.get(part.id) ?? (await getWordsForPart(part.id)).length;
+  const summaries = parts
+    .map((part) => {
+      const wordCount = counts.get(part.id) ?? 0;
       const stats = localStats.get(part.id) ?? emptyProgress();
       return {
         id: part.id,
@@ -111,8 +115,10 @@ export async function getDautoeicVocabTestView(
         dueWords: stats.dueWords,
         internalSetId,
       };
-    }),
-  );
+    })
+    .filter((part) => part.wordCount > 0);
+
+  if (!summaries.length) throw NotFound("Dautoeic vocabulary parts not found");
 
   return {
     test,
@@ -148,6 +154,7 @@ export async function syncDautoeicVocabTest(
   if (!selectedParts.length) throw NotFound("Dautoeic vocabulary part not found");
 
   const setId = dautoeicVocabSetId(test.testId);
+  const expectedCounts = await wordCountsByPart(selectedParts.map((part) => part.id));
   const now = Date.now();
   await adminDb.collection(SETS).doc(String(setId)).set(
     {
@@ -175,6 +182,10 @@ export async function syncDautoeicVocabTest(
 
   let written = 0;
   for (const part of selectedParts) {
+    if (await hasLocalWordsForPart(setId, part.id)) {
+      written += expectedCounts.get(part.id) ?? 0;
+      continue;
+    }
     const words = await getWordsForPart(part.id);
     const writes = words
       .filter((word) => word.id && cleanName(word.word))
@@ -202,9 +213,13 @@ export async function getVocabularyCatalog(): Promise<DauToeicVocabCatalog> {
 export async function listVocabularyParts(testId: string): Promise<DauToeicVocabPart[]> {
   const cleanTestId = testId.trim();
   if (!cleanTestId) throw new ApiError("testId is required", 400);
+  return cachedVocabularyParts(cleanTestId);
+}
+
+async function uncachedVocabularyParts(testId: string): Promise<DauToeicVocabPart[]> {
   const rows = await supabaseGet("/rest/v1/vocabulary_parts", {
     select: "id,test_id,name,order_index",
-    test_id: `eq.${cleanTestId}`,
+    test_id: `eq.${testId}`,
     order: "order_index.asc",
   });
   if (!Array.isArray(rows)) return [];
@@ -214,8 +229,12 @@ export async function listVocabularyParts(testId: string): Promise<DauToeicVocab
 export async function getWordsForPart(partId: string): Promise<DauToeicVocabWord[]> {
   const cleanPartId = partId.trim();
   if (!cleanPartId) throw new ApiError("partId is required", 400);
+  return cachedWordsForPart(cleanPartId);
+}
+
+async function uncachedWordsForPart(partId: string): Promise<DauToeicVocabWord[]> {
   const rows = await supabasePost("/rest/v1/rpc/get_vocab_words_for_part_fast", {
-    p_part_id: cleanPartId,
+    p_part_id: partId,
   });
   if (!Array.isArray(rows)) return [];
   return rows.map(mapWord);
@@ -236,13 +255,31 @@ async function findCatalogTest(testId: string): Promise<DauToeicVocabTest> {
   if (!cleanTestId) throw new ApiError("testId is required", 400);
   const catalog = await getVocabularyCatalog();
   const test = catalog.tests.find((item) => item.testId === cleanTestId);
-  if (!test) throw NotFound("Dautoeic vocabulary test not found");
+  if (!test || !isPlayableTest(test)) throw NotFound("Dautoeic vocabulary test not found");
   return test;
 }
 
 const cachedVocabularyCatalog = unstable_cache(
   uncachedVocabularyCatalog,
   ["dautoeic-vocab-catalog"],
+  { revalidate: CATALOG_REVALIDATE_SECONDS },
+);
+
+const cachedVocabularyParts = unstable_cache(
+  uncachedVocabularyParts,
+  ["dautoeic-vocab-parts"],
+  { revalidate: CATALOG_REVALIDATE_SECONDS },
+);
+
+const cachedWordsForPart = unstable_cache(
+  uncachedWordsForPart,
+  ["dautoeic-vocab-words-for-part"],
+  { revalidate: CATALOG_REVALIDATE_SECONDS },
+);
+
+const cachedWordCountEntriesByPart = unstable_cache(
+  uncachedWordCountEntriesByPart,
+  ["dautoeic-vocab-word-counts-by-part"],
   { revalidate: CATALOG_REVALIDATE_SECONDS },
 );
 
@@ -277,17 +314,23 @@ async function uncachedVocabularyCatalog(): Promise<DauToeicVocabCatalog> {
 async function wordCountsByPart(partIds: string[]): Promise<Map<string, number>> {
   const cleanPartIds = partIds.map((id) => id.trim()).filter(Boolean);
   if (!cleanPartIds.length) return new Map();
+  return new Map(await cachedWordCountEntriesByPart(cleanPartIds));
+}
+
+async function uncachedWordCountEntriesByPart(
+  partIds: string[],
+): Promise<Array<[string, number]>> {
   const rows = await supabasePost("/rest/v1/rpc/get_vocabulary_word_counts_by_part", {
-    p_part_ids: cleanPartIds,
+    p_part_ids: partIds,
   });
   const counts = new Map<string, number>();
-  if (!Array.isArray(rows)) return counts;
+  if (!Array.isArray(rows)) return [];
   for (const row of rows) {
     const data = asRecord(row);
     const partId = text(data, "part_id");
     if (partId) counts.set(partId, integer(data, "word_count") ?? 0);
   }
-  return counts;
+  return Array.from(counts.entries());
 }
 
 async function progressStatsForSetIds(
@@ -310,6 +353,24 @@ async function progressStatsForSetIds(
     addProgress(stats, setId, data, now);
   }
   return stats;
+}
+
+async function hasLocalWordsForPart(setId: number, partId: string): Promise<boolean> {
+  const snap = await adminDb
+    .collection(WORDS)
+    .where("setId", "==", setId)
+    .where("externalPartId", "==", partId)
+    .limit(1)
+    .get();
+  return !snap.empty;
+}
+
+function isPlayableTest(test: DauToeicVocabTest): boolean {
+  return !isProAccess(test.accessLevel) && test.wordCount > 0 && test.partCount > 0;
+}
+
+function isProAccess(value: string | null): boolean {
+  return cleanName(value).toLowerCase() === "pro";
 }
 
 async function progressStatsForParts(

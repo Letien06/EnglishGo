@@ -3,40 +3,22 @@ import { redirect } from "next/navigation";
 import AppTopbar from "@/components/AppTopbar";
 import { getCurrentUser } from "@/lib/auth/session";
 import * as dautoeicVocab from "@/lib/services/dautoeic-vocab";
+import DautoeicPartStudyButton from "./DautoeicPartStudyButton";
 
 interface Props {
   params: Promise<{ testId: string }>;
-  searchParams: Promise<Record<string, string | string[] | undefined>>;
 }
 
-export default async function DautoeicVocabTestPage({ params, searchParams }: Props) {
+export default async function DautoeicVocabTestPage({ params }: Props) {
   const { testId } = await params;
-  const sp = await searchParams;
   const user = await getCurrentUser();
-  const partId = typeof sp.partId === "string" ? sp.partId : undefined;
-  const currentPath = `/vocab/dautoeic/${encodeURIComponent(testId)}${partId ? `?partId=${encodeURIComponent(partId)}` : ""}`;
+  const currentPath = `/vocab/dautoeic/${encodeURIComponent(testId)}`;
 
   if (!user) {
     redirect(`/login?redirect=${encodeURIComponent(currentPath)}`);
   }
 
   const view = await dautoeicVocab.getDautoeicVocabTestView(testId, user.uid);
-
-  if (partId) {
-    const part = view.parts.find((item) => item.id === partId);
-    if (!part) redirect(`/vocab/dautoeic/${encodeURIComponent(testId)}`);
-    const synced = await dautoeicVocab.syncDautoeicVocabTest(testId, part.id);
-    redirect(
-      `/vocab/${synced.setId}/flashcards?mode=menu&partId=${encodeURIComponent(part.id)}&mastery=all&order=random&amount=all`,
-    );
-  }
-
-  if (view.parts.length <= 1) {
-    const onlyPart = view.parts[0];
-    const synced = await dautoeicVocab.syncDautoeicVocabTest(testId, onlyPart?.id);
-    const suffix = onlyPart ? `&partId=${encodeURIComponent(onlyPart.id)}` : "";
-    redirect(`/vocab/${synced.setId}/flashcards?mode=menu${suffix}&mastery=all&order=random&amount=all`);
-  }
 
   return (
     <>
@@ -60,7 +42,7 @@ export default async function DautoeicVocabTestPage({ params, searchParams }: Pr
               {view.test.name ?? "Vocabulary test"}
             </h1>
             <p className="mt-2 text-sm text-muted">
-              Bộ này có {view.parts.length} phần. Chọn part trước, sau đó chọn game để học.
+              Bộ này có {view.parts.length} phần học được. Chọn part trước, sau đó chọn game để học.
             </p>
           </section>
 
@@ -80,12 +62,11 @@ export default async function DautoeicVocabTestPage({ params, searchParams }: Pr
                     <span>{part.masteredWords}/{part.wordCount} từ đã thuộc</span>
                     {part.dueWords > 0 ? <span className="text-red-600">{part.dueWords} cần ôn</span> : null}
                   </div>
-                  <Link
-                    href={`/vocab/dautoeic/${encodeURIComponent(testId)}?partId=${encodeURIComponent(part.id)}`}
-                    className="mt-5 inline-flex w-full items-center justify-center rounded-full border border-emerald-300 px-4 py-2 text-xs font-extrabold text-emerald-700 hover:bg-emerald-50"
-                  >
-                    Vào học
-                  </Link>
+                  <DautoeicPartStudyButton
+                    testId={testId}
+                    partId={part.id}
+                    setId={part.internalSetId}
+                  />
                 </article>
               );
             })}
