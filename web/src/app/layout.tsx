@@ -1,6 +1,8 @@
 import type { Metadata } from "next";
+import { Suspense } from "react";
 import { Analytics } from "@vercel/analytics/next";
 import { SpeedInsights } from "@vercel/speed-insights/next";
+import AppOverdelay from "@/components/AppOverdelay";
 import "./globals.css";
 
 const SITE_URL = "https://www.englishgo.io.vn";
@@ -52,6 +54,9 @@ export default function RootLayout({
         <script dangerouslySetInnerHTML={{ __html: themeInitScript }} />
       </head>
       <body className="flex min-h-dvh flex-col">
+        <Suspense fallback={null}>
+          <AppOverdelay />
+        </Suspense>
         {children}
         <Analytics />
         <SpeedInsights />

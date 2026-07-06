@@ -149,6 +149,7 @@ html {
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
   text-rendering: optimizeLegibility;
+  scroll-behavior: smooth;
 }
 body {
   font-family: var(--font-body);
@@ -164,6 +165,124 @@ h1, h2, h3, h4, h5 {
   font-weight: 700;
   letter-spacing: -0.02em;
   line-height: 1.18;
+}
+
+/* ── MOTION FEEDBACK ── */
+@media (prefers-reduced-motion: no-preference) {
+  :where(a, button, [role="button"], input, select, textarea, summary) {
+    transition-property: color, background-color, border-color, opacity, box-shadow, transform, filter;
+    transition-duration: 180ms;
+    transition-timing-function: cubic-bezier(0.22, 1, 0.36, 1);
+  }
+
+  :where(a, button, [role="button"], summary):active {
+    transform: translateY(1px) scale(0.99);
+  }
+}
+
+.overdelay-feedback {
+  pointer-events: none;
+  position: fixed;
+  inset: 0;
+  z-index: 120;
+  opacity: 0;
+  transition: opacity 180ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.overdelay-feedback.is-visible {
+  opacity: 1;
+}
+
+.overdelay-progress {
+  position: fixed;
+  left: 0;
+  right: 0;
+  top: 0;
+  height: 3px;
+  overflow: hidden;
+  background: color-mix(in srgb, var(--primary) 18%, transparent);
+}
+
+.overdelay-progress::before {
+  content: "";
+  display: block;
+  height: 100%;
+  width: 45%;
+  border-radius: 999px;
+  background: linear-gradient(90deg, var(--primary), var(--jade2), var(--azure2));
+  animation: overdelay-progress 1.05s cubic-bezier(0.22, 1, 0.36, 1) infinite;
+}
+
+.overdelay-pill {
+  position: fixed;
+  left: 50%;
+  top: 18px;
+  display: inline-flex;
+  max-width: min(92vw, 420px);
+  transform: translateX(-50%) translateY(-8px);
+  align-items: center;
+  gap: 10px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--surface) 92%, transparent);
+  box-shadow: var(--shadow);
+  color: var(--ink);
+  font-size: 13px;
+  font-weight: 800;
+  line-height: 1.2;
+  padding: 10px 14px;
+  opacity: 0;
+  backdrop-filter: blur(14px);
+  transition:
+    opacity 180ms cubic-bezier(0.22, 1, 0.36, 1),
+    transform 180ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.overdelay-feedback.is-visible .overdelay-pill {
+  transform: translateX(-50%) translateY(0);
+  opacity: 1;
+}
+
+.overdelay-spinner {
+  height: 16px;
+  width: 16px;
+  flex: 0 0 auto;
+  border: 3px solid color-mix(in srgb, var(--primary) 22%, transparent);
+  border-top-color: var(--primary);
+  border-radius: 999px;
+  animation: overdelay-spin 0.8s linear infinite;
+}
+
+@keyframes overdelay-progress {
+  0% {
+    transform: translateX(-120%);
+  }
+  100% {
+    transform: translateX(240%);
+  }
+}
+
+@keyframes overdelay-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  html {
+    scroll-behavior: auto;
+  }
+
+  .overdelay-feedback,
+  .overdelay-pill,
+  :where(a, button, [role="button"], input, select, textarea, summary) {
+    transition: none;
+  }
+
+  .overdelay-progress::before,
+  .overdelay-spinner {
+    animation: none;
+  }
 }
 
 /* ── LIGHT CARD SHADOW ── */
