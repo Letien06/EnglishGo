@@ -11,6 +11,7 @@ const navItems = [
   { href: "/read", icon: "▥", label: "Đọc", color: "text-azure" },
   { href: "/vocab", icon: "A", label: "Từ vựng", color: "text-jade" },
   { href: "/practice", icon: "▧", label: "Đề thi", color: "text-terracotta" },
+  { href: "/leaderboard", icon: "🏆", label: "Bảng xếp hạng", color: "text-primary" },
 ] as const;
 
 export default function AppShell({ children }: { children: React.ReactNode }) {

@@ -38,6 +38,7 @@ function labelForHref(href: string): string {
     if (path.startsWith("/read")) return "Đang mở phần Đọc...";
     if (path.startsWith("/vocab")) return "Đang mở phần Từ vựng...";
     if (path.startsWith("/practice")) return "Đang mở bài luyện...";
+    if (path.startsWith("/leaderboard")) return "Đang mở bảng xếp hạng...";
     if (path.startsWith("/admin")) return "Đang mở trang quản trị...";
     return "Đang mở trang...";
   } catch {

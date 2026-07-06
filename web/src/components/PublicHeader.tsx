@@ -11,6 +11,7 @@ const navItems = [
   { href: "/read", icon: "▥", label: "Đọc", key: "read", color: "text-azure" },
   { href: "/vocab", icon: "A", label: "Từ vựng", key: "vocab", color: "text-jade" },
   { href: "/practice", icon: "▧", label: "Đề thi", key: "practice", color: "text-terracotta" },
+  { href: "/leaderboard", icon: "🏆", label: "Bảng xếp hạng", key: "leaderboard", color: "text-primary" },
 ] as const;
 
 interface PublicHeaderProps {

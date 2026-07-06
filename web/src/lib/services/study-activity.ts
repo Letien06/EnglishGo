@@ -22,6 +22,18 @@ export interface StudyStreakSummary {
   todayDateKey: string;
 }
 
+export interface StudyStreakLeaderboardEntry {
+  rank: number;
+  uid: string;
+  displayName: string | null;
+  email: string | null;
+  avatarUrl: string | null;
+  streakDays: number;
+  studiedToday: boolean;
+  todayActivityCount: number;
+  lastActivityAtMillis: number | null;
+}
+
 export async function recordStudyActivity(
   uid: string,
   input: StudyActivityInput,
@@ -55,6 +67,8 @@ export async function recordStudyActivity(
       { merge: true },
     );
   });
+
+  await refreshStudyStreakSummary(uid, undefined, now).catch(() => undefined);
 }
 
 export async function getStudyStreak(uid: string): Promise<StudyStreakSummary> {
@@ -99,6 +113,68 @@ export async function getStudyStreak(uid: string): Promise<StudyStreakSummary> {
     todayModules: today?.modules ?? [],
     todayDateKey: todayKey,
   };
+}
+
+export async function refreshStudyStreakSummary(
+  uid: string,
+  summary?: StudyStreakSummary,
+  lastActivityAtMillis?: number | null,
+): Promise<StudyStreakSummary> {
+  const next = summary ?? await getStudyStreak(uid);
+  await adminDb.collection("users").doc(uid).set(
+    {
+      studyStreakDays: next.streakDays,
+      studyStudiedToday: next.studiedToday,
+      studyTodayActivityCount: next.todayActivityCount,
+      studyTodayModules: next.todayModules,
+      studyTodayDateKey: next.todayDateKey,
+      studyStreakUpdatedAtMillis: Date.now(),
+      ...(lastActivityAtMillis ? { lastStudyActivityAtMillis: lastActivityAtMillis } : {}),
+      updatedAt: FieldValue.serverTimestamp(),
+    },
+    { merge: true },
+  );
+  return next;
+}
+
+export async function getStudyStreakLeaderboard(
+  limit = 100,
+): Promise<StudyStreakLeaderboardEntry[]> {
+  const safeLimit = Math.max(1, Math.min(100, Math.trunc(limit)));
+  const snap = await adminDb
+    .collection("users")
+    .orderBy("studyStreakDays", "desc")
+    .limit(safeLimit)
+    .get();
+
+  const entries = await Promise.all(snap.docs.map(async (doc) => {
+      const data = doc.data();
+      const summary = await getStudyStreak(doc.id).catch(() => null);
+      if (summary) {
+        await refreshStudyStreakSummary(doc.id, summary).catch(() => undefined);
+      }
+      return {
+        rank: 0,
+        uid: doc.id,
+        displayName: stringValue(data.displayName),
+        email: stringValue(data.email),
+        avatarUrl: stringValue(data.avatarUrl),
+        streakDays: summary?.streakDays ?? numberValue(data.studyStreakDays) ?? 0,
+        studiedToday: summary?.studiedToday ?? data.studyStudiedToday === true,
+        todayActivityCount: summary?.todayActivityCount ?? numberValue(data.studyTodayActivityCount) ?? 0,
+        lastActivityAtMillis: numberValue(data.lastStudyActivityAtMillis),
+      };
+    }));
+
+  return entries
+    .filter((entry) => entry.streakDays > 0)
+    .sort((a, b) =>
+      b.streakDays - a.streakDays ||
+      (b.lastActivityAtMillis ?? 0) - (a.lastActivityAtMillis ?? 0) ||
+      displayNameForSort(a).localeCompare(displayNameForSort(b)),
+    )
+    .slice(0, safeLimit)
+    .map((entry, index) => ({ ...entry, rank: index + 1 }));
 }
 
 function activityCollection(uid: string) {
@@ -146,4 +222,17 @@ function addDaysToDateKey(dateKey: string, days: number): string {
     String(date.getUTCMonth() + 1).padStart(2, "0"),
     String(date.getUTCDate()).padStart(2, "0"),
   ].join("-");
+}
+
+function stringValue(value: unknown): string | null {
+  return typeof value === "string" && value.trim() ? value.trim() : null;
+}
+
+function numberValue(value: unknown): number | null {
+  if (typeof value === "number" && Number.isFinite(value)) return value;
+  return null;
+}
+
+function displayNameForSort(entry: Pick<StudyStreakLeaderboardEntry, "displayName" | "email" | "uid">) {
+  return entry.displayName ?? entry.email ?? entry.uid;
 }
