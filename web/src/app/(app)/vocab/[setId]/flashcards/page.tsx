@@ -26,31 +26,32 @@ export default async function FlashcardsPage({ params, searchParams }: Props) {
   const amount = (sp.amount as string) ?? undefined;
   const partId = (sp.partId as string) ?? undefined;
 
-  let session;
-  if (partId) {
-    session = await vocab.getFilteredSessionForPart(
-      id,
-      uid,
-      partId,
-      mastery ?? "all",
-      order ?? "random",
-      amount ?? "all",
-    );
-  } else if (mastery || order || amount) {
-    session = await vocab.getFilteredSession(
-      id,
-      uid,
-      mastery ?? "all",
-      order ?? "original",
-      amount ?? "all",
-    );
-  } else {
-    session = await vocab.getSession(id);
-  }
+  const sessionPromise = partId
+    ? vocab.getFilteredSessionForPart(
+        id,
+        uid,
+        partId,
+        mastery ?? "all",
+        order ?? "random",
+        amount ?? "all",
+      )
+    : mastery || order || amount
+      ? vocab.getFilteredSession(
+          id,
+          uid,
+          mastery ?? "all",
+          order ?? "original",
+          amount ?? "all",
+        )
+      : vocab.getSession(id);
+  const practiceOptionsPromise = user
+    ? vocab.findPracticeSetOptions(uid)
+    : Promise.resolve([]);
 
-  const practiceOptions = user
-    ? await vocab.findPracticeSetOptions(uid)
-    : [];
+  const [session, practiceOptions] = await Promise.all([
+    sessionPromise,
+    practiceOptionsPromise,
+  ]);
 
   return (
     <FlashcardGame

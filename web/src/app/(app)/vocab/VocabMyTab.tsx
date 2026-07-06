@@ -19,10 +19,17 @@ interface Props {
   folderSearch?: string;
 }
 
+const myTabCache = new Map<string, {
+  sets: MyVocabSetCard[];
+  folders: MyVocabFolderCard[];
+}>();
+
 export default function VocabMyTab({ uid, folderId, folderSearch }: Props) {
-  const [mySets, setMySets] = useState<MyVocabSetCard[]>([]);
-  const [myFolders, setMyFolders] = useState<MyVocabFolderCard[]>([]);
-  const [loading, setLoading] = useState(true);
+  const cacheKey = `${uid || "guest"}:${folderId ?? "all"}:${folderSearch ?? ""}`;
+  const cached = myTabCache.get(cacheKey);
+  const [mySets, setMySets] = useState<MyVocabSetCard[]>(cached?.sets ?? []);
+  const [myFolders, setMyFolders] = useState<MyVocabFolderCard[]>(cached?.folders ?? []);
+  const [loading, setLoading] = useState(!cached);
 
   /* modals */
   const [showCreateSet, setShowCreateSet] = useState(false);
@@ -40,7 +47,7 @@ export default function VocabMyTab({ uid, folderId, folderSearch }: Props) {
 
   const reload = useCallback(async () => {
     if (!uid) return;
-    setLoading(true);
+    setLoading(!myTabCache.has(cacheKey));
     try {
       const [setsRes, foldersRes] = await Promise.all([
         fetch(
@@ -52,14 +59,31 @@ export default function VocabMyTab({ uid, folderId, folderSearch }: Props) {
       ]);
       const setsData = await setsRes.json();
       const foldersData = await foldersRes.json();
-      if (setsData.success) setMySets(setsData.data);
-      if (foldersData.success) setMyFolders(foldersData.data);
+      const previous = myTabCache.get(cacheKey);
+      const nextSets = setsData.success ? setsData.data : previous?.sets ?? [];
+      const nextFolders = foldersData.success ? foldersData.data : previous?.folders ?? [];
+      setMySets(nextSets);
+      setMyFolders(nextFolders);
+      myTabCache.set(cacheKey, { sets: nextSets, folders: nextFolders });
     } catch {
       /* ignore */
     } finally {
       setLoading(false);
     }
-  }, [uid, folderId, folderSearch]);
+  }, [uid, folderId, folderSearch, cacheKey]);
+
+  useEffect(() => {
+    const next = myTabCache.get(cacheKey);
+    if (next) {
+      setMySets(next.sets);
+      setMyFolders(next.folders);
+      setLoading(false);
+      return;
+    }
+    setMySets([]);
+    setMyFolders([]);
+    setLoading(!!uid);
+  }, [cacheKey, uid]);
 
   useEffect(() => {
     const timer = window.setTimeout(() => {
@@ -141,6 +165,7 @@ export default function VocabMyTab({ uid, folderId, folderSearch }: Props) {
         <div className="flex gap-2 flex-wrap">
           <Link
             href="/vocab?tab=my"
+            data-overdelay="Dang mo tat ca bo tu..."
             className={`px-3 py-1.5 rounded-lg text-sm font-semibold transition-colors no-underline ${
               !folderId
                 ? "bg-accent text-white"
@@ -153,6 +178,7 @@ export default function VocabMyTab({ uid, folderId, folderSearch }: Props) {
             <div key={folder.id} className="flex items-center gap-1">
               <Link
                 href={`/vocab?tab=my&folderId=${folder.id}`}
+                data-overdelay="Dang mo folder..."
                 className={`px-3 py-1.5 rounded-lg text-sm font-semibold transition-colors no-underline ${
                   folderId === folder.id
                     ? "bg-accent text-white"
@@ -192,6 +218,7 @@ export default function VocabMyTab({ uid, folderId, folderSearch }: Props) {
               <header className="flex items-start justify-between gap-2 mb-3">
                 <Link
                   href={`/vocab/${set.id}`}
+                  data-overdelay="Dang mo chi tiet bo tu..."
                   className="min-w-0 no-underline"
                 >
                   <div className="flex items-center gap-2">
@@ -213,12 +240,14 @@ export default function VocabMyTab({ uid, folderId, folderSearch }: Props) {
               <footer className="flex items-center gap-2 border-t border-line pt-3">
                 <Link
                   href={`/vocab/${set.id}`}
+                  data-overdelay="Dang mo chi tiet bo tu..."
                   className="rounded-full bg-accent px-4 py-2 text-sm font-bold text-white no-underline"
                 >
                   Xem
                 </Link>
                 <Link
                   href={`/vocab/${set.id}/flashcards?mode=menu`}
+                  data-overdelay="Dang nap game tu vung..."
                   className="rounded-full px-3 py-2 text-sm font-bold text-ink2 no-underline hover:bg-surface-soft"
                   title="Chọn 6 game và lịch sử chơi"
                 >

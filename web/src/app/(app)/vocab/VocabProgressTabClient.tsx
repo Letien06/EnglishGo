@@ -1,0 +1,248 @@
+"use client";
+
+import Link from "next/link";
+import { useEffect, useState } from "react";
+import type { VocabProgressSetCard, VocabSetCard } from "@/types/vocab";
+
+type ApiEnvelope<T> = {
+  success: boolean;
+  data: T | null;
+  error: string | null;
+};
+
+interface ProgressPayload {
+  totalWords: number;
+  learnedWords: number;
+  masteredWords: number;
+  dueWords: number;
+  studiedWordsToday: number;
+  streakDays: number;
+  dailyNewWordGoal: number;
+  progressSets: VocabProgressSetCard[];
+  practiceOptions: VocabSetCard[];
+}
+
+const progressCache: { value: ProgressPayload | null } = { value: null };
+
+export default function VocabProgressTabClient() {
+  const [payload, setPayload] = useState<ProgressPayload | null>(progressCache.value);
+  const [loading, setLoading] = useState(!progressCache.value);
+  const [unauthorized, setUnauthorized] = useState(false);
+  const [error, setError] = useState(false);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    async function load() {
+      setLoading(!progressCache.value);
+      try {
+        const res = await fetch("/api/vocab/progress", { cache: "no-store" });
+        if (res.status === 401) {
+          if (!cancelled) setUnauthorized(true);
+          return;
+        }
+        const json = (await res.json()) as ApiEnvelope<ProgressPayload>;
+        if (!json.success || !json.data) throw new Error(json.error ?? "Cannot load progress");
+        progressCache.value = json.data;
+        if (!cancelled) {
+          setPayload(json.data);
+          setError(false);
+        }
+      } catch {
+        if (!cancelled && !progressCache.value) setError(true);
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    }
+
+    void load();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  if (unauthorized) {
+    return (
+      <EmptyPanel
+        title="Dang nhap de xem tien do"
+        description="Tien do hoc, lich on va so tu da thuoc duoc luu theo tai khoan cua ban."
+        actionHref="/login?redirect=/vocab%3Ftab%3Dprogress"
+        actionLabel="Dang nhap"
+      />
+    );
+  }
+
+  if (loading && !payload) return <ProgressSkeleton />;
+
+  if (error || !payload) {
+    return (
+      <EmptyPanel
+        title="Chua tai duoc tien do"
+        description="Du lieu tien do chua san sang. Hay thu lai sau hoac vao Bo tu cua toi de hoc tiep."
+        actionHref="/vocab?tab=my"
+        actionLabel="Bo tu cua toi"
+      />
+    );
+  }
+
+  const dailyGoal = payload.dailyNewWordGoal;
+  const dailyPercent = dailyGoal > 0
+    ? Math.min(100, Math.round((payload.studiedWordsToday / dailyGoal) * 100))
+    : 0;
+
+  return (
+    <section className="space-y-5">
+      <article className="rounded-2xl border border-amber-100 bg-white p-5 shadow-sm">
+        <div className="flex flex-wrap items-center justify-between gap-4">
+          <div>
+            <h2 className="text-xl font-extrabold text-ink">Muc tieu hom nay</h2>
+            <p className="mt-1 text-sm text-muted">
+              {payload.dueWords} tu can on · chuoi hoc {payload.streakDays} ngay
+            </p>
+          </div>
+          <Link
+            href="/vocab?tab=my"
+            data-overdelay="Dang mo bo tu cua toi..."
+            className="rounded-full border border-amber-200 px-4 py-2 text-xs font-extrabold text-ink hover:bg-amber-50"
+          >
+            Quan ly bo tu
+          </Link>
+        </div>
+        <div className="mt-5 grid gap-4 md:grid-cols-2">
+          <div className="rounded-xl bg-blue-50 p-4">
+            <p className="text-sm font-extrabold text-blue-700">On tap</p>
+            <p className="mt-2 text-3xl font-extrabold text-ink">{payload.dueWords} <span className="text-sm text-muted">tu</span></p>
+          </div>
+          <div className="rounded-xl bg-emerald-50 p-4">
+            <p className="text-sm font-extrabold text-emerald-700">Tu moi</p>
+            <p className="mt-2 text-3xl font-extrabold text-ink">{payload.studiedWordsToday}<span className="text-sm text-muted">/{dailyGoal} tu</span></p>
+            <div className="mt-3 h-2 overflow-hidden rounded-full bg-white">
+              <span className="block h-full rounded-full bg-emerald-500" style={{ width: `${dailyPercent}%` }} />
+            </div>
+            <p className="mt-2 text-xs font-bold text-emerald-700">{dailyPercent}% hoan thanh</p>
+          </div>
+        </div>
+      </article>
+
+      <section className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+        <StatCard label="Tong the" value={payload.totalWords} />
+        <StatCard label="Da hoc" value={payload.learnedWords} />
+        <StatCard label="Thanh thao" value={payload.masteredWords} />
+        <StatCard label="Can on" value={payload.dueWords} />
+      </section>
+
+      {payload.progressSets.length === 0 ? (
+        <EmptyPanel
+          title="Chua co tien do hoc"
+          description="Hoc mot bo tu hoac mo game trong Bo tu cua toi de he thong luu tien do va lich on."
+        />
+      ) : (
+        <section className="grid gap-4 md:grid-cols-2">
+          {payload.progressSets.map((set) => {
+            const masteredPercent = set.totalWords > 0 ? Math.round((set.masteredWords / set.totalWords) * 100) : 0;
+            const learningWords = Math.max(0, set.learnedWords - set.masteredWords);
+            return (
+              <article key={set.id} className="rounded-2xl border border-amber-100 bg-white p-5 shadow-sm">
+                <header className="flex items-start gap-3">
+                  <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-amber-100 text-xl font-extrabold text-primary">
+                    {set.icon || "*"}
+                  </span>
+                  <div className="min-w-0 flex-1">
+                    <p className="text-xs font-extrabold text-primary">{set.topic}</p>
+                    <h3 className="mt-1 line-clamp-2 text-base font-extrabold text-ink">{set.title}</h3>
+                  </div>
+                  <b className={set.dueWords > 0 ? "text-sm text-red-600" : "text-sm text-emerald-600"}>
+                    {set.dueWords > 0 ? `${set.dueWords} can on` : `${masteredPercent}%`}
+                  </b>
+                </header>
+                <div className="mt-4 h-2 overflow-hidden rounded-full bg-slate-100">
+                  <span className="block h-full rounded-full bg-primary" style={{ width: `${masteredPercent}%` }} />
+                </div>
+                <div className="mt-3 flex flex-wrap gap-x-4 gap-y-1 text-xs font-bold text-muted">
+                  <span>{set.masteredWords}/{set.totalWords} da thuoc</span>
+                  <span>{set.learnedWords} da hoc</span>
+                  <span>{learningWords} dang hoc</span>
+                </div>
+                <footer className="mt-5 flex flex-wrap gap-2">
+                  <Link
+                    href={`/vocab/${set.id}`}
+                    data-overdelay="Dang mo chi tiet bo tu..."
+                    className="rounded-full border border-amber-200 px-4 py-2 text-xs font-extrabold text-ink hover:bg-amber-50"
+                  >
+                    Xem chi tiet
+                  </Link>
+                  <Link
+                    href={set.dueWords > 0 ? `/vocab/${set.id}/flashcards?mode=menu&mastery=due&order=random&amount=20` : `/vocab/${set.id}/flashcards?mode=menu`}
+                    data-overdelay="Dang nap game tu vung..."
+                    className="rounded-full bg-primary px-4 py-2 text-xs font-extrabold text-gold-ink hover:opacity-90"
+                  >
+                    {set.dueWords > 0 ? "Chon mode on" : "Hoc tiep"}
+                  </Link>
+                </footer>
+              </article>
+            );
+          })}
+        </section>
+      )}
+    </section>
+  );
+}
+
+function ProgressSkeleton() {
+  return (
+    <section className="space-y-5">
+      <article className="h-48 animate-pulse rounded-2xl border border-amber-100 bg-white p-5 shadow-sm" />
+      <section className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+        {Array.from({ length: 4 }).map((_, index) => (
+          <article key={index} className="h-24 animate-pulse rounded-2xl border border-amber-100 bg-white p-4 shadow-sm" />
+        ))}
+      </section>
+      <section className="grid gap-4 md:grid-cols-2">
+        {Array.from({ length: 2 }).map((_, index) => (
+          <article key={index} className="h-40 animate-pulse rounded-2xl border border-amber-100 bg-white p-5 shadow-sm" />
+        ))}
+      </section>
+    </section>
+  );
+}
+
+function StatCard({ label, value }: { label: string; value: number }) {
+  return (
+    <article className="rounded-2xl border border-amber-100 bg-white p-4 shadow-sm">
+      <span className="text-lg text-primary">*</span>
+      <p className="mt-2 text-xs font-extrabold text-muted">{label}</p>
+      <strong className="mt-1 block text-2xl text-ink">{value}</strong>
+    </article>
+  );
+}
+
+function EmptyPanel({
+  title,
+  description,
+  actionHref,
+  actionLabel,
+}: {
+  title: string;
+  description: string;
+  actionHref?: string;
+  actionLabel?: string;
+}) {
+  return (
+    <section className="flex min-h-52 items-center justify-center rounded-xl border border-amber-100 bg-white p-8 text-center shadow-sm">
+      <div>
+        <div className="mx-auto mb-5 text-3xl text-amber-200">*</div>
+        <h2 className="text-xl font-extrabold text-ink">{title}</h2>
+        <p className="mt-3 max-w-xl text-sm text-muted">{description}</p>
+        {actionHref && actionLabel ? (
+          <Link
+            href={actionHref}
+            data-overdelay="Dang mo trang..."
+            className="mt-5 inline-flex rounded-full bg-primary px-5 py-2 text-xs font-extrabold text-gold-ink"
+          >
+            {actionLabel}
+          </Link>
+        ) : null}
+      </div>
+    </section>
+  );
+}

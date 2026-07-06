@@ -2,7 +2,9 @@ import Link from "next/link";
 import { getCurrentUser } from "@/lib/auth/session";
 import * as vocab from "@/lib/services/vocab";
 import * as dautoeicVocab from "@/lib/services/dautoeic-vocab";
+import VocabLearnTabClient from "./VocabLearnTabClient";
 import VocabMyTab from "./VocabMyTab";
+import VocabProgressTabClient from "./VocabProgressTabClient";
 
 const tabs = [
   { key: "learn", label: "Học", icon: "▦" },
@@ -55,6 +57,7 @@ export default async function VocabPage({
               <Link
                 key={tab.key}
                 href={`/vocab?tab=${tab.key}`}
+                data-overdelay={`Dang mo ${tab.label}...`}
                 className={`inline-flex items-center gap-2 whitespace-nowrap rounded-full px-4 py-2 text-xs font-extrabold transition-colors ${
                   selected
                     ? "bg-primary text-gold-ink"
@@ -69,9 +72,9 @@ export default async function VocabPage({
         </nav>
 
         {active === "learn" ? (
-          <LearnTab uid={user?.uid ?? ""} groupId={groupId} />
+          <VocabLearnTabClient groupId={groupId} />
         ) : active === "progress" ? (
-          <ProgressTab uid={user?.uid ?? ""} />
+          <VocabProgressTabClient />
         ) : active === "my" ? (
           <VocabMyTab
             uid={user?.uid ?? ""}

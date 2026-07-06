@@ -235,6 +235,7 @@ export default function FlashcardGame({
   const [quizChooser, setQuizChooser] = useState(initialMode === "quiz");
   const [muted, setMuted] = useState(false);
   const [history, setHistory] = useState<HistoryEntry[]>(() => session.history ?? []);
+  const [filterPending, setFilterPending] = useState(false);
 
   // Load history from localStorage after mount (avoids hydration mismatch).
   useEffect(() => {
@@ -307,6 +308,7 @@ export default function FlashcardGame({
     order?: string;
     amount?: string;
   }) {
+    setFilterPending(true);
     const params = new URLSearchParams({
       mode: "menu",
       mastery: next.mastery ?? selectedMastery,
@@ -326,6 +328,12 @@ export default function FlashcardGame({
 
   return (
     <main className="flex-1 overflow-y-auto px-4 py-6 lg:px-8 space-y-6">
+      {filterPending && (
+        <div className="fixed inset-x-0 top-16 z-50 mx-auto w-fit rounded-full border border-amber-200 bg-white px-4 py-2 text-xs font-extrabold text-ink shadow-lg">
+          Dang nap bo loc tu vung...
+        </div>
+      )}
+
       <Link
         href={reviewMode || session.set.sourceType === "DAUTOEIC" ? "/vocab?tab=learn" : `/vocab/${setId}`}
         className="text-accent text-sm"
