@@ -181,6 +181,7 @@ export default function LevelDashboardClient({
         <LevelCard
           key={level.level}
           level={level}
+          skill={skill}
           partNum={partNum}
           endpoint={resetEndpoint}
           href={`${practiceHrefBase}?part=${partId}&level=${level.level}&mode=normal&assist=30&q=${nextPracticeIndex(level)}`}
@@ -193,12 +194,14 @@ export default function LevelDashboardClient({
 
 function LevelCard({
   level,
+  skill,
   partNum,
   endpoint,
   href,
   className,
 }: {
   level: DauToeicDifficultyLevel;
+  skill: "listening" | "reading";
   partNum: number;
   endpoint: string;
   href: string;
@@ -244,6 +247,8 @@ function LevelCard({
           <ResetLevelButton part={partNum} level={level.level} endpoint={endpoint} />
           <Link
             href={href}
+            data-overdelay={skill === "listening" ? "Đang mở bài luyện nghe..." : "Đang mở bài luyện đọc..."}
+            data-overdelay-timeout="9000"
             className="rounded-lg bg-primary px-5 py-2 text-sm font-extrabold text-gold-ink shadow-md transition-opacity hover:opacity-90"
           >
             Luyện ngay →
