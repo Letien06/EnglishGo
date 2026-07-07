@@ -4,7 +4,6 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useEffect, useState } from "react";
 import ThemeToggle from "./ThemeToggle";
-import StudyStreakBadge from "./StudyStreakBadge";
 
 const navItems = [
   { href: "/listen", icon: "♪", label: "Nghe", key: "listen", color: "text-plum" },
@@ -82,7 +81,6 @@ export default function PublicHeader({ user }: PublicHeaderProps) {
               <span className="block h-0.5 w-6 rounded bg-current" />
             </span>
           </button>
-          <StudyStreakBadge className="h-12" />
           <ThemeToggle className="h-12 w-12 border border-line bg-surface-soft text-ink" />
           {user ? (
             <Link

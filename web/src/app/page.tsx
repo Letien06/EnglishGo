@@ -1,6 +1,5 @@
 import Link from "next/link";
 import PublicHeader from "@/components/PublicHeader";
-import { getCurrentUser } from "@/lib/auth/session";
 
 const features = [
   {
@@ -65,20 +64,10 @@ const steps = [
   },
 ];
 
-export default async function HomePage() {
-  let user: { displayName: string; streakDays: number } | null = null;
-  try {
-    const appUser = await getCurrentUser();
-    if (appUser) {
-      user = { displayName: appUser.displayName, streakDays: 0 };
-    }
-  } catch {
-    // The landing page is public; auth failures should not block it.
-  }
-
+export default function HomePage() {
   return (
     <>
-      <PublicHeader user={user} />
+      <PublicHeader />
 
       <main className="flex-1">
         <section className="mx-auto flex min-h-[calc(100dvh-5rem)] max-w-7xl flex-col items-center justify-center px-5 py-16 text-center sm:px-8 md:py-24">
