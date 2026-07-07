@@ -1,7 +1,7 @@
 import { withErrorHandling } from "@/lib/api/handler";
 import { ok } from "@/lib/api/response";
 import { getCurrentUser } from "@/lib/auth/session";
-import { getStudyStreak, refreshStudyStreakSummary } from "@/lib/services/study-activity";
+import { getStoredStudyStreakSummary, getStudyStreak } from "@/lib/services/study-activity";
 
 export const GET = withErrorHandling(async () => {
   const user = await getCurrentUser();
@@ -16,8 +16,9 @@ export const GET = withErrorHandling(async () => {
     });
   }
 
-  const streak = await getStudyStreak(user.uid);
-  await refreshStudyStreakSummary(user.uid, streak).catch(() => undefined);
+  const streak =
+    await getStoredStudyStreakSummary(user.uid) ??
+    await getStudyStreak(user.uid);
   return ok({
     ...streak,
     authenticated: true,

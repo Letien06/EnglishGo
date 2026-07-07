@@ -6,7 +6,7 @@
  */
 import { adminDb } from "@/lib/firestore/db";
 import type { AppUser } from "@/types";
-import { getStudyStreak } from "./study-activity";
+import { getStoredStudyStreakSummary, getStudyStreak } from "./study-activity";
 
 /* ------------------------------------------------------------------ */
 /*  Types                                                              */
@@ -64,13 +64,12 @@ async function countMasteredWords(uid: string): Promise<number> {
     const snap = await adminDb
       .collection("users")
       .doc(uid)
-      .collection("vocabProgress")
+      .collection("userVocabProgress")
+      .where("status", "==", "MASTERED")
+      .count()
       .get();
 
-    return snap.docs.filter((doc) => {
-      const status = doc.data().status;
-      return typeof status === "string" && status.toUpperCase() === "MASTERED";
-    }).length;
+    return snap.data().count;
   } catch {
     return 0;
   }
@@ -84,29 +83,17 @@ const DAILY_GOAL_TARGET = 1;
 
 export async function getHub(user: AppUser): Promise<HubView> {
   const uid = user.uid;
-
-  // Load profile
-  let profileName: string | null = null;
-  let targetScore: number | null = null;
-  let level: string | null = null;
-
-  try {
-    const profileSnap = await adminDb.collection("users").doc(uid).get();
-    if (profileSnap.exists) {
-      const data = profileSnap.data()!;
-      profileName = (data.displayName as string) || null;
-      targetScore = typeof data.targetScore === "number" ? data.targetScore : null;
-      level = (data.level as string) || null;
-    }
-  } catch {
-    // ignore
-  }
-
-  // Load attempts
-  const [attempts, studyStreak] = await Promise.all([
+  const [profileSnap, attempts, studyStreak, masteredWords] = await Promise.all([
+    adminDb.collection("users").doc(uid).get().catch(() => null),
     loadSubmittedAttempts(uid),
-    getStudyStreak(uid),
+    getStoredStudyStreakSummary(uid).then((summary) => summary ?? getStudyStreak(uid)),
+    countMasteredWords(uid),
   ]);
+
+  const profile = profileSnap?.exists ? profileSnap.data() ?? {} : {};
+  const profileName = (profile.displayName as string) || null;
+  const targetScore = typeof profile.targetScore === "number" ? profile.targetScore : null;
+  const level = (profile.level as string) || null;
   const todayCompleted = studyStreak.todayActivityCount;
   const goalPercent = Math.min(
     100,
@@ -121,9 +108,6 @@ export async function getHub(user: AppUser): Promise<HubView> {
             100,
         ) / 100
       : 0;
-
-  // Mastered words
-  const masteredWords = await countMasteredWords(uid);
 
   // Greeting name
   const greetingName = profileName || user.displayName || user.email;

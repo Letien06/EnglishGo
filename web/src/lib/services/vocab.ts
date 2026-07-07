@@ -40,7 +40,7 @@ import {
 } from "./gemini";
 import { enrichCandidatePronunciation, enrichWithDictionary } from "./dictionary";
 import { parseImportFile, parseDelimitedWords } from "@/lib/parsers/vocab-import";
-import { getStudyStreak, recordStudyActivity } from "./study-activity";
+import { getStoredStudyStreakSummary, getStudyStreak, recordStudyActivity } from "./study-activity";
 
 /* ------------------------------------------------------------------ */
 /*  Collection constants                                               */
@@ -409,6 +409,57 @@ export async function findMyFolderCards(
   }));
 }
 
+export async function findMyTabCards(
+  uid: string,
+  folderId?: number | null,
+  search?: string | null,
+): Promise<{ sets: MyVocabSetCard[]; folders: MyVocabFolderCard[] }> {
+  requireUid(uid);
+  const [sets, folders] = await Promise.all([
+    liveOwnerSets(uid),
+    liveOwnerFolders(uid),
+  ]);
+  const foldersById = new Map(folders.map((folder) => [folder.id, folder]));
+
+  let mySets = sets.filter((set) => set.ownerUid === uid);
+  if (folderId != null) {
+    mySets = mySets.filter((set) => set.folderId === folderId);
+  }
+
+  let myFolders = folders;
+  if (search?.trim()) {
+    const lower = search.toLowerCase();
+    myFolders = myFolders.filter((folder) => folder.name.toLowerCase().includes(lower));
+  }
+
+  const [wordCounts, setCountByFolderId] = await Promise.all([
+    wordCountBySetId(mySets.map((set) => set.id)),
+    Promise.resolve(folderCounts(sets)),
+  ]);
+
+  return {
+    sets: mySets.map((set) => {
+      const folder = set.folderId != null ? foldersById.get(set.folderId) : undefined;
+      return {
+        id: set.id,
+        title: set.title,
+        topic: set.topic,
+        icon: set.icon,
+        level: set.level,
+        wordCount: wordCounts.get(set.id) ?? 0,
+        folderId: set.folderId,
+        folderName: folder?.name,
+      };
+    }),
+    folders: myFolders.map((folder) => ({
+      id: folder.id,
+      name: folder.name,
+      publicShared: folder.publicShared,
+      setCount: setCountByFolderId.get(folder.id) ?? 0,
+    })),
+  };
+}
+
 export async function findCommunityFolderCards(
   search?: string | null,
 ): Promise<CommunityVocabFolderCard[]> {
@@ -499,6 +550,77 @@ export async function findProgressSetCards(
     .sort(
       (a, b) => b.dueWords - a.dueWords || b.learnedWords - a.learnedWords,
     );
+}
+
+export async function progressOverview(uid: string): Promise<{
+  totalWords: number;
+  learnedWords: number;
+  masteredWords: number;
+  dueWords: number;
+  studiedWordsToday: number;
+  streakDays: number;
+  dailyNewWordGoal: number;
+  progressSets: VocabProgressSetCard[];
+  practiceOptions: VocabSetCard[];
+}> {
+  requireUid(uid);
+  const now = Date.now();
+  const todayStart = startOfDay(now);
+  const [progress, studyStreak] = await Promise.all([
+    userProgressDocs(uid),
+    getStoredStudyStreakSummary(uid).then((summary) => summary ?? getStudyStreak(uid)),
+  ]);
+  const learnedStatuses = new Set<VocabProgressStatus>([
+    "LEARNING",
+    "REVIEWING",
+    "MASTERED",
+  ]);
+  const setIds = [...new Set(progress.map((item) => item.setId))];
+  const relevantSets = await liveSetsByIds(setIds);
+  const wordCounts = await wordCountBySetId(relevantSets.map((set) => set.id));
+  const progressBySetId = new Map<number, VocabProgressDoc[]>();
+  for (const item of progress) {
+    const bucket = progressBySetId.get(item.setId);
+    if (bucket) bucket.push(item);
+    else progressBySetId.set(item.setId, [item]);
+  }
+
+  const progressSets = relevantSets
+    .map((set) => {
+      const setProgress = progressBySetId.get(set.id) ?? [];
+      return {
+        id: set.id,
+        title: set.title,
+        topic: set.topic,
+        icon: set.icon,
+        totalWords: wordCounts.get(set.id) ?? 0,
+        learnedWords: setProgress.filter((item) => item.status !== "NEW").length,
+        masteredWords: setProgress.filter((item) => item.status === "MASTERED").length,
+        dueWords: setProgress.filter((item) => isDueProgress(item, now)).length,
+      };
+    })
+    .sort((a, b) => b.dueWords - a.dueWords || b.learnedWords - a.learnedWords);
+
+  return {
+    totalWords: progress.length,
+    learnedWords: progress.filter((item) => learnedStatuses.has(item.status)).length,
+    masteredWords: progress.filter((item) => item.status === "MASTERED").length,
+    dueWords: progress.filter((item) => isDueProgress(item, now)).length,
+    studiedWordsToday: progress.filter(
+      (item) => item.lastReviewedAtMillis != null && item.lastReviewedAtMillis >= todayStart,
+    ).length,
+    streakDays: studyStreak.streakDays,
+    dailyNewWordGoal: dailyNewWordGoal(),
+    progressSets,
+    practiceOptions: relevantSets.map((set) => ({
+      id: set.id,
+      title: set.title,
+      topic: set.topic,
+      icon: set.icon,
+      level: set.level,
+      wordCount: wordCounts.get(set.id) ?? 0,
+    })),
+  };
 }
 
 /* ------------------------------------------------------------------ */
@@ -1461,6 +1583,23 @@ function matchesMastery(
     default:
       return !prog || prog.status !== "MASTERED";
   }
+}
+
+function isDueProgress(progress: VocabProgressDoc, now: number): boolean {
+  return (
+    progress.status !== "NEW" &&
+    progress.nextReviewAtMillis != null &&
+    progress.nextReviewAtMillis <= now
+  );
+}
+
+function folderCounts(sets: VocabSetDoc[]): Map<number, number> {
+  const counts = new Map<number, number>();
+  for (const set of sets) {
+    if (set.folderId == null) continue;
+    counts.set(set.folderId, (counts.get(set.folderId) ?? 0) + 1);
+  }
+  return counts;
 }
 
 function normalizeMastery(mastery: string): string {

@@ -49,19 +49,14 @@ export default function VocabMyTab({ uid, folderId, folderSearch }: Props) {
     if (!uid) return;
     setLoading(!myTabCache.has(cacheKey));
     try {
-      const [setsRes, foldersRes] = await Promise.all([
-        fetch(
-          `/api/vocab/my-sets${folderId ? `?folderId=${folderId}` : ""}`,
-        ),
-        fetch(
-          `/api/vocab/my-folders${folderSearch ? `?q=${encodeURIComponent(folderSearch)}` : ""}`,
-        ),
-      ]);
-      const setsData = await setsRes.json();
-      const foldersData = await foldersRes.json();
+      const params = new URLSearchParams();
+      if (folderId) params.set("folderId", String(folderId));
+      if (folderSearch) params.set("q", folderSearch);
+      const res = await fetch(`/api/vocab/my${params.size ? `?${params}` : ""}`);
+      const data = await res.json();
       const previous = myTabCache.get(cacheKey);
-      const nextSets = setsData.success ? setsData.data : previous?.sets ?? [];
-      const nextFolders = foldersData.success ? foldersData.data : previous?.folders ?? [];
+      const nextSets = data.success ? data.data?.sets ?? [] : previous?.sets ?? [];
+      const nextFolders = data.success ? data.data?.folders ?? [] : previous?.folders ?? [];
       setMySets(nextSets);
       setMyFolders(nextFolders);
       myTabCache.set(cacheKey, { sets: nextSets, folders: nextFolders });
@@ -73,16 +68,24 @@ export default function VocabMyTab({ uid, folderId, folderSearch }: Props) {
   }, [uid, folderId, folderSearch, cacheKey]);
 
   useEffect(() => {
-    const next = myTabCache.get(cacheKey);
-    if (next) {
-      setMySets(next.sets);
-      setMyFolders(next.folders);
-      setLoading(false);
-      return;
-    }
-    setMySets([]);
-    setMyFolders([]);
-    setLoading(!!uid);
+    let cancelled = false;
+    const timer = window.setTimeout(() => {
+      if (cancelled) return;
+      const next = myTabCache.get(cacheKey);
+      if (next) {
+        setMySets(next.sets);
+        setMyFolders(next.folders);
+        setLoading(false);
+        return;
+      }
+      setMySets([]);
+      setMyFolders([]);
+      setLoading(!!uid);
+    }, 0);
+    return () => {
+      cancelled = true;
+      window.clearTimeout(timer);
+    };
   }, [cacheKey, uid]);
 
   useEffect(() => {

@@ -216,6 +216,16 @@ export async function findTests(
   size = 10,
 ): Promise<{ items: PracticeTestCard[]; total: number; size: number; nextCursor?: string }> {
   const safeSize = Math.min(Math.max(size, 1), 50);
+  return cachedFindTests(type ?? null, difficulty ?? null, cursor ?? null, safeSize);
+}
+
+const cachedFindTests = unstable_cache(
+  async (
+    type: string | null,
+    difficulty: string | null,
+    cursor: string | null,
+    safeSize: number,
+  ): Promise<{ items: PracticeTestCard[]; total: number; size: number; nextCursor?: string }> => {
   if (!(await hasTestIndex())) {
     await writeTestIndex(await dautoeic.listTests(null));
   }
@@ -231,7 +241,10 @@ export async function findTests(
     size: safeSize,
     nextCursor: page.nextCursor,
   };
-}
+  },
+  ["practice-tests-page"],
+  { revalidate: 600 },
+);
 
 export async function getPracticeSession(
   testId: number,

@@ -14,7 +14,24 @@ import * as dautoeic from "@/lib/services/dautoeic";
 import * as listening from "@/lib/services/listening";
 
 export const GET = withErrorHandling(async (req: NextRequest) => {
-  const partParam = new URL(req.url).searchParams.get("part");
+  const url = new URL(req.url);
+  const parts = parseParts(url.searchParams.get("parts"));
+  if (parts.length > 0) {
+    const user = await getCurrentUser();
+    const levelsByPartEntries = await Promise.all(
+      parts.map(async (part) => {
+        const base = await dautoeic.listDifficultyLevels(part);
+        const levels = await listening.applyProgress(user?.uid ?? null, base);
+        return [`part${part}`, levels] as const;
+      }),
+    );
+    return ok({
+      levels: levelsByPartEntries[0]?.[1] ?? [],
+      levelsByPart: Object.fromEntries(levelsByPartEntries),
+    });
+  }
+
+  const partParam = url.searchParams.get("part");
   const part = Number.parseInt(partParam ?? "", 10);
   if (Number.isNaN(part) || part < 1 || part > 4) {
     throw new ApiError("Listening part must be between 1 and 4", 400);
@@ -26,3 +43,13 @@ export const GET = withErrorHandling(async (req: NextRequest) => {
   const levels = await listening.applyProgress(user?.uid ?? null, base);
   return ok({ levels });
 });
+
+function parseParts(value: string | null): number[] {
+  if (!value?.trim()) return [];
+  return [...new Set(
+    value
+      .split(",")
+      .map((part) => Number.parseInt(part, 10))
+      .filter((part) => Number.isInteger(part) && part >= 1 && part <= 4),
+  )].sort((a, b) => a - b);
+}

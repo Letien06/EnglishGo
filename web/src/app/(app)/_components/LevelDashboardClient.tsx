@@ -80,17 +80,27 @@ export default function LevelDashboardClient({
     async (showOverlay: boolean) => {
       if (showOverlay) setLoading(true);
       try {
+        const partNums = partNumsForSkill(skill);
         const res = await fetch(
-          `${levelsEndpoint}?part=${partNum}`,
+          `${levelsEndpoint}?parts=${partNums.join(",")}`,
           { cache: "no-store" },
         );
         const json = (await res.json()) as {
           success: boolean;
-          data: { levels: DauToeicDifficultyLevel[] } | null;
+          data: {
+            levels?: DauToeicDifficultyLevel[];
+            levelsByPart?: Record<string, DauToeicDifficultyLevel[]>;
+          } | null;
         };
         if (!mounted.current) return;
         if (json.success && json.data) {
-          const next = json.data.levels;
+          const levelsByPart = json.data.levelsByPart;
+          if (levelsByPart) {
+            for (const [nextPartId, nextLevels] of Object.entries(levelsByPart)) {
+              sessionCache.set(`${skill}:${nextPartId}`, nextLevels);
+            }
+          }
+          const next = levelsByPart?.[partId] ?? json.data.levels ?? [];
           sessionCache.set(cacheKey, next);
           setLevels(next);
           setError(false);
@@ -103,36 +113,7 @@ export default function LevelDashboardClient({
         if (mounted.current) setLoading(false);
       }
     },
-    [cacheKey, levelsEndpoint, partNum, levels.length],
-  );
-
-  const prefetchSiblingLevels = useCallback(
-    async (signal: AbortSignal) => {
-      const partNums = skill === "listening" ? [1, 2, 3, 4] : [5, 6, 7];
-      for (const nextPartNum of partNums) {
-        if (signal.aborted || nextPartNum === partNum) continue;
-        const nextPartId = `part${nextPartNum}`;
-        const nextCacheKey = `${skill}:${nextPartId}`;
-        if (sessionCache.has(nextCacheKey)) continue;
-
-        try {
-          const res = await fetch(`${levelsEndpoint}?part=${nextPartNum}`, {
-            cache: "no-store",
-            signal,
-          });
-          const json = (await res.json()) as {
-            success: boolean;
-            data: { levels: DauToeicDifficultyLevel[] } | null;
-          };
-          if (json.success && json.data && !signal.aborted) {
-            sessionCache.set(nextCacheKey, json.data.levels);
-          }
-        } catch {
-          // Background prefetch is best-effort; the destination part can fetch on demand.
-        }
-      }
-    },
-    [levelsEndpoint, partNum, skill],
+    [cacheKey, levelsEndpoint, partId, skill, levels.length],
   );
 
   useEffect(() => {
@@ -147,10 +128,6 @@ export default function LevelDashboardClient({
     const revalidateTimer = window.setTimeout(() => {
       void fetchLevels(levels.length === 0 && !error);
     }, 0);
-    const abortController = new AbortController();
-    const prefetchTimer = window.setTimeout(() => {
-      void prefetchSiblingLevels(abortController.signal);
-    }, 450);
     // Refresh when the user comes back to the tab (e.g. returning from a
     // practice session) so progress numbers stay current.
     const onFocus = () => void fetchLevels(false);
@@ -158,8 +135,6 @@ export default function LevelDashboardClient({
     return () => {
       mounted.current = false;
       window.clearTimeout(revalidateTimer);
-      window.clearTimeout(prefetchTimer);
-      abortController.abort();
       window.removeEventListener("focus", onFocus);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -264,6 +239,10 @@ function nextPracticeIndex(level: DauToeicDifficultyLevel) {
   const total = level.total ?? 0;
   if (total <= 0) return 0;
   return Math.max(0, Math.min(total - 1, level.done));
+}
+
+function partNumsForSkill(skill: "listening" | "reading") {
+  return skill === "listening" ? [1, 2, 3, 4] : [5, 6, 7];
 }
 
 function SkeletonGrid() {

@@ -4,6 +4,7 @@ import { adminDb } from "@/lib/firestore/db";
 const ACTIVITY_COLLECTION = "studyActivity";
 const STREAK_LOOKBACK_LIMIT = 500;
 const STUDY_TIME_ZONE = "Asia/Ho_Chi_Minh";
+const SUMMARY_MAX_AGE_MS = 60 * 60 * 1000;
 
 export type StudyModule = "listening" | "reading" | "practice" | "vocab";
 
@@ -111,6 +112,33 @@ export async function getStudyStreak(uid: string): Promise<StudyStreakSummary> {
     studiedToday: Boolean(today),
     todayActivityCount: today?.activityCount ?? 0,
     todayModules: today?.modules ?? [],
+    todayDateKey: todayKey,
+  };
+}
+
+export async function getStoredStudyStreakSummary(
+  uid: string,
+  maxAgeMs = SUMMARY_MAX_AGE_MS,
+): Promise<StudyStreakSummary | null> {
+  if (!uid?.trim()) return null;
+
+  const snap = await adminDb.collection("users").doc(uid).get();
+  if (!snap.exists) return null;
+
+  const data = snap.data() ?? {};
+  const todayKey = dateKeyForMillis(Date.now());
+  const summaryDateKey = stringValue(data.studyTodayDateKey);
+  const updatedAtMillis = numberValue(data.studyStreakUpdatedAtMillis);
+  if (summaryDateKey !== todayKey) return null;
+  if (updatedAtMillis == null || Date.now() - updatedAtMillis > maxAgeMs) {
+    return null;
+  }
+
+  return {
+    streakDays: numberValue(data.studyStreakDays) ?? 0,
+    studiedToday: data.studyStudiedToday === true,
+    todayActivityCount: numberValue(data.studyTodayActivityCount) ?? 0,
+    todayModules: parseModules(data.studyTodayModules),
     todayDateKey: todayKey,
   };
 }

@@ -3,6 +3,8 @@
 import { useEffect, useState } from "react";
 import { usePathname } from "next/navigation";
 
+const CACHE_TTL_MS = 60 * 1000;
+
 type StreakResponse = {
   success: boolean;
   data: {
@@ -13,6 +15,32 @@ type StreakResponse = {
   } | null;
   error: string | null;
 };
+
+let cachedStreak: StreakResponse["data"] | null = null;
+let cachedAt = 0;
+let inFlight: Promise<StreakResponse["data"] | null> | null = null;
+
+async function fetchStreak(): Promise<StreakResponse["data"] | null> {
+  if (cachedStreak && Date.now() - cachedAt < CACHE_TTL_MS) {
+    return cachedStreak;
+  }
+  if (inFlight) return inFlight;
+
+  inFlight = fetch("/api/study/streak", { cache: "no-store" })
+    .then(async (res) => {
+      const json = (await res.json()) as StreakResponse;
+      if (!json.success || !json.data) return null;
+      cachedStreak = json.data;
+      cachedAt = Date.now();
+      return json.data;
+    })
+    .catch(() => null)
+    .finally(() => {
+      inFlight = null;
+    });
+
+  return inFlight;
+}
 
 export default function StudyStreakBadge({
   className,
@@ -30,20 +58,18 @@ export default function StudyStreakBadge({
     let cancelled = false;
 
     async function load() {
-      try {
-        const res = await fetch("/api/study/streak", { cache: "no-store" });
-        const json = (await res.json()) as StreakResponse;
-        if (cancelled || !json.success || !json.data) return;
-        setStreakDays(json.data.streakDays);
-        setStudiedToday(json.data.studiedToday);
-        setAuthenticated(json.data.authenticated);
-      } catch {
-        /* keep the last visible value */
-      }
+      const data = await fetchStreak();
+      if (cancelled || !data) return;
+      setStreakDays(data.streakDays);
+      setStudiedToday(data.studiedToday);
+      setAuthenticated(data.authenticated);
     }
 
     void load();
-    const onFocus = () => void load();
+    const onFocus = () => {
+      cachedAt = 0;
+      void load();
+    };
     window.addEventListener("focus", onFocus);
     return () => {
       cancelled = true;
