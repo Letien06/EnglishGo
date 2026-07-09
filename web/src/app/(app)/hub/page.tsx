@@ -55,6 +55,19 @@ export default async function HubPage() {
           </div>
         </section>
 
+        <section className="flex flex-wrap items-center justify-between gap-4 rounded-2xl border border-primary/20 bg-primary-soft p-5">
+          <div>
+            <p className="text-xs font-extrabold uppercase tracking-widest text-primary">Hoc tiep nhanh</p>
+            <h2 className="mt-1 text-lg font-extrabold text-ink">Resume draft, vocab on tap va practice goi y</h2>
+          </div>
+          <Link
+            href="/continue"
+            className="rounded-lg bg-primary px-4 py-2 text-sm font-extrabold text-gold-ink"
+          >
+            Mo Hoc tiep
+          </Link>
+        </section>
+
         <section className="grid grid-cols-2 lg:grid-cols-4 gap-4" aria-label="Thong ke hoc tap">
           <StatCard icon="T" label="Thoi gian hoc" value={`${hub.dailyGoalCompleted * 5}m`} color="text-azure" />
           <StatCard

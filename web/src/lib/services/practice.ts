@@ -12,6 +12,7 @@ import {
   queryTestIndex,
   writeTestIndex,
 } from "./dautoeic-test-index";
+import { enforceDailyActionLimit } from "./rate-limit";
 
 export interface PracticeTestCard {
   id: number;
@@ -140,6 +141,7 @@ export interface PracticeAttempt {
 export interface ReviewAnswer {
   questionId: number;
   part: number;
+  weakTag: string;
   questionText: string;
   explanation: string | null;
   selectedOptionId: number | null;
@@ -164,7 +166,7 @@ interface PracticeContent {
 
 interface PracticeAnswerKeyContent {
   test: PracticeTestCard;
-  questions: Array<{ id: number; part: number }>;
+  questions: Array<{ id: number; part: number; content?: string; explanation?: string | null }>;
   correctAnswerByQuestionId: Record<string, string | null>;
 }
 
@@ -207,7 +209,7 @@ const TOEIC_SECTION_MIN_SCORE = 5;
 const TOEIC_SECTION_MAX_SCORE = 495;
 const TOEIC_SCORE_NOTE =
   "TOEIC estimate only: official raw-to-scaled conversion varies by test form.";
-const PRACTICE_CACHE_VERSION = "v5";
+const PRACTICE_CACHE_VERSION = "v6";
 const PRACTICE_CACHE_TTL_MILLIS = 24 * 60 * 60 * 1000;
 export const PART_DEFAULTS: Record<number, { questionCount: number; suggestedMinutes: number; skill: "LISTENING" | "READING" }> = {
   1: { questionCount: 6, suggestedMinutes: 4, skill: "LISTENING" },
@@ -292,6 +294,7 @@ export async function saveDraft(
 ): Promise<PracticeDraftView> {
   const config = normalizeSessionConfig(input, testId);
   const updatedAtMillis = Date.now();
+  await enforceDailyActionLimit(uid, "practice-draft", 1500);
   const draftRef = practiceDraftRef(uid, config.sessionKey);
   const snap = await draftRef.get();
   const startedAtMillis =
@@ -431,8 +434,9 @@ export async function submit(
     answerDocs.push({
       questionId: question.id,
       part: question.part,
-      questionText: "",
-      explanation: null,
+      weakTag: classifyPracticeWeakTag(question.part, question.content),
+      questionText: question.content ?? "",
+      explanation: question.explanation ?? null,
       selectedOptionId: submitted.selectedOptionId ?? null,
       selectedAnswer,
       correctAnswer,
@@ -525,6 +529,7 @@ async function updatePracticeWeakAreas(
     mode: PracticeMode;
     parts: number[];
     partBreakdown: PracticePartBreakdown[];
+    answers?: ReviewAnswer[];
     submittedAtMillis: number;
   },
 ): Promise<void> {
@@ -545,6 +550,7 @@ async function updatePracticeWeakAreas(
   await adminDb.collection("users").doc(uid).set(
     {
       practiceWeakAreas: attempt.partBreakdown,
+      practiceWeakTags: buildWeakTagBreakdown(attempt.answers ?? []),
       nextPracticeRecommendation: recommendation,
       lastPracticeAttemptId: attempt.attemptId,
       lastPracticeTitle: attempt.title,
@@ -777,6 +783,8 @@ async function loadAnswerKey(routeTestId: number, parts: number[]): Promise<Prac
         return {
           id: numberValue(item.id) ?? 0,
           part: numberValue(item.part) ?? 1,
+          content: stringValue(item.content) ?? "",
+          explanation: stringValue(item.explanation),
         };
       })
       .filter((question) => question.id > 0);
@@ -798,7 +806,12 @@ async function loadAnswerKey(routeTestId: number, parts: number[]): Promise<Prac
 function buildAnswerKeyFromContent(content: PracticeContent): PracticeAnswerKeyContent {
   return {
     test: content.test,
-    questions: content.questions.map((question) => ({ id: question.id, part: question.part })),
+    questions: content.questions.map((question) => ({
+      id: question.id,
+      part: question.part,
+      content: question.content,
+      explanation: question.explanation,
+    })),
     correctAnswerByQuestionId: content.correctAnswerByQuestionId,
   };
 }
@@ -830,6 +843,7 @@ async function enrichReviewAnswers(attempt: PracticeAttempt, answers: ReviewAnsw
       ...answer,
       part: question?.part ?? answer.part,
       questionText: answer.questionText || question?.content || `Question ${answer.questionId}`,
+      weakTag: answer.weakTag || classifyPracticeWeakTag(question?.part ?? answer.part, question?.content ?? answer.questionText),
       explanation: answer.explanation || question?.explanation || null,
       options: answer.options.length > 0 ? answer.options : content.optionsByQuestionId[String(answer.questionId)] ?? [],
     };
@@ -1008,7 +1022,7 @@ function normalizeAttemptMode(value: unknown): PracticeMode {
   return value === "part" ? "part" : "exam";
 }
 
-function normalizeDraftPayload(
+export function normalizeDraftPayload(
   payload: string | null | undefined,
   allowedQuestionIds: Set<number>,
   config: PracticeSessionConfig,
@@ -1051,10 +1065,56 @@ function parseDraftPayload(payload: string | null | undefined): Record<string, u
   }
 }
 
-function normalizeCurrentQuestionIndex(value: unknown, questionCount: number): number {
+export function normalizeCurrentQuestionIndex(value: unknown, questionCount: number): number {
   const parsed = numberValue(value) ?? 0;
   const max = Math.max(0, questionCount - 1);
   return Math.min(max, Math.max(0, Math.trunc(parsed)));
+}
+
+function buildWeakTagBreakdown(answers: ReviewAnswer[]): Array<{
+  tag: string;
+  part: number;
+  wrong: number;
+  total: number;
+  percentWrong: number;
+}> {
+  const stats = new Map<string, { tag: string; part: number; wrong: number; total: number }>();
+  for (const answer of answers) {
+    const tag = answer.weakTag || classifyPracticeWeakTag(answer.part, answer.questionText);
+    const current = stats.get(tag) ?? { tag, part: answer.part, wrong: 0, total: 0 };
+    current.total += 1;
+    if (!answer.correct) current.wrong += 1;
+    stats.set(tag, current);
+  }
+  return [...stats.values()]
+    .filter((item) => item.total > 0 && item.wrong > 0)
+    .map((item) => ({
+      ...item,
+      percentWrong: round2((item.wrong * 100) / item.total),
+    }))
+    .sort((a, b) => b.percentWrong - a.percentWrong || b.wrong - a.wrong)
+    .slice(0, 8);
+}
+
+function classifyPracticeWeakTag(part: number, content: string | null | undefined): string {
+  const text = cleanDisplayText(content).toLowerCase();
+  if (part === 1) return "part-1-photo-detail";
+  if (part === 2) return "part-2-question-response";
+  if (part === 3) return text.includes("where") || text.includes("when") ? "part-3-detail" : "part-3-conversation";
+  if (part === 4) return text.includes("purpose") || text.includes("why") ? "part-4-purpose" : "part-4-talk-detail";
+  if (part === 5) {
+    if (/\b(if|unless|although|because|while|when)\b/.test(text)) return "part-5-clause-connector";
+    if (/\b(is|are|was|were|be|been|being|has|have|had)\b/.test(text)) return "part-5-verb-form";
+    if (/\b(the|a|an|this|these|those)\b/.test(text)) return "part-5-noun-determiner";
+    return "part-5-grammar";
+  }
+  if (part === 6) return text.length > 180 ? "part-6-text-cohesion" : "part-6-sentence-completion";
+  if (part === 7) {
+    if (text.includes("implied") || text.includes("infer")) return "part-7-inference";
+    if (text.includes("purpose") || text.includes("main")) return "part-7-main-idea";
+    return "part-7-detail";
+  }
+  return `part-${part}-general`;
 }
 
 function buildScoreBreakdown(
@@ -1263,10 +1323,13 @@ function decodeHtmlEntities(value: string): string {
 
 function toReviewAnswer(value: unknown): ReviewAnswer {
   const data = recordValue(value);
+  const part = numberValue(data.part) ?? 1;
+  const questionText = stringValue(data.questionText) ?? "Question";
   return {
     questionId: numberValue(data.questionId) ?? 0,
-    part: numberValue(data.part) ?? 1,
-    questionText: stringValue(data.questionText) ?? "Question",
+    part,
+    weakTag: stringValue(data.weakTag) ?? classifyPracticeWeakTag(part, questionText),
+    questionText,
     explanation: stringValue(data.explanation),
     selectedOptionId: numberValue(data.selectedOptionId),
     selectedAnswer: stringValue(data.selectedAnswer),

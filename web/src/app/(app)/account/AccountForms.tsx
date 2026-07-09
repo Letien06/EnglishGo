@@ -1,5 +1,6 @@
 "use client";
 
+import Image from "next/image";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 import type { AccountSettingsView } from "@/lib/services/account";
@@ -34,7 +35,15 @@ export default function AccountForms({ settings }: { settings: AccountSettingsVi
           <div className="relative">
             <div className="flex h-28 w-28 items-center justify-center overflow-hidden rounded-full border-4 border-amber-200 bg-sky-100 text-4xl font-extrabold text-primary">
               {avatarUrl ? (
-                <img src={avatarUrl} alt="Avatar" className="h-full w-full object-cover" />
+                <Image
+                  src={avatarUrl}
+                  alt="Avatar"
+                  width={AVATAR_SIZE}
+                  height={AVATAR_SIZE}
+                  sizes="112px"
+                  unoptimized={avatarUrl.startsWith("data:")}
+                  className="h-full w-full object-cover"
+                />
               ) : (
                 (settings.form.displayName || settings.email || "E").charAt(0).toUpperCase()
               )}

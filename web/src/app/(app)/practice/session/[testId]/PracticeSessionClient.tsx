@@ -1,5 +1,6 @@
 "use client";
 
+import Image from "next/image";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import type { PracticeQuestion, PracticeSessionView } from "@/lib/services/practice";
@@ -69,6 +70,7 @@ export default function PracticeSessionClient({ session }: { session: PracticeSe
   const [status, setStatus] = useState("Draft not saved yet");
   const [remaining, setRemaining] = useState(() => initialRemainingSeconds(session));
   const [submitting, setSubmitting] = useState(false);
+  const [online, setOnline] = useState(() => typeof navigator === "undefined" ? true : navigator.onLine);
   const [confirmSubmit, setConfirmSubmit] = useState(false);
   const [confirmExit, setConfirmExit] = useState(false);
   const [activeQuestionId, setActiveQuestionId] = useState(() => {
@@ -177,7 +179,7 @@ export default function PracticeSessionClient({ session }: { session: PracticeSe
   }
 
   function queueSave() {
-    setStatus("Changes pending");
+    setStatus(online ? "Changes pending" : "Offline - saved on this device");
     if (saveTimer.current) clearTimeout(saveTimer.current);
     saveTimer.current = setTimeout(() => void saveNow(), 8000);
   }
@@ -219,11 +221,15 @@ export default function PracticeSessionClient({ session }: { session: PracticeSe
   async function saveNow() {
     const payload = makeDraftPayload();
     window.localStorage.setItem(storageKey, payload);
+    if (!navigator.onLine) {
+      setStatus("Offline - saved on this device");
+      return;
+    }
     const result = await saveDraftToServer(payload, activeIndex).catch(() => ({
       ok: false,
       error: "Save failed",
     }));
-    setStatus(result.ok ? `Saved at ${new Date().toLocaleTimeString()}` : result.error || "Save failed");
+    setStatus(result.ok ? `Saved at ${new Date().toLocaleTimeString()}` : result.error || "Save failed - saved locally");
   }
 
   const saveDraftToServer = useCallback(async (payload: string, currentQuestionIndex: number) => {
@@ -354,6 +360,28 @@ export default function PracticeSessionClient({ session }: { session: PracticeSe
       if (saveTimer.current) clearTimeout(saveTimer.current);
     };
   }, [activeIndex, makeDraftPayload, saveDraftToServer, storageKey]);
+
+  useEffect(() => {
+    const onOnline = () => {
+      setOnline(true);
+      const payload = window.localStorage.getItem(storageKey);
+      if (payload && !submittingRef.current) {
+        void saveDraftToServer(payload, activeIndex).then(() => {
+          setStatus(`Synced at ${new Date().toLocaleTimeString()}`);
+        }).catch(() => setStatus("Save failed - saved locally"));
+      }
+    };
+    const onOffline = () => {
+      setOnline(false);
+      setStatus("Offline - saved on this device");
+    };
+    window.addEventListener("online", onOnline);
+    window.addEventListener("offline", onOffline);
+    return () => {
+      window.removeEventListener("online", onOnline);
+      window.removeEventListener("offline", onOffline);
+    };
+  }, [activeIndex, saveDraftToServer, storageKey]);
 
   return (
     <main className="min-h-[calc(100dvh-4rem)] bg-white">
@@ -579,9 +607,9 @@ function QuestionCard({
         </div>
       ) : null}
       {showQuestionText ? <p className="mt-4 whitespace-pre-wrap text-sm font-semibold text-ink">{question.content}</p> : null}
-      {imageFirst && question.imageUrl ? <img src={question.imageUrl} alt="Question media" className="mt-4 max-h-[520px] max-w-full rounded-lg border border-line object-contain" /> : null}
+      {imageFirst && question.imageUrl ? <QuestionImage src={question.imageUrl} /> : null}
       {question.audioUrl ? <audio controls src={question.audioUrl} className="mt-4 w-full" /> : null}
-      {!imageFirst && question.imageUrl ? <img src={question.imageUrl} alt="Question media" className="mt-4 max-h-[520px] max-w-full rounded-lg border border-line object-contain" /> : null}
+      {!imageFirst && question.imageUrl ? <QuestionImage src={question.imageUrl} /> : null}
 
       {options.length > 0 ? (
         <div className="mt-5 space-y-3">
@@ -627,6 +655,19 @@ function QuestionCard({
         </button>
       </footer>
     </article>
+  );
+}
+
+function QuestionImage({ src }: { src: string }) {
+  return (
+    <Image
+      src={src}
+      alt="Question media"
+      width={1200}
+      height={800}
+      sizes="(max-width: 1024px) 100vw, 900px"
+      className="mt-4 max-h-[520px] max-w-full rounded-lg border border-line object-contain"
+    />
   );
 }
 

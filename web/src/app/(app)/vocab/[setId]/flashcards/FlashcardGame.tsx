@@ -80,6 +80,14 @@ interface FeedbackState {
   item: VocabWordCard;
 }
 
+interface VocabGameDraftPayload {
+  index: number;
+  score: number;
+  attempts: number;
+  answers: AnswerRecord[];
+  updatedAtMillis: number;
+}
+
 interface ModeTone {
   card: string;
   icon: string;
@@ -206,6 +214,22 @@ async function submitReview(wordId: number, quality: number): Promise<number> {
     return res.status;
   } catch {
     return 0;
+  }
+}
+
+function parseGameDraft(raw: string | null): VocabGameDraftPayload | null {
+  if (!raw) return null;
+  try {
+    const parsed = JSON.parse(raw) as Partial<VocabGameDraftPayload>;
+    return {
+      index: typeof parsed.index === "number" ? parsed.index : 0,
+      score: typeof parsed.score === "number" ? parsed.score : 0,
+      attempts: typeof parsed.attempts === "number" ? parsed.attempts : 0,
+      answers: Array.isArray(parsed.answers) ? parsed.answers : [],
+      updatedAtMillis: typeof parsed.updatedAtMillis === "number" ? parsed.updatedAtMillis : 0,
+    };
+  } catch {
+    return null;
   }
 }
 
@@ -764,6 +788,9 @@ function PlaySurface({
   const [selMeaning, setSelMeaning] = useState<number | null>(null);
 
   const timerRef = useRef<number | null>(null);
+  const draftTimerRef = useRef<number | null>(null);
+  const hydratedDraftRef = useRef(false);
+  const draftStorageKey = `englishgo-vocab-draft-${setId}-${externalPartId ?? "all"}-${mode}-${quizMode}`;
 
   const activeMode: PlayMode = useMemo(() => {
     if (mode !== "mixed") return mode;
@@ -773,6 +800,90 @@ function PlaySurface({
   const word = words[index] ?? words[0];
 
   const usesTimer = activeMode === "quiz" || activeMode === "matching";
+
+  const makeDraftPayload = useCallback(() => {
+    const payload: VocabGameDraftPayload = {
+      index,
+      score,
+      attempts,
+      answers,
+      updatedAtMillis: Date.now(),
+    };
+    return JSON.stringify(payload);
+  }, [answers, attempts, index, score]);
+
+  const saveDraftToServer = useCallback(async (payload: string) => {
+    await fetch("/api/vocab/game-draft", {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        setId,
+        mode,
+        quizMode,
+        externalPartId,
+        payload,
+      }),
+    }).catch(() => undefined);
+  }, [externalPartId, mode, quizMode, setId]);
+
+  const applyDraft = useCallback((draft: VocabGameDraftPayload) => {
+    if (!words.length || showResult) return;
+    const safeIndex = Math.min(Math.max(Math.trunc(draft.index), 0), words.length - 1);
+    setIndex(safeIndex);
+    setScore(Math.max(0, draft.score));
+    setAttempts(Math.max(0, draft.attempts));
+    setCorrect(draft.answers.filter((answer) => answer.correct).length);
+    setAnswers(draft.answers);
+    resetCardState();
+  }, [showResult, words.length]);
+
+  useEffect(() => {
+    let cancelled = false;
+    const localDraft = parseGameDraft(window.localStorage.getItem(draftStorageKey));
+    if (localDraft) {
+      window.setTimeout(() => {
+        if (!cancelled) applyDraft(localDraft);
+      }, 0);
+      hydratedDraftRef.current = true;
+    }
+    const params = new URLSearchParams({
+      setId: String(setId),
+      mode,
+      quizMode,
+    });
+    if (externalPartId) params.set("externalPartId", externalPartId);
+    fetch(`/api/vocab/game-draft?${params.toString()}`, { cache: "no-store" })
+      .then(async (response) => response.ok ? response.json() : null)
+      .then((result) => {
+        if (cancelled || !result?.success || !result.data?.payload) return;
+        const serverDraft = parseGameDraft(result.data.payload);
+        if (!serverDraft) return;
+        if ((serverDraft.updatedAtMillis || result.data.updatedAtMillis || 0) <= (localDraft?.updatedAtMillis ?? 0)) return;
+        window.localStorage.setItem(draftStorageKey, result.data.payload);
+        applyDraft(serverDraft);
+        hydratedDraftRef.current = true;
+      })
+      .catch(() => undefined)
+      .finally(() => {
+        if (!cancelled) hydratedDraftRef.current = true;
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [applyDraft, draftStorageKey, externalPartId, mode, quizMode, setId]);
+
+  useEffect(() => {
+    if (!hydratedDraftRef.current || showResult) return;
+    const payload = makeDraftPayload();
+    window.localStorage.setItem(draftStorageKey, payload);
+    if (draftTimerRef.current) window.clearTimeout(draftTimerRef.current);
+    draftTimerRef.current = window.setTimeout(() => {
+      void saveDraftToServer(payload);
+    }, 5000);
+    return () => {
+      if (draftTimerRef.current) window.clearTimeout(draftTimerRef.current);
+    };
+  }, [answers, attempts, draftStorageKey, index, makeDraftPayload, saveDraftToServer, score, showResult]);
 
   const speakItem = useCallback(
     (item?: VocabWordCard | AnswerRecord, accent: "us" | "uk" = "us") => {
@@ -1171,6 +1282,14 @@ function PlaySurface({
       setSaveError("Đã lưu tiến độ từ, nhưng chưa lưu được lịch sử học. Vui lòng thử lại.");
       return;
     }
+    window.localStorage.removeItem(draftStorageKey);
+    const draftParams = new URLSearchParams({
+      setId: String(setId),
+      mode,
+      quizMode,
+    });
+    if (externalPartId) draftParams.set("externalPartId", externalPartId);
+    await fetch(`/api/vocab/game-draft?${draftParams.toString()}`, { method: "DELETE" }).catch(() => undefined);
     onFinish({
       mode: modeLabel,
       accuracy,

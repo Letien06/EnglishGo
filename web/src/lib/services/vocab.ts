@@ -41,6 +41,7 @@ import {
 import { enrichCandidatePronunciation, enrichWithDictionary } from "./dictionary";
 import { parseImportFile, parseDelimitedWords } from "@/lib/parsers/vocab-import";
 import { getStoredStudyStreakSummary, getStudyStreak, recordStudyActivity } from "./study-activity";
+import { enforceDailyActionLimit } from "./rate-limit";
 
 /* ------------------------------------------------------------------ */
 /*  Collection constants                                               */
@@ -870,6 +871,7 @@ export async function recordStudyHistory(
   },
 ): Promise<{ id: string }> {
   requireUid(uid);
+  await enforceDailyActionLimit(uid, "vocab-history", 200);
   const finishedAtMillis = Date.now();
   const id = `${finishedAtMillis}-${randomInt(1000, 9999)}`;
   const source = input.externalTestId || input.externalPartId ? "DAUTOEIC" : "LOCAL";

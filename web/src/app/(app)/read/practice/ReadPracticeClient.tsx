@@ -1,5 +1,6 @@
 "use client";
 
+import Image from "next/image";
 import Link from "next/link";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { markVisited, routeKey } from "@/lib/nav/session-nav";
@@ -247,7 +248,14 @@ export default function ReadPracticeClient({
           <p className="mb-5 text-lg italic text-ink sm:text-xl">{readingInstruction(partNum)}</p>
 
           {item.imageUrl && (
-            <img src={item.imageUrl} alt="Reading material" className="mb-4 max-h-[48dvh] w-full object-contain" />
+            <Image
+              src={item.imageUrl}
+              alt="Reading material"
+              width={1200}
+              height={800}
+              sizes="(max-width: 1024px) 100vw, 50vw"
+              className="mb-4 max-h-[48dvh] w-full object-contain"
+            />
           )}
 
           {partNum !== 5 && item.transcript ? (

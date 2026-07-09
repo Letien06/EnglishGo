@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { ApiEnvelope, ApiError, fail } from "./response";
+import { logServerError } from "@/lib/logging";
 
 type RouteHandler<T> = (
   req: NextRequest,
@@ -19,7 +20,10 @@ export function withErrorHandling<T>(handler: RouteHandler<T>): RouteHandler<T> 
       if (err instanceof ApiError) {
         return fail(err.message, err.status) as NextResponse<ApiEnvelope<T>>;
       }
-      console.error("[unhandled-route-error]", err);
+      logServerError("unhandled-route-error", err, {
+        method: req.method,
+        path: req.nextUrl.pathname,
+      });
       return fail("Internal server error", 500) as NextResponse<ApiEnvelope<T>>;
     }
   };

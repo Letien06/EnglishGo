@@ -3,6 +3,7 @@ import { adminDb } from "@/lib/firestore/db";
 import { BadRequest, Unauthorized } from "@/lib/api/response";
 import type { AppUser } from "@/types";
 import { generateJson } from "./gemini";
+import { enforceDailyActionLimit } from "./rate-limit";
 
 export interface AiWritingJob {
   id: string;
@@ -40,7 +41,7 @@ export async function submit(
   }
   if (cleanPrompt.length > 2000) throw BadRequest("Prompt is too long");
   if (cleanResponse.length > 8000) throw BadRequest("Response is too long");
-  await enforceDailyLimit(user.uid);
+  await enforceDailyActionLimit(user.uid, "ai-writing", 20);
 
   const now = Date.now();
   const feedbackResult = await buildAiFeedback(cleanPrompt, cleanResponse)
@@ -67,20 +68,6 @@ export async function submit(
     .collection("aiWritingJobs")
     .add(data);
   return { id: ref.id, ...data };
-}
-
-async function enforceDailyLimit(uid: string): Promise<void> {
-  const todayStart = startOfDay(Date.now());
-  const snap = await adminDb
-    .collection("users")
-    .doc(uid)
-    .collection("aiWritingJobs")
-    .where("createdAtMillis", ">=", todayStart)
-    .count()
-    .get();
-  if (snap.data().count >= 20) {
-    throw BadRequest("Daily AI writing limit reached");
-  }
 }
 
 async function buildAiFeedback(prompt: string, responseText: string): Promise<{
@@ -169,12 +156,6 @@ function buildFeedback(responseText: string): string {
 
 function arrayValue(value: unknown): unknown[] {
   return Array.isArray(value) ? value : [];
-}
-
-function startOfDay(value: number): number {
-  const date = new Date(value);
-  date.setHours(0, 0, 0, 0);
-  return date.getTime();
 }
 
 function stringValue(value: unknown): string | null {

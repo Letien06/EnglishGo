@@ -1,5 +1,6 @@
 "use client";
 
+import Image from "next/image";
 import Link from "next/link";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import PracticeMobileMenu from "../../_components/PracticeMobileMenu";
@@ -361,13 +362,19 @@ export default function ListenPracticeClient({
             </div>
           </div>
 
-          {(item.imageUrl || currentQuestion?.imageUrl) && (
-            <img
-              src={item.imageUrl ?? currentQuestion?.imageUrl ?? undefined}
-              alt="Listening question"
-              className="mt-2 max-h-[62dvh] w-full object-contain opacity-75 grayscale"
-            />
-          )}
+          {(() => {
+            const imageUrl = item.imageUrl ?? currentQuestion?.imageUrl;
+            return imageUrl ? (
+              <Image
+                src={imageUrl}
+                alt="Listening question"
+                width={1200}
+                height={800}
+                sizes="(max-width: 1024px) 100vw, 50vw"
+                className="mt-2 max-h-[62dvh] w-full object-contain opacity-75 grayscale"
+              />
+            ) : null;
+          })()}
         </section>
 
         <section className="px-4 py-5 sm:px-6 lg:px-10 lg:py-8">

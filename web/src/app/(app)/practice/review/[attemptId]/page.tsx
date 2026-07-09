@@ -105,6 +105,7 @@ export default async function PracticeReviewPage({ params }: Props) {
                     {answer.correct ? "Correct" : "Incorrect"}
                   </p>
                 </div>
+                <p className="mt-2 text-xs font-semibold text-muted">Weak tag: {answer.weakTag}</p>
                 <p className="mt-3 whitespace-pre-wrap text-sm text-ink">{answer.questionText}</p>
                 <div className="mt-4 space-y-2">
                   {answer.options.map((option) => (

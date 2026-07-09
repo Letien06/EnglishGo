@@ -16,7 +16,12 @@ vi.mock("./dautoeic-test-index", () => ({
   writeTestIndex: vi.fn(),
 }));
 
-import { normalizeSessionConfig, suggestedMinutes } from "./practice";
+import {
+  normalizeCurrentQuestionIndex,
+  normalizeDraftPayload,
+  normalizeSessionConfig,
+  suggestedMinutes,
+} from "./practice";
 
 describe("normalizeSessionConfig", () => {
   it("defaults to full exam mode with all parts and 120 minutes", () => {
@@ -70,5 +75,49 @@ describe("suggestedMinutes", () => {
     expect(suggestedMinutes([5])).toBe(18);
     expect(suggestedMinutes([5, 6, 7])).toBe(70);
     expect(suggestedMinutes([1, 2, 3, 4, 5, 6, 7])).toBe(120);
+  });
+});
+
+describe("practice draft normalization", () => {
+  it("keeps only allowed question ids and clamps current question index", () => {
+    const config = normalizeSessionConfig({ mode: "part", parts: [5], durationMinutes: 18 }, 99);
+    const payload = normalizeDraftPayload(
+      JSON.stringify({
+        answers: {
+          501: { selectedOptionId: 1001, textResponse: " A " },
+          999: { selectedOptionId: 1999 },
+          bad: { selectedOptionId: 1 },
+        },
+        markedQuestionIds: [501, 999, 501, "bad"],
+      }),
+      new Set([501, 502]),
+      config,
+      1000,
+      2000,
+      normalizeCurrentQuestionIndex(99, 2),
+    );
+
+    expect(JSON.parse(payload)).toEqual({
+      answers: {
+        501: { selectedOptionId: 1001, textResponse: " A " },
+      },
+      markedQuestionIds: [501],
+      currentQuestionIndex: 1,
+      startedAtMillis: 1000,
+      updatedAtMillis: 2000,
+      config,
+    });
+  });
+
+  it("handles invalid draft JSON as an empty draft", () => {
+    const config = normalizeSessionConfig({ mode: "part", parts: [6], durationMinutes: 10 }, 88);
+    expect(JSON.parse(normalizeDraftPayload("{bad", new Set([1]), config, 10, 20, 0))).toEqual({
+      answers: {},
+      markedQuestionIds: [],
+      currentQuestionIndex: 0,
+      startedAtMillis: 10,
+      updatedAtMillis: 20,
+      config,
+    });
   });
 });

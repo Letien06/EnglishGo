@@ -9,6 +9,34 @@
       ]
     },
     {
+      "collectionGroup": "practiceDrafts",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "updatedAtMillis", "order": "DESCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "vocabGameDrafts",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "updatedAtMillis", "order": "DESCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "vocabStudyHistory",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "finishedAtMillis", "order": "DESCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "rateLimits",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "updatedAtMillis", "order": "DESCENDING" }
+      ]
+    },
+    {
       "collectionGroup": "vocabFolders",
       "queryScope": "COLLECTION",
       "fields": [

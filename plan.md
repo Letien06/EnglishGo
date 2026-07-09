@@ -424,3 +424,817 @@ Neu phase co thay doi performance:
   - `/read`
 - Ghi lai ket qua vao `speed.md`.
 
+## 14. Backlog tiep theo - toi uu frontend image va framework
+
+Trang thai 2026-07-09: DA CODE
+
+- Da chuyen cac `<img>` con lai sang `next/image`.
+- Da them remote pattern `*.googleusercontent.com`.
+- Da doi `web/src/middleware.ts` sang `web/src/proxy.ts`.
+- Da them `/continue` vao route protected.
+
+### 14.1 Doi `<img>` sang `next/image`
+
+Hien trang:
+
+- `npm run lint` pass nhung con warning `@next/next/no-img-element` o:
+  - `web/src/app/(app)/account/AccountForms.tsx`
+  - `web/src/app/(app)/listen/practice/ListenPracticeClient.tsx`
+  - `web/src/app/(app)/practice/session/[testId]/PracticeSessionClient.tsx`
+  - `web/src/app/(app)/read/practice/ReadPracticeClient.tsx`
+
+Muc tieu:
+
+- Giam LCP/bandwidth cho avatar, image cau hoi, image bai nghe/doc.
+- Khong lam vo layout image cau hoi TOEIC.
+- Khong lam loi remote image domain.
+
+Viec can lam:
+
+1. Kiem tra `next.config.ts` hien tai va them `images.remotePatterns` cho cac domain anh dang dung:
+   - Firebase Storage neu co.
+   - DauToeic/Supabase media host neu co.
+   - Provider avatar Google neu account page dung avatar ngoai.
+2. Doi image co kich thuoc biet truoc sang `next/image` voi `width`, `height`, `sizes`.
+3. Voi image cau hoi co ty le khong co dinh:
+   - Dung container `relative`.
+   - Dung `fill` + `object-contain` neu can giu anh tron ven.
+   - Hoac giu `width/height` conservative va CSS `max-h`, `object-contain`.
+4. Neu mot source image la data/blob/local khong phu hop `next/image`, ghi ly do va chi disable lint cuc bo o dong do, khong disable ca file.
+5. Test desktop/mobile de dam bao image khong bi crop, stretch, overlap.
+
+Acceptance:
+
+- `npm run lint` khong con warning `no-img-element`, tru khi co comment ly do cuc bo.
+- Anh cau hoi Part 1/Practice Session hien day du, khong bi cat noi dung.
+- Avatar account neu co van hien dung.
+- `npm run build` pass.
+
+Kiem thu:
+
+```powershell
+cd D:\EnglishWebApp\web
+npm run lint
+npm run build
+npm run test:e2e
+```
+
+Manual/visual QA:
+
+- Mo `/account`, xem avatar/preview.
+- Mo `/listen/practice` voi item co image/audio.
+- Mo `/read/practice` voi passage/item co image neu data co.
+- Mo `/practice/session/{testId}` voi Part 1 hoac cau co image.
+- Kiem tra viewport desktop 1365x900 va mobile 390x844.
+
+### 14.2 Doi `middleware.ts` sang `proxy.ts`
+
+Hien trang:
+
+- Next build canh bao: `"middleware" file convention is deprecated. Please use "proxy" instead.`
+
+Muc tieu:
+
+- Het warning framework.
+- Giu nguyen logic redirect auth route protected.
+
+Viec can lam:
+
+1. Doc tai lieu Next.js version dang dung neu can de xac nhan API `proxy.ts`.
+2. Chuyen `web/src/middleware.ts` sang convention moi neu Next 16 yeu cau root `proxy.ts`/`src/proxy.ts`.
+3. Giu matcher hien co:
+   - Bo static files.
+   - Bo `_next/static`, `_next/image`, `favicon.ico`, `api/health`.
+4. Test cac route protected anonymous redirect ve `/login?from=...`.
+5. Dam bao build khong con warning middleware deprecated.
+
+Acceptance:
+
+- Anonymous vao `/hub`, `/vocab`, `/practice`, `/listen`, `/read`, `/admin` van redirect login.
+- `/`, `/login`, `/api/health` van public.
+- `npm run build` khong con warning middleware/proxy deprecated.
+
+Kiem thu:
+
+```powershell
+cd D:\EnglishWebApp\web
+npm run build
+npm run test:e2e
+```
+
+Them/doi e2e neu can:
+
+- Test `/admin` anonymous redirect.
+- Test `/api/health` khong redirect.
+
+## 15. Backlog tiep theo - test coverage cho draft va history
+
+Trang thai 2026-07-09: DA CODE MOT PHAN CAN THIET
+
+- Da them unit test cho normalize practice draft payload/current index.
+- Da them unit test cho `recordStudyHistory()`.
+- Con nen lam sau: component test local-first draft bang React Testing Library va test API route auth/validation.
+
+### 15.1 Unit test service practice draft
+
+Muc tieu:
+
+- Bao ve logic server-side draft local-first moi them.
+- Dam bao payload khong luu cau hoi ngoai session.
+
+Pham vi test:
+
+1. `normalizeSessionConfig()`:
+   - Full test parts 1-7 => mode `exam`.
+   - Part 5 => mode `part`, time default/specific dung.
+   - Parts duplicate/invalid duoc normalize.
+2. `saveDraft()`:
+   - Tao doc `users/{uid}/practiceDrafts/{sessionKey}`.
+   - Giu `startedAtMillis` cu khi save lan 2.
+   - Luu `currentQuestionIndex`.
+   - Loai answer co `questionId` khong nam trong selected parts.
+3. `getDraft()`:
+   - Tra null khi khong co draft.
+   - Tra payload/config dung khi co.
+4. `deleteDraft()`:
+   - Xoa dung doc theo session key.
+5. `submit()`:
+   - Submit thanh cong xoa draft.
+   - Expired tinh theo `startedAtMillis` cua draft.
+
+Acceptance:
+
+- Co test moi trong `web/src/lib/services/practice.test.ts` hoac file rieng.
+- Test khong goi DauToeic network that; mock `loadAnswerKey`/Firestore hop ly.
+- `npm test` pass.
+
+Kiem thu:
+
+```powershell
+cd D:\EnglishWebApp\web
+npm test
+npm run build
+```
+
+### 15.2 Component/client test cho local-first draft
+
+Muc tieu:
+
+- Dam bao UI render nhanh tu localStorage va merge server draft neu server moi hon.
+
+Pham vi:
+
+1. LocalStorage co draft:
+   - Initial answers/marked/current question dung.
+   - Khong doi server truoc khi render lan dau.
+2. Server draft moi hon:
+   - Sau GET draft, answers/marked/current question cap nhat.
+   - LocalStorage duoc ghi lai payload server.
+3. Server draft cu hon:
+   - Khong de server ghi de local.
+4. Autosave:
+   - Chon dap an ghi local ngay.
+   - Debounce PUT server.
+   - Visibility hidden flush save nen.
+5. Submit:
+   - Flush draft server truoc submit.
+   - Submit success remove local draft.
+
+Acceptance:
+
+- Test dung React Testing Library/Vitest.
+- Fake timers cho debounce.
+- Mock `fetch` ro tung endpoint.
+
+Kiem thu:
+
+```powershell
+cd D:\EnglishWebApp\web
+npm test
+npm run lint
+```
+
+### 15.3 Test API vocab history
+
+Muc tieu:
+
+- Bao ve luong history Firestore server-side.
+
+Pham vi:
+
+1. `GET /api/vocab/history?setId=&limit=`:
+   - Yeu cau auth.
+   - Filter dung `setId`.
+   - Filter dung `externalPartId` neu co.
+   - Limit khong vuot gioi han service.
+2. `POST /api/vocab/history`:
+   - Validate input.
+   - Ghi history.
+   - Goi `recordStudyActivity`.
+3. Flashcard page:
+   - User dang nhap va `mode=menu` mac dinh van goi `getFilteredSession()` de lay history server.
+
+Acceptance:
+
+- Test service/API pass.
+- Guest van fallback localStorage trong client game.
+
+Kiem thu:
+
+```powershell
+cd D:\EnglishWebApp\web
+npm test
+npm run build
+```
+
+## 16. Backlog tiep theo - Firestore rules va indexes
+
+Trang thai 2026-07-09: DA CODE
+
+- Da them indexes cho `practiceDrafts`, `vocabGameDrafts`, `vocabStudyHistory`, `rateLimits`.
+- Da tighten rules de `practiceAttempts`, `vocabStudyHistory`, `rateLimits` khong bi client write qua wildcard.
+- Luu y: can deploy rules/indexes bang Firebase CLI tren moi truong that.
+
+Hien trang:
+
+- Them/dua vao cac collection/subcollection:
+  - `users/{uid}/practiceDrafts/{draftId}`
+  - `users/{uid}/vocabStudyHistory/{historyId}`
+  - `users/{uid}/dailySummaries/{dateKey}`
+  - `users/{uid}/aiWritingJobs`
+- Firestore rules dang cho `users/{uid}/{subcollection}/{docId}` owner read/write, nen user-owned subcollection duoc bao ve co ban.
+- Mot so query co the can index neu production data lon.
+
+Muc tieu:
+
+- Khong gap `FAILED_PRECONDITION: The query requires an index` tren production.
+- Rules ro rang, khong mo qua rong neu sau nay co client SDK ghi truc tiep.
+
+Viec can lam:
+
+1. Audit query moi:
+   - `aiWritingJobs.where(createdAtMillis >= todayStart).count()`
+   - `vocabStudyHistory.orderBy(finishedAtMillis desc).limit(100)`
+   - `practiceAttempts.orderBy(submittedAtMillis desc).orderBy(documentId desc)`
+   - `userVocabProgress.where(status in ...).where(nextReviewAtMillis <= now).count()`
+2. Cap nhat `firestore.indexes.json` neu query can composite/collection group.
+3. Ranh gioi rules:
+   - Giu owner-only cho `users/{uid}/practiceDrafts`.
+   - Giu owner-only cho `users/{uid}/vocabStudyHistory`.
+   - Giu owner-only cho `users/{uid}/dailySummaries`.
+   - Neu API server-only ghi bang Admin SDK, rules khong can mo write public.
+4. Chay Firebase emulator rules test neu co setup; neu chua co, them test rules toi thieu.
+5. Cap nhat docs deploy indexes/rules.
+
+Acceptance:
+
+- `firestore.indexes.json` co index can thiet.
+- `firestore.rules` khong mo public write.
+- Cac route progress/history/AI khong fail do missing index tren emulator/production.
+
+Kiem thu:
+
+```powershell
+firebase emulators:exec --only firestore "npm --prefix web test"
+firebase deploy --only firestore:indexes --dry-run
+firebase deploy --only firestore:rules --dry-run
+```
+
+Neu Firebase CLI khong ho tro dry-run trong moi truong hien tai, ghi ro lenh deploy can chay thu cong trong docs.
+
+## 17. Backlog tiep theo - Trang Hoc tiep
+
+Trang thai 2026-07-09: DA CODE
+
+- Da them `web/src/lib/services/continue-learning.ts`.
+- Da them route `/continue`.
+- Da them CTA tu `/hub` sang `/continue`.
+- Trang hien due vocab, practice recommendation, practice drafts gan day, vocab history gan day.
+
+Muc tieu:
+
+- Tao mot man hinh tap trung cac viec nen lam tiep, thay vi de Hub chi hien mot vai CTA.
+
+Route de xuat:
+
+```text
+/continue
+```
+
+Hoac neu muon gom trong app hien co:
+
+```text
+/hub/continue
+```
+
+Data can gom:
+
+- `dueVocabWords`: so tu can on.
+- `nextPracticeRecommendation`: part yeu nhat sau lan submit gan nhat.
+- Practice draft dang do:
+  - Doc `users/{uid}/practiceDrafts`, limit 5, sort `updatedAtMillis desc`.
+  - Hien ten test/config/time con lai neu co metadata.
+- Vocab set hoc gan day:
+  - Doc `vocabStudyHistory`, group theo setId, lay 3 set gan nhat.
+- Listening/Reading part gan day:
+  - Lay tu `studyActivity.sourceIds` hoac progress docs neu co san.
+
+UI de xuat:
+
+- Section "Can lam ngay":
+  - On tu den han.
+  - Tiep tuc bai thi dang do.
+- Section "Sua diem yeu":
+  - Luyen Part yeu.
+  - Link review attempt gan nhat.
+- Section "Hoc tiep gan day":
+  - Vocab sets/parts gan day.
+  - Listening/Reading level gan day.
+
+Service de xuat:
+
+- `web/src/lib/services/continue-learning.ts`
+- Ham:
+  - `getContinueLearning(uid): ContinueLearningView`
+  - doc cac summary nho, khong scan lon.
+
+Acceptance:
+
+- Hub co link ro den trang Hoc tiep.
+- Trang render nhanh, co empty state.
+- Khong query scan qua 100 docs moi section.
+- Neu user moi chua co data, hien goi y bat dau `/vocab`, `/practice`, `/listen`, `/read`.
+
+Kiem thu:
+
+```powershell
+cd D:\EnglishWebApp\web
+npm test
+npm run lint
+npm run build
+npm run test:e2e
+```
+
+E2E nen them:
+
+- Anonymous `/continue` redirect login.
+- Logged-in mock/session neu e2e co auth helper: trang hien empty state.
+- Link tu `/hub` sang `/continue` hoat dong.
+
+Manual QA:
+
+- User co due vocab.
+- User co practice draft.
+- User co weak area sau submit.
+- User moi khong co data.
+
+## 18. Backlog tiep theo - Phan tich loi chi tiet theo dang cau
+
+Trang thai 2026-07-09: DA CODE PHIEN BAN LOCAL HEURISTIC
+
+- Da them `weakTag` vao answer docs khi submit practice.
+- Da luu `practiceWeakTags` vao user doc.
+- Da hien weak tag trong trang review answer.
+- Con nen lam sau: classifier co unit test rieng va dung metadata DauToeic neu provider co them field topic/type.
+
+Hien trang:
+
+- Practice submit da luu `partBreakdown`.
+- User doc co `nextPracticeRecommendation` theo part yeu nhat.
+
+Muc tieu:
+
+- Phan tich sau submit khong chi theo Part, ma theo dang loi de goi y dung bai luyen.
+
+Data de xuat:
+
+```ts
+interface PracticeWeakArea {
+  part: number;
+  tag: string;
+  total: number;
+  correct: number;
+  percent: number;
+  lastAttemptId: number;
+  updatedAtMillis: number;
+}
+```
+
+Nguon tag:
+
+- Neu DauToeic question co metadata topic/type: map truc tiep.
+- Neu chua co metadata:
+  - Part 5 heuristic theo text/options:
+    - word form
+    - tense
+    - preposition
+    - vocabulary
+  - Part 6/7:
+    - detail
+    - inference
+    - vocabulary-in-context
+  - Listening:
+    - main idea
+    - detail
+    - speaker intent
+- Heuristic phai conservative; neu khong chac thi tag `general`.
+
+Viec can lam:
+
+1. Them helper `classifyPracticeQuestion(question, options?)`.
+2. Khi submit, trong `answerDocs` luu tag/difficulty neu co.
+3. Luu `weakAreasByTag` vao user doc hoac subcollection `practiceWeakAreas`.
+4. Review page hien:
+   - part breakdown.
+   - top 3 dang loi.
+   - CTA luyen lai.
+5. Hub/Hoc tiep dung top weak tag de goi y.
+
+Acceptance:
+
+- Review attempt hien dang loi co du lieu.
+- Neu khong classify duoc, van hien `general`, khong doan qua da.
+- Submit latency khong tang dang ke; classifier phai local, khong goi AI trong submit.
+
+Kiem thu:
+
+```powershell
+cd D:\EnglishWebApp\web
+npm test
+npm run build
+```
+
+Unit tests:
+
+- Classifier Part 5 voi cau preposition/word form/tense mau.
+- Breakdown tag tinh dung total/correct/percent.
+- Unknown question => `general`.
+
+Manual QA:
+
+- Lam/nop Part 5, review thay top weak tags.
+- Lam/nop Part 7, review khong bi crash neu metadata thieu.
+
+## 19. Backlog tiep theo - Server-side draft cho vocab game
+
+Trang thai 2026-07-09: DA CODE
+
+- Da them service `vocab-game-draft`.
+- Da them API `GET/PUT/DELETE /api/vocab/game-draft`.
+- Da them local-first restore/autosave/delete draft trong `FlashcardGame`.
+- Draft server merge theo `updatedAtMillis`, local render truoc.
+
+Muc tieu:
+
+- Vocab game dang choi do co the tiep tuc sau reload/doi may.
+- Van giu local-first de khong lam cham gameplay.
+
+Data model:
+
+```text
+users/{uid}/vocabGameDrafts/{draftId}
+```
+
+`draftId` gom:
+
+```text
+setId + externalPartId + mode + quizMode + mastery + order + amount
+```
+
+Fields:
+
+```json
+{
+  "setId": 123,
+  "externalPartId": "optional",
+  "mode": "quiz",
+  "quizMode": "wordMeaning",
+  "wordIds": [1, 2, 3],
+  "currentIndex": 5,
+  "answers": [],
+  "score": 80,
+  "attempts": 10,
+  "startedAtMillis": 123,
+  "updatedAtMillis": 456,
+  "status": "ACTIVE"
+}
+```
+
+API:
+
+- `GET /api/vocab/game-draft?setId=&mode=&...`
+- `PUT /api/vocab/game-draft`
+- `DELETE /api/vocab/game-draft?setId=&mode=&...`
+
+Client flow:
+
+1. Khi start game: tao local draft.
+2. Moi cau tra loi: update local ngay.
+3. Debounce PUT server 5-10 giay.
+4. Reload:
+   - render local neu co.
+   - GET server draft sau render, merge neu moi hon.
+5. Finish:
+   - Ghi progress/history.
+   - DELETE draft local/server.
+
+Acceptance:
+
+- Reload giua game khong mat tien do.
+- Doi thiet bi van tiep tuc duoc neu da sync.
+- Finish xong khong hien draft cu.
+- Guest van dung localStorage fallback.
+
+Kiem thu:
+
+```powershell
+cd D:\EnglishWebApp\web
+npm test
+npm run lint
+npm run build
+```
+
+Component tests:
+
+- Local-first restore.
+- Server newer merge.
+- Finish deletes draft.
+
+Manual QA:
+
+- Start quiz, tra loi vai cau, reload.
+- Doi browser/login cung account, mo lai game.
+- Finish game, quay lai menu khong con continue draft.
+
+## 20. Backlog tiep theo - Offline va sync resilience
+
+Trang thai 2026-07-09: DA CODE MOT PHAN
+
+- Practice session da detect online/offline.
+- Khi offline, draft van luu local va status hien "Offline - saved on this device".
+- Khi online lai, client flush local draft len server.
+- Vocab game da co local-first + debounce server draft.
+- Con nen lam sau: queue chung `useOnlineStatus`, conflict prompt neu server/local cung moi, Playwright offline test.
+
+Muc tieu:
+
+- Khi mat mang, user van lam bai/hoc tiep; app dong bo lai khi online.
+
+Pham vi:
+
+- Practice session draft.
+- Vocab game draft.
+- Vocab review/history.
+
+Viec can lam:
+
+1. Them hook `useOnlineStatus`.
+2. Autosave queue:
+   - Neu fetch fail do network, giu payload trong local queue.
+   - Khi `online` event, flush queue.
+3. UI status:
+   - `Offline - dang luu tren may`
+   - `Dang dong bo...`
+   - `Da dong bo`
+4. Submit:
+   - Neu offline, khong cho submit server; hien message ro.
+   - Van giu draft.
+5. Conflict:
+   - Neu server co draft moi hon, hoi user "Dung ban tren may nay" hay "Dung ban server" neu chenh lech lon.
+   - Ban dau co the chon newest wins, nhung phai ghi ro.
+
+Acceptance:
+
+- Tat network trong DevTools, chon dap an, reload van con local draft.
+- Bat network lai, draft sync server.
+- Khong co unhandled promise rejection.
+
+Kiem thu:
+
+```powershell
+cd D:\EnglishWebApp\web
+npm test
+npm run build
+```
+
+Playwright tests nen them:
+
+- Mock route draft PUT fail, UI hien offline/pending.
+- Sau khi route restore, click/trigger online flush thanh cong.
+
+Manual QA:
+
+- Chrome DevTools Offline cho practice session.
+- Chrome DevTools Offline cho vocab game.
+
+## 21. Backlog tiep theo - Rate limit va abuse protection
+
+Trang thai 2026-07-09: DA CODE NEN TANG
+
+- Da them `web/src/lib/services/rate-limit.ts` bang Firestore daily counter.
+- Da ap dung cho AI Writing, practice draft autosave, vocab game draft autosave, vocab history.
+- Con nen lam sau: ap dung tiep cho vocab AI preview/save, admin generate, community comments/contributions va them unit test fake clock.
+
+Hien trang:
+
+- AI Writing co limit 20 job/ngay/user.
+- Cac API khac chua co rate limit chung.
+
+Muc tieu:
+
+- Bao ve Gemini quota, Firestore write cost, comment spam, autosave spam.
+
+API can limit:
+
+- `/api/vocab/sets/[setId]/ai-words/preview`
+- `/api/vocab/sets/[setId]/ai-words/save`
+- `/api/admin/generate`
+- `/api/practice/tests/[testId]/draft`
+- `/api/vocab/history`
+- `/api/community/comments`
+- `/api/community/contributions`
+
+Thiet ke de xuat:
+
+- Service `rate-limit.ts`.
+- Firestore collection:
+
+```text
+rateLimits/{scopeKey}
+```
+
+Hoac user subcollection:
+
+```text
+users/{uid}/rateLimits/{bucket}
+```
+
+- Bucket theo minute/day tuy API:
+  - AI preview: 30/day/user.
+  - AI writing: 20/day/user.
+  - Admin generate: 100/day/admin.
+  - Draft autosave: 120/hour/session.
+  - Comments: 30/day/user.
+
+Luu y:
+
+- Rate limit phai fail nhanh, message ro.
+- Khong log prompt/secret.
+- Admin co the co limit cao hon, khong unlimited neu goi Gemini.
+
+Acceptance:
+
+- Vuot limit tra 429 hoac BadRequest co message ro.
+- Test duoc voi fake clock.
+- Khong lam cham request binh thuong qua muc.
+
+Kiem thu:
+
+```powershell
+cd D:\EnglishWebApp\web
+npm test
+npm run build
+```
+
+Unit tests:
+
+- Under limit pass.
+- At/over limit fail.
+- Window moi reset.
+- Different user/session khong anh huong nhau.
+
+## 22. Backlog tiep theo - Observability va structured logging
+
+Trang thai 2026-07-09: DA CODE NEN TANG
+
+- Da them `web/src/lib/logging.ts`.
+- Da doi `withErrorHandling` sang structured error log co method/path.
+- Con nen lam sau: them redaction helper/test va log latency cho DauToeic/Gemini/draft/submit.
+
+Muc tieu:
+
+- Khi production loi, biet loi o dau ma khong log secret/user content nhay cam.
+
+Pham vi log:
+
+- DauToeic API:
+  - endpoint/function
+  - status
+  - latency
+  - cache hit/miss
+- Gemini:
+  - feature (`ai-writing`, `vocab-preview`, `dictionary`)
+  - model
+  - status
+  - latency
+  - fallback used
+- Draft:
+  - save success/fail
+  - payload size
+  - latency
+  - sessionKey hash, khong log answers day du
+- Submit practice:
+  - testId
+  - mode/parts
+  - questionCount
+  - latency
+  - expired
+- Firestore missing index:
+  - collection/query name
+  - link Firebase neu error co.
+
+Thiet ke:
+
+- Tao helper `web/src/lib/logging.ts`:
+
+```ts
+logInfo(event, fields)
+logWarn(event, fields)
+logError(event, error, fields)
+```
+
+- Redact:
+  - token
+  - cookie
+  - API key
+  - prompt/essay full text
+  - answer payload full text
+
+Acceptance:
+
+- Route handlers dung logging helper thay vi `console.error` raw cho loi quan trong.
+- Khong log secret trong output.
+- Loi unexpected van vao `withErrorHandling`.
+
+Kiem thu:
+
+```powershell
+cd D:\EnglishWebApp\web
+npm test
+npm run lint
+npm run build
+```
+
+Unit tests:
+
+- Redaction xoa key nhay cam.
+- Error serializer khong throw voi object la.
+
+## 23. Checklist kiem thu tong hop cho cac backlog moi
+
+Ket qua kiem thu 2026-07-09:
+
+- `npm test`: PASS, 6 files, 17 tests.
+- `npm run lint`: PASS.
+- `npm run build`: PASS.
+- `npm run test:e2e`: PASS, 3 tests. Luu y dev server co warning allowedDevOrigins cho `127.0.0.1` khi Playwright dung host nay; test van pass.
+
+Sau khi code bat ky phase moi nao tu 14-22, chay toi thieu:
+
+```powershell
+cd D:\EnglishWebApp\web
+npm test
+npm run lint
+npm run build
+npm run test:e2e
+```
+
+Checklist manual bat buoc neu dung vao UI:
+
+- Desktop 1365x900.
+- Mobile 390x844.
+- Anonymous route protected redirect login.
+- Logged-in route render dung.
+- Loading/empty/error state khong bi blank page.
+- Khong co hydration error trong browser console.
+
+Checklist performance neu dung vao draft/dashboard/practice:
+
+- Vao `/practice/session/{testId}` van render nhanh tu local draft.
+- Draft server GET/PUT khong block thao tac chon dap an.
+- `/hub` khong scan collection lon; chi doc summary/count query nho.
+- `/vocab/[setId]/flashcards?mode=menu` khong bi cham do history scan qua muc.
+
+Checklist bao mat/van hanh:
+
+- Khong them secret vao source.
+- `.env.example` cap nhat neu them env moi.
+- Rules/indexes cap nhat neu them collection/query moi.
+- API moi co auth/role guard dung muc.
+- API AI/write-heavy co rate limit hoac ly do chua can.
+
+Checklist git truoc khi push:
+
+```powershell
+git status --short
+git diff --stat
+rg -n "API_KEY|SECRET|PRIVATE_KEY|eyJ" web/src .env.example web/.env.example
+```
+
+Neu push:
+
+```powershell
+git add -A
+git commit -m "<message ro nghiep vu>"
+git push <remote> HEAD:<branch>
+```
