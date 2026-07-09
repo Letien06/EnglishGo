@@ -29,6 +29,7 @@ export default async function PracticeHistoryPage({ searchParams }: Props) {
                   <th className="text-left p-3">Test</th>
                   <th className="text-left p-3">Mode</th>
                   <th className="text-left p-3">Score</th>
+                  <th className="text-left p-3">BXH</th>
                   <th className="text-left p-3">Time</th>
                   <th className="text-left p-3">Submitted</th>
                   <th className="p-3" />
@@ -45,6 +46,11 @@ export default async function PracticeHistoryPage({ searchParams }: Props) {
                     <td className="p-3">
                       <div className="font-bold text-ink">{attempt.score}%</div>
                       <div className="text-xs text-muted">{scoreLabel(attempt.scoreBreakdown)}</div>
+                    </td>
+                    <td className="p-3">
+                      <span className={`rounded-full px-2.5 py-1 text-xs font-bold ${eligibilityClass(attempt.leaderboardEligibility)}`}>
+                        {eligibilityLabel(attempt.leaderboardEligibility)}
+                      </span>
                     </td>
                     <td className="p-3 text-muted">{formatElapsed(attempt.elapsedMillis)}</td>
                     <td className="p-3 text-muted">{formatDate(attempt.submittedAtMillis)}</td>
@@ -99,4 +105,16 @@ function formatElapsed(value: number) {
 function partLabel(parts: number[]) {
   if (parts.length === 1) return `Part ${parts[0]}`;
   return `Parts ${parts.join(", ")}`;
+}
+
+function eligibilityLabel(value: string) {
+  if (value === "VERIFIED") return "Verified";
+  if (value === "SUSPICIOUS") return "Blocked";
+  return "Retry";
+}
+
+function eligibilityClass(value: string) {
+  if (value === "VERIFIED") return "bg-emerald-50 text-emerald-700";
+  if (value === "SUSPICIOUS") return "bg-red-50 text-red-700";
+  return "bg-amber-50 text-amber-700";
 }

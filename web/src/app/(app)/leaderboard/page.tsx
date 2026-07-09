@@ -1,90 +1,238 @@
+import Link from "next/link";
 import { getCurrentUser } from "@/lib/auth/session";
-import { getStudyStreakLeaderboard } from "@/lib/services/study-activity";
+import {
+  getPracticeLeaderboard,
+  normalizeLeaderboardPeriod,
+  normalizeLeaderboardScope,
+  practiceLeaderboardLabel,
+  type PracticeLeaderboardEntry,
+  type PracticeLeaderboardPeriod,
+  type PracticeLeaderboardScope,
+} from "@/lib/services/leaderboard";
+import { getStudyStreakLeaderboard, type StudyStreakLeaderboardEntry } from "@/lib/services/study-activity";
 
 export const dynamic = "force-dynamic";
 
-export default async function StreakLeaderboardPage() {
-  const [user, entries] = await Promise.all([
-    getCurrentUser(),
-    getStudyStreakLeaderboard(100),
-  ]);
+interface Props {
+  searchParams: Promise<Record<string, string | string[] | undefined>>;
+}
+
+type LeaderboardTab = "streak" | "listening" | "reading" | "exam" | "weekly";
+
+export default async function LeaderboardPage({ searchParams }: Props) {
+  const [user, sp] = await Promise.all([getCurrentUser(), searchParams]);
+  const tab = normalizeTab(singleValue(sp.tab));
+  const period = tab === "weekly" ? "WEEKLY" : normalizeLeaderboardPeriod(singleValue(sp.period));
+  const scope = tab === "weekly" ? "EXAM" : scopeForTab(tab);
+
+  const [streakEntries, practiceEntries] = tab === "streak"
+    ? [await getStudyStreakLeaderboard(100), [] as PracticeLeaderboardEntry[]]
+    : [[] as StudyStreakLeaderboardEntry[], await getPracticeLeaderboard(scope, period, 100)];
 
   return (
     <main className="min-h-[calc(100dvh-4rem)] bg-[#f1f5fb] px-5 py-8 lg:px-8">
-      <section className="mx-auto max-w-5xl space-y-5">
+      <section className="mx-auto max-w-6xl space-y-5">
         <header className="flex flex-wrap items-end justify-between gap-4">
           <div>
             <p className="text-xs font-extrabold uppercase tracking-widest text-primary">
-              Bảng xếp hạng chuỗi
+              Bang xep hang
             </p>
             <h1 className="mt-2 text-3xl font-extrabold text-ink">
-              Bảng xếp hạng chuỗi học
+              BXH hoc tap TOEIC
             </h1>
             <p className="mt-2 text-sm text-muted">
-              Xếp hạng tối đa 100 người có chuỗi học liên tiếp cao nhất.
+              Diem nghe, doc va de thi chi tinh attempt verified; lam lai van luu lich su nhung khong cong don BXH.
             </p>
           </div>
           <div className="rounded-2xl border border-amber-100 bg-white px-4 py-3 text-sm font-extrabold text-primary shadow-sm">
-            <span aria-hidden="true">&#128293;</span> {entries.length}/100 người
+            {tab === "streak" ? `${streakEntries.length}/100 nguoi` : `${practiceEntries.length}/100 entries`}
           </div>
         </header>
 
-        <section className="overflow-hidden rounded-[28px] border border-line bg-white shadow-sm">
-          <div className="grid grid-cols-[88px_1fr_112px] border-b border-line bg-slate-50 px-5 py-3 text-xs font-extrabold uppercase tracking-wide text-slate-600">
-            <span>Hạng</span>
-            <span>Người dùng</span>
-            <span className="text-right">Streak</span>
-          </div>
+        <nav className="flex flex-wrap gap-2" aria-label="Leaderboard tabs">
+          <TabLink href="/leaderboard?tab=streak" active={tab === "streak"} label="Streak" />
+          <TabLink href="/leaderboard?tab=listening" active={tab === "listening"} label="Listening" />
+          <TabLink href="/leaderboard?tab=reading" active={tab === "reading"} label="Reading" />
+          <TabLink href="/leaderboard?tab=exam" active={tab === "exam"} label="De thi" />
+          <TabLink href="/leaderboard?tab=weekly" active={tab === "weekly"} label="Tuan nay" />
+        </nav>
 
-          {entries.length === 0 ? (
-            <div className="p-10 text-center text-muted">
-              Chưa có dữ liệu chuỗi học. Hãy học một bài để xuất hiện trên bảng xếp hạng.
-            </div>
-          ) : (
-            <div className="divide-y divide-line">
-              {entries.map((entry) => (
-                <article
-                  key={entry.uid}
-                  className={`grid grid-cols-[88px_1fr_112px] items-center px-5 py-4 ${
-                    entry.uid === user?.uid ? "bg-amber-50/70" : "bg-white"
-                  }`}
-                >
-                  <RankBadge rank={entry.rank} />
-                  <div className="flex min-w-0 items-center gap-4">
-                    <Avatar
-                      name={entry.displayName ?? entry.email ?? "Learner"}
-                      avatarUrl={entry.avatarUrl}
-                    />
-                    <div className="min-w-0">
-                      <h2 className="truncate text-base font-extrabold text-ink">
-                        {entry.displayName ?? entry.email ?? "Learner"}
-                        {entry.uid === user?.uid ? (
-                          <span className="ml-2 rounded-full bg-primary/10 px-2 py-0.5 text-[10px] font-extrabold text-primary">
-                            Bạn
-                          </span>
-                        ) : null}
-                      </h2>
-                      {entry.studiedToday ? (
-                        <p className="mt-0.5 text-xs font-bold text-emerald-600">
-                          Hôm nay đã học {entry.todayActivityCount} hoạt động
-                        </p>
-                      ) : (
-                        <p className="mt-0.5 text-xs font-bold text-muted">
-                          Chưa học hôm nay
-                        </p>
-                      )}
-                    </div>
-                  </div>
-                  <strong className="text-right text-lg font-extrabold text-orange-500">
-                    {entry.streakDays} <span aria-hidden="true">&#128293;</span>
-                  </strong>
-                </article>
-              ))}
-            </div>
-          )}
-        </section>
+        {tab !== "streak" && tab !== "weekly" ? (
+          <nav className="flex gap-2" aria-label="Leaderboard period">
+            <TabLink
+              href={`/leaderboard?tab=${tab}&period=all-time`}
+              active={period === "ALL_TIME"}
+              label="All time"
+              compact
+            />
+            <TabLink
+              href={`/leaderboard?tab=${tab}&period=weekly`}
+              active={period === "WEEKLY"}
+              label="Tuan nay"
+              compact
+            />
+          </nav>
+        ) : null}
+
+        {tab === "streak" ? (
+          <StreakBoard entries={streakEntries} currentUid={user?.uid ?? null} />
+        ) : (
+          <PracticeBoard
+            entries={practiceEntries}
+            currentUid={user?.uid ?? null}
+            scope={scope}
+            period={period}
+          />
+        )}
       </section>
     </main>
+  );
+}
+
+function PracticeBoard({
+  entries,
+  currentUid,
+  scope,
+  period,
+}: {
+  entries: PracticeLeaderboardEntry[];
+  currentUid: string | null;
+  scope: PracticeLeaderboardScope;
+  period: PracticeLeaderboardPeriod;
+}) {
+  return (
+    <section className="overflow-hidden rounded-[28px] border border-line bg-white shadow-sm">
+      <div className="grid grid-cols-[72px_1fr_120px_120px_96px] gap-3 border-b border-line bg-slate-50 px-5 py-3 text-xs font-extrabold uppercase tracking-wide text-slate-600 max-md:grid-cols-[56px_1fr_96px]">
+        <span>Hang</span>
+        <span>Nguoi dung</span>
+        <span className="text-right">Diem</span>
+        <span className="text-right max-md:hidden">Dung</span>
+        <span className="text-right max-md:hidden">Thoi gian</span>
+      </div>
+
+      {entries.length === 0 ? (
+        <div className="p-10 text-center text-muted">
+          Chua co attempt verified cho BXH {practiceLeaderboardLabel(scope)} {period === "WEEKLY" ? "tuan nay" : "all time"}.
+        </div>
+      ) : (
+        <div className="divide-y divide-line">
+          {entries.map((entry) => (
+            <article
+              key={entry.uid}
+              className={`grid grid-cols-[72px_1fr_120px_120px_96px] items-center gap-3 px-5 py-4 max-md:grid-cols-[56px_1fr_96px] ${
+                entry.uid === currentUid ? "bg-amber-50/70" : "bg-white"
+              }`}
+            >
+              <RankBadge rank={entry.rank} />
+              <div className="flex min-w-0 items-center gap-4">
+                <Avatar name={entry.displayName ?? entry.email ?? "Learner"} avatarUrl={entry.avatarUrl} />
+                <div className="min-w-0">
+                  <h2 className="truncate text-base font-extrabold text-ink">
+                    {entry.displayName ?? entry.email ?? "Learner"}
+                    {entry.uid === currentUid ? (
+                      <span className="ml-2 rounded-full bg-primary/10 px-2 py-0.5 text-[10px] font-extrabold text-primary">
+                        Ban
+                      </span>
+                    ) : null}
+                  </h2>
+                  <p className="mt-0.5 truncate text-xs font-bold text-muted">
+                    Verified {practiceLeaderboardLabel(entry.scope)} attempt
+                  </p>
+                </div>
+              </div>
+              <strong className="text-right text-lg font-extrabold text-primary">
+                {entry.score}/{entry.maxScore}
+              </strong>
+              <span className="text-right text-sm font-bold text-ink max-md:hidden">
+                {entry.correctCount}/{entry.questionCount}
+              </span>
+              <span className="text-right text-sm text-muted max-md:hidden">
+                {formatElapsed(entry.elapsedMillis)}
+              </span>
+            </article>
+          ))}
+        </div>
+      )}
+    </section>
+  );
+}
+
+function StreakBoard({
+  entries,
+  currentUid,
+}: {
+  entries: StudyStreakLeaderboardEntry[];
+  currentUid: string | null;
+}) {
+  return (
+    <section className="overflow-hidden rounded-[28px] border border-line bg-white shadow-sm">
+      <div className="grid grid-cols-[88px_1fr_112px] border-b border-line bg-slate-50 px-5 py-3 text-xs font-extrabold uppercase tracking-wide text-slate-600">
+        <span>Hang</span>
+        <span>Nguoi dung</span>
+        <span className="text-right">Streak</span>
+      </div>
+
+      {entries.length === 0 ? (
+        <div className="p-10 text-center text-muted">
+          Chua co du lieu chuoi hoc. Hay hoc mot bai de xuat hien tren bang xep hang.
+        </div>
+      ) : (
+        <div className="divide-y divide-line">
+          {entries.map((entry) => (
+            <article
+              key={entry.uid}
+              className={`grid grid-cols-[88px_1fr_112px] items-center px-5 py-4 ${
+                entry.uid === currentUid ? "bg-amber-50/70" : "bg-white"
+              }`}
+            >
+              <RankBadge rank={entry.rank} />
+              <div className="flex min-w-0 items-center gap-4">
+                <Avatar name={entry.displayName ?? entry.email ?? "Learner"} avatarUrl={entry.avatarUrl} />
+                <div className="min-w-0">
+                  <h2 className="truncate text-base font-extrabold text-ink">
+                    {entry.displayName ?? entry.email ?? "Learner"}
+                    {entry.uid === currentUid ? (
+                      <span className="ml-2 rounded-full bg-primary/10 px-2 py-0.5 text-[10px] font-extrabold text-primary">
+                        Ban
+                      </span>
+                    ) : null}
+                  </h2>
+                  <p className="mt-0.5 text-xs font-bold text-muted">
+                    {entry.studiedToday ? `Hom nay da hoc ${entry.todayActivityCount} hoat dong` : "Chua hoc hom nay"}
+                  </p>
+                </div>
+              </div>
+              <strong className="text-right text-lg font-extrabold text-orange-500">
+                {entry.streakDays} <span aria-hidden="true">&#128293;</span>
+              </strong>
+            </article>
+          ))}
+        </div>
+      )}
+    </section>
+  );
+}
+
+function TabLink({
+  href,
+  active,
+  label,
+  compact = false,
+}: {
+  href: string;
+  active: boolean;
+  label: string;
+  compact?: boolean;
+}) {
+  return (
+    <Link
+      href={href}
+      className={`${compact ? "px-3 py-1.5 text-xs" : "px-4 py-2 text-sm"} rounded-lg font-extrabold ${
+        active ? "bg-primary text-white" : "border border-line bg-white text-ink hover:bg-surface-soft"
+      }`}
+    >
+      {label}
+    </Link>
   );
 }
 
@@ -125,4 +273,28 @@ function Avatar({ name, avatarUrl }: { name: string; avatarUrl: string | null })
       {initial}
     </span>
   );
+}
+
+function normalizeTab(value?: string | null): LeaderboardTab {
+  if (value === "streak" || value === "listening" || value === "reading" || value === "exam" || value === "weekly") {
+    return value;
+  }
+  return "streak";
+}
+
+function scopeForTab(tab: LeaderboardTab): PracticeLeaderboardScope {
+  if (tab === "listening") return "LISTENING";
+  if (tab === "reading") return "READING";
+  return normalizeLeaderboardScope(tab);
+}
+
+function singleValue(value: string | string[] | undefined): string | null {
+  return Array.isArray(value) ? value[0] ?? null : value ?? null;
+}
+
+function formatElapsed(value: number): string {
+  const totalSeconds = Math.max(0, Math.round(value / 1000));
+  const minutes = Math.floor(totalSeconds / 60);
+  const seconds = totalSeconds % 60;
+  return `${minutes}m ${seconds}s`;
 }

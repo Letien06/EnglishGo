@@ -47,6 +47,22 @@ export default async function PracticeReviewPage({ params }: Props) {
               </p>
               <p className="mt-1 text-xs text-muted">Ước tính theo tỷ lệ đúng; điểm TOEIC thật có thể khác theo form đề.</p>
             </div>
+            <div className={`mt-5 rounded-xl border px-4 py-3 text-left text-sm ${eligibilityStyle(attempt.leaderboardEligibility)}`}>
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <strong>{eligibilityTitle(attempt.leaderboardEligibility)}</strong>
+                <span className="rounded-full bg-white/70 px-2.5 py-1 text-xs font-extrabold">
+                  {attempt.leaderboardScope.replace("_", " ")}
+                </span>
+              </div>
+              <p className="mt-1 text-xs">
+                {eligibilityDescription(attempt.leaderboardEligibility, attempt.ineligibleReason)}
+              </p>
+              {attempt.leaderboardScore > 0 ? (
+                <p className="mt-2 text-xs font-bold">
+                  BXH score: {attempt.leaderboardScore}/{attempt.leaderboardMaxScore}
+                </p>
+              ) : null}
+            </div>
             <div className="mt-5 flex flex-wrap justify-center gap-2 text-xs font-bold text-muted">
               <span className="rounded-full bg-surface-soft px-3 py-1">{attempt.mode === "exam" ? "Full Test" : `Thi theo ${partLabel(attempt.parts)}`}</span>
               <span className="rounded-full bg-surface-soft px-3 py-1">{attempt.durationMinutes} phút cấu hình</span>
@@ -172,4 +188,31 @@ function formatElapsed(value: number): string {
   const minutes = Math.floor(totalSeconds / 60);
   const seconds = totalSeconds % 60;
   return `${minutes}m ${seconds}s`;
+}
+
+function eligibilityTitle(value: string): string {
+  if (value === "VERIFIED") return "Tinh vao BXH";
+  if (value === "SUSPICIOUS") return "Khong tinh BXH";
+  return "Lan luyen lai";
+}
+
+function eligibilityDescription(value: string, reason: string | null): string {
+  if (value === "VERIFIED") {
+    return "Attempt nay du dieu kien verified va co the cap nhat bang xep hang.";
+  }
+  if (value === "SUSPICIOUS") {
+    if (reason === "expired") return "Attempt qua gio nen khong tinh vao bang xep hang chinh.";
+    if (reason === "too_fast") return "Attempt nop qua nhanh nen duoc giu de review nhung khong tinh BXH.";
+    return "Attempt co dau hieu bat thuong nen khong tinh vao bang xep hang chinh.";
+  }
+  if (reason === "same_test_retry") {
+    return "Day la lan lam lai cung de/scope, van luu lich su va review nhung khong ghi de BXH verified.";
+  }
+  return "Part practice hoac cau hinh khong chuan chi tinh vao lich su hoc, khong tinh BXH chinh.";
+}
+
+function eligibilityStyle(value: string): string {
+  if (value === "VERIFIED") return "border-emerald-200 bg-emerald-50 text-emerald-800";
+  if (value === "SUSPICIOUS") return "border-red-200 bg-red-50 text-red-800";
+  return "border-amber-200 bg-amber-50 text-amber-800";
 }

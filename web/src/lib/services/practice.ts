@@ -5,7 +5,12 @@ import { unstable_cache } from "next/cache";
 import type { AppUser } from "@/types";
 import type { DauToeicQuestion, DauToeicTest } from "@/types/dautoeic";
 import * as dautoeic from "./dautoeic";
-import { addScore } from "./community";
+import {
+  buildPracticeLeaderboardDecision,
+  recordPracticeLeaderboardAttempt,
+  type PracticeLeaderboardEligibility,
+  type PracticeLeaderboardScope,
+} from "./leaderboard";
 import { recordStudyActivity } from "./study-activity";
 import {
   hasTestIndex,
@@ -84,6 +89,10 @@ export interface PracticeSubmissionResponse {
   score: number;
   correctCount: number;
   questionCount: number;
+  leaderboardScore: number;
+  leaderboardMaxScore: number;
+  leaderboardScope: PracticeLeaderboardScope;
+  leaderboardEligibility: PracticeLeaderboardEligibility;
   expired: boolean;
   elapsedMillis: number;
   scoreBreakdown: PracticeScoreBreakdown;
@@ -131,6 +140,15 @@ export interface PracticeAttempt {
   score: number;
   correctCount: number;
   questionCount: number;
+  leaderboardScore: number;
+  leaderboardMaxScore: number;
+  leaderboardScope: PracticeLeaderboardScope;
+  leaderboardEligibility: PracticeLeaderboardEligibility;
+  officialConfig: boolean;
+  canonicalAttemptKey: string;
+  unansweredCount: number;
+  retryIndex: number;
+  ineligibleReason: string | null;
   expired: boolean;
   elapsedMillis: number;
   submittedAtMillis: number | null;
@@ -417,6 +435,7 @@ export async function submit(
 
   const answersByQuestionId = new Map(answers.map((a) => [a.questionId, a]));
   let correctCount = 0;
+  let unansweredCount = 0;
   const answerDocs: ReviewAnswer[] = [];
   const partStats = new Map<number, { total: number; correct: number }>();
 
@@ -426,6 +445,7 @@ export async function submit(
     const selectedAnswer = dautoeic.optionLetter(submitted.selectedOptionId);
     const correctAnswer = answerKey.correctAnswerByQuestionId[String(question.id)] ?? null;
     const correct = Boolean(correctAnswer && correctAnswer === selectedAnswer);
+    if (!selectedAnswer) unansweredCount++;
     if (correct) correctCount++;
     const currentPartStats = partStats.get(question.part) ?? { total: 0, correct: 0 };
     currentPartStats.total += 1;
@@ -463,6 +483,16 @@ export async function submit(
       };
     })
     .filter((part) => part.total > 0);
+  const leaderboardDecision = await buildPracticeLeaderboardDecision(user.uid, {
+    testId,
+    config,
+    scoreBreakdown,
+    correctCount,
+    questionCount: answerKey.questions.length,
+    unansweredCount,
+    elapsedMillis,
+    expired,
+  });
   const attemptId = submittedAtMillis;
   const attempt = {
     source: "DAUTOEIC",
@@ -478,6 +508,17 @@ export async function submit(
     score,
     correctCount,
     questionCount: answerKey.questions.length,
+    scope: leaderboardDecision.scope,
+    eligibility: leaderboardDecision.eligibility,
+    officialConfig: leaderboardDecision.officialConfig,
+    canonicalAttemptKey: leaderboardDecision.canonicalAttemptKey,
+    leaderboardScore: leaderboardDecision.leaderboardScore,
+    leaderboardMaxScore: leaderboardDecision.leaderboardMaxScore,
+    rawCorrect: leaderboardDecision.rawCorrect,
+    rawTotal: leaderboardDecision.rawTotal,
+    unansweredCount: leaderboardDecision.unansweredCount,
+    retryIndex: leaderboardDecision.retryIndex,
+    ineligibleReason: leaderboardDecision.ineligibleReason,
     startedAtMillis,
     submittedAtMillis,
     elapsedMillis,
@@ -502,7 +543,18 @@ export async function submit(
       .catch(() => undefined),
     updatePracticeWeakAreas(user.uid, attempt).catch(() => undefined),
     updatePracticeSummary(user.uid, score, submittedAtMillis).catch(() => undefined),
-    addScore(user, score).catch(() => undefined),
+    recordPracticeLeaderboardAttempt({
+      uid: user.uid,
+      email: user.email,
+      displayName: user.displayName,
+      avatarUrl: user.avatarUrl,
+      attemptId,
+      testId,
+      title: answerKey.test.title,
+      elapsedMillis,
+      submittedAtMillis,
+      ...leaderboardDecision,
+    }).catch(() => undefined),
     recordStudyActivity(user.uid, {
       module: "practice",
       activityType: config.mode === "exam" ? "practice_exam_submit" : "practice_part_submit",
@@ -515,6 +567,10 @@ export async function submit(
     score,
     correctCount,
     questionCount: answerKey.questions.length,
+    leaderboardScore: leaderboardDecision.leaderboardScore,
+    leaderboardMaxScore: leaderboardDecision.leaderboardMaxScore,
+    leaderboardScope: leaderboardDecision.scope,
+    leaderboardEligibility: leaderboardDecision.eligibility,
     expired,
     elapsedMillis,
     scoreBreakdown,
@@ -949,6 +1005,15 @@ function toAttempt(doc: FirebaseFirestore.DocumentSnapshot): PracticeAttempt {
     score: numberValue(doc.get("score")) ?? 0,
     correctCount: numberValue(doc.get("correctCount")) ?? 0,
     questionCount: numberValue(doc.get("questionCount")) ?? 0,
+    leaderboardScore: numberValue(doc.get("leaderboardScore")) ?? 0,
+    leaderboardMaxScore: numberValue(doc.get("leaderboardMaxScore")) ?? 0,
+    leaderboardScope: normalizeLeaderboardScope(doc.get("scope")),
+    leaderboardEligibility: normalizeLeaderboardEligibility(doc.get("eligibility")),
+    officialConfig: doc.get("officialConfig") === true,
+    canonicalAttemptKey: stringValue(doc.get("canonicalAttemptKey")) ?? "",
+    unansweredCount: numberValue(doc.get("unansweredCount")) ?? 0,
+    retryIndex: numberValue(doc.get("retryIndex")) ?? 1,
+    ineligibleReason: stringValue(doc.get("ineligibleReason")),
     expired: Boolean(doc.get("expired")),
     elapsedMillis: numberValue(doc.get("elapsedMillis")) ?? 0,
     submittedAtMillis: numberValue(doc.get("submittedAtMillis")),
@@ -1045,6 +1110,20 @@ function toCachedAnswerMap(value: unknown): Record<string, string | null> {
 
 function normalizeAttemptMode(value: unknown): PracticeMode {
   return value === "part" ? "part" : "exam";
+}
+
+function normalizeLeaderboardScope(value: unknown): PracticeLeaderboardScope {
+  if (value === "LISTENING" || value === "READING" || value === "EXAM" || value === "PART_PRACTICE") {
+    return value;
+  }
+  return "PART_PRACTICE";
+}
+
+function normalizeLeaderboardEligibility(value: unknown): PracticeLeaderboardEligibility {
+  if (value === "VERIFIED" || value === "PRACTICE_RETRY" || value === "SUSPICIOUS") {
+    return value;
+  }
+  return "PRACTICE_RETRY";
 }
 
 export function normalizeDraftPayload(

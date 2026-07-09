@@ -1238,3 +1238,347 @@ git add -A
 git commit -m "<message ro nghiep vu>"
 git push <remote> HEAD:<branch>
 ```
+
+## 24. Backlog tiep theo - BXH diem nghe, doc, de thi va luong tinh diem cong bang
+
+Trang thai 2026-07-09: DA CODE
+
+- Da them service leaderboard rieng cho Listening, Reading, Full exam va weekly board.
+- Da luu `scope`, `eligibility`, `leaderboardScore`, `unansweredCount`, `retryIndex`, `ineligibleReason` vao practice attempt.
+- Da bo luong cong don score cu trong practice submit; attempt retry khong ghi de BXH verified.
+- Da cap nhat `/leaderboard`, practice history va review attempt de hien trang thai BXH.
+- Da them Firestore rules/index va unit test cho scoring/eligibility.
+
+Muc tieu:
+
+- Co bang xep hang rieng cho:
+  - Listening.
+  - Reading.
+  - Full exam/de thi.
+  - Weekly learning points neu muon tang dong luc hoc moi ngay.
+- Diem BXH phan anh nang luc that, khong phai ai lam lai cung mot de nhieu lan thi cong don vo han.
+- Nguoi lam cham, can than, khong gian lan khong bi thiet vi nguoi khac spam submit/lam lai.
+- Van cho phep lam lai de hoc, nhung attempt lam lai co nhan dien rieng va khong pha BXH chinh.
+
+### 24.1 Nguyen tac san pham
+
+- Dung thi co diem, sai hoac bo trong thi 0 diem. Khong tru diem khi sai, vi TOEIC that cung khong tru diem sai.
+- Khong cong don diem raw cua moi lan lam vao BXH chinh. Neu cong don, nguoi lam nhieu lan mot de se vuot nguoi hoc nghiem tuc.
+- BXH nang luc nen dua tren "best verified score" hoac "first verified score" theo tung scope, khong dua tren tong tat ca attempts.
+- XP hoc tap va diem BXH phai tach nhau:
+  - Diem BXH: can cong bang, chong spam, uu tien attempt hop le.
+  - XP hoc tap: co the thuong nho cho viec hoc deu, xem lai cau sai, hoan thanh bai.
+- Thoi gian lam bai chi nen dung lam tie-breaker, khong nen cong bonus lon. Neu cong bonus thoi gian, user co the doan nhanh de leo BXH.
+
+### 24.2 Scope BXH de xuat
+
+Board IDs:
+
+```text
+listening_all_time
+listening_weekly
+reading_all_time
+reading_weekly
+exam_all_time
+exam_weekly
+learning_xp_weekly
+```
+
+Dieu kien vao tung BXH:
+
+- Listening:
+  - Chi tinh session gom Part 1-4 hoac full Listening section.
+  - Nen yeu cau coverage gan 100 cau listening neu muon BXH nghiem tuc.
+  - Neu user chi lam Part 1 rieng, luu lich su va XP, nhung khong dua vao BXH Listening chinh.
+- Reading:
+  - Chi tinh session gom Part 5-7 hoac full Reading section.
+  - Tuong tu Listening, part le chi nen vao practice history/XP.
+- Full exam:
+  - Chi tinh attempt mode `exam`, parts 1-7, duration chuan 120 phut hoac config duoc danh dau official.
+  - Expired attempt khong vao BXH chinh.
+- Weekly:
+  - Reset theo tuan calendar hoac rolling 7 ngay. De don gian nen dung calendar week theo timezone app.
+
+### 24.3 Cong thuc diem
+
+Diem cau hoi:
+
+```text
+correct = 1
+wrong = 0
+unanswered = 0
+rawPercent = correctCount / questionCount * 100
+```
+
+Diem hien thi theo scope:
+
+- Listening:
+  - Dung `scoreBreakdown.listening.projectedScaledScore`, thang 5-495.
+  - Neu chua du full section, hien "practice score" rieng, khong eligible BXH chinh.
+- Reading:
+  - Dung `scoreBreakdown.reading.projectedScaledScore`, thang 5-495.
+- Full exam:
+  - Dung `scoreBreakdown.totalProjectedScore`, thang 10-990.
+  - Neu khong co du listening va reading thi khong eligible.
+- Tie-breaker:
+  1. Diem scaled cao hon.
+  2. Correct count cao hon.
+  3. It unanswered hon.
+  4. ElapsedMillis thap hon, chi dung khi cac chi so tren bang nhau.
+  5. SubmittedAtMillis som hon.
+
+Khong khuyen nghi:
+
+- Khong tru diem cau sai.
+- Khong cong bonus thoi gian vao diem chinh.
+- Khong cong don diem tat ca attempts vao BXH nang luc.
+
+### 24.4 Chinh sach lam lai cho cong bang
+
+Co 3 loai attempt:
+
+```text
+VERIFIED
+PRACTICE_RETRY
+SUSPICIOUS
+```
+
+`VERIFIED`:
+
+- Attempt dau tien hop le cua user cho mot `testId + scope + officialConfig`.
+- Hoac best score cua cac de khac nhau trong cung scope.
+- Khong expired.
+- Thoi gian lam khong qua bat thuong.
+- Payload cau tra loi duoc cham server-side bang answer key server, khong tin diem client gui len.
+
+`PRACTICE_RETRY`:
+
+- User lam lai cung mot test/scope sau attempt verified dau tien.
+- Van luu lich su, review cau sai, tinh progress ca nhan.
+- Khong ghi de BXH chinh mac dinh.
+- Co the hien "personal best" trong profile, nhung label ro la retry.
+
+`SUSPICIOUS`:
+
+- Submit qua nhanh so voi so cau hoi.
+- Nhieu attempt cung mot test trong thoi gian ngan.
+- Expired nhung van submit.
+- Client draft/start time bat thuong so voi server.
+- Attempt loai nay khong vao BXH chinh, nhung van co the luu de user review neu khong vi pham nang.
+
+Khuyen nghi chinh sach BXH:
+
+- BXH chinh: tinh diem tot nhat cua moi user tren cac attempt `VERIFIED`, moi test/scope chi lay 1 attempt dau tien.
+- BXH weekly: chi tinh attempt verified trong tuan, moi test/scope chi lay attempt verified dau tien trong tuan.
+- Personal history: hien tat ca attempts, gom retry, de user thay tien bo.
+- Personal best: co the tinh ca retry, nhung khong tron voi BXH verified.
+
+Neu muon cho lam lai van co dong luc:
+
+- Retry lan 2 tro di co the nhan XP giam dan:
+
+```text
+attempt 1: 100% learning XP
+attempt 2: 40% learning XP
+attempt 3+: 15% learning XP
+```
+
+- Diem BXH khong nhan multiplier, ma chi eligible hay khong eligible. Cach nay de giai thich va cong bang hon.
+
+### 24.5 Data model de xuat
+
+Luu attempt hien co:
+
+```text
+users/{uid}/practiceAttempts/{attemptId}
+```
+
+Them fields vao attempt:
+
+```json
+{
+  "scope": "LISTENING|READING|EXAM|PART_PRACTICE",
+  "eligibility": "VERIFIED|PRACTICE_RETRY|SUSPICIOUS",
+  "officialConfig": true,
+  "canonicalAttemptKey": "testId_scope_officialConfig",
+  "leaderboardScore": 495,
+  "leaderboardMaxScore": 495,
+  "rawCorrect": 88,
+  "rawTotal": 100,
+  "unansweredCount": 3,
+  "retryIndex": 1,
+  "ineligibleReason": null
+}
+```
+
+Bang best attempt theo user de query nhanh:
+
+```text
+users/{uid}/leaderboardBest/{scope}
+```
+
+Fields:
+
+```json
+{
+  "scope": "LISTENING",
+  "bestScore": 450,
+  "bestAttemptId": 123,
+  "bestTestId": 456,
+  "correctCount": 88,
+  "questionCount": 100,
+  "elapsedMillis": 2700000,
+  "updatedAtMillis": 123456789
+}
+```
+
+Bang global leaderboard:
+
+```text
+leaderboards/{boardId}/entries/{uid}
+```
+
+Fields:
+
+```json
+{
+  "uid": "abc",
+  "displayName": "Learner",
+  "email": "hidden-or-null",
+  "score": 450,
+  "maxScore": 495,
+  "correctCount": 88,
+  "questionCount": 100,
+  "elapsedMillis": 2700000,
+  "attemptId": 123,
+  "testId": 456,
+  "period": "ALL_TIME",
+  "scope": "LISTENING",
+  "updatedAtMillis": 123456789
+}
+```
+
+Luu y privacy:
+
+- Public leaderboard khong nen hien email day du. Uu tien displayName/avatar; email chi dung fallback da mask.
+
+### 24.6 Luong submit va update BXH
+
+Flow khi user submit:
+
+1. Server nhan answers, config, testId.
+2. Server load answer key va danh sach question hop le.
+3. Server tinh:
+   - correctCount.
+   - unansweredCount.
+   - partBreakdown.
+   - scoreBreakdown.
+   - scope.
+   - leaderboardScore.
+4. Server xac dinh `canonicalAttemptKey`.
+5. Server dem/lays attempt truoc cua user voi cung key:
+   - chua co attempt verified: attempt moi co the la `VERIFIED`.
+   - da co attempt verified: attempt moi la `PRACTICE_RETRY`.
+6. Server chay rule eligibility:
+   - expired => ineligible.
+   - elapsedMillis qua ngan => suspicious.
+   - parts khong du scope => part practice.
+7. Luu attempt vao `practiceAttempts`.
+8. Neu `VERIFIED`, update:
+   - `users/{uid}/leaderboardBest/{scope}` neu diem cao hon best hien tai.
+   - `leaderboards/{boardId}/entries/{uid}` cho all-time/weekly.
+9. Van update learning summary/weak areas/history cho moi attempt hop le, ke ca retry.
+10. Xoa draft sau submit thanh cong.
+
+Pseudo rule:
+
+```ts
+const score = correctCount / questionCount;
+const isOfficialExam = mode === "exam" && parts.length === 7 && durationMinutes === 120;
+const scope = inferScope(parts, mode);
+const hasPreviousVerified = await existsVerifiedAttempt(uid, canonicalAttemptKey);
+
+if (expired) eligibility = "SUSPICIOUS";
+else if (!isEligibleScope(scope, questionCount)) eligibility = "PRACTICE_RETRY";
+else if (hasPreviousVerified) eligibility = "PRACTICE_RETRY";
+else eligibility = "VERIFIED";
+```
+
+### 24.7 Luong UI
+
+Trang `/leaderboard` nen co tabs:
+
+- Streak.
+- Listening.
+- Reading.
+- De thi.
+- Tuan nay.
+
+Moi dong BXH nen hien:
+
+- Rank.
+- Ten/avatar.
+- Diem: `450/495` hoac `890/990`.
+- Correct: `88/100` hoac `176/200`.
+- Thoi gian lam, neu can.
+- Badge `Verified`.
+
+Trang review attempt nen hien:
+
+- Diem attempt.
+- Eligibility:
+  - `Tinh vao BXH`.
+  - `Lan luyen lai - khong tinh BXH`.
+  - `Khong tinh BXH do het gio/du lieu bat thuong`.
+- Neu retry dat diem cao hon verified score, hien ro:
+  - "Diem nay la personal best, khong tinh vao BXH chinh vi day la lan lam lai."
+
+### 24.8 Anti-abuse muc vua phai
+
+Khong can lam qua nang ngay tu dau, nhung nen co baseline:
+
+- Server-only scoring, client khong gui diem.
+- Server-side start time tu draft/session, khong tin startedAt client.
+- Rate limit submit theo user/test.
+- One active official attempt per test/scope trong mot khoang thoi gian.
+- Minimum reasonable time:
+  - Khong hard-block user nhanh, chi danh dau suspicious neu qua vo ly.
+  - Vi du full exam 200 cau ma submit duoi 10 phut thi khong vao BXH.
+- Log `eligibilityReason` de debug va giai thich cho user.
+- Admin co the reclassify attempt neu can.
+
+### 24.9 Acceptance
+
+- Submit dung/sai tinh diem server-side dung:
+  - Dung +1 raw.
+  - Sai 0.
+  - Bo trong 0.
+- Attempt full Listening vao BXH Listening.
+- Attempt full Reading vao BXH Reading.
+- Attempt full exam vao BXH De thi.
+- Part practice khong vao BXH chinh, nhung van vao history va weak areas.
+- Lam lai cung mot de khong cong don va khong ghi de BXH verified mac dinh.
+- BXH chi doc `leaderboards/{boardId}/entries`, khong scan attempts cua tat ca user.
+- UI giai thich ro vi sao mot attempt co/khong tinh BXH.
+
+### 24.10 Thu tu trien khai khuyen nghi
+
+1. Them helper tinh `scope`, `leaderboardScore`, `eligibility`, `canonicalAttemptKey`.
+2. Them unit test cho scoring/eligibility.
+3. Cap nhat `submit()` de luu fields moi vao attempt.
+4. Tao service `leaderboard.ts` rieng thay vi dung chung `community.addScore()`.
+5. Viet update best score bang transaction de tranh race condition.
+6. Cap nhat route `/leaderboard` thanh multi-tab.
+7. Cap nhat review attempt de hien eligibility.
+8. Them indexes/rules neu query moi can.
+9. Chay test/lint/build/e2e.
+
+Kiem thu:
+
+```powershell
+cd D:\EnglishWebApp\web
+npm test
+npm run lint
+npm run build
+npm run test:e2e
+```
