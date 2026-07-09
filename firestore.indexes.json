@@ -1,14 +1,6 @@
 {
   "indexes": [
     {
-      "collectionGroup": "practiceAttempts",
-      "queryScope": "COLLECTION",
-      "fields": [
-        { "fieldPath": "submittedAtMillis", "order": "DESCENDING" },
-        { "fieldPath": "__name__", "order": "DESCENDING" }
-      ]
-    },
-    {
       "collectionGroup": "practiceDrafts",
       "queryScope": "COLLECTION",
       "fields": [
