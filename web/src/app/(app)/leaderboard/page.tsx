@@ -141,7 +141,7 @@ function PracticeBoard({
                 </div>
               </div>
               <strong className="text-right text-lg font-extrabold text-primary">
-                {entry.score}/{entry.maxScore}
+                {scoreText(entry)}
               </strong>
               <span className="text-right text-sm font-bold text-ink max-md:hidden">
                 {entry.correctCount}/{entry.questionCount}
@@ -297,4 +297,8 @@ function formatElapsed(value: number): string {
   const minutes = Math.floor(totalSeconds / 60);
   const seconds = totalSeconds % 60;
   return `${minutes} phút ${seconds} giây`;
+}
+
+function scoreText(entry: PracticeLeaderboardEntry): string {
+  return entry.maxScore > 0 ? `${entry.score}/${entry.maxScore}` : `${entry.score} điểm`;
 }

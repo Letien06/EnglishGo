@@ -1,6 +1,7 @@
 import { FieldValue } from "firebase-admin/firestore";
 import { adminDb } from "../firestore/db";
 import { ApiError } from "../api/response";
+import { recordSkillQuestionLeaderboard } from "./leaderboard";
 import { recordStudyActivity, type StudyModule } from "./study-activity";
 import type { DauToeicDifficultyLevel } from "../../types/dautoeic";
 import type {
@@ -170,10 +171,9 @@ export function createLearningToolService(
       validateProgressRequest(request, config);
       const questionId = request.questionId!.trim();
       const now = Date.now();
+      const progressRef = userCol(uid, config.progressCollection).doc(questionId);
 
-      await userCol(uid, config.progressCollection)
-        .doc(questionId)
-        .set(
+      await progressRef.set(
           {
             source: "DAUTOEIC",
             part: request.part,
@@ -199,6 +199,19 @@ export function createLearningToolService(
         sourceId: questionId,
         occurredAtMillis: now,
       }).catch(() => undefined);
+      if (isCorrect) {
+        await recordSkillQuestionLeaderboard({
+          uid,
+          module: config.module,
+          part: request.part!,
+          level: request.level!,
+          itemId: request.itemId!.trim(),
+          questionId,
+          correct: isCorrect,
+          occurredAtMillis: now,
+          elapsedMillis: Math.max(0, request.elapsedSeconds ?? 0) * 1000,
+        }).catch(() => undefined);
+      }
       return { saved: true, authenticated: true, correct: isCorrect };
     },
 

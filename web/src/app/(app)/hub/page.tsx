@@ -2,19 +2,20 @@ import Link from "next/link";
 import AppTopbar from "@/components/AppTopbar";
 import { requireUser } from "@/lib/auth/session";
 import { getHub } from "@/lib/services/hub";
+import HubReadySignal from "./HubReadySignal";
 
 const skillTabs = [
-  { label: "Tong quan", icon: "D", href: null, active: true },
-  { label: "Doc", icon: "R", href: "/read", active: false },
+  { label: "Tổng quan", icon: "D", href: null, active: true },
+  { label: "Đọc", icon: "R", href: "/read", active: false },
   { label: "Nghe", icon: "L", href: "/listen", active: false },
-  { label: "Tu vung", icon: "V", href: "/vocab", active: false },
+  { label: "Từ vựng", icon: "V", href: "/vocab", active: false },
 ] as const;
 
 const dailyGoals = [
-  { key: "reading", label: "Doc", icon: "R", target: 2, unit: "hoat dong", color: "text-celadon" },
-  { key: "listening", label: "Nghe", icon: "L", target: 2, unit: "hoat dong", color: "text-plum" },
-  { key: "vocab", label: "Tu vung", icon: "V", target: 4, unit: "hoat dong", color: "text-jade" },
-  { key: "practice", label: "Luyen de", icon: "P", target: 2, unit: "hoat dong", color: "text-terracotta" },
+  { key: "reading", label: "Đọc", icon: "R", target: 2, unit: "hoạt động", color: "text-celadon" },
+  { key: "listening", label: "Nghe", icon: "L", target: 2, unit: "hoạt động", color: "text-plum" },
+  { key: "vocab", label: "Từ vựng", icon: "V", target: 4, unit: "hoạt động", color: "text-jade" },
+  { key: "practice", label: "Luyện đề", icon: "P", target: 2, unit: "hoạt động", color: "text-terracotta" },
 ] as const;
 
 export default async function HubPage() {
@@ -29,9 +30,10 @@ export default async function HubPage() {
 
   return (
     <>
+      <HubReadySignal />
       <AppTopbar
-        pageTitle="Dashboard"
-        pageSubtitle="Track your progress"
+        pageTitle="Bảng điều khiển"
+        pageSubtitle="Theo dõi tiến độ học"
         userName={user.displayName}
         userEmail={user.email}
       />
@@ -40,13 +42,13 @@ export default async function HubPage() {
         <section className="flex items-center justify-between gap-4 p-6 rounded-2xl bg-surface border border-line">
           <div>
             <span className="text-xs font-semibold text-primary uppercase tracking-wider">
-              ENGLISHGO CUNG BAN
+              ENGLISHGO CÙNG BẠN
             </span>
             <h1 className="text-xl md:text-2xl font-bold text-ink mt-1">
-              {hub.greetingName}, luyen tiep thoi!
+              {hub.greetingName}, luyện tiếp thôi!
             </h1>
             <p className="text-sm text-muted mt-1">
-              Moi ngay mot chut, diem so se tu noi len tien do cua ban.
+              Mỗi ngày một chút, điểm số sẽ tự nói lên tiến độ của bạn.
             </p>
           </div>
           <div className="hidden md:flex items-center gap-2 text-3xl" aria-hidden="true">
@@ -57,52 +59,52 @@ export default async function HubPage() {
 
         <section className="flex flex-wrap items-center justify-between gap-4 rounded-2xl border border-primary/20 bg-primary-soft p-5">
           <div>
-            <p className="text-xs font-extrabold uppercase tracking-widest text-primary">Hoc tiep nhanh</p>
-            <h2 className="mt-1 text-lg font-extrabold text-ink">Resume draft, vocab on tap va practice goi y</h2>
+            <p className="text-xs font-extrabold uppercase tracking-widest text-primary">Học tiếp nhanh</p>
+            <h2 className="mt-1 text-lg font-extrabold text-ink">Bài đang làm, từ cần ôn và đề gợi ý</h2>
           </div>
           <Link
             href="/continue"
             className="rounded-lg bg-primary px-4 py-2 text-sm font-extrabold text-gold-ink"
           >
-            Mo Hoc tiep
+            Mở học tiếp
           </Link>
         </section>
 
-        <section className="grid grid-cols-2 lg:grid-cols-4 gap-4" aria-label="Thong ke hoc tap">
-          <StatCard icon="T" label="Thoi gian hoc" value={`${hub.dailyGoalCompleted * 5}m`} color="text-azure" />
+        <section className="grid grid-cols-2 lg:grid-cols-4 gap-4" aria-label="Thống kê học tập">
+          <StatCard icon="T" label="Thời gian học" value={`${hub.dailyGoalCompleted * 5}m`} color="text-azure" />
           <StatCard
             icon="S"
-            label="Chuoi ngay"
+            label="Chuỗi ngày"
             value={String(hub.streakDays)}
-            sub={`Hom nay: ${hub.dailyGoalCompleted} hoat dong`}
+            sub={`Hôm nay: ${hub.dailyGoalCompleted} hoạt động`}
             color="text-terracotta"
           />
           <StatCard
             icon="XP"
-            label="XP hom nay"
+            label="XP hôm nay"
             value={String(hub.todayXp)}
-            sub={`Tong XP: ${hub.totalXp}`}
+            sub={`Tổng XP: ${hub.totalXp}`}
             color="text-celadon"
           />
-          <StatCard icon="V" label="Tu da thuoc" value={String(hub.masteredWords)} color="text-gold" />
+          <StatCard icon="V" label="Từ đã thuộc" value={String(hub.masteredWords)} color="text-gold" />
         </section>
 
         {hub.dueVocabWords > 0 ? (
           <section className="flex flex-wrap items-center justify-between gap-4 rounded-2xl border border-amber-200 bg-amber-50 p-5">
             <div>
               <p className="text-xs font-extrabold uppercase tracking-widest text-amber-700">
-                Can on hom nay
+                Cần ôn hôm nay
               </p>
               <h2 className="mt-1 text-lg font-extrabold text-ink">
-                {hub.dueVocabWords} tu vung dang den han SRS
+                {hub.dueVocabWords} từ vựng đang đến hạn SRS
               </h2>
-              <p className="mt-1 text-sm text-muted">On ngay de giu chuoi nho dai han.</p>
+              <p className="mt-1 text-sm text-muted">Ôn ngay để giữ chuỗi nhớ dài hạn.</p>
             </div>
             <Link
               href="/vocab?tab=progress"
               className="rounded-lg bg-amber-500 px-4 py-2 text-sm font-extrabold text-white"
             >
-              On tu
+              Ôn từ
             </Link>
           </section>
         ) : null}
@@ -111,7 +113,7 @@ export default async function HubPage() {
           <section className="flex flex-wrap items-center justify-between gap-4 rounded-2xl border border-primary/20 bg-primary-soft p-5">
             <div>
               <p className="text-xs font-extrabold uppercase tracking-widest text-primary">
-                Goi y hoc tiep
+                Gợi ý học tiếp
               </p>
               <h2 className="mt-1 text-lg font-extrabold text-ink">
                 {hub.nextRecommendation.label}
@@ -122,14 +124,14 @@ export default async function HubPage() {
               href={hub.nextRecommendation.href}
               className="rounded-lg bg-primary px-4 py-2 text-sm font-extrabold text-gold-ink"
             >
-              Hoc tiep
+              Học tiếp
             </Link>
           </section>
         ) : null}
 
         <section aria-label="Ky nang">
           <strong className="text-xs uppercase tracking-widest text-muted">
-            KY NANG
+            KỸ NĂNG
           </strong>
           <div className="flex flex-wrap gap-2 mt-3">
             {skillTabs.map((tab) =>
@@ -160,40 +162,40 @@ export default async function HubPage() {
           </div>
         </section>
 
-        <section className="grid grid-cols-1 md:grid-cols-3 gap-4" aria-label="Tong quan ky nang">
+        <section className="grid grid-cols-1 md:grid-cols-3 gap-4" aria-label="Tổng quan kỹ năng">
           <SkillSummary
             icon="P"
-            title="Luyen de"
-            value={`${hub.todayPractice} hoat dong hom nay`}
-            note={`${hub.completedTests} lan nop bai - diem TB ${hub.averageScore}`}
+            title="Luyện đề"
+            value={`${hub.todayPractice} hoạt động hôm nay`}
+            note={`${hub.completedTests} lần nộp bài - điểm TB ${hub.averageScore}`}
             color="bg-plum/10 text-plum"
           />
           <SkillSummary
             icon="R"
-            title="Doc"
-            value={`${hub.todayReading} hoat dong hom nay`}
-            note={hub.todayReading > 0 ? "Da co tien do trong ngay" : "Chua luyen doc hom nay"}
+            title="Đọc"
+            value={`${hub.todayReading} hoạt động hôm nay`}
+            note={hub.todayReading > 0 ? "Đã có tiến độ trong ngày" : "Chưa luyện đọc hôm nay"}
             color="bg-jade/10 text-jade"
           />
           <SkillSummary
             icon="L"
             title="Nghe"
-            value={`${hub.todayListening} hoat dong hom nay`}
-            note={hub.todayListening > 0 ? "Da co tien do trong ngay" : "Chua luyen nghe hom nay"}
+            value={`${hub.todayListening} hoạt động hôm nay`}
+            note={hub.todayListening > 0 ? "Đã có tiến độ trong ngày" : "Chưa luyện nghe hôm nay"}
             color="bg-plum/10 text-plum2"
           />
         </section>
 
         <section>
           <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-primary-soft text-primary text-xs font-semibold mb-4">
-            Muc tieu hom nay
+            Mục tiêu hôm nay
           </span>
 
           <article className="flex items-center gap-4 p-5 rounded-2xl bg-surface border border-line mb-4">
             <span className="text-2xl">T</span>
             <div className="flex-1 min-w-0">
               <div className="flex items-center justify-between mb-1.5">
-                <strong className="text-sm font-bold text-ink">Tien do tong</strong>
+                <strong className="text-sm font-bold text-ink">Tiến độ tổng</strong>
                 <span className="text-sm text-muted">
                   <b className="text-ink">{hub.dailyGoalCompleted}</b> /{" "}
                   {hub.dailyGoalTarget}{" "}
@@ -238,10 +240,10 @@ export default async function HubPage() {
             <span className="text-lg">G</span>
             <div className="flex-1 min-w-0">
               <strong className="text-sm font-semibold text-ink block">
-                Cai dat muc tieu hang ngay
+                Cài đặt mục tiêu hằng ngày
               </strong>
               <small className="text-xs text-muted">
-                Sau nay co the tuy chinh so hoat dong, tu vung va bai luyen theo tung ky nang.
+                Sau này có thể tùy chỉnh số hoạt động, từ vựng và bài luyện theo từng kỹ năng.
               </small>
             </div>
             <b className="text-lg text-muted">-&gt;</b>

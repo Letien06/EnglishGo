@@ -7,6 +7,7 @@ const SHOW_DELAY_MS = 180;
 const MIN_VISIBLE_MS = 420;
 const MAX_VISIBLE_MS = 9000;
 const READY_EVENT = "englishgo:overdelay-ready";
+const BEGIN_EVENT = "englishgo:overdelay-begin";
 const ACTIVE_ATTR = "data-overdelay-active";
 
 function isModifiedClick(event: MouseEvent): boolean {
@@ -108,10 +109,26 @@ export default function AppOverdelay() {
     }
 
     function handleReady(event: Event) {
+      const detail = event instanceof CustomEvent ? event.detail as { key?: unknown; force?: unknown } | undefined : undefined;
+      if (detail?.force === true) {
+        finish(true);
+        return;
+      }
       if (!waitForRef.current) return;
-      const detail = event instanceof CustomEvent ? event.detail as { key?: unknown } | undefined : undefined;
       const key = typeof detail?.key === "string" ? detail.key : "";
       if (!key || key === waitForRef.current) finish(true);
+    }
+
+    function handleBegin(event: Event) {
+      const detail = event instanceof CustomEvent
+        ? event.detail as { label?: unknown; timeout?: unknown; waitFor?: unknown } | undefined
+        : undefined;
+      const timeout = Number(detail?.timeout);
+      begin(
+        typeof detail?.label === "string" ? detail.label : "Đang xử lý...",
+        Number.isFinite(timeout) && timeout > 0 ? timeout : MAX_VISIBLE_MS,
+        typeof detail?.waitFor === "string" ? detail.waitFor : null,
+      );
     }
 
     function handlePageShow() {
@@ -154,11 +171,13 @@ export default function AppOverdelay() {
 
     document.addEventListener("click", handleClick, true);
     document.addEventListener("submit", handleSubmit, true);
+    window.addEventListener(BEGIN_EVENT, handleBegin);
     window.addEventListener(READY_EVENT, handleReady);
     window.addEventListener("pageshow", handlePageShow);
     return () => {
       document.removeEventListener("click", handleClick, true);
       document.removeEventListener("submit", handleSubmit, true);
+      window.removeEventListener(BEGIN_EVENT, handleBegin);
       window.removeEventListener(READY_EVENT, handleReady);
       window.removeEventListener("pageshow", handlePageShow);
       clearTimers();

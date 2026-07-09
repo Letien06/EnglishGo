@@ -14,6 +14,22 @@ import { getClientAuth } from "@/lib/firebase/client";
 
 type AuthMode = "login" | "register";
 
+function beginLoginOverdelay(waitFor: string | null) {
+  window.dispatchEvent(new CustomEvent("englishgo:overdelay-begin", {
+    detail: {
+      label: "Đang đăng nhập...",
+      timeout: 15000,
+      waitFor,
+    },
+  }));
+}
+
+function finishLoginOverdelay(waitFor: string | null) {
+  window.dispatchEvent(new CustomEvent("englishgo:overdelay-ready", {
+    detail: waitFor ? { key: waitFor } : { force: true },
+  }));
+}
+
 export default function LoginForm() {
   const searchParams = useSearchParams();
   const from = getSafeReturnPath(searchParams.get("from") || searchParams.get("redirect") || "/hub");
@@ -59,10 +75,14 @@ export default function LoginForm() {
         if (!cancelled) {
           setError("");
           setBusy(true);
+          beginLoginOverdelay(from.startsWith("/hub") ? "hub-ready" : null);
         }
         await createBackendSession(result.user);
       } catch (err: unknown) {
-        if (!cancelled) setError(friendlyAuthError(err));
+        if (!cancelled) {
+          finishLoginOverdelay(from.startsWith("/hub") ? "hub-ready" : null);
+          setError(friendlyAuthError(err));
+        }
       } finally {
         if (!cancelled) setBusy(false);
       }
@@ -73,19 +93,22 @@ export default function LoginForm() {
     return () => {
       cancelled = true;
     };
-  }, [createBackendSession]);
+  }, [createBackendSession, from]);
 
   const runAuth = useCallback(async (callback: () => Promise<void>) => {
     setError("");
     setBusy(true);
+    const waitFor = from.startsWith("/hub") ? "hub-ready" : null;
+    beginLoginOverdelay(waitFor);
     try {
       await callback();
     } catch (err: unknown) {
+      finishLoginOverdelay(waitFor);
       setError(friendlyAuthError(err));
     } finally {
       setBusy(false);
     }
-  }, []);
+  }, [from]);
 
   const handleGoogle = () =>
     runAuth(async () => {

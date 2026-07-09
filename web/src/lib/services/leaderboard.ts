@@ -64,6 +64,18 @@ export interface PracticeLeaderboardEntry {
   updatedAtMillis: number | null;
 }
 
+export interface SkillQuestionLeaderboardInput {
+  uid: string;
+  module: "listening" | "reading";
+  part: number;
+  level: number;
+  itemId: string;
+  questionId: string;
+  correct: boolean;
+  occurredAtMillis: number;
+  elapsedMillis?: number | null;
+}
+
 const LISTENING_PARTS = [1, 2, 3, 4];
 const READING_PARTS = [5, 6, 7];
 const EXAM_PARTS = [1, 2, 3, 4, 5, 6, 7];
@@ -164,6 +176,51 @@ export async function recordPracticeLeaderboardAttempt(
     updateBoardEntry(attempt, "ALL_TIME"),
     updateBoardEntry(attempt, "WEEKLY"),
   ]);
+}
+
+export async function recordSkillQuestionLeaderboard(
+  input: SkillQuestionLeaderboardInput,
+): Promise<void> {
+  if (!input.uid?.trim() || !input.correct) return;
+  const scope: PracticeLeaderboardScope = input.module === "listening" ? "LISTENING" : "READING";
+  const points = Math.max(1, Math.min(50, Math.trunc(input.level) * 10));
+  const userRef = adminDb.collection("users").doc(input.uid);
+  const userSnap = await userRef.get().catch(() => null);
+  const userData = userSnap?.data() ?? {};
+  const awardRef = userRef
+    .collection("leaderboardQuestionAwards")
+    .doc(skillQuestionAwardId(input.module, input.questionId));
+  const allTimeRef = boardEntryRef(input.uid, scope, "ALL_TIME");
+  const weeklyRef = boardEntryRef(input.uid, scope, "WEEKLY");
+
+  await adminDb.runTransaction(async (tx) => {
+    const award = await tx.get(awardRef);
+    const allTime = await tx.get(allTimeRef);
+    const weekly = await tx.get(weeklyRef);
+    if (award.exists) return;
+
+    tx.set(awardRef, {
+      module: input.module,
+      scope,
+      part: input.part,
+      level: input.level,
+      itemId: input.itemId,
+      questionId: input.questionId,
+      points,
+      awardedAtMillis: input.occurredAtMillis,
+      awardedAt: FieldValue.serverTimestamp(),
+    });
+    tx.set(
+      allTimeRef,
+      skillBoardPayload(input, scope, points, "ALL_TIME", userData, allTime.data() ?? {}),
+      { merge: true },
+    );
+    tx.set(
+      weeklyRef,
+      skillBoardPayload(input, scope, points, "WEEKLY", userData, weekly.data() ?? {}),
+      { merge: true },
+    );
+  });
 }
 
 export async function getPracticeLeaderboard(
@@ -312,6 +369,62 @@ function boardIdFor(scope: PracticeLeaderboardScope, period: PracticeLeaderboard
   const prefix = scope.toLowerCase();
   if (period === "WEEKLY") return `${prefix}_weekly_${currentWeekKey()}`;
   return `${prefix}_all_time`;
+}
+
+function boardEntryRef(
+  uid: string,
+  scope: PracticeLeaderboardScope,
+  period: PracticeLeaderboardPeriod,
+) {
+  const boardId = boardIdFor(scope, period);
+  return adminDb
+    .collection("leaderboards")
+    .doc(boardId)
+    .collection("entries")
+    .doc(uid);
+}
+
+function skillBoardPayload(
+  input: SkillQuestionLeaderboardInput,
+  scope: PracticeLeaderboardScope,
+  points: number,
+  period: PracticeLeaderboardPeriod,
+  userData: Record<string, unknown>,
+  data: Record<string, unknown>,
+) {
+  const boardId = boardIdFor(scope, period);
+  const currentScore = numberValue(data.score) ?? 0;
+  const currentCorrect = numberValue(data.correctCount) ?? 0;
+  const currentTotal = numberValue(data.questionCount) ?? 0;
+  return {
+    uid: input.uid,
+    email: maskEmail(stringValue(userData.email)),
+    displayName: stringValue(userData.displayName),
+    avatarUrl: stringValue(userData.avatarUrl),
+    score: currentScore + points,
+    maxScore: 0,
+    correctCount: currentCorrect + 1,
+    questionCount: currentTotal + 1,
+    unansweredCount: numberValue(data.unansweredCount) ?? 0,
+    elapsedMillis: input.elapsedMillis ?? numberValue(data.elapsedMillis) ?? 0,
+    attemptId: input.occurredAtMillis,
+    testId: input.part,
+    title: scope === "LISTENING" ? "Luyện nghe" : "Luyện đọc",
+    scope,
+    period,
+    boardId,
+    weekKey: period === "WEEKLY" ? currentWeekKey() : null,
+    updatedAtMillis: input.occurredAtMillis,
+    updatedAt: FieldValue.serverTimestamp(),
+    lastQuestionId: input.questionId,
+    lastItemId: input.itemId,
+    lastPart: input.part,
+    lastLevel: input.level,
+  };
+}
+
+function skillQuestionAwardId(module: "listening" | "reading", questionId: string): string {
+  return encodeURIComponent(`${module}:${questionId}`);
 }
 
 function currentWeekKey(now = new Date()): string {
