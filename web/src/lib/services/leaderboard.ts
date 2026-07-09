@@ -202,10 +202,10 @@ export function normalizeLeaderboardPeriod(value?: string | null): PracticeLeade
 
 export function practiceLeaderboardLabel(scope: PracticeLeaderboardScope): string {
   return {
-    LISTENING: "Listening",
-    READING: "Reading",
-    EXAM: "De thi",
-    PART_PRACTICE: "Practice",
+    LISTENING: "Nghe",
+    READING: "Đọc",
+    EXAM: "Đề thi",
+    PART_PRACTICE: "Luyện tập",
   }[scope];
 }
 

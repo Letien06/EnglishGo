@@ -27,8 +27,8 @@ export default async function PracticeReviewPage({ params }: Props) {
       <main className="flex-1 overflow-y-auto bg-white px-4 py-8 lg:px-8">
         <div className="mx-auto max-w-4xl space-y-6">
           <section className="text-center">
-            <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-full bg-sky-100 text-3xl text-sky-600">
-              ♛
+            <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-full bg-sky-100 text-2xl font-extrabold text-sky-600">
+              ✓
             </div>
             <h1 className="mt-4 text-2xl font-extrabold text-ink">Hoàn thành bài thi!</h1>
             <p className="mt-1 text-sm text-muted">{attempt.title}</p>
@@ -39,19 +39,19 @@ export default async function PracticeReviewPage({ params }: Props) {
             <p className="mt-2 text-lg text-ink">/ {attempt.questionCount} câu đúng</p>
             <p className="mt-2 text-sm text-muted">({accuracy}% chính xác)</p>
             <div className="mt-5 rounded-xl bg-surface-soft p-4">
-              <p className="text-xs font-extrabold uppercase text-muted">TOEIC projected score</p>
+              <p className="text-xs font-extrabold uppercase text-muted">Điểm TOEIC ước tính</p>
               <p className="mt-1 text-3xl font-extrabold text-ink">
                 {scoreBreakdown.totalProjectedScore != null
                   ? `${scoreBreakdown.totalProjectedScore}/${scoreBreakdown.maxScore}`
                   : `${scoreBreakdown.listening?.projectedScaledScore ?? scoreBreakdown.reading?.projectedScaledScore ?? 5}/495`}
               </p>
-              <p className="mt-1 text-xs text-muted">Ước tính theo tỷ lệ đúng; điểm TOEIC thật có thể khác theo form đề.</p>
+              <p className="mt-1 text-xs text-muted">Ước tính theo tỷ lệ đúng; điểm TOEIC thật có thể khác theo từng form đề.</p>
             </div>
             <div className={`mt-5 rounded-xl border px-4 py-3 text-left text-sm ${eligibilityStyle(attempt.leaderboardEligibility)}`}>
               <div className="flex flex-wrap items-center justify-between gap-2">
                 <strong>{eligibilityTitle(attempt.leaderboardEligibility)}</strong>
                 <span className="rounded-full bg-white/70 px-2.5 py-1 text-xs font-extrabold">
-                  {attempt.leaderboardScope.replace("_", " ")}
+                  {scopeLabel(attempt.leaderboardScope)}
                 </span>
               </div>
               <p className="mt-1 text-xs">
@@ -59,12 +59,12 @@ export default async function PracticeReviewPage({ params }: Props) {
               </p>
               {attempt.leaderboardScore > 0 ? (
                 <p className="mt-2 text-xs font-bold">
-                  BXH score: {attempt.leaderboardScore}/{attempt.leaderboardMaxScore}
+                  Điểm xếp hạng: {attempt.leaderboardScore}/{attempt.leaderboardMaxScore}
                 </p>
               ) : null}
             </div>
             <div className="mt-5 flex flex-wrap justify-center gap-2 text-xs font-bold text-muted">
-              <span className="rounded-full bg-surface-soft px-3 py-1">{attempt.mode === "exam" ? "Full Test" : `Thi theo ${partLabel(attempt.parts)}`}</span>
+              <span className="rounded-full bg-surface-soft px-3 py-1">{attempt.mode === "exam" ? "Đề đầy đủ" : `Thi theo ${partLabel(attempt.parts)}`}</span>
               <span className="rounded-full bg-surface-soft px-3 py-1">{attempt.durationMinutes} phút cấu hình</span>
               <span className="rounded-full bg-surface-soft px-3 py-1">{formatElapsed(attempt.elapsedMillis)} đã làm</span>
               {attempt.expired ? <span className="rounded-full bg-red-50 px-3 py-1 text-red-600">Quá giờ</span> : null}
@@ -72,12 +72,12 @@ export default async function PracticeReviewPage({ params }: Props) {
           </section>
 
           <section className="grid gap-4 md:grid-cols-2">
-            <SkillScoreCard title="Listening" score={scoreBreakdown.listening} />
-            <SkillScoreCard title="Reading" score={scoreBreakdown.reading} />
+            <SkillScoreCard title="Nghe" score={scoreBreakdown.listening} />
+            <SkillScoreCard title="Đọc" score={scoreBreakdown.reading} />
           </section>
 
           <section className="rounded-xl border border-line bg-surface p-6 shadow-sm">
-            <h2 className="text-lg font-extrabold text-ink">Phân tích theo Part</h2>
+            <h2 className="text-lg font-extrabold text-ink">Phân tích theo phần</h2>
             <div className="mt-5 space-y-4">
               {attempt.partBreakdown.length > 0 ? (
                 attempt.partBreakdown.map((part) => {
@@ -85,8 +85,8 @@ export default async function PracticeReviewPage({ params }: Props) {
                   return (
                     <div key={part.part}>
                       <div className="flex items-center justify-between gap-3 text-sm">
-                        <span className="font-bold text-ink">{part.part <= 4 ? "🎧" : "📖"} Part {part.part}</span>
-                        <span className="text-muted">{part.correct}/{part.total} ({percent}%) · ~{part.projectedScaledScore}/495 · ~{part.questionWeight}đ/câu</span>
+                        <span className="font-bold text-ink">Phần {part.part}</span>
+                        <span className="text-muted">{part.correct}/{part.total} ({percent}%) · ~{part.projectedScaledScore}/495 · ~{part.questionWeight} điểm/câu</span>
                       </div>
                       <div className="mt-2 h-2 overflow-hidden rounded-full bg-surface-soft">
                         <span className="block h-full rounded-full bg-accent" style={{ width: `${percent}%` }} />
@@ -95,7 +95,7 @@ export default async function PracticeReviewPage({ params }: Props) {
                   );
                 })
               ) : (
-                <p className="text-sm text-muted">Chưa có dữ liệu phân tích theo part.</p>
+                <p className="text-sm text-muted">Chưa có dữ liệu phân tích theo phần.</p>
               )}
             </div>
           </section>
@@ -116,19 +116,19 @@ export default async function PracticeReviewPage({ params }: Props) {
             {review.answers.map((answer, index) => (
               <article key={`${answer.questionId}-${index}`} className="rounded-xl border border-line bg-surface p-5 shadow-sm">
                 <div className="flex flex-wrap items-center justify-between gap-2">
-                  <h2 className="font-bold text-ink">Question {index + 1} <span className="text-xs text-muted">(Part {answer.part})</span></h2>
+                  <h2 className="font-bold text-ink">Câu {index + 1} <span className="text-xs text-muted">(Phần {answer.part})</span></h2>
                   <p className={`text-sm font-bold ${answer.correct ? "text-green-600" : "text-red-600"}`}>
-                    {answer.correct ? "Correct" : "Incorrect"}
+                    {answer.correct ? "Đúng" : "Sai"}
                   </p>
                 </div>
-                <p className="mt-2 text-xs font-semibold text-muted">Weak tag: {answer.weakTag}</p>
+                <p className="mt-2 text-xs font-semibold text-muted">Dạng lỗi: {answer.weakTag}</p>
                 <p className="mt-3 whitespace-pre-wrap text-sm text-ink">{answer.questionText}</p>
                 <div className="mt-4 space-y-2">
                   {answer.options.map((option) => (
                     <div key={option.id} className={`rounded-lg p-3 text-sm ${answer.selectedOptionId === option.id ? "bg-accent/10 ring-1 ring-accent" : "bg-surface-soft"}`}>
                       <span>{option.content}</span>
-                      {option.correct ? <span className="font-semibold text-green-600"> - correct answer</span> : null}
-                      {answer.selectedOptionId === option.id ? <span className="text-muted"> - your choice</span> : null}
+                      {option.correct ? <span className="font-semibold text-green-600"> - đáp án đúng</span> : null}
+                      {answer.selectedOptionId === option.id ? <span className="text-muted"> - bạn chọn</span> : null}
                     </div>
                   ))}
                 </div>
@@ -153,7 +153,7 @@ function SkillScoreCard({
     return (
       <section className="rounded-xl border border-line bg-surface p-5 shadow-sm">
         <h2 className="font-extrabold text-ink">{title}</h2>
-        <p className="mt-3 text-sm text-muted">Chưa làm section này.</p>
+        <p className="mt-3 text-sm text-muted">Chưa làm phần này.</p>
       </section>
     );
   }
@@ -163,56 +163,63 @@ function SkillScoreCard({
       <div className="flex items-start justify-between gap-3">
         <div>
           <h2 className="font-extrabold text-ink">{title}</h2>
-          <p className="mt-1 text-xs text-muted">Parts {score.selectedParts.join(", ")} · coverage {score.coveragePercent}%</p>
+          <p className="mt-1 text-xs text-muted">Phần {score.selectedParts.join(", ")} · độ phủ {score.coveragePercent}%</p>
         </div>
         <strong className="text-2xl text-accent">~{score.projectedScaledScore}</strong>
       </div>
       <p className="mt-4 text-sm text-ink">
-        {score.correct}/{score.total} câu đúng · quy đổi ~{score.equivalentCorrect100}/100 câu section
+        {score.correct}/{score.total} câu đúng · quy đổi ~{score.equivalentCorrect100}/100 câu trong phần
       </p>
       <div className="mt-3 h-2 overflow-hidden rounded-full bg-surface-soft">
         <span className="block h-full rounded-full bg-accent" style={{ width: `${Math.min(100, Math.max(0, score.projectedScaledScore / 4.95))}%` }} />
       </div>
-      <p className="mt-3 text-xs text-muted">Mỗi câu trong phần đang làm tương đương khoảng {score.questionWeight} điểm scaled nếu dự phóng toàn section.</p>
+      <p className="mt-3 text-xs text-muted">Mỗi câu trong phần đang làm tương đương khoảng {score.questionWeight} điểm quy đổi nếu dự phóng toàn phần.</p>
     </section>
   );
 }
 
 function partLabel(parts: number[]): string {
-  if (parts.length === 1) return `Part ${parts[0]}`;
-  return `Parts ${parts.join(", ")}`;
+  if (parts.length === 1) return `Phần ${parts[0]}`;
+  return `Phần ${parts.join(", ")}`;
 }
 
 function formatElapsed(value: number): string {
   const totalSeconds = Math.max(0, Math.round(value / 1000));
   const minutes = Math.floor(totalSeconds / 60);
   const seconds = totalSeconds % 60;
-  return `${minutes}m ${seconds}s`;
+  return `${minutes} phút ${seconds} giây`;
 }
 
 function eligibilityTitle(value: string): string {
-  if (value === "VERIFIED") return "Tinh vao BXH";
-  if (value === "SUSPICIOUS") return "Khong tinh BXH";
-  return "Lan luyen lai";
+  if (value === "VERIFIED") return "Tính vào bảng xếp hạng";
+  if (value === "SUSPICIOUS") return "Không tính bảng xếp hạng";
+  return "Lần luyện lại";
 }
 
 function eligibilityDescription(value: string, reason: string | null): string {
   if (value === "VERIFIED") {
-    return "Attempt nay du dieu kien verified va co the cap nhat bang xep hang.";
+    return "Bài làm này đủ điều kiện hợp lệ và có thể cập nhật bảng xếp hạng.";
   }
   if (value === "SUSPICIOUS") {
-    if (reason === "expired") return "Attempt qua gio nen khong tinh vao bang xep hang chinh.";
-    if (reason === "too_fast") return "Attempt nop qua nhanh nen duoc giu de review nhung khong tinh BXH.";
-    return "Attempt co dau hieu bat thuong nen khong tinh vao bang xep hang chinh.";
+    if (reason === "expired") return "Bài làm quá giờ nên không tính vào bảng xếp hạng chính.";
+    if (reason === "too_fast") return "Bài làm nộp quá nhanh nên vẫn được giữ để xem lại, nhưng không tính bảng xếp hạng.";
+    return "Bài làm có dấu hiệu bất thường nên không tính vào bảng xếp hạng chính.";
   }
   if (reason === "same_test_retry") {
-    return "Day la lan lam lai cung de/scope, van luu lich su va review nhung khong ghi de BXH verified.";
+    return "Đây là lần làm lại cùng đề hoặc cùng phạm vi, vẫn lưu lịch sử và xem lại nhưng không ghi đè bảng xếp hạng hợp lệ.";
   }
-  return "Part practice hoac cau hinh khong chuan chi tinh vao lich su hoc, khong tinh BXH chinh.";
+  return "Bài luyện từng phần hoặc cấu hình chưa chuẩn chỉ tính vào lịch sử học, không tính bảng xếp hạng chính.";
 }
 
 function eligibilityStyle(value: string): string {
   if (value === "VERIFIED") return "border-emerald-200 bg-emerald-50 text-emerald-800";
   if (value === "SUSPICIOUS") return "border-red-200 bg-red-50 text-red-800";
   return "border-amber-200 bg-amber-50 text-amber-800";
+}
+
+function scopeLabel(value: string): string {
+  if (value === "LISTENING") return "Nghe";
+  if (value === "READING") return "Đọc";
+  if (value === "EXAM") return "Đề thi";
+  return "Luyện tập";
 }

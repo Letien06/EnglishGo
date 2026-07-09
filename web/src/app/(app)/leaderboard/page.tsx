@@ -35,40 +35,40 @@ export default async function LeaderboardPage({ searchParams }: Props) {
         <header className="flex flex-wrap items-end justify-between gap-4">
           <div>
             <p className="text-xs font-extrabold uppercase tracking-widest text-primary">
-              Bang xep hang
+              Bảng xếp hạng
             </p>
             <h1 className="mt-2 text-3xl font-extrabold text-ink">
-              BXH hoc tap TOEIC
+              Bảng xếp hạng học tập TOEIC
             </h1>
             <p className="mt-2 text-sm text-muted">
-              Diem nghe, doc va de thi chi tinh attempt verified; lam lai van luu lich su nhung khong cong don BXH.
+              Điểm nghe, đọc và đề thi chỉ tính bài làm hợp lệ; làm lại vẫn lưu lịch sử nhưng không cộng dồn vào bảng xếp hạng.
             </p>
           </div>
           <div className="rounded-2xl border border-amber-100 bg-white px-4 py-3 text-sm font-extrabold text-primary shadow-sm">
-            {tab === "streak" ? `${streakEntries.length}/100 nguoi` : `${practiceEntries.length}/100 entries`}
+            {tab === "streak" ? `${streakEntries.length}/100 người` : `${practiceEntries.length}/100 lượt xếp hạng`}
           </div>
         </header>
 
-        <nav className="flex flex-wrap gap-2" aria-label="Leaderboard tabs">
-          <TabLink href="/leaderboard?tab=streak" active={tab === "streak"} label="Streak" />
-          <TabLink href="/leaderboard?tab=listening" active={tab === "listening"} label="Listening" />
-          <TabLink href="/leaderboard?tab=reading" active={tab === "reading"} label="Reading" />
-          <TabLink href="/leaderboard?tab=exam" active={tab === "exam"} label="De thi" />
-          <TabLink href="/leaderboard?tab=weekly" active={tab === "weekly"} label="Tuan nay" />
+        <nav className="flex flex-wrap gap-2" aria-label="Các bảng xếp hạng">
+          <TabLink href="/leaderboard?tab=streak" active={tab === "streak"} label="Chuỗi học" />
+          <TabLink href="/leaderboard?tab=listening" active={tab === "listening"} label="Nghe" />
+          <TabLink href="/leaderboard?tab=reading" active={tab === "reading"} label="Đọc" />
+          <TabLink href="/leaderboard?tab=exam" active={tab === "exam"} label="Đề thi" />
+          <TabLink href="/leaderboard?tab=weekly" active={tab === "weekly"} label="Tuần này" />
         </nav>
 
         {tab !== "streak" && tab !== "weekly" ? (
-          <nav className="flex gap-2" aria-label="Leaderboard period">
+          <nav className="flex gap-2" aria-label="Khoảng thời gian xếp hạng">
             <TabLink
               href={`/leaderboard?tab=${tab}&period=all-time`}
               active={period === "ALL_TIME"}
-              label="All time"
+              label="Tất cả"
               compact
             />
             <TabLink
               href={`/leaderboard?tab=${tab}&period=weekly`}
               active={period === "WEEKLY"}
-              label="Tuan nay"
+              label="Tuần này"
               compact
             />
           </nav>
@@ -103,16 +103,16 @@ function PracticeBoard({
   return (
     <section className="overflow-hidden rounded-[28px] border border-line bg-white shadow-sm">
       <div className="grid grid-cols-[72px_1fr_120px_120px_96px] gap-3 border-b border-line bg-slate-50 px-5 py-3 text-xs font-extrabold uppercase tracking-wide text-slate-600 max-md:grid-cols-[56px_1fr_96px]">
-        <span>Hang</span>
-        <span>Nguoi dung</span>
-        <span className="text-right">Diem</span>
-        <span className="text-right max-md:hidden">Dung</span>
-        <span className="text-right max-md:hidden">Thoi gian</span>
+        <span>Hạng</span>
+        <span>Người dùng</span>
+        <span className="text-right">Điểm</span>
+        <span className="text-right max-md:hidden">Đúng</span>
+        <span className="text-right max-md:hidden">Thời gian</span>
       </div>
 
       {entries.length === 0 ? (
         <div className="p-10 text-center text-muted">
-          Chua co attempt verified cho BXH {practiceLeaderboardLabel(scope)} {period === "WEEKLY" ? "tuan nay" : "all time"}.
+          Chưa có bài làm hợp lệ cho bảng xếp hạng {practiceLeaderboardLabel(scope)} {period === "WEEKLY" ? "tuần này" : "tất cả"}.
         </div>
       ) : (
         <div className="divide-y divide-line">
@@ -125,18 +125,18 @@ function PracticeBoard({
             >
               <RankBadge rank={entry.rank} />
               <div className="flex min-w-0 items-center gap-4">
-                <Avatar name={entry.displayName ?? entry.email ?? "Learner"} avatarUrl={entry.avatarUrl} />
+                <Avatar name={entry.displayName ?? entry.email ?? "Người học"} avatarUrl={entry.avatarUrl} />
                 <div className="min-w-0">
                   <h2 className="truncate text-base font-extrabold text-ink">
-                    {entry.displayName ?? entry.email ?? "Learner"}
+                    {entry.displayName ?? entry.email ?? "Người học"}
                     {entry.uid === currentUid ? (
                       <span className="ml-2 rounded-full bg-primary/10 px-2 py-0.5 text-[10px] font-extrabold text-primary">
-                        Ban
+                        Bạn
                       </span>
                     ) : null}
                   </h2>
                   <p className="mt-0.5 truncate text-xs font-bold text-muted">
-                    Verified {practiceLeaderboardLabel(entry.scope)} attempt
+                    Bài làm {practiceLeaderboardLabel(entry.scope)} hợp lệ
                   </p>
                 </div>
               </div>
@@ -167,14 +167,14 @@ function StreakBoard({
   return (
     <section className="overflow-hidden rounded-[28px] border border-line bg-white shadow-sm">
       <div className="grid grid-cols-[88px_1fr_112px] border-b border-line bg-slate-50 px-5 py-3 text-xs font-extrabold uppercase tracking-wide text-slate-600">
-        <span>Hang</span>
-        <span>Nguoi dung</span>
-        <span className="text-right">Streak</span>
+        <span>Hạng</span>
+        <span>Người dùng</span>
+        <span className="text-right">Chuỗi học</span>
       </div>
 
       {entries.length === 0 ? (
         <div className="p-10 text-center text-muted">
-          Chua co du lieu chuoi hoc. Hay hoc mot bai de xuat hien tren bang xep hang.
+          Chưa có dữ liệu chuỗi học. Hãy học một bài để xuất hiện trên bảng xếp hạng.
         </div>
       ) : (
         <div className="divide-y divide-line">
@@ -187,18 +187,18 @@ function StreakBoard({
             >
               <RankBadge rank={entry.rank} />
               <div className="flex min-w-0 items-center gap-4">
-                <Avatar name={entry.displayName ?? entry.email ?? "Learner"} avatarUrl={entry.avatarUrl} />
+                <Avatar name={entry.displayName ?? entry.email ?? "Người học"} avatarUrl={entry.avatarUrl} />
                 <div className="min-w-0">
                   <h2 className="truncate text-base font-extrabold text-ink">
-                    {entry.displayName ?? entry.email ?? "Learner"}
+                    {entry.displayName ?? entry.email ?? "Người học"}
                     {entry.uid === currentUid ? (
                       <span className="ml-2 rounded-full bg-primary/10 px-2 py-0.5 text-[10px] font-extrabold text-primary">
-                        Ban
+                        Bạn
                       </span>
                     ) : null}
                   </h2>
                   <p className="mt-0.5 text-xs font-bold text-muted">
-                    {entry.studiedToday ? `Hom nay da hoc ${entry.todayActivityCount} hoat dong` : "Chua hoc hom nay"}
+                    {entry.studiedToday ? `Hôm nay đã học ${entry.todayActivityCount} hoạt động` : "Chưa học hôm nay"}
                   </p>
                 </div>
               </div>
@@ -296,5 +296,5 @@ function formatElapsed(value: number): string {
   const totalSeconds = Math.max(0, Math.round(value / 1000));
   const minutes = Math.floor(totalSeconds / 60);
   const seconds = totalSeconds % 60;
-  return `${minutes}m ${seconds}s`;
+  return `${minutes} phút ${seconds} giây`;
 }
