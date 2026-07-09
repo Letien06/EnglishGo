@@ -4,6 +4,10 @@ const nextConfig: NextConfig = {
   poweredByHeader: false,
   allowedDevOrigins: ["127.0.0.1"],
   images: {
+    // Vercel Image Optimization stores one optimized variant per URL/size.
+    // TOEIC media has many remote images, so use browser-native loading to avoid
+    // growing Vercel Images Storage while keeping next/image layout behavior.
+    unoptimized: true,
     remotePatterns: [
       {
         protocol: "https",
