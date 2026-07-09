@@ -114,12 +114,13 @@ export default function LoginForm() {
     runAuth(async () => {
       const provider = new GoogleAuthProvider();
       const auth = getClientAuth();
-      if (shouldUseRedirectSignIn()) {
+      try {
+        const credential = await signInWithPopup(auth, provider);
+        await createBackendSession(credential.user);
+      } catch (err: unknown) {
+        if (!shouldFallbackToRedirect(err)) throw err;
         await signInWithRedirect(auth, provider);
-        return;
       }
-      const credential = await signInWithPopup(auth, provider);
-      await createBackendSession(credential.user);
     });
 
   return (
@@ -248,18 +249,17 @@ function getSafeReturnPath(path: string): string {
   return path;
 }
 
-function shouldUseRedirectSignIn(): boolean {
-  if (typeof window === "undefined") return false;
-  const userAgent = window.navigator.userAgent;
-  return window.matchMedia("(pointer: coarse)").matches ||
-    /Android|iPhone|iPad|iPod|Mobile/i.test(userAgent);
-}
-
 function isFirebaseAuthCode(error: unknown, code: string): boolean {
   return typeof error === "object" &&
     error !== null &&
     "code" in error &&
     (error as { code?: unknown }).code === code;
+}
+
+function shouldFallbackToRedirect(error: unknown): boolean {
+  return isFirebaseAuthCode(error, "auth/popup-blocked") ||
+    isFirebaseAuthCode(error, "auth/operation-not-supported-in-this-environment") ||
+    isFirebaseAuthCode(error, "auth/cancelled-popup-request");
 }
 
 function friendlyAuthError(error: unknown): string {
@@ -271,6 +271,15 @@ function friendlyAuthError(error: unknown): string {
   }
   if (isFirebaseAuthCode(error, "auth/account-exists-with-different-credential")) {
     return "Tài khoản Google này đã liên kết với phương thức đăng nhập khác.";
+  }
+  if (isFirebaseAuthCode(error, "auth/unauthorized-domain")) {
+    return "Tên miền hiện tại chưa được cho phép trong Firebase Authentication.";
+  }
+  if (isFirebaseAuthCode(error, "auth/invalid-api-key")) {
+    return "Cấu hình Firebase đăng nhập đang thiếu hoặc không hợp lệ.";
+  }
+  if (isFirebaseAuthCode(error, "auth/network-request-failed")) {
+    return "Không kết nối được Google/Firebase. Vui lòng kiểm tra mạng rồi thử lại.";
   }
   return error instanceof Error ? error.message : "Đã xảy ra lỗi không xác định";
 }
