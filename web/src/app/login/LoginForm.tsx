@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useCallback, useEffect, useState } from "react";
-import { useRouter, useSearchParams } from "next/navigation";
+import { useSearchParams } from "next/navigation";
 import {
   GoogleAuthProvider,
   getRedirectResult,
@@ -15,7 +15,6 @@ import { getClientAuth } from "@/lib/firebase/client";
 type AuthMode = "login" | "register";
 
 export default function LoginForm() {
-  const router = useRouter();
   const searchParams = useSearchParams();
   const from = getSafeReturnPath(searchParams.get("from") || searchParams.get("redirect") || "/hub");
   const initialMode: AuthMode = searchParams.get("mode") === "register" ? "register" : "login";
@@ -45,10 +44,9 @@ export default function LoginForm() {
           result.error || result.message || `Đăng nhập thất bại (${res.status})`,
         );
       }
-      router.replace(from);
-      router.refresh();
+      window.location.replace(from);
     },
-    [router, from],
+    [from],
   );
 
   useEffect(() => {

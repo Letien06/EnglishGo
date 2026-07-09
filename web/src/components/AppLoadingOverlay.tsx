@@ -35,6 +35,10 @@ export default function AppLoadingOverlay() {
   const [visible, setVisible] = useState(false);
 
   useEffect(() => {
+    if (document.documentElement.hasAttribute("data-overdelay-active")) {
+      const hideTimer = window.setTimeout(() => setVisible(false), 0);
+      return () => window.clearTimeout(hideTimer);
+    }
     // Read query params from the URL directly (client-only) instead of
     // useSearchParams() — the latter forces a CSR bailout that breaks
     // prerendering of the practice pages.

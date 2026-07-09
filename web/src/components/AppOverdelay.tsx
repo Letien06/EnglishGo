@@ -7,6 +7,7 @@ const SHOW_DELAY_MS = 180;
 const MIN_VISIBLE_MS = 420;
 const MAX_VISIBLE_MS = 9000;
 const READY_EVENT = "englishgo:overdelay-ready";
+const ACTIVE_ATTR = "data-overdelay-active";
 
 function isModifiedClick(event: MouseEvent): boolean {
   return event.metaKey || event.ctrlKey || event.shiftKey || event.altKey || event.button !== 0;
@@ -87,11 +88,15 @@ export default function AppOverdelay() {
       const elapsed = Date.now() - startedAtRef.current;
       const remaining = Math.max(0, MIN_VISIBLE_MS - elapsed);
       if (hideTimerRef.current) window.clearTimeout(hideTimerRef.current);
-      hideTimerRef.current = window.setTimeout(() => setVisible(false), remaining);
+      hideTimerRef.current = window.setTimeout(() => {
+        document.documentElement.removeAttribute(ACTIVE_ATTR);
+        setVisible(false);
+      }, remaining);
     }
 
     function begin(nextLabel: string, maxMs = MAX_VISIBLE_MS, waitFor: string | null = null) {
       clearTimers();
+      document.documentElement.setAttribute(ACTIVE_ATTR, "true");
       waitForRef.current = waitFor;
       setLabel(nextLabel);
       startedAtRef.current = Date.now();
@@ -157,13 +162,17 @@ export default function AppOverdelay() {
       window.removeEventListener(READY_EVENT, handleReady);
       window.removeEventListener("pageshow", handlePageShow);
       clearTimers();
+      document.documentElement.removeAttribute(ACTIVE_ATTR);
     };
   }, []);
 
   useEffect(() => {
     if (!startedAtRef.current) return;
     if (waitForRef.current) return;
-    const timer = window.setTimeout(() => setVisible(false), MIN_VISIBLE_MS);
+    const timer = window.setTimeout(() => {
+      document.documentElement.removeAttribute(ACTIVE_ATTR);
+      setVisible(false);
+    }, MIN_VISIBLE_MS);
     return () => window.clearTimeout(timer);
   }, [routeKey]);
 

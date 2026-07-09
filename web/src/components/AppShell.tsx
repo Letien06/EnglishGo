@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { useEffect, useState } from "react";
+import type { ReactNode } from "react";
 import ThemeToggle from "./ThemeToggle";
 import StudyStreakBadge from "./StudyStreakBadge";
 
@@ -14,18 +14,12 @@ const navItems = [
   { href: "/leaderboard", icon: "🏆", label: "Bảng xếp hạng", color: "text-primary" },
 ] as const;
 
-export default function AppShell({ children }: { children: React.ReactNode }) {
+export default function AppShell({ children }: { children: ReactNode }) {
   const pathname = usePathname();
-  const [pendingLabel, setPendingLabel] = useState<string | null>(null);
   const isPracticeWorkspace =
     pathname.startsWith("/listen/practice") ||
     pathname.startsWith("/read/practice") ||
     pathname.startsWith("/practice/session");
-
-  useEffect(() => {
-    const timer = window.setTimeout(() => setPendingLabel(null), 0);
-    return () => window.clearTimeout(timer);
-  }, [pathname]);
 
   if (isPracticeWorkspace) {
     return <>{children}</>;
@@ -51,7 +45,6 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
                 <Link
                   key={item.href}
                   href={item.href}
-                  onClick={() => setPendingLabel(item.label.replace(" (demo)", ""))}
                   className={`inline-flex items-center gap-2 rounded-lg px-3 py-2 text-sm font-extrabold transition-colors ${
                     active
                       ? "bg-primary/10 text-primary"
@@ -83,26 +76,7 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
         </div>
       </header>
 
-      {pendingLabel && <SmallLoadingNotice title={`Đang mở phần ${pendingLabel}`} />}
       {children}
-    </div>
-  );
-}
-
-function SmallLoadingNotice({ title }: { title: string }) {
-  return (
-    <div className="app-busy-notice">
-      <div className="app-busy-card">
-        <span className="app-busy-spinner" />
-        <div>
-          <p className="app-busy-title">
-            {title}
-          </p>
-          <p className="app-busy-description">
-            Đang tải dữ liệu luyện tập...
-          </p>
-        </div>
-      </div>
     </div>
   );
 }
