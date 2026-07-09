@@ -4,11 +4,11 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 
 const navItems = [
-  { href: "/hub", shortLabel: "D", label: "Dashboard" },
-  { href: "/listen", shortLabel: "L", label: "Nghe" },
-  { href: "/read", shortLabel: "R", label: "Đọc" },
+  { href: "/hub", shortLabel: "T", label: "Trang chủ" },
+  { href: "/listen", shortLabel: "N", label: "Nghe" },
+  { href: "/read", shortLabel: "Đ", label: "Đọc" },
   { href: "/vocab", shortLabel: "V", label: "Từ vựng" },
-  { href: "/practice", shortLabel: "P", label: "Luyện đề" },
+  { href: "/practice", shortLabel: "ĐT", label: "Luyện đề" },
   { href: "/community", shortLabel: "C", label: "Cộng đồng" },
 ] as const;
 
@@ -23,11 +23,11 @@ export default function AppSidebar() {
         </span>
         <span className="flex flex-col leading-tight">
           <strong className="text-sm font-extrabold tracking-tight text-ink">ENGLISHGO</strong>
-          <small className="text-[11px] text-muted">Free TOEIC practice</small>
+          <small className="text-[11px] text-muted">Luyện TOEIC miễn phí</small>
         </span>
       </Link>
 
-      <nav className="mt-2 flex flex-1 flex-col gap-0.5 px-3" aria-label="Primary navigation">
+      <nav className="mt-2 flex flex-1 flex-col gap-0.5 px-3" aria-label="Điều hướng chính">
         {navItems.map((item) => {
           const isActive =
             item.href === "/hub" ? pathname === "/hub" : pathname.startsWith(item.href);

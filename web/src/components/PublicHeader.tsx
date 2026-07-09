@@ -6,11 +6,12 @@ import { useEffect, useState } from "react";
 import ThemeToggle from "./ThemeToggle";
 
 const navItems = [
-  { href: "/listen", icon: "♪", label: "Nghe", key: "listen", color: "text-plum" },
-  { href: "/read", icon: "▥", label: "Đọc", key: "read", color: "text-azure" },
-  { href: "/vocab", icon: "A", label: "Từ vựng", key: "vocab", color: "text-jade" },
-  { href: "/practice", icon: "▧", label: "Đề thi", key: "practice", color: "text-terracotta" },
-  { href: "/leaderboard", icon: "🏆", label: "Bảng xếp hạng", key: "leaderboard", color: "text-primary" },
+  { href: "/hub", icon: "T", label: "Trang chủ", key: "hub", color: "text-primary" },
+  { href: "/listen", icon: "N", label: "Nghe", key: "listen", color: "text-plum" },
+  { href: "/read", icon: "Đ", label: "Đọc", key: "read", color: "text-azure" },
+  { href: "/vocab", icon: "V", label: "Từ vựng", key: "vocab", color: "text-jade" },
+  { href: "/practice", icon: "ĐT", label: "Đề thi", key: "practice", color: "text-terracotta" },
+  { href: "/leaderboard", icon: "BXH", label: "Bảng xếp hạng", key: "leaderboard", color: "text-primary" },
 ] as const;
 
 interface PublicHeaderProps {
@@ -21,13 +22,11 @@ export default function PublicHeader({ user }: PublicHeaderProps) {
   const pathname = usePathname();
   const [menuOpen, setMenuOpen] = useState(false);
 
-  // Close the mobile menu whenever the route changes.
   useEffect(() => {
     const timer = window.setTimeout(() => setMenuOpen(false), 0);
     return () => window.clearTimeout(timer);
   }, [pathname]);
 
-  // Lock body scroll while the mobile menu is open.
   useEffect(() => {
     if (!menuOpen) return;
     const previous = document.body.style.overflow;
@@ -49,14 +48,15 @@ export default function PublicHeader({ user }: PublicHeaderProps) {
           </strong>
         </Link>
 
-        <nav className="hidden items-center gap-6 md:flex" aria-label="Main navigation">
+        <nav className="hidden items-center gap-5 lg:flex" aria-label="Điều hướng chính">
           {navItems.map((item) => {
-            const isActive = pathname.startsWith(item.href);
+            const isActive =
+              item.href === "/hub" ? pathname === "/hub" : pathname.startsWith(item.href);
             return (
               <Link
                 key={item.key}
                 href={item.href}
-                className={`flex items-center gap-2 text-base font-extrabold transition-colors ${
+                className={`flex items-center gap-2 text-sm font-extrabold transition-colors ${
                   isActive ? "text-primary" : "text-ink3 hover:text-ink"
                 }`}
               >
@@ -71,7 +71,7 @@ export default function PublicHeader({ user }: PublicHeaderProps) {
           <button
             type="button"
             onClick={() => setMenuOpen((open) => !open)}
-            className="inline-flex h-12 w-12 items-center justify-center rounded-xl border border-line bg-surface-soft text-ink md:hidden"
+            className="inline-flex h-12 w-12 items-center justify-center rounded-xl border border-line bg-surface-soft text-ink lg:hidden"
             aria-label="Menu"
             aria-expanded={menuOpen}
           >
@@ -109,9 +109,8 @@ export default function PublicHeader({ user }: PublicHeaderProps) {
         </div>
       </div>
 
-      {/* Mobile slide-down menu (< md) */}
       {menuOpen && (
-        <div className="md:hidden">
+        <div className="lg:hidden">
           <button
             type="button"
             aria-label="Đóng menu"
@@ -120,11 +119,12 @@ export default function PublicHeader({ user }: PublicHeaderProps) {
           />
           <nav
             className="absolute inset-x-0 top-20 z-50 border-b border-line bg-surface px-5 pb-6 pt-2 shadow-xl"
-            aria-label="Mobile navigation"
+            aria-label="Điều hướng mobile"
           >
             <ul className="flex flex-col gap-1">
               {navItems.map((item) => {
-                const isActive = pathname.startsWith(item.href);
+                const isActive =
+                  item.href === "/hub" ? pathname === "/hub" : pathname.startsWith(item.href);
                 return (
                   <li key={item.key}>
                     <Link

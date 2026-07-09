@@ -86,6 +86,13 @@ describe("getHub", () => {
         studyStudiedToday: true,
         studyTodayActivityCount: 2,
         studyTodayModules: ["practice"],
+        studyModuleTotals: {
+          practice: 3,
+          reading: 4,
+          listening: 5,
+          vocab: 6,
+        },
+        lastStudyActivityAtMillis: 123456,
       }),
     });
     practiceAttemptsGet.mockResolvedValue({
@@ -132,5 +139,8 @@ describe("getHub", () => {
     expect(hub.todayXp).toBe(35);
     expect(hub.todayPractice).toBe(1);
     expect(hub.todayVocab).toBe(1);
+    expect(hub.moduleTotals.practice).toBe(3);
+    expect(hub.moduleTotals.vocab).toBe(6);
+    expect(hub.lastActivityAtMillis).toBe(123456);
   });
 });

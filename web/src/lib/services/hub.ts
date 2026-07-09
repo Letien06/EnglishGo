@@ -15,15 +15,15 @@ import { dueWords } from "./vocab";
 
 export interface HubView {
   greetingName: string;
-  dailyGoalTarget: number;
   dailyGoalCompleted: number;
-  dailyGoalPercent: number;
   todayXp: number;
   totalXp: number;
   todayListening: number;
   todayReading: number;
   todayPractice: number;
   todayVocab: number;
+  moduleTotals: Record<"listening" | "reading" | "practice" | "vocab", number>;
+  lastActivityAtMillis: number | null;
   dueVocabWords: number;
   nextRecommendation: {
     label: string;
@@ -36,7 +36,6 @@ export interface HubView {
   targetScore: number | null;
   level: string | null;
   masteredWords: number;
-  totalWords: number;
 }
 
 /* ------------------------------------------------------------------ */
@@ -108,8 +107,6 @@ async function countMasteredWords(uid: string): Promise<number> {
 /*  Main hub function                                                  */
 /* ------------------------------------------------------------------ */
 
-const DAILY_ACTIVITY_TARGET = 10;
-
 export async function getHub(user: AppUser): Promise<HubView> {
   const uid = user.uid;
   const [profileSnap, studyStreak, todaySummary, masteredWords, dueVocabWords] = await Promise.all([
@@ -126,26 +123,24 @@ export async function getHub(user: AppUser): Promise<HubView> {
   const level = (profile.level as string) || null;
   const practiceSummary = await loadPracticeSummary(uid, profile);
   const nextRecommendation = toRecommendation(profile.nextPracticeRecommendation);
+  const moduleTotals = parseModuleTotals(profile.studyModuleTotals);
+  const lastActivityAtMillis = numberValue(profile.lastStudyActivityAtMillis);
   const todayCompleted = todaySummary.totalActivityCount || studyStreak.todayActivityCount;
-  const goalPercent = Math.min(
-    100,
-    Math.round((todayCompleted * 100) / Math.max(DAILY_ACTIVITY_TARGET, 1)),
-  );
 
   // Greeting name
   const greetingName = profileName || user.displayName || user.email;
 
   return {
     greetingName,
-    dailyGoalTarget: DAILY_ACTIVITY_TARGET,
     dailyGoalCompleted: todayCompleted,
-    dailyGoalPercent: goalPercent,
     todayXp: todaySummary.xp,
-    totalXp: numberValue(profile.totalStudyXp) ?? practiceSummary.completedTests * 5,
+    totalXp: numberValue(profile.totalStudyXp) ?? 0,
     todayListening: todaySummary.moduleCounts.listening,
     todayReading: todaySummary.moduleCounts.reading,
     todayPractice: todaySummary.moduleCounts.practice,
     todayVocab: todaySummary.moduleCounts.vocab,
+    moduleTotals,
+    lastActivityAtMillis,
     dueVocabWords,
     nextRecommendation,
     streakDays: studyStreak.streakDays,
@@ -154,12 +149,21 @@ export async function getHub(user: AppUser): Promise<HubView> {
     targetScore,
     level,
     masteredWords,
-    totalWords: 0,
   };
 }
 
 function numberValue(value: unknown): number | null {
   return typeof value === "number" && Number.isFinite(value) ? value : null;
+}
+
+function parseModuleTotals(value: unknown): HubView["moduleTotals"] {
+  const data = value && typeof value === "object" ? value as Record<string, unknown> : {};
+  return {
+    listening: numberValue(data.listening) ?? 0,
+    reading: numberValue(data.reading) ?? 0,
+    practice: numberValue(data.practice) ?? 0,
+    vocab: numberValue(data.vocab) ?? 0,
+  };
 }
 
 function toRecommendation(value: unknown): HubView["nextRecommendation"] {

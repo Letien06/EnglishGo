@@ -4,11 +4,11 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 
 const navItems = [
-  { href: "/hub", shortLabel: "D", label: "Dashboard" },
-  { href: "/listen", shortLabel: "L", label: "Nghe" },
-  { href: "/read", shortLabel: "R", label: "Đọc" },
+  { href: "/hub", shortLabel: "T", label: "Trang chủ" },
+  { href: "/listen", shortLabel: "N", label: "Nghe" },
+  { href: "/read", shortLabel: "Đ", label: "Đọc" },
   { href: "/vocab", shortLabel: "V", label: "Từ vựng" },
-  { href: "/practice", shortLabel: "P", label: "Đề thi" },
+  { href: "/practice", shortLabel: "ĐT", label: "Đề thi" },
 ] as const;
 
 export default function AppMobileNav() {
@@ -17,7 +17,7 @@ export default function AppMobileNav() {
   return (
     <nav
       className="fixed inset-x-0 bottom-0 z-50 flex items-center justify-around border-t border-line bg-glass px-1 py-1.5 backdrop-blur-xl lg:hidden"
-      aria-label="Mobile navigation"
+      aria-label="Điều hướng mobile"
     >
       {navItems.map((item) => {
         const isActive =

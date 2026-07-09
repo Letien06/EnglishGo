@@ -16,13 +16,13 @@ export default function AppTopbar({
   userName,
   userEmail,
 }: AppTopbarProps) {
-  const displayLabel = userName || userEmail || "Account";
+  const displayLabel = userName || userEmail || "Tài khoản";
 
   return (
     <header className="sticky top-0 z-40 flex items-center justify-between gap-4 px-5 py-3 bg-glass backdrop-blur-xl border-b border-line lg:px-8">
       <div className="min-w-0">
         <p className="text-[11px] uppercase tracking-widest text-muted font-semibold mb-0.5">
-          Learning workspace
+          Không gian học tập
         </p>
         <h1 className="text-lg font-bold text-ink truncate">{pageTitle}</h1>
         {pageSubtitle && (
@@ -34,7 +34,7 @@ export default function AppTopbar({
         <Link
           href="/account?tab=profile"
           className="hidden sm:inline-flex items-center px-3 py-1.5 rounded-full bg-surface-soft text-sm font-semibold text-ink2 hover:text-ink transition-colors truncate max-w-[160px]"
-          aria-label="Account profile"
+          aria-label="Hồ sơ tài khoản"
         >
           {displayLabel}
         </Link>

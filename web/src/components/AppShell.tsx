@@ -7,11 +7,12 @@ import ThemeToggle from "./ThemeToggle";
 import StudyStreakBadge from "./StudyStreakBadge";
 
 const navItems = [
-  { href: "/listen", icon: "♫", label: "Nghe", color: "text-plum" },
-  { href: "/read", icon: "▥", label: "Đọc", color: "text-azure" },
-  { href: "/vocab", icon: "A", label: "Từ vựng", color: "text-jade" },
-  { href: "/practice", icon: "▧", label: "Đề thi", color: "text-terracotta" },
-  { href: "/leaderboard", icon: "🏆", label: "Bảng xếp hạng", color: "text-primary" },
+  { href: "/hub", icon: "T", label: "Trang chủ", color: "text-primary" },
+  { href: "/listen", icon: "N", label: "Nghe", color: "text-plum" },
+  { href: "/read", icon: "Đ", label: "Đọc", color: "text-azure" },
+  { href: "/vocab", icon: "V", label: "Từ vựng", color: "text-jade" },
+  { href: "/practice", icon: "ĐT", label: "Đề thi", color: "text-terracotta" },
+  { href: "/leaderboard", icon: "BXH", label: "Bảng xếp hạng", color: "text-primary" },
 ] as const;
 
 export default function AppShell({ children }: { children: ReactNode }) {
@@ -38,9 +39,10 @@ export default function AppShell({ children }: { children: ReactNode }) {
             </strong>
           </Link>
 
-          <nav className="hidden items-center gap-3 md:flex" aria-label="Learning navigation">
+          <nav className="hidden items-center gap-2 md:flex" aria-label="Điều hướng học tập">
             {navItems.map((item) => {
-              const active = pathname.startsWith(item.href);
+              const active =
+                item.href === "/hub" ? pathname === "/hub" : pathname.startsWith(item.href);
               return (
                 <Link
                   key={item.href}
