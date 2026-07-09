@@ -1,27 +1,6 @@
 {
   "indexes": [
     {
-      "collectionGroup": "practiceDrafts",
-      "queryScope": "COLLECTION",
-      "fields": [
-        { "fieldPath": "updatedAtMillis", "order": "DESCENDING" }
-      ]
-    },
-    {
-      "collectionGroup": "vocabGameDrafts",
-      "queryScope": "COLLECTION",
-      "fields": [
-        { "fieldPath": "updatedAtMillis", "order": "DESCENDING" }
-      ]
-    },
-    {
-      "collectionGroup": "vocabStudyHistory",
-      "queryScope": "COLLECTION",
-      "fields": [
-        { "fieldPath": "finishedAtMillis", "order": "DESCENDING" }
-      ]
-    },
-    {
       "collectionGroup": "vocabStudyHistory",
       "queryScope": "COLLECTION",
       "fields": [
@@ -39,20 +18,6 @@
       ]
     },
     {
-      "collectionGroup": "rateLimits",
-      "queryScope": "COLLECTION",
-      "fields": [
-        { "fieldPath": "updatedAtMillis", "order": "DESCENDING" }
-      ]
-    },
-    {
-      "collectionGroup": "vocabFolders",
-      "queryScope": "COLLECTION",
-      "fields": [
-        { "fieldPath": "deletedAtMillis", "order": "ASCENDING" }
-      ]
-    },
-    {
       "collectionGroup": "dauToeicTestIndex",
       "queryScope": "COLLECTION",
       "fields": [
@@ -86,13 +51,6 @@
         { "fieldPath": "difficultyLevel", "order": "ASCENDING" },
         { "fieldPath": "orderIndexSort", "order": "ASCENDING" },
         { "fieldPath": "__name__", "order": "ASCENDING" }
-      ]
-    },
-    {
-      "collectionGroup": "userVocabProgress",
-      "queryScope": "COLLECTION",
-      "fields": [
-        { "fieldPath": "setId", "order": "ASCENDING" }
       ]
     },
     {
@@ -101,20 +59,6 @@
       "fields": [
         { "fieldPath": "status", "order": "ASCENDING" },
         { "fieldPath": "nextReviewAtMillis", "order": "ASCENDING" }
-      ]
-    },
-    {
-      "collectionGroup": "userVocabProgress",
-      "queryScope": "COLLECTION",
-      "fields": [
-        { "fieldPath": "lastReviewedAtMillis", "order": "DESCENDING" }
-      ]
-    },
-    {
-      "collectionGroup": "aiWritingJobs",
-      "queryScope": "COLLECTION",
-      "fields": [
-        { "fieldPath": "createdAtMillis", "order": "DESCENDING" }
       ]
     },
     {
@@ -131,13 +75,6 @@
       "fields": [
         { "fieldPath": "part", "order": "ASCENDING" },
         { "fieldPath": "level", "order": "ASCENDING" }
-      ]
-    },
-    {
-      "collectionGroup": "entries",
-      "queryScope": "COLLECTION",
-      "fields": [
-        { "fieldPath": "score", "order": "DESCENDING" }
       ]
     },
     {
@@ -161,13 +98,6 @@
       "queryScope": "COLLECTION",
       "fields": [
         { "fieldPath": "status", "order": "ASCENDING" },
-        { "fieldPath": "createdAtMillis", "order": "DESCENDING" }
-      ]
-    },
-    {
-      "collectionGroup": "mediaAssets",
-      "queryScope": "COLLECTION",
-      "fields": [
         { "fieldPath": "createdAtMillis", "order": "DESCENDING" }
       ]
     },
