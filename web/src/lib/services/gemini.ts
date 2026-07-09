@@ -139,6 +139,11 @@ Return a JSON array of objects with "word" and "example" keys.`;
   return result;
 }
 
+export async function generateJson(prompt: string): Promise<unknown> {
+  requireText(prompt);
+  return generateResponse(prompt);
+}
+
 /* ------------------------------------------------------------------ */
 /*  Internal helpers                                                    */
 /* ------------------------------------------------------------------ */
@@ -213,8 +218,7 @@ async function generateResponse(
     throw new Error("Gemini returned empty response");
   }
 
-  // Extract JSON array from response text
-  const jsonStr = extractJsonArray(text);
+  const jsonStr = extractJson(text);
   return JSON.parse(jsonStr);
 }
 
@@ -254,11 +258,16 @@ function parseWords(response: unknown): GeneratedVocabWord[] {
     }));
 }
 
-function extractJsonArray(text: string): string {
-  const start = text.indexOf("[");
-  const end = text.lastIndexOf("]");
-  if (start !== -1 && end > start) {
-    return text.substring(start, end + 1);
+function extractJson(text: string): string {
+  const arrayStart = text.indexOf("[");
+  const arrayEnd = text.lastIndexOf("]");
+  const objectStart = text.indexOf("{");
+  const objectEnd = text.lastIndexOf("}");
+  if (arrayStart !== -1 && arrayEnd > arrayStart) {
+    return text.substring(arrayStart, arrayEnd + 1);
+  }
+  if (objectStart !== -1 && objectEnd > objectStart) {
+    return text.substring(objectStart, objectEnd + 1);
   }
   return text;
 }

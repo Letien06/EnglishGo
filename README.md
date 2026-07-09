@@ -112,7 +112,6 @@ firebase deploy --only storage
 - `/community` - comments and leaderboard
 - `/ai/writing` - writing feedback
 - `/account` - account settings
-- `/billing` - plans and transactions
 - `/admin` - admin dashboard, ADMIN only
 
 ## Notes

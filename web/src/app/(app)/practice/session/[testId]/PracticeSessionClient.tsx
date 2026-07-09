@@ -1,24 +1,51 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import type { PracticeQuestion, PracticeSessionView } from "@/lib/services/practice";
 
 type PracticeAnswers = Record<string, { selectedOptionId: number | null; textResponse: string | null }>;
-type PracticeDraftPayload = { answers: PracticeAnswers; markedQuestionIds: number[] };
+type PracticeDraftPayload = {
+  answers: PracticeAnswers;
+  markedQuestionIds: number[];
+  currentQuestionIndex: number;
+  startedAtMillis?: number;
+  updatedAtMillis: number;
+};
 
 function readInitialDraft(storageKey: string, draftPayload: string): PracticeDraftPayload {
-  if (typeof window === "undefined") return { answers: {}, markedQuestionIds: [] };
+  if (typeof window === "undefined") return { answers: {}, markedQuestionIds: [], currentQuestionIndex: 0, updatedAtMillis: 0 };
   const raw = window.localStorage.getItem(storageKey) || draftPayload || "{}";
+  return parseDraftPayload(raw);
+}
+
+function parseDraftPayload(raw: string): PracticeDraftPayload {
   try {
     const parsed = JSON.parse(raw) as Partial<PracticeDraftPayload>;
     return {
-      answers: parsed.answers || {},
+      answers: normalizeAnswers(parsed.answers),
       markedQuestionIds: Array.isArray(parsed.markedQuestionIds) ? parsed.markedQuestionIds : [],
+      currentQuestionIndex: typeof parsed.currentQuestionIndex === "number" ? parsed.currentQuestionIndex : 0,
+      startedAtMillis: typeof parsed.startedAtMillis === "number" ? parsed.startedAtMillis : undefined,
+      updatedAtMillis: typeof parsed.updatedAtMillis === "number" ? parsed.updatedAtMillis : 0,
     };
   } catch {
-    return { answers: {}, markedQuestionIds: [] };
+    return { answers: {}, markedQuestionIds: [], currentQuestionIndex: 0, updatedAtMillis: 0 };
   }
+}
+
+function normalizeAnswers(value: unknown): PracticeAnswers {
+  if (!value || typeof value !== "object") return {};
+  const answers: PracticeAnswers = {};
+  for (const [questionId, answer] of Object.entries(value as Record<string, unknown>)) {
+    if (!answer || typeof answer !== "object") continue;
+    const item = answer as { selectedOptionId?: unknown; textResponse?: unknown };
+    answers[questionId] = {
+      selectedOptionId: typeof item.selectedOptionId === "number" ? item.selectedOptionId : null,
+      textResponse: typeof item.textResponse === "string" ? item.textResponse : null,
+    };
+  }
+  return answers;
 }
 
 function initialRemainingSeconds(session: PracticeSessionView): number {
@@ -44,11 +71,15 @@ export default function PracticeSessionClient({ session }: { session: PracticeSe
   const [submitting, setSubmitting] = useState(false);
   const [confirmSubmit, setConfirmSubmit] = useState(false);
   const [confirmExit, setConfirmExit] = useState(false);
-  const [activeQuestionId, setActiveQuestionId] = useState(() => session.questions[0]?.id ?? 0);
+  const [activeQuestionId, setActiveQuestionId] = useState(() => {
+    const index = Math.min(Math.max(initialDraft.currentQuestionIndex, 0), Math.max(session.questions.length - 1, 0));
+    return session.questions[index]?.id ?? session.questions[0]?.id ?? 0;
+  });
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const answersRef = useRef(answers);
   const markedRef = useRef(markedQuestionIds);
+  const draftUpdatedAtRef = useRef(initialDraft.updatedAtMillis);
   const submittingRef = useRef(false);
   const submitRef = useRef<(reason?: "manual" | "timeout") => void>(() => {});
 
@@ -59,6 +90,40 @@ export default function PracticeSessionClient({ session }: { session: PracticeSe
   useEffect(() => {
     markedRef.current = markedQuestionIds;
   }, [markedQuestionIds]);
+
+  useEffect(() => {
+    let cancelled = false;
+    const params = new URLSearchParams({
+      mode: session.config.mode,
+      parts: session.config.parts.join(","),
+      time: String(session.config.durationMinutes),
+    });
+    fetch(`/api/practice/tests/${session.test.id}/draft?${params.toString()}`, {
+      cache: "no-store",
+    })
+      .then(async (response) => response.ok ? response.json() : null)
+      .then((result) => {
+        if (cancelled || !result?.success || !result.data?.payload) return;
+        const serverDraft = parseDraftPayload(result.data.payload);
+        const serverUpdatedAtMillis =
+          serverDraft.updatedAtMillis || Number(result.data.updatedAtMillis) || 0;
+        if (serverUpdatedAtMillis <= draftUpdatedAtRef.current) return;
+        answersRef.current = serverDraft.answers;
+        const nextMarked = new Set(serverDraft.markedQuestionIds);
+        markedRef.current = nextMarked;
+        setAnswers(serverDraft.answers);
+        setMarkedQuestionIds(nextMarked);
+        draftUpdatedAtRef.current = serverUpdatedAtMillis;
+        window.localStorage.setItem(storageKey, result.data.payload);
+        const nextQuestion = session.questions[serverDraft.currentQuestionIndex];
+        if (nextQuestion) setActiveQuestionId(nextQuestion.id);
+        setStatus("Loaded server draft");
+      })
+      .catch(() => undefined);
+    return () => {
+      cancelled = true;
+    };
+  }, [session.config.durationMinutes, session.config.mode, session.config.parts, session.questions, session.test.id, storageKey]);
 
   const answeredCount = useMemo(
     () => session.questions.filter((question) => hasAnswer(answers[String(question.id)])).length,
@@ -87,21 +152,34 @@ export default function PracticeSessionClient({ session }: { session: PracticeSe
     ? `TOEIC Full Test: Questions ${activeIndex + 1} of ${totalQuestions}`
     : `${partLabel(session.config.parts)}: Questions ${activeIndex + 1} of ${totalQuestions}`;
 
+  const makeDraftPayload = useCallback((
+    nextAnswers = answersRef.current,
+    nextMarked = markedRef.current,
+    updatedAtMillis = Date.now(),
+    currentQuestionIndex = activeIndex,
+  ) => {
+    draftUpdatedAtRef.current = updatedAtMillis;
+    return JSON.stringify({
+      answers: nextAnswers,
+      markedQuestionIds: [...nextMarked],
+      currentQuestionIndex,
+      startedAtMillis: session.startedAtMillis,
+      updatedAtMillis,
+      config: session.config,
+    });
+  }, [activeIndex, session.config, session.startedAtMillis]);
+
   function persistLocal(nextAnswers = answersRef.current, nextMarked = markedRef.current) {
     window.localStorage.setItem(
       storageKey,
-      JSON.stringify({
-        answers: nextAnswers,
-        markedQuestionIds: [...nextMarked],
-        config: session.config,
-      }),
+      makeDraftPayload(nextAnswers, nextMarked),
     );
   }
 
   function queueSave() {
     setStatus("Changes pending");
     if (saveTimer.current) clearTimeout(saveTimer.current);
-    saveTimer.current = setTimeout(() => void saveNow(), 12000);
+    saveTimer.current = setTimeout(() => void saveNow(), 8000);
   }
 
   function setAnswer(questionId: number, value: { selectedOptionId?: number | null; textResponse?: string | null }) {
@@ -139,25 +217,33 @@ export default function PracticeSessionClient({ session }: { session: PracticeSe
   }
 
   async function saveNow() {
-    const payload = JSON.stringify({
-      answers: answersRef.current,
-      markedQuestionIds: [...markedRef.current],
-      config: session.config,
-    });
+    const payload = makeDraftPayload();
     window.localStorage.setItem(storageKey, payload);
+    const result = await saveDraftToServer(payload, activeIndex).catch(() => ({
+      ok: false,
+      error: "Save failed",
+    }));
+    setStatus(result.ok ? `Saved at ${new Date().toLocaleTimeString()}` : result.error || "Save failed");
+  }
+
+  const saveDraftToServer = useCallback(async (payload: string, currentQuestionIndex: number) => {
     const response = await fetch(`/api/practice/tests/${session.test.id}/draft`, {
-      method: "POST",
+      method: "PUT",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         payload,
         mode: session.config.mode,
         parts: session.config.parts,
         durationMinutes: session.config.durationMinutes,
+        currentQuestionIndex,
       }),
     });
-    const result = await response.json();
-    setStatus(response.ok && result.success ? `Saved at ${new Date().toLocaleTimeString()}` : result.error || "Save failed");
-  }
+    const result = await response.json().catch(() => null);
+    return {
+      ok: response.ok && result?.success,
+      error: result?.error as string | undefined,
+    };
+  }, [session.config.durationMinutes, session.config.mode, session.config.parts, session.test.id]);
 
   async function submit(reason: "manual" | "timeout" = "manual") {
     if (submittingRef.current) return;
@@ -170,6 +256,9 @@ export default function PracticeSessionClient({ session }: { session: PracticeSe
       saveTimer.current = null;
     }
     persistLocal();
+    await saveDraftToServer(window.localStorage.getItem(storageKey) || "{}", activeIndex).catch(() => ({
+      ok: false,
+    }));
     const payload = Object.entries(answersRef.current).map(([questionId, answer]) => ({
       questionId: Number(questionId),
       selectedOptionId: answer.selectedOptionId,
@@ -250,6 +339,21 @@ export default function PracticeSessionClient({ session }: { session: PracticeSe
     window.addEventListener("beforeunload", onBeforeUnload);
     return () => window.removeEventListener("beforeunload", onBeforeUnload);
   }, []);
+
+  useEffect(() => {
+    const flush = () => {
+      const payload = makeDraftPayload();
+      window.localStorage.setItem(storageKey, payload);
+      if (document.visibilityState === "hidden" && !submittingRef.current) {
+        void saveDraftToServer(payload, activeIndex).catch(() => undefined);
+      }
+    };
+    document.addEventListener("visibilitychange", flush);
+    return () => {
+      document.removeEventListener("visibilitychange", flush);
+      if (saveTimer.current) clearTimeout(saveTimer.current);
+    };
+  }, [activeIndex, makeDraftPayload, saveDraftToServer, storageKey]);
 
   return (
     <main className="min-h-[calc(100dvh-4rem)] bg-white">

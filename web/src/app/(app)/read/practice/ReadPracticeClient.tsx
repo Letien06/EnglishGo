@@ -57,10 +57,6 @@ export default function ReadPracticeClient({
   const firstQuestion = item.questions[0];
 
   useEffect(() => {
-    setActiveMode(normalizeMode(mode));
-  }, [mode]);
-
-  useEffect(() => {
     let firstFrame = 0;
     let secondFrame = 0;
     firstFrame = window.requestAnimationFrame(() => {

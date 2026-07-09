@@ -48,10 +48,6 @@ export const COLLECTIONS = {
   // --- Content moderation ---
   contentAuditLogs: "contentAuditLogs",
 
-  // --- Billing ---
-  subscriptions: "subscriptions",
-  transactions: "transactions",
-
   // --- Media ---
   mediaAssets: "mediaAssets",
 

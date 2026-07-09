@@ -178,6 +178,16 @@ interface PracticeDraftState {
   payload: string;
   startedAtMillis: number;
   updatedAtMillis: number;
+  currentQuestionIndex: number;
+}
+
+export interface PracticeDraftView {
+  testId: number;
+  config: PracticeSessionConfig;
+  payload: string;
+  startedAtMillis: number;
+  updatedAtMillis: number;
+  currentQuestionIndex: number;
 }
 
 export interface PracticeHistoryPage {
@@ -278,34 +288,78 @@ export async function saveDraft(
   testId: number,
   payload: string | null,
   input?: PracticeSessionInput,
-): Promise<{ id: number; payload: string; updatedAtMillis: number }> {
+  currentQuestionIndex?: number | null,
+): Promise<PracticeDraftView> {
   const config = normalizeSessionConfig(input, testId);
-  const safePayload = payload || "{}";
   const updatedAtMillis = Date.now();
   const draftRef = practiceDraftRef(uid, config.sessionKey);
   const snap = await draftRef.get();
   const startedAtMillis =
     numberValue(snap.get("startedAtMillis")) ?? updatedAtMillis;
-  await adminDb
-    .collection("users")
-    .doc(uid)
-    .collection("practiceDrafts")
-    .doc(config.sessionKey)
-    .set(
-      {
-        source: "DAUTOEIC",
-        testId,
-        mode: config.mode,
-        parts: config.parts,
-        durationMinutes: config.durationMinutes,
-        sessionKey: config.sessionKey,
-        payload: safePayload,
-        startedAtMillis,
-        updatedAtMillis,
-      },
-      { merge: true },
-    );
-  return { id: testId, payload: safePayload, updatedAtMillis };
+  const answerKey = await loadAnswerKey(testId, config.parts);
+  const safeCurrentQuestionIndex = normalizeCurrentQuestionIndex(
+    currentQuestionIndex,
+    answerKey.questions.length,
+  );
+  const safePayload = normalizeDraftPayload(
+    payload,
+    new Set(answerKey.questions.map((question) => question.id)),
+    config,
+    startedAtMillis,
+    updatedAtMillis,
+    safeCurrentQuestionIndex,
+  );
+  await draftRef.set(
+    {
+      source: "DAUTOEIC",
+      testId,
+      mode: config.mode,
+      parts: config.parts,
+      durationMinutes: config.durationMinutes,
+      sessionKey: config.sessionKey,
+      payload: safePayload,
+      startedAtMillis,
+      updatedAtMillis,
+      currentQuestionIndex: safeCurrentQuestionIndex,
+    },
+    { merge: true },
+  );
+  return {
+    testId,
+    config,
+    payload: safePayload,
+    startedAtMillis,
+    updatedAtMillis,
+    currentQuestionIndex: safeCurrentQuestionIndex,
+  };
+}
+
+export async function getDraft(
+  uid: string,
+  testId: number,
+  input?: PracticeSessionInput,
+): Promise<PracticeDraftView | null> {
+  const config = normalizeSessionConfig(input, testId);
+  const snap = await practiceDraftRef(uid, config.sessionKey).get();
+  if (!snap.exists) return null;
+  return {
+    testId,
+    config,
+    payload: stringValue(snap.get("payload")) ?? "{}",
+    startedAtMillis: numberValue(snap.get("startedAtMillis")) ?? Date.now(),
+    updatedAtMillis: numberValue(snap.get("updatedAtMillis")) ?? 0,
+    currentQuestionIndex: numberValue(snap.get("currentQuestionIndex")) ?? 0,
+  };
+}
+
+export async function deleteDraft(
+  uid: string,
+  testId: number,
+  input?: PracticeSessionInput,
+): Promise<{ deleted: true; sessionKey: string }> {
+  const config = normalizeSessionConfig(input, testId);
+  await practiceDraftRef(uid, config.sessionKey).delete().catch(() => undefined);
+  return { deleted: true, sessionKey: config.sessionKey };
 }
 
 export async function warmupPracticeContent(
@@ -442,6 +496,7 @@ export async function submit(
       .doc(config.sessionKey)
       .delete()
       .catch(() => undefined),
+    updatePracticeWeakAreas(user.uid, attempt).catch(() => undefined),
     addScore(user, score).catch(() => undefined),
     recordStudyActivity(user.uid, {
       module: "practice",
@@ -459,6 +514,44 @@ export async function submit(
     elapsedMillis,
     scoreBreakdown,
   };
+}
+
+async function updatePracticeWeakAreas(
+  uid: string,
+  attempt: {
+    attemptId: number;
+    testId: number;
+    title: string;
+    mode: PracticeMode;
+    parts: number[];
+    partBreakdown: PracticePartBreakdown[];
+    submittedAtMillis: number;
+  },
+): Promise<void> {
+  const weakest = [...attempt.partBreakdown]
+    .filter((part) => part.total > 0)
+    .sort((a, b) => a.percent - b.percent || b.total - a.total)
+    .at(0);
+  if (!weakest) return;
+
+  const recommendation = {
+    type: "practice_part",
+    label: `Luyen tiep Part ${weakest.part}`,
+    href: `/practice/session/${attempt.testId}?mode=part&parts=${weakest.part}&time=${PART_DEFAULTS[weakest.part]?.suggestedMinutes ?? 20}`,
+    reason: `Part ${weakest.part} dat ${weakest.correct}/${weakest.total} cau dung (${weakest.percent}%).`,
+    updatedAtMillis: attempt.submittedAtMillis,
+  };
+
+  await adminDb.collection("users").doc(uid).set(
+    {
+      practiceWeakAreas: attempt.partBreakdown,
+      nextPracticeRecommendation: recommendation,
+      lastPracticeAttemptId: attempt.attemptId,
+      lastPracticeTitle: attempt.title,
+      updatedAtMillis: Date.now(),
+    },
+    { merge: true },
+  );
 }
 
 export async function getAttemptReview(
@@ -558,6 +651,7 @@ async function getOrCreateDraft(
       payload,
       startedAtMillis,
       updatedAtMillis: numberValue(snap.get("updatedAtMillis")) ?? now,
+      currentQuestionIndex: numberValue(snap.get("currentQuestionIndex")) ?? 0,
     };
   }
 
@@ -571,6 +665,7 @@ async function getOrCreateDraft(
     payload: "{}",
     startedAtMillis: now,
     updatedAtMillis: now,
+    currentQuestionIndex: 0,
   };
   await ref.set(draft, { merge: true });
   return draft;
@@ -911,6 +1006,55 @@ function toCachedAnswerMap(value: unknown): Record<string, string | null> {
 
 function normalizeAttemptMode(value: unknown): PracticeMode {
   return value === "part" ? "part" : "exam";
+}
+
+function normalizeDraftPayload(
+  payload: string | null | undefined,
+  allowedQuestionIds: Set<number>,
+  config: PracticeSessionConfig,
+  startedAtMillis: number,
+  updatedAtMillis: number,
+  currentQuestionIndex: number,
+): string {
+  const raw = parseDraftPayload(payload);
+  const rawAnswers = recordValue(raw.answers);
+  const answers: Record<string, { selectedOptionId: number | null; textResponse: string | null }> = {};
+  for (const [questionId, value] of Object.entries(rawAnswers)) {
+    const id = Number(questionId);
+    if (!Number.isInteger(id) || !allowedQuestionIds.has(id)) continue;
+    const answer = recordValue(value);
+    answers[String(id)] = {
+      selectedOptionId: numberValue(answer.selectedOptionId),
+      textResponse: stringValue(answer.textResponse),
+    };
+  }
+  const markedQuestionIds = arrayValue(raw.markedQuestionIds)
+    .map(numberValue)
+    .filter((id): id is number => id != null && allowedQuestionIds.has(id));
+
+  return JSON.stringify({
+    answers,
+    markedQuestionIds: [...new Set(markedQuestionIds)],
+    currentQuestionIndex,
+    startedAtMillis,
+    updatedAtMillis,
+    config,
+  });
+}
+
+function parseDraftPayload(payload: string | null | undefined): Record<string, unknown> {
+  if (!payload?.trim()) return {};
+  try {
+    return recordValue(JSON.parse(payload));
+  } catch {
+    return {};
+  }
+}
+
+function normalizeCurrentQuestionIndex(value: unknown, questionCount: number): number {
+  const parsed = numberValue(value) ?? 0;
+  const max = Math.max(0, questionCount - 1);
+  return Math.min(max, Math.max(0, Math.trunc(parsed)));
 }
 
 function buildScoreBreakdown(

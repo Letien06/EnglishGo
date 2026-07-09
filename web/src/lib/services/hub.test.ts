@@ -3,7 +3,21 @@ import type { AppUser } from "@/types";
 
 const profileGet = vi.fn();
 const practiceAttemptsGet = vi.fn();
-const vocabProgressGet = vi.fn();
+const masteredCountGet = vi.fn();
+const todaySummaryGet = vi.fn();
+
+function todayDateKey(): string {
+  const parts = new Intl.DateTimeFormat("en-CA", {
+    timeZone: "Asia/Ho_Chi_Minh",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).formatToParts(new Date());
+  const year = parts.find((part) => part.type === "year")?.value ?? "1970";
+  const month = parts.find((part) => part.type === "month")?.value ?? "01";
+  const day = parts.find((part) => part.type === "day")?.value ?? "01";
+  return `${year}-${month}-${day}`;
+}
 
 vi.mock("@/lib/firestore/db", () => ({
   adminDb: {
@@ -18,8 +32,17 @@ vi.mock("@/lib/firestore/db", () => ({
             if (subcollectionName === "practiceAttempts") {
               return { get: practiceAttemptsGet };
             }
-            if (subcollectionName === "vocabProgress") {
-              return { get: vocabProgressGet };
+            if (subcollectionName === "dailySummaries") {
+              return {
+                doc: vi.fn(() => ({ get: todaySummaryGet })),
+              };
+            }
+            if (subcollectionName === "userVocabProgress") {
+              return {
+                where: vi.fn(() => ({
+                  count: vi.fn(() => ({ get: masteredCountGet })),
+                })),
+              };
             }
             throw new Error(`Unexpected subcollection ${subcollectionName}`);
           }),
@@ -51,6 +74,12 @@ describe("getHub", () => {
         displayName: "Learner",
         targetScore: 750,
         level: "B1",
+        studyTodayDateKey: todayDateKey(),
+        studyStreakUpdatedAtMillis: Date.now(),
+        studyStreakDays: 3,
+        studyStudiedToday: true,
+        studyTodayActivityCount: 2,
+        studyTodayModules: ["practice"],
       }),
     });
     practiceAttemptsGet.mockResolvedValue({
@@ -63,11 +92,21 @@ describe("getHub", () => {
         },
       ],
     });
-    vocabProgressGet.mockResolvedValue({
-      docs: [
-        { data: () => ({ status: "MASTERED" }) },
-        { data: () => ({ status: "LEARNING" }) },
-      ],
+    masteredCountGet.mockResolvedValue({
+      data: () => ({ count: 1 }),
+    });
+    todaySummaryGet.mockResolvedValue({
+      exists: true,
+      data: () => ({
+        totalActivityCount: 4,
+        xp: 35,
+        moduleCounts: {
+          practice: 1,
+          reading: 1,
+          listening: 1,
+          vocab: 1,
+        },
+      }),
     });
   });
 
@@ -82,5 +121,10 @@ describe("getHub", () => {
     expect(hub.completedTests).toBe(1);
     expect(hub.averageScore).toBe(85);
     expect(hub.masteredWords).toBe(1);
+    expect(hub.streakDays).toBe(3);
+    expect(hub.dailyGoalCompleted).toBe(4);
+    expect(hub.todayXp).toBe(35);
+    expect(hub.todayPractice).toBe(1);
+    expect(hub.todayVocab).toBe(1);
   });
 });

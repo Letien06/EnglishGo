@@ -20,6 +20,18 @@ const historySchema = z.object({
   score: z.coerce.number().min(0),
 });
 
+export const GET = withErrorHandling(async (req: NextRequest) => {
+  const user = await requireUser();
+  const url = new URL(req.url);
+  const setId = Number(url.searchParams.get("setId"));
+  const externalPartId = url.searchParams.get("externalPartId");
+  const limit = Number(url.searchParams.get("limit") ?? 8);
+  const history = Number.isInteger(setId) && setId > 0
+    ? await vocab.findStudyHistory(user.uid, setId, externalPartId, limit)
+    : [];
+  return ok(history);
+});
+
 export const POST = withErrorHandling(async (req: NextRequest) => {
   const user = await requireUser();
   const body = await parseBody(req, historySchema);

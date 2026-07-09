@@ -106,7 +106,7 @@ After production deploy, inspect Vercel:
 ## Go-Live Checklist
 
 1. Deploy production from `web/`.
-2. Verify `/api/health`, `/login`, `/hub`, `/vocab`, `/listen`, `/read`, `/practice`, `/community`, `/ai/writing`, `/account`, `/billing`, and `/admin` with appropriate user roles.
+2. Verify `/api/health`, `/login`, `/hub`, `/vocab`, `/listen`, `/read`, `/practice`, `/community`, `/ai/writing`, `/account`, and `/admin` with appropriate user roles.
 3. Add the custom domain in Vercel and update DNS records at the DNS provider.
 4. Keep `englishwebapp.vercel.app` as a fallback while DNS propagates.
 5. Monitor Vercel logs, Firebase usage, Firestore indexes, and Storage upload/read behavior for several days.

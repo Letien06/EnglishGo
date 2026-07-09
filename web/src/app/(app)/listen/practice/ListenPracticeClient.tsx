@@ -77,14 +77,6 @@ export default function ListenPracticeClient({
   const item = items[currentIndex] ?? items[0];
 
   useEffect(() => {
-    setActiveMode(normalizeMode(mode));
-  }, [mode]);
-
-  useEffect(() => {
-    setActiveAssist(assist);
-  }, [assist]);
-
-  useEffect(() => {
     let firstFrame = 0;
     let secondFrame = 0;
     firstFrame = window.requestAnimationFrame(() => {

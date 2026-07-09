@@ -35,7 +35,7 @@ export default async function FlashcardsPage({ params, searchParams }: Props) {
         order ?? "random",
         amount ?? "all",
       )
-    : mastery || order || amount
+    : user || mastery || order || amount
       ? vocab.getFilteredSession(
           id,
           uid,

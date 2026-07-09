@@ -54,10 +54,7 @@ export const serverEnv = {
     );
   },
   get dauToeicAnonKey() {
-    return optional(
-      "DAUTOEIC_ANON_KEY",
-      "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InFmaG1ubHZnd2V6bnpjc29panlyIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Njg4MDYyMzQsImV4cCI6MjA4NDM4MjIzNH0.mNJAoc-uJVilLr03PT3luXsekfwJ4sICOIsOIRQu-N0",
-    );
+    return required("DAUTOEIC_ANON_KEY");
   },
   get dauToeicMediaBaseUrl() {
     return optional(

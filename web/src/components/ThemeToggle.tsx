@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 
 const STORAGE_KEY = "englishgo-theme";
 const MANUAL_STORAGE_KEY = "englishgo-theme-manual";
@@ -19,6 +19,10 @@ function readTheme(): "dark" | "light" {
 
 export default function ThemeToggle({ className }: { className?: string }) {
   const [theme, setTheme] = useState<"dark" | "light">(() => readTheme());
+
+  useEffect(() => {
+    document.documentElement.dataset.theme = theme;
+  }, [theme]);
 
   const toggle = useCallback(() => {
     const next = theme === "dark" ? "light" : "dark";

@@ -17,7 +17,6 @@ export function middleware(request: NextRequest) {
     '/practice',
     '/account',
     '/ai',
-    '/billing',
     '/admin'
   ];
 

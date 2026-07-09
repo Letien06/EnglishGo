@@ -2,6 +2,7 @@ import { FieldValue } from "firebase-admin/firestore";
 import { adminDb } from "@/lib/firestore/db";
 
 const ACTIVITY_COLLECTION = "studyActivity";
+const DAILY_SUMMARY_COLLECTION = "dailySummaries";
 const STREAK_LOOKBACK_LIMIT = 500;
 const STUDY_TIME_ZONE = "Asia/Ho_Chi_Minh";
 const SUMMARY_MAX_AGE_MS = 60 * 60 * 1000;
@@ -35,6 +36,13 @@ export interface StudyStreakLeaderboardEntry {
   lastActivityAtMillis: number | null;
 }
 
+export interface StudyDailySummary {
+  dateKey: string;
+  totalActivityCount: number;
+  xp: number;
+  moduleCounts: Record<StudyModule, number>;
+}
+
 export async function recordStudyActivity(
   uid: string,
   input: StudyActivityInput,
@@ -44,7 +52,10 @@ export async function recordStudyActivity(
   const now = input.occurredAtMillis ?? Date.now();
   const dateKey = dateKeyForMillis(now);
   const ref = activityCollection(uid).doc(dateKey);
+  const dailyRef = dailySummaryCollection(uid).doc(dateKey);
+  const userRef = adminDb.collection("users").doc(uid);
   const sourceId = input.sourceId == null ? null : String(input.sourceId);
+  const xp = xpForActivity(input.module);
 
   await adminDb.runTransaction(async (tx) => {
     const snap = await tx.get(ref);
@@ -67,9 +78,47 @@ export async function recordStudyActivity(
       },
       { merge: true },
     );
+    tx.set(
+      dailyRef,
+      {
+        dateKey,
+        totalActivityCount: FieldValue.increment(1),
+        xp: FieldValue.increment(xp),
+        [`moduleCounts.${input.module}`]: FieldValue.increment(1),
+        [`activityTypeCounts.${input.activityType}`]: FieldValue.increment(1),
+        modules: FieldValue.arrayUnion(input.module),
+        lastActivityAtMillis: now,
+        updatedAt: FieldValue.serverTimestamp(),
+        createdAt: FieldValue.serverTimestamp(),
+      },
+      { merge: true },
+    );
+    tx.set(
+      userRef,
+      {
+        totalStudyXp: FieldValue.increment(xp),
+        [`studyModuleTotals.${input.module}`]: FieldValue.increment(1),
+        updatedAt: FieldValue.serverTimestamp(),
+      },
+      { merge: true },
+    );
   });
 
   await refreshStudyStreakSummary(uid, undefined, now).catch(() => undefined);
+}
+
+export async function getTodayStudySummary(uid: string): Promise<StudyDailySummary> {
+  if (!uid?.trim()) return emptyDailySummary();
+  const todayKey = dateKeyForMillis(Date.now());
+  const snap = await dailySummaryCollection(uid).doc(todayKey).get().catch(() => null);
+  if (!snap?.exists) return emptyDailySummary(todayKey);
+  const data = snap.data() ?? {};
+  return {
+    dateKey: todayKey,
+    totalActivityCount: numberValue(data.totalActivityCount) ?? 0,
+    xp: numberValue(data.xp) ?? 0,
+    moduleCounts: parseModuleCounts(data.moduleCounts),
+  };
 }
 
 export async function getStudyStreak(uid: string): Promise<StudyStreakSummary> {
@@ -169,30 +218,28 @@ export async function getStudyStreakLeaderboard(
   limit = 100,
 ): Promise<StudyStreakLeaderboardEntry[]> {
   const safeLimit = Math.max(1, Math.min(100, Math.trunc(limit)));
+  const todayKey = dateKeyForMillis(Date.now());
   const snap = await adminDb
     .collection("users")
     .orderBy("studyStreakDays", "desc")
     .limit(safeLimit)
     .get();
 
-  const entries = await Promise.all(snap.docs.map(async (doc) => {
+  const entries = snap.docs.map((doc) => {
       const data = doc.data();
-      const summary = await getStudyStreak(doc.id).catch(() => null);
-      if (summary) {
-        await refreshStudyStreakSummary(doc.id, summary).catch(() => undefined);
-      }
+      const isToday = stringValue(data.studyTodayDateKey) === todayKey;
       return {
         rank: 0,
         uid: doc.id,
         displayName: stringValue(data.displayName),
         email: stringValue(data.email),
         avatarUrl: stringValue(data.avatarUrl),
-        streakDays: summary?.streakDays ?? numberValue(data.studyStreakDays) ?? 0,
-        studiedToday: summary?.studiedToday ?? data.studyStudiedToday === true,
-        todayActivityCount: summary?.todayActivityCount ?? numberValue(data.studyTodayActivityCount) ?? 0,
+        streakDays: numberValue(data.studyStreakDays) ?? 0,
+        studiedToday: isToday && data.studyStudiedToday === true,
+        todayActivityCount: isToday ? numberValue(data.studyTodayActivityCount) ?? 0 : 0,
         lastActivityAtMillis: numberValue(data.lastStudyActivityAtMillis),
       };
-    }));
+    });
 
   return entries
     .filter((entry) => entry.streakDays > 0)
@@ -209,6 +256,10 @@ function activityCollection(uid: string) {
   return adminDb.collection("users").doc(uid).collection(ACTIVITY_COLLECTION);
 }
 
+function dailySummaryCollection(uid: string) {
+  return adminDb.collection("users").doc(uid).collection(DAILY_SUMMARY_COLLECTION);
+}
+
 function emptySummary(): StudyStreakSummary {
   return {
     streakDays: 0,
@@ -216,6 +267,30 @@ function emptySummary(): StudyStreakSummary {
     todayActivityCount: 0,
     todayModules: [],
     todayDateKey: dateKeyForMillis(Date.now()),
+  };
+}
+
+function emptyDailySummary(dateKey = dateKeyForMillis(Date.now())): StudyDailySummary {
+  return {
+    dateKey,
+    totalActivityCount: 0,
+    xp: 0,
+    moduleCounts: {
+      listening: 0,
+      reading: 0,
+      practice: 0,
+      vocab: 0,
+    },
+  };
+}
+
+function parseModuleCounts(value: unknown): Record<StudyModule, number> {
+  const data = value && typeof value === "object" ? value as Record<string, unknown> : {};
+  return {
+    listening: numberValue(data.listening) ?? 0,
+    reading: numberValue(data.reading) ?? 0,
+    practice: numberValue(data.practice) ?? 0,
+    vocab: numberValue(data.vocab) ?? 0,
   };
 }
 
@@ -227,6 +302,15 @@ function parseModules(value: unknown): StudyModule[] {
     item === "practice" ||
     item === "vocab",
   );
+}
+
+function xpForActivity(module: StudyModule): number {
+  return {
+    listening: 10,
+    reading: 10,
+    practice: 20,
+    vocab: 5,
+  }[module];
 }
 
 function dateKeyForMillis(ms: number): string {

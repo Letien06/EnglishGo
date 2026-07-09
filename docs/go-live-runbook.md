@@ -38,7 +38,6 @@ Verify:
 - `/community`
 - `/ai/writing`
 - `/account`
-- `/billing`
 - `/admin` with an admin account
 
 ## 3. Domain Cutover
