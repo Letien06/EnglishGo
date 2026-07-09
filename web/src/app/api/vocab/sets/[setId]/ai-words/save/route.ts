@@ -5,6 +5,7 @@ import { ok, BadRequest } from "@/lib/api/response";
 import { parseBody } from "@/lib/api/validate";
 import { requireUser } from "@/lib/auth/session";
 import * as vocab from "@/lib/services/vocab";
+import { enforceDailyActionLimit } from "@/lib/services/rate-limit";
 
 // Coerce optional/nullable text fields to empty strings so the inferred type
 // matches `AiVocabCandidate` (whose `meaning`/`partOfSpeech` are required
@@ -37,6 +38,7 @@ export const POST = withErrorHandling(
     if (!Number.isInteger(id) || id <= 0) throw BadRequest("Invalid set ID");
 
     const user = await requireUser();
+    await enforceDailyActionLimit(user.uid, "vocab-ai-save", 100);
     const body = await parseBody(req, saveSchema);
     const count = await vocab.saveAiWords(id, user.uid, body.candidates);
     return ok({ saved: count });

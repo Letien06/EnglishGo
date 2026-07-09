@@ -841,16 +841,18 @@ export async function findStudyHistory(
 ): Promise<VocabStudyHistoryCard[]> {
   requireUid(uid);
   const cleanPartId = externalPartId?.trim() || null;
-  const snap = await historyCollection(uid)
+  let query: FirebaseFirestore.Query = historyCollection(uid)
+    .where("setId", "==", setId);
+  if (cleanPartId) {
+    query = query.where("externalPartId", "==", cleanPartId);
+  }
+  const snap = await query
     .orderBy("finishedAtMillis", "desc")
-    .limit(100)
+    .limit(Math.max(1, Math.min(20, limit)))
     .get();
 
   return snap.docs
     .map(toStudyHistoryDoc)
-    .filter((entry) => entry.setId === setId)
-    .filter((entry) => !cleanPartId || entry.externalPartId === cleanPartId)
-    .slice(0, limit)
     .map(toStudyHistoryCard);
 }
 

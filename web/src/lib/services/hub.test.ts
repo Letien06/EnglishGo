@@ -3,6 +3,7 @@ import type { AppUser } from "@/types";
 
 const profileGet = vi.fn();
 const practiceAttemptsGet = vi.fn();
+const practiceAttemptsCountGet = vi.fn();
 const masteredCountGet = vi.fn();
 const todaySummaryGet = vi.fn();
 
@@ -30,7 +31,12 @@ vi.mock("@/lib/firestore/db", () => ({
           get: profileGet,
           collection: vi.fn((subcollectionName: string) => {
             if (subcollectionName === "practiceAttempts") {
-              return { get: practiceAttemptsGet };
+              return {
+                orderBy: vi.fn(() => ({
+                  limit: vi.fn(() => ({ get: practiceAttemptsGet })),
+                })),
+                count: vi.fn(() => ({ get: practiceAttemptsCountGet })),
+              };
             }
             if (subcollectionName === "dailySummaries") {
               return {
@@ -85,12 +91,12 @@ describe("getHub", () => {
     practiceAttemptsGet.mockResolvedValue({
       docs: [
         {
-          data: () => ({
-            score: 85,
-            submittedAtMillis: Date.now(),
-          }),
+          get: (field: string) => field === "score" ? 85 : Date.now(),
         },
       ],
+    });
+    practiceAttemptsCountGet.mockResolvedValue({
+      data: () => ({ count: 1 }),
     });
     masteredCountGet.mockResolvedValue({
       data: () => ({ count: 1 }),

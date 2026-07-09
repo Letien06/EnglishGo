@@ -1,6 +1,6 @@
 import { adminDb } from "@/lib/firestore/db";
 import { BadRequest, NotFound } from "@/lib/api/response";
-import { FieldPath } from "firebase-admin/firestore";
+import { FieldPath, FieldValue } from "firebase-admin/firestore";
 import { unstable_cache } from "next/cache";
 import type { AppUser } from "@/types";
 import type { DauToeicQuestion, DauToeicTest } from "@/types/dautoeic";
@@ -501,6 +501,7 @@ export async function submit(
       .delete()
       .catch(() => undefined),
     updatePracticeWeakAreas(user.uid, attempt).catch(() => undefined),
+    updatePracticeSummary(user.uid, score, submittedAtMillis).catch(() => undefined),
     addScore(user, score).catch(() => undefined),
     recordStudyActivity(user.uid, {
       module: "practice",
@@ -518,6 +519,30 @@ export async function submit(
     elapsedMillis,
     scoreBreakdown,
   };
+}
+
+async function updatePracticeSummary(
+  uid: string,
+  score: number,
+  submittedAtMillis: number,
+): Promise<void> {
+  const userRef = adminDb.collection("users").doc(uid);
+  await adminDb.runTransaction(async (tx) => {
+    const snap = await tx.get(userRef);
+    const currentCount = numberValue(snap.get("practiceCompletedTests")) ?? 0;
+    const currentTotal = numberValue(snap.get("practiceScoreTotal")) ?? 0;
+    const currentBest = numberValue(snap.get("practiceBestScore")) ?? 0;
+    const nextCount = currentCount + 1;
+    const nextTotal = currentTotal + score;
+    tx.set(userRef, {
+      practiceCompletedTests: FieldValue.increment(1),
+      practiceScoreTotal: FieldValue.increment(score),
+      practiceAverageScore: round2(nextTotal / nextCount),
+      practiceBestScore: Math.max(currentBest, score),
+      lastPracticeSubmittedAtMillis: submittedAtMillis,
+      updatedAtMillis: Date.now(),
+    }, { merge: true });
+  });
 }
 
 async function updatePracticeWeakAreas(

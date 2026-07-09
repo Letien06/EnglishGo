@@ -4,6 +4,7 @@ import { ok } from "@/lib/api/response";
 import { parseBody } from "@/lib/api/validate";
 import { requireRole } from "@/lib/auth/session";
 import { createGeneratorDraft } from "@/lib/services/admin";
+import { enforceDailyActionLimit } from "@/lib/services/rate-limit";
 
 const schema = z.object({
   part: z.string().min(1),
@@ -13,6 +14,7 @@ const schema = z.object({
 
 export const POST = withErrorHandling(async (req) => {
   const user = await requireRole("ADMIN");
+  await enforceDailyActionLimit(user.uid, "admin-generate", 100);
   const body = await parseBody(req, schema);
   return ok(await createGeneratorDraft(user, body), { status: 201 });
 });

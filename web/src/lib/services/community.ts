@@ -2,6 +2,7 @@ import { FieldValue } from "firebase-admin/firestore";
 import { adminDb } from "@/lib/firestore/db";
 import { BadRequest, Unauthorized } from "@/lib/api/response";
 import type { AppUser } from "@/types";
+import { enforceDailyActionLimit } from "./rate-limit";
 
 const ALL_TIME = "ALL_TIME";
 const WEEKLY = "WEEKLY";
@@ -37,12 +38,13 @@ export async function comments(
   targetType = "GENERAL",
   targetId = 1,
 ): Promise<CommunityComment[]> {
-  const snap = await commentCollection(targetType, targetId).get();
+  const snap = await commentCollection(targetType, targetId)
+    .where("deletedAtMillis", "==", null)
+    .orderBy("createdAtMillis", "desc")
+    .limit(30)
+    .get();
   return snap.docs
-    .filter((doc) => doc.get("deletedAtMillis") == null)
-    .map(toComment)
-    .sort((a, b) => (b.createdAtMillis ?? 0) - (a.createdAtMillis ?? 0))
-    .slice(0, 30);
+    .map(toComment);
 }
 
 export async function addComment(
@@ -53,6 +55,7 @@ export async function addComment(
 ): Promise<CommunityComment> {
   if (!user) throw Unauthorized("User not found");
   if (!content.trim()) throw BadRequest("Comment content is required");
+  await enforceDailyActionLimit(user.uid, "community-comments", 30);
 
   const data = {
     uid: user.uid,
@@ -114,6 +117,7 @@ export async function submitContribution(
   if (!title.trim() || !content.trim()) {
     throw BadRequest("Title and content are required.");
   }
+  await enforceDailyActionLimit(user.uid, "community-contributions", 20);
   const ref = await adminDb.collection("contentAuditLogs").add({
     uid: user.uid,
     email: user.email,

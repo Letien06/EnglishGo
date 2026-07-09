@@ -30,6 +30,23 @@
       ]
     },
     {
+      "collectionGroup": "vocabStudyHistory",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "setId", "order": "ASCENDING" },
+        { "fieldPath": "finishedAtMillis", "order": "DESCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "vocabStudyHistory",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "setId", "order": "ASCENDING" },
+        { "fieldPath": "externalPartId", "order": "ASCENDING" },
+        { "fieldPath": "finishedAtMillis", "order": "DESCENDING" }
+      ]
+    },
+    {
       "collectionGroup": "rateLimits",
       "queryScope": "COLLECTION",
       "fields": [
@@ -134,6 +151,14 @@
     {
       "collectionGroup": "comments",
       "queryScope": "COLLECTION_GROUP",
+      "fields": [
+        { "fieldPath": "deletedAtMillis", "order": "ASCENDING" },
+        { "fieldPath": "createdAtMillis", "order": "DESCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "comments",
+      "queryScope": "COLLECTION",
       "fields": [
         { "fieldPath": "deletedAtMillis", "order": "ASCENDING" },
         { "fieldPath": "createdAtMillis", "order": "DESCENDING" }

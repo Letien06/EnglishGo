@@ -1,11 +1,13 @@
 "use client";
 
 import Link from "next/link";
-import { useCallback, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import {
   GoogleAuthProvider,
+  getRedirectResult,
   signInWithPopup,
+  signInWithRedirect,
 } from "firebase/auth";
 import ThemeToggle from "@/components/ThemeToggle";
 import { getClientAuth } from "@/lib/firebase/client";
@@ -15,7 +17,7 @@ type AuthMode = "login" | "register";
 export default function LoginForm() {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const from = searchParams.get("from") || searchParams.get("redirect") || "/hub";
+  const from = getSafeReturnPath(searchParams.get("from") || searchParams.get("redirect") || "/hub");
   const initialMode: AuthMode = searchParams.get("mode") === "register" ? "register" : "login";
 
   const [error, setError] = useState("");
@@ -43,10 +45,37 @@ export default function LoginForm() {
           result.error || result.message || `Đăng nhập thất bại (${res.status})`,
         );
       }
-      router.push(from);
+      router.replace(from);
+      router.refresh();
     },
     [router, from],
   );
+
+  useEffect(() => {
+    let cancelled = false;
+
+    async function finishRedirectLogin() {
+      try {
+        const result = await getRedirectResult(getClientAuth());
+        if (!result) return;
+        if (!cancelled) {
+          setError("");
+          setBusy(true);
+        }
+        await createBackendSession(result.user);
+      } catch (err: unknown) {
+        if (!cancelled) setError(friendlyAuthError(err));
+      } finally {
+        if (!cancelled) setBusy(false);
+      }
+    }
+
+    void finishRedirectLogin();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [createBackendSession]);
 
   const runAuth = useCallback(async (callback: () => Promise<void>) => {
     setError("");
@@ -63,7 +92,12 @@ export default function LoginForm() {
   const handleGoogle = () =>
     runAuth(async () => {
       const provider = new GoogleAuthProvider();
-      const credential = await signInWithPopup(getClientAuth(), provider);
+      const auth = getClientAuth();
+      if (shouldUseRedirectSignIn()) {
+        await signInWithRedirect(auth, provider);
+        return;
+      }
+      const credential = await signInWithPopup(auth, provider);
       await createBackendSession(credential.user);
     });
 
@@ -186,6 +220,18 @@ export default function LoginForm() {
       </section>
     </main>
   );
+}
+
+function getSafeReturnPath(path: string): string {
+  if (!path.startsWith("/") || path.startsWith("//")) return "/hub";
+  return path;
+}
+
+function shouldUseRedirectSignIn(): boolean {
+  if (typeof window === "undefined") return false;
+  const userAgent = window.navigator.userAgent;
+  return window.matchMedia("(pointer: coarse)").matches ||
+    /Android|iPhone|iPad|iPod|Mobile/i.test(userAgent);
 }
 
 function isFirebaseAuthCode(error: unknown, code: string): boolean {

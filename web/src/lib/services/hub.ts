@@ -43,32 +43,48 @@ export interface HubView {
 /*  Dashboard summary (port of DashboardService)                       */
 /* ------------------------------------------------------------------ */
 
-interface AttemptDoc {
-  score: number;
-  submittedAtMillis: number | null;
+interface PracticeSummary {
+  completedTests: number;
+  averageScore: number;
 }
 
-async function loadSubmittedAttempts(uid: string): Promise<AttemptDoc[]> {
+async function loadPracticeSummary(
+  uid: string,
+  profile: Record<string, unknown>,
+): Promise<PracticeSummary> {
+  const aggregateCount = numberValue(profile.practiceCompletedTests);
+  const aggregateAverage = numberValue(profile.practiceAverageScore);
+  if (aggregateCount != null && aggregateAverage != null) {
+    return {
+      completedTests: aggregateCount,
+      averageScore: aggregateAverage,
+    };
+  }
+
   try {
-    const snap = await adminDb
+    const base = adminDb
       .collection("users")
       .doc(uid)
-      .collection("practiceAttempts")
-      .get();
-
-    return snap.docs
-      .map((doc) => {
-        const data = doc.data();
-        const score = typeof data.score === "number" ? data.score : 0;
-        const submittedAtMillis =
-          typeof data.submittedAtMillis === "number"
-            ? data.submittedAtMillis
-            : null;
-        return { score, submittedAtMillis };
-      })
-      .filter((a) => a.submittedAtMillis !== null);
+      .collection("practiceAttempts");
+    const [recentSnap, countSnap] = await Promise.all([
+      base.orderBy("submittedAtMillis", "desc").limit(50).get(),
+      base.count().get(),
+    ]);
+    const scores = recentSnap.docs
+      .map((doc) => numberValue(doc.get("score")) ?? 0)
+      .filter((score) => score > 0);
+    const averageScore = scores.length > 0
+      ? Math.round((scores.reduce((sum, score) => sum + score, 0) / scores.length) * 100) / 100
+      : 0;
+    return {
+      completedTests: countSnap.data().count,
+      averageScore,
+    };
   } catch {
-    return [];
+    return {
+      completedTests: 0,
+      averageScore: 0,
+    };
   }
 }
 
@@ -96,9 +112,8 @@ const DAILY_ACTIVITY_TARGET = 10;
 
 export async function getHub(user: AppUser): Promise<HubView> {
   const uid = user.uid;
-  const [profileSnap, attempts, studyStreak, todaySummary, masteredWords, dueVocabWords] = await Promise.all([
+  const [profileSnap, studyStreak, todaySummary, masteredWords, dueVocabWords] = await Promise.all([
     adminDb.collection("users").doc(uid).get().catch(() => null),
-    loadSubmittedAttempts(uid),
     getStoredStudyStreakSummary(uid).then((summary) => summary ?? getStudyStreak(uid)),
     getTodayStudySummary(uid),
     countMasteredWords(uid),
@@ -109,21 +124,13 @@ export async function getHub(user: AppUser): Promise<HubView> {
   const profileName = (profile.displayName as string) || null;
   const targetScore = typeof profile.targetScore === "number" ? profile.targetScore : null;
   const level = (profile.level as string) || null;
+  const practiceSummary = await loadPracticeSummary(uid, profile);
   const nextRecommendation = toRecommendation(profile.nextPracticeRecommendation);
   const todayCompleted = todaySummary.totalActivityCount || studyStreak.todayActivityCount;
   const goalPercent = Math.min(
     100,
     Math.round((todayCompleted * 100) / Math.max(DAILY_ACTIVITY_TARGET, 1)),
   );
-
-  // Average score
-  const avgScore =
-    attempts.length > 0
-      ? Math.round(
-          (attempts.reduce((sum, a) => sum + a.score, 0) / attempts.length) *
-            100,
-        ) / 100
-      : 0;
 
   // Greeting name
   const greetingName = profileName || user.displayName || user.email;
@@ -134,7 +141,7 @@ export async function getHub(user: AppUser): Promise<HubView> {
     dailyGoalCompleted: todayCompleted,
     dailyGoalPercent: goalPercent,
     todayXp: todaySummary.xp,
-    totalXp: numberValue(profile.totalStudyXp) ?? attempts.length * 5,
+    totalXp: numberValue(profile.totalStudyXp) ?? practiceSummary.completedTests * 5,
     todayListening: todaySummary.moduleCounts.listening,
     todayReading: todaySummary.moduleCounts.reading,
     todayPractice: todaySummary.moduleCounts.practice,
@@ -142,8 +149,8 @@ export async function getHub(user: AppUser): Promise<HubView> {
     dueVocabWords,
     nextRecommendation,
     streakDays: studyStreak.streakDays,
-    completedTests: attempts.length,
-    averageScore: avgScore,
+    completedTests: practiceSummary.completedTests,
+    averageScore: practiceSummary.averageScore,
     targetScore,
     level,
     masteredWords,

@@ -91,8 +91,8 @@ export async function createGeneratorDraft(
 
 async function countCollection(collection: string): Promise<number> {
   try {
-    const snap = await adminDb.collection(collection).get();
-    return snap.size;
+    const snap = await adminDb.collection(collection).count().get();
+    return snap.data().count;
   } catch {
     return 0;
   }
