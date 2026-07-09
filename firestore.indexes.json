@@ -21,14 +21,6 @@
       "collectionGroup": "dauToeicTestIndex",
       "queryScope": "COLLECTION",
       "fields": [
-        { "fieldPath": "orderIndexSort", "order": "ASCENDING" },
-        { "fieldPath": "__name__", "order": "ASCENDING" }
-      ]
-    },
-    {
-      "collectionGroup": "dauToeicTestIndex",
-      "queryScope": "COLLECTION",
-      "fields": [
         { "fieldPath": "difficultyLevel", "order": "ASCENDING" },
         { "fieldPath": "orderIndexSort", "order": "ASCENDING" },
         { "fieldPath": "__name__", "order": "ASCENDING" }
@@ -59,22 +51,6 @@
       "fields": [
         { "fieldPath": "status", "order": "ASCENDING" },
         { "fieldPath": "nextReviewAtMillis", "order": "ASCENDING" }
-      ]
-    },
-    {
-      "collectionGroup": "listeningProgress",
-      "queryScope": "COLLECTION",
-      "fields": [
-        { "fieldPath": "part", "order": "ASCENDING" },
-        { "fieldPath": "level", "order": "ASCENDING" }
-      ]
-    },
-    {
-      "collectionGroup": "readingProgress",
-      "queryScope": "COLLECTION",
-      "fields": [
-        { "fieldPath": "part", "order": "ASCENDING" },
-        { "fieldPath": "level", "order": "ASCENDING" }
       ]
     },
     {
