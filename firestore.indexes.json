@@ -9,14 +9,6 @@
       ]
     },
     {
-      "collectionGroup": "practiceAttempts",
-      "queryScope": "COLLECTION",
-      "fields": [
-        { "fieldPath": "canonicalAttemptKey", "order": "ASCENDING" },
-        { "fieldPath": "eligibility", "order": "ASCENDING" }
-      ]
-    },
-    {
       "collectionGroup": "practiceDrafts",
       "queryScope": "COLLECTION",
       "fields": [
