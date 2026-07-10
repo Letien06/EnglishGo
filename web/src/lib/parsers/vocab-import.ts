@@ -51,6 +51,10 @@ export function parseDelimitedWords(text: string): AiVocabCandidate[] {
 }
 
 function parseDelimitedLine(line: string): string[] {
+  // Format used by the quick-add dialog: word | phonetic | type | meaning | example
+  if (line.includes("|")) {
+    return line.split("|").map((s) => s.trim());
+  }
   // Try tab first, then semicolon, then comma
   if (line.includes("\t")) {
     return line.split("\t").map((s) => s.trim());

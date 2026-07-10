@@ -47,42 +47,7 @@ export default async function VocabSetDetailPage({ params }: Props) {
           </h1>
         </section>
 
-        {/* Stats */}
-        <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-          <StatBox label="Tổng từ" value={detail.totalWords} />
-          <StatBox label="Thành thạo" value={detail.masteredWords} />
-          <StatBox
-            label="Đang học"
-            value={detail.totalWords - detail.masteredWords}
-          />
-          <StatBox label="Tiến trình" value={`${detail.progressPercent}%`} />
-        </div>
-
-        {/* Progress bar */}
-        <div className="h-3 rounded-full bg-surface-soft overflow-hidden">
-          <div
-            className="h-full rounded-full bg-gradient-to-r from-accent to-green-400 transition-all"
-            style={{ width: `${detail.progressPercent}%` }}
-          />
-        </div>
-
-        {/* Actions */}
-        <div className="flex gap-3 flex-wrap">
-          <Link
-            href={`/vocab/${id}/flashcards`}
-            className="px-5 py-2.5 rounded-lg bg-accent text-white text-sm font-semibold hover:bg-accent/90 transition-colors no-underline"
-          >
-            🃏 Flashcards
-          </Link>
-          <Link
-            href={`/vocab/${id}/flashcards?mode=quiz`}
-            className="px-5 py-2.5 rounded-lg bg-surface border border-line text-ink2 text-sm font-semibold hover:bg-surface-soft transition-colors no-underline"
-          >
-            📝 Quiz
-          </Link>
-        </div>
-
-        {/* Client component for word table + AI modal */}
+        {/* Vocabulary dashboard, search, and word management */}
         <VocabSetDetailClient
           setId={id}
           words={detail.words}
@@ -90,20 +55,5 @@ export default async function VocabSetDetailPage({ params }: Props) {
         />
       </main>
     </>
-  );
-}
-
-function StatBox({
-  label,
-  value,
-}: {
-  label: string;
-  value: number | string;
-}) {
-  return (
-    <article className="p-4 rounded-xl bg-surface border border-line">
-      <p className="text-2xl font-bold text-ink">{value}</p>
-      <p className="text-xs text-muted">{label}</p>
-    </article>
   );
 }
