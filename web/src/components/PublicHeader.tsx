@@ -15,12 +15,39 @@ const navItems = [
 ] as const;
 
 interface PublicHeaderProps {
-  user?: { displayName: string; streakDays: number } | null;
+  user?: { displayName: string } | null;
 }
+
+type SessionUser = { displayName: string };
 
 export default function PublicHeader({ user }: PublicHeaderProps) {
   const pathname = usePathname();
+  const [sessionUser, setSessionUser] = useState<SessionUser | null | undefined>(user);
   const [menuOpen, setMenuOpen] = useState(false);
+
+  useEffect(() => {
+    const controller = new AbortController();
+
+    async function loadSession() {
+      try {
+        const response = await fetch("/api/auth/session", {
+          cache: "no-store",
+          signal: controller.signal,
+        });
+        if (!response.ok) return;
+
+        const result = await response.json();
+        if (result?.success) {
+          setSessionUser(result.data ? { displayName: result.data.displayName } : null);
+        }
+      } catch (error) {
+        if (error instanceof DOMException && error.name === "AbortError") return;
+      }
+    }
+
+    void loadSession();
+    return () => controller.abort();
+  }, []);
 
   useEffect(() => {
     const timer = window.setTimeout(() => setMenuOpen(false), 0);
@@ -82,13 +109,13 @@ export default function PublicHeader({ user }: PublicHeaderProps) {
             </span>
           </button>
           <ThemeToggle className="h-12 w-12 border border-line bg-surface-soft text-ink" />
-          {user ? (
+          {sessionUser ? (
             <Link
               href="/account"
               className="inline-flex h-12 min-w-12 items-center justify-center rounded-full bg-primary px-4 text-sm font-extrabold text-gold-ink shadow-[0_12px_28px_rgba(224,149,43,0.25)]"
               aria-label="Tài khoản"
             >
-              {(user.displayName || "E").charAt(0).toUpperCase()}
+              {(sessionUser.displayName || "E").charAt(0).toUpperCase()}
             </Link>
           ) : (
             <>
@@ -142,7 +169,7 @@ export default function PublicHeader({ user }: PublicHeaderProps) {
               })}
             </ul>
 
-            {!user && (
+            {!sessionUser && (
               <div className="mt-4 flex flex-col gap-2 border-t border-line pt-4">
                 <Link
                   href="/login"
