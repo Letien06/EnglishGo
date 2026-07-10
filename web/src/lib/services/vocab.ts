@@ -1320,15 +1320,26 @@ async function saveCandidates(
   const existingWords = await wordKeysForSet(setId);
   const existingSet = new Set(existingWords);
 
-  const writes: Array<{ id: number; data: Record<string, unknown> }> = [];
-  for (const candidate of candidates) {
-    if (writes.length >= limit) break;
-    const normalizedCandidate = await normalizeCandidateForSave(candidate);
+  const normalizedCandidates = await mapWithConcurrency(
+    candidates.slice(0, limit),
+    8,
+    normalizeCandidateForSave,
+  );
+  const accepted: AiVocabCandidate[] = [];
+  for (const normalizedCandidate of normalizedCandidates) {
     const normalized = normalizedCandidate.word.toLowerCase().trim();
     if (!normalized || existingSet.has(normalized)) continue;
 
-    const wordId = await newNumericId(WORDS);
-    const now = Date.now();
+    accepted.push(normalizedCandidate);
+    existingSet.add(normalized);
+  }
+
+  const wordIds = await newNumericIds(WORDS, accepted.length);
+  const now = Date.now();
+  const writes: Array<{ id: number; data: Record<string, unknown> }> = [];
+  for (const [index, normalizedCandidate] of accepted.entries()) {
+    const wordId = wordIds[index]!;
+
     writes.push({
       id: wordId,
       data: {
@@ -1351,7 +1362,6 @@ async function saveCandidates(
         updatedAtMillis: now,
       },
     });
-    existingSet.add(normalized);
   }
 
   await commitWordWrites(writes);
@@ -1592,6 +1602,43 @@ function matchesMastery(
     default:
       return !prog || prog.status !== "MASTERED";
   }
+}
+
+/**
+ * Reserve a group of random numeric IDs with one Firestore read batch.
+ * Individual collision checks made a 50-word AI save wait for 50 sequential
+ * network round trips; collisions in this 48-bit range are exceptionally rare.
+ */
+async function newNumericIds(collection: string, count: number): Promise<number[]> {
+  if (count <= 0) return [];
+  const proposals = new Set<number>();
+  while (proposals.size < count) {
+    proposals.add(randomInt(1_000_000_000, 281_474_976_710_655));
+  }
+  const ids = [...proposals];
+  const snapshots = await adminDb.getAll(
+    ...ids.map((id) => adminDb.collection(collection).doc(String(id))),
+  );
+  const available = snapshots.filter((snapshot) => !snapshot.exists).map((snapshot) => Number(snapshot.id));
+  if (available.length === count) return available;
+  return [...available, ...(await newNumericIds(collection, count - available.length))];
+}
+
+async function mapWithConcurrency<T, R>(
+  values: T[],
+  limit: number,
+  mapper: (value: T) => Promise<R>,
+): Promise<R[]> {
+  const results = new Array<R>(values.length);
+  let nextIndex = 0;
+  const worker = async () => {
+    while (nextIndex < values.length) {
+      const index = nextIndex++;
+      results[index] = await mapper(values[index]!);
+    }
+  };
+  await Promise.all(Array.from({ length: Math.min(limit, values.length) }, worker));
+  return results;
 }
 
 function isDueProgress(progress: VocabProgressDoc, now: number): boolean {

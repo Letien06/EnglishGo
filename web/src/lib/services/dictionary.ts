@@ -45,14 +45,14 @@ export async function enrichWithDictionary(
   const unique = uniqueWords(suggestedWords);
 
   // Look up each word in the dictionary
-  const entries: DictionaryEntry[] = [];
-  for (const word of unique) {
-    if (entries.length >= count) break;
-    const entry = await lookup(word);
-    if (entry) {
-      entries.push(entry);
-    }
-  }
+  // Dictionary requests are independent. A small concurrency cap keeps the
+  // preview responsive without overwhelming the public dictionary service.
+  const lookedUp = await mapWithConcurrency(
+    unique.slice(0, count),
+    8,
+    lookup,
+  );
+  const entries = lookedUp.filter((entry): entry is DictionaryEntry => entry !== null);
 
   if (entries.length === 0) return [];
 
@@ -190,6 +190,23 @@ interface PronunciationPick {
   audioUrl: string;
   audioUsUrl: string;
   audioUkUrl: string;
+}
+
+async function mapWithConcurrency<T, R>(
+  values: T[],
+  limit: number,
+  mapper: (value: T) => Promise<R>,
+): Promise<R[]> {
+  const results = new Array<R>(values.length);
+  let nextIndex = 0;
+  const worker = async () => {
+    while (nextIndex < values.length) {
+      const index = nextIndex++;
+      results[index] = await mapper(values[index]!);
+    }
+  };
+  await Promise.all(Array.from({ length: Math.min(limit, values.length) }, worker));
+  return results;
 }
 
 function pronunciationFor(

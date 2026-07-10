@@ -23,7 +23,12 @@ const candidateSchema = z.object({
     .default("")
     .transform((v) => v ?? ""),
   phonetic: z.string().optional(),
+  phoneticUs: z.string().optional(),
+  phoneticUk: z.string().optional(),
   example: z.string().optional(),
+  audioUrl: z.string().optional(),
+  audioUsUrl: z.string().optional(),
+  audioUkUrl: z.string().optional(),
   selected: z.boolean().optional(),
 });
 
