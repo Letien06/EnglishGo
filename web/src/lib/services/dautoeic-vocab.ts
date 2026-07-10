@@ -27,9 +27,14 @@ export function dautoeicVocabWordId(wordId: string): number {
   return stableId(`dautoeic:vocab_word:${wordId}`);
 }
 
+export function isDauToeicVocabConfigured(): boolean {
+  return Boolean(serverEnv.dauToeicSupabaseUrl && serverEnv.dauToeicAnonKey);
+}
+
 export async function getVocabularyCatalogView(
   uid?: string | null,
 ): Promise<DauToeicVocabCatalogView> {
+  if (!isDauToeicVocabConfigured()) return { groups: [], cards: [] };
   const catalog = await getVocabularyCatalog();
   const visibleTests = catalog.tests.filter(isPlayableTest);
   const setNameById = new Map(
@@ -196,6 +201,20 @@ export async function syncDautoeicVocabTest(
     await commitWordWrites(writes);
     written += writes.length;
   }
+
+  // Keep list pages fast: they read this denormalized value instead of issuing
+  // one aggregate query per vocabulary set. The sync path is infrequent, so a
+  // single reconciliation count here also repairs interrupted/older imports.
+  const localCount = await adminDb
+    .collection(WORDS)
+    .where("setId", "==", setId)
+    .where("status", "==", "PUBLISHED")
+    .count()
+    .get();
+  await adminDb.collection(SETS).doc(String(setId)).update({
+    wordCount: localCount.data().count,
+    updatedAtMillis: Date.now(),
+  });
 
   return {
     setId,
@@ -535,7 +554,7 @@ async function supabasePost(
 async function supabaseFetch(url: string, init: RequestInit): Promise<unknown> {
   const anonKey = serverEnv.dauToeicAnonKey;
   if (!serverEnv.dauToeicSupabaseUrl || !anonKey) {
-    throw new ApiError("Nguồn từ vựng chưa được cấu hình", 400);
+    throw new ApiError("Nguồn từ vựng chưa được cấu hình", 503);
   }
   try {
     const response = await fetch(url, {

@@ -76,6 +76,12 @@ export async function provisionUser(decoded: {
   if (!snap.exists) {
     const role = adminEmails.includes(email.toLowerCase()) ? "ADMIN" : "STUDENT";
     const now = Date.now();
+    const todayDateKey = new Intl.DateTimeFormat("en-CA", {
+      timeZone: "Asia/Ho_Chi_Minh",
+      year: "numeric",
+      month: "2-digit",
+      day: "2-digit",
+    }).format(new Date(now));
     const newUser: Record<string, unknown> = {
       uid,
       firebaseUid: uid,
@@ -86,6 +92,24 @@ export async function provisionUser(decoded: {
       role,
       level: null,
       targetScore: null,
+      studyStreakDays: 0,
+      studyStudiedToday: false,
+      studyTodayActivityCount: 0,
+      studyTodayModules: [],
+      studyTodayModuleCounts: { listening: 0, reading: 0, practice: 0, vocab: 0 },
+      studyTodayXp: 0,
+      studyTodayDateKey: todayDateKey,
+      studyStreakUpdatedAtMillis: now,
+      totalStudyXp: 0,
+      studyModuleTotals: { listening: 0, reading: 0, practice: 0, vocab: 0 },
+      practiceCompletedTests: 0,
+      practiceScoreTotal: 0,
+      practiceAverageScore: 0,
+      practiceBestScore: 0,
+      vocabMasteredWords: 0,
+      vocabDueWords: 0,
+      vocabNextDueAtMillis: null,
+      vocabSummaryUpdatedAtMillis: now,
       createdAtMillis: now,
       updatedAtMillis: now,
       createdAt: FieldValue.serverTimestamp(),

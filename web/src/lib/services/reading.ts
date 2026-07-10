@@ -11,6 +11,7 @@ const service = createLearningToolService({
 });
 
 export const applyProgress = service.applyProgress;
+export const applyProgressBatch = service.applyProgressBatch;
 export const summarize = service.summarize;
 export const recordProgress = service.recordProgress;
 export const saveNote = service.saveNote;

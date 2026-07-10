@@ -6,9 +6,12 @@ import { parseBody } from "@/lib/api/validate";
 import { requireUser } from "@/lib/auth/session";
 import * as vocab from "@/lib/services/vocab";
 
-const reviewSchema = z.object({
-  quality: z.coerce.number().min(0, "Quality must be 0-5").max(5, "Quality must be 0-5"),
-});
+const reviewSchema = z.union([
+  z.object({
+    quality: z.coerce.number().min(0, "Quality must be 0-5").max(5, "Quality must be 0-5"),
+  }),
+  z.object({ mastered: z.literal(true) }),
+]);
 
 export const POST = withErrorHandling(
   async (req: NextRequest, { params }: { params: Promise<Record<string, string>> }) => {
@@ -18,7 +21,9 @@ export const POST = withErrorHandling(
 
     const user = await requireUser();
     const body = await parseBody(req, reviewSchema);
-    const result = await vocab.review(user.uid, id, body.quality);
+    const result = "mastered" in body
+      ? await vocab.markMastered(user.uid, id)
+      : await vocab.review(user.uid, id, body.quality);
     return ok(result);
   },
 );

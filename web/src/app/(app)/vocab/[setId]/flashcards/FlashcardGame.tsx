@@ -10,6 +10,7 @@
  * timer + lives, feedback overlay, result screen with "Lưu & Hoàn thành", mute + TTS.
  */
 import Link from "next/link";
+import dynamic from "next/dynamic";
 import { useRouter } from "next/navigation";
 import {
   useCallback,
@@ -143,6 +144,16 @@ const MODE_TONES: Record<PlayMode, ModeTone> = {
     badge: "bg-fuchsia-100 text-fuchsia-700",
   },
 };
+
+const FlashcardBody = dynamic(() => import("./modes/FlashcardMode"), { loading: ModeLoading });
+const QuizBody = dynamic(() => import("./modes/QuizMode"), { loading: ModeLoading });
+const MatchingBody = dynamic(() => import("./modes/MatchingMode"), { loading: ModeLoading });
+const TypingBody = dynamic(() => import("./modes/TypingMode"), { loading: ModeLoading });
+const ListeningBody = dynamic(() => import("./modes/ListeningMode"), { loading: ModeLoading });
+
+function ModeLoading() {
+  return <div className="mx-auto min-h-72 max-w-2xl animate-pulse rounded-2xl border border-line bg-white" />;
+}
 
 /* ================================================================== */
 /*  Helpers                                                            */
@@ -1480,11 +1491,26 @@ function PlaySurface({
           onMeaning={chooseMatchMeaning}
         />
       )}
-      {(activeMode === "typing" || activeMode === "listening") && (
+      {activeMode === "typing" && (
         <TypingBody
           word={word}
           reverse={reverse}
-          listening={activeMode === "listening"}
+          typed={typed}
+          onType={setTyped}
+          flipped={flipped}
+          onToggleExample={() => setFlipped((f) => !f)}
+          hintAnswer={hintAnswer}
+          hintRevealed={hintRevealed}
+          remainingHints={remainingHints}
+          onHint={revealHintLetter}
+          onSpeakWord={speakWord}
+          onSubmit={checkTyped}
+        />
+      )}
+      {activeMode === "listening" && (
+        <ListeningBody
+          word={word}
+          reverse={reverse}
           typed={typed}
           onType={setTyped}
           flipped={flipped}
@@ -1590,464 +1616,6 @@ function PlaySurface({
 /* ================================================================== */
 /*  Mode bodies                                                        */
 /* ================================================================== */
-
-function FlashcardBody({
-  word,
-  reverse,
-  flipped,
-  onFlip,
-  onSpeakWord,
-  onSpeakWordUk,
-  onSpeakExample,
-}: {
-  word: VocabWordCard;
-  reverse: boolean;
-  flipped: boolean;
-  onFlip: () => void;
-  onSpeakWord: () => void;
-  onSpeakWordUk: () => void;
-  onSpeakExample: () => void;
-}) {
-  const frontTitle = reverse ? "NGHĨA TIẾNG VIỆT" : "TỪ TIẾNG ANH";
-  const frontMain = reverse ? word.meaning : word.word;
-  const backTitle = reverse ? "TỪ TIẾNG ANH" : "NGHĨA TIẾNG VIỆT";
-  const backMain = reverse ? word.word : word.meaning;
-  return (
-    <div
-      onClick={onFlip}
-      className="mx-auto flex min-h-[360px] max-w-2xl cursor-pointer flex-col items-center justify-center rounded-2xl border border-line bg-white p-10 text-center shadow-lg transition-transform hover:-translate-y-0.5"
-    >
-      {!flipped ? (
-        <>
-          <small className="text-[10px] font-extrabold uppercase tracking-widest text-muted">
-            {frontTitle}
-          </small>
-          <strong className="my-3 text-4xl font-extrabold text-ink">
-            {frontMain}
-          </strong>
-          <span className="rounded bg-surface-soft px-2 py-0.5 text-xs text-muted">
-            {word.partOfSpeech || "OTHER"}
-          </span>
-          {!reverse && word.phonetic && (
-            <em className="mt-1 text-sm text-muted">{word.phonetic}</em>
-          )}
-          {!reverse && (word.phoneticUs || word.phoneticUk) && (
-            <div className="mt-2 flex flex-wrap justify-center gap-2 text-sm font-semibold text-muted">
-              {word.phoneticUs && <span>US {word.phoneticUs}</span>}
-              {word.phoneticUk && <span>UK {word.phoneticUk}</span>}
-            </div>
-          )}
-          <div className="mt-3 flex justify-center gap-2">
-            <button
-              type="button"
-              onClick={(e) => {
-                e.stopPropagation();
-                onSpeakWord();
-              }}
-              className="rounded-full bg-accent px-3 py-1.5 text-xs font-bold text-white"
-            >
-              US
-            </button>
-            <button
-              type="button"
-              onClick={(e) => {
-                e.stopPropagation();
-                onSpeakWordUk();
-              }}
-              className="rounded-full bg-surface-soft px-3 py-1.5 text-xs font-bold text-ink2"
-            >
-              UK
-            </button>
-          </div>
-          <button
-            type="button"
-            onClick={(e) => {
-              e.stopPropagation();
-              onSpeakWord();
-            }}
-            className="mt-3 text-accent"
-          >
-            ♫ Nghe từ
-          </button>
-          <p className="mt-3 text-xs text-muted">Nhấn Space hoặc click để lật</p>
-        </>
-      ) : (
-        <>
-          <small className="text-[10px] font-extrabold uppercase tracking-widest text-muted">
-            {backTitle}
-          </small>
-          <strong className="my-3 text-3xl font-extrabold text-ink">
-            {backMain}
-          </strong>
-          <span className="rounded bg-surface-soft px-2 py-0.5 text-xs text-muted">
-            {word.partOfSpeech || "OTHER"}
-          </span>
-          {word.example && (
-            <em className="mt-2 text-sm text-muted">Ví dụ: {word.example}</em>
-          )}
-          <button
-            type="button"
-            onClick={(e) => {
-              e.stopPropagation();
-              onSpeakExample();
-            }}
-            className="mt-3 text-accent"
-          >
-            ♫ Nghe câu ví dụ
-          </button>
-          <p className="mt-3 text-xs text-muted">Nhấn Space hoặc click để lật lại</p>
-        </>
-      )}
-    </div>
-  );
-}
-
-function QuizBody({
-  word,
-  quizMode,
-  options,
-  selected,
-  correctAnswer,
-  index,
-  total,
-  score,
-  timer,
-  onSpeakWord,
-  onSpeakWordUk,
-  onSpeakExample,
-  onAnswer,
-}: {
-  word: VocabWordCard;
-  quizMode: QuizMode;
-  options: string[];
-  selected: string;
-  correctAnswer: string;
-  index: number;
-  total: number;
-  score: number;
-  timer: number;
-  onSpeakWord: () => void;
-  onSpeakWordUk: () => void;
-  onSpeakExample: () => void;
-  onAnswer: (option: string) => void;
-}) {
-  const contextSentence = useMemo(() => {
-    const example =
-      word.example || `We verified the ${word.word} before publishing.`;
-    return example.replace(
-      new RegExp(word.word.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"), "ig"),
-      "____",
-    );
-  }, [word]);
-
-  function optionClass(opt: string): string {
-    if (!selected) return "border-line hover:border-accent/50";
-    if (opt === correctAnswer) return "border-green-500 bg-green-500/10";
-    if (opt === selected) return "border-red-500 bg-red-500/10";
-    return "border-line opacity-60";
-  }
-
-  return (
-    <section className="space-y-4 rounded-2xl border border-line bg-surface p-5">
-      <header className="flex items-center justify-between">
-        <strong className="text-sm text-ink">
-          Câu {index + 1} / {total}
-        </strong>
-        <div className="flex items-center gap-2">
-          <span className="rounded-full bg-amber-400/20 px-2 py-0.5 text-xs font-bold text-amber-600">
-            ~<b>{score}</b> GAME
-          </span>
-          <span className="rounded-full bg-surface-soft px-2 py-0.5 text-xs text-ink2">
-            {timer}s
-          </span>
-        </div>
-      </header>
-
-      {quizMode === "context" ? (
-        <div className="space-y-2 text-center">
-          <span className="text-[10px] uppercase tracking-widest text-muted">
-            NGỮ CẢNH · CHỌN ĐÁP ÁN
-          </span>
-          <p className="text-lg text-ink">{contextSentence}</p>
-          <button type="button" onClick={onSpeakExample} className="text-accent text-sm">
-            Dịch câu / nghe
-          </button>
-        </div>
-      ) : quizMode === "meaningWord" ? (
-        <div className="flex items-center justify-center gap-2 text-center">
-          <h2 className="text-2xl font-bold text-ink">{word.meaning}</h2>
-          <button type="button" onClick={onSpeakWord} className="rounded-full bg-accent px-3 py-1 text-xs font-bold text-white">
-            US
-          </button>
-          <button type="button" onClick={onSpeakWordUk} className="rounded-full bg-surface-soft px-3 py-1 text-xs font-bold text-ink2">
-            UK
-          </button>
-          <button type="button" onClick={onSpeakWord} className="text-accent">
-            ♫
-          </button>
-        </div>
-      ) : (
-        <div className="flex flex-wrap items-center justify-center gap-2 text-center">
-          <h2 className="text-2xl font-bold text-ink">{word.word}</h2>
-          <button type="button" onClick={onSpeakWord} className="rounded-full bg-accent px-3 py-1 text-xs font-bold text-white">
-            US
-          </button>
-          <button type="button" onClick={onSpeakWordUk} className="rounded-full bg-surface-soft px-3 py-1 text-xs font-bold text-ink2">
-            UK
-          </button>
-          <button type="button" onClick={onSpeakWord} className="text-accent">
-            ♫
-          </button>
-          <span className="rounded bg-surface-soft px-2 py-0.5 text-xs text-muted">
-            {word.partOfSpeech || "OTHER"}
-          </span>
-          {word.phonetic && (
-            <em className="text-sm text-muted">{word.phonetic}</em>
-          )}
-          {(word.phoneticUs || word.phoneticUk) && (
-            <div className="basis-full text-sm text-muted">
-              {word.phoneticUs && <span className="mr-3">US {word.phoneticUs}</span>}
-              {word.phoneticUk && <span>UK {word.phoneticUk}</span>}
-            </div>
-          )}
-        </div>
-      )}
-
-      <div className="grid gap-2 sm:grid-cols-2">
-        {options.map((opt, i) => (
-          <button
-            key={`${opt}-${i}`}
-            type="button"
-            disabled={!!selected}
-            onClick={() => onAnswer(opt)}
-            className={`flex items-center gap-3 rounded-xl border bg-surface px-4 py-3 text-left text-sm transition-colors ${optionClass(opt)}`}
-          >
-            <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded bg-surface-soft text-xs font-bold text-ink2">
-              {i + 1}
-            </span>
-            <b className="font-semibold text-ink">{opt}</b>
-          </button>
-        ))}
-      </div>
-      <p className="text-center text-xs text-muted">
-        Sử dụng phím số 1-4 để chọn nhanh đáp án
-      </p>
-    </section>
-  );
-}
-
-function MatchingBody({
-  words,
-  meanings,
-  matchedIds,
-  selWord,
-  selMeaning,
-  lives,
-  timer,
-  onWord,
-  onMeaning,
-}: {
-  words: MatchItem[];
-  meanings: MatchItem[];
-  matchedIds: number[];
-  selWord: number | null;
-  selMeaning: number | null;
-  lives: number;
-  timer: number;
-  onWord: (id: number) => void;
-  onMeaning: (id: number) => void;
-}) {
-  function cls(id: number, sel: number | null): string {
-    const done = matchedIds.includes(id);
-    if (done) return "border-green-500 bg-green-500/10 opacity-60";
-    if (sel === id) return "border-accent bg-accent/10";
-    return "border-line hover:border-accent/50";
-  }
-  return (
-    <section className="space-y-4 rounded-2xl border border-line bg-surface p-5">
-      <header className="flex items-center justify-between">
-        <div className="text-red-500">{"❤ ".repeat(Math.max(0, lives)).trim()}</div>
-        <span className="rounded-full bg-surface-soft px-2 py-0.5 text-xs text-ink2">
-          {timer}s
-        </span>
-      </header>
-      <div className="grid grid-cols-2 gap-4">
-        <div className="space-y-2">
-          <h3 className="text-xs font-semibold text-muted">Tiếng Anh</h3>
-          {words.map((item) => (
-            <button
-              key={item.id}
-              type="button"
-              disabled={matchedIds.includes(item.id)}
-              onClick={() => onWord(item.id)}
-              className={`block w-full rounded-lg border bg-surface px-3 py-2 text-sm text-ink ${cls(item.id, selWord)}`}
-            >
-              {item.word}
-            </button>
-          ))}
-        </div>
-        <div className="space-y-2">
-          <h3 className="text-xs font-semibold text-muted">Tiếng Việt</h3>
-          {meanings.map((item) => (
-            <button
-              key={item.id}
-              type="button"
-              disabled={matchedIds.includes(item.id)}
-              onClick={() => onMeaning(item.id)}
-              className={`block w-full rounded-lg border bg-surface px-3 py-2 text-sm text-ink ${cls(item.id, selMeaning)}`}
-            >
-              {item.meaning}
-            </button>
-          ))}
-        </div>
-      </div>
-      <strong className="block text-center text-sm text-ink">
-        Đã ghép: {matchedIds.length} / {words.length}
-      </strong>
-    </section>
-  );
-}
-
-function TypingBody({
-  word,
-  reverse,
-  listening,
-  typed,
-  onType,
-  flipped,
-  onToggleExample,
-  hintAnswer,
-  hintRevealed,
-  remainingHints,
-  onHint,
-  onSpeakWord,
-  onSubmit,
-}: {
-  word: VocabWordCard;
-  reverse: boolean;
-  listening: boolean;
-  typed: string;
-  onType: (value: string) => void;
-  flipped: boolean;
-  onToggleExample: () => void;
-  hintAnswer: string;
-  hintRevealed: number[];
-  remainingHints: number;
-  onHint: () => void;
-  onSpeakWord: () => void;
-  onSubmit: () => void;
-}) {
-  const prompt = listening
-    ? "Nghe và gõ từ tiếng Anh"
-    : reverse
-      ? word.meaning
-      : word.word;
-  const placeholder = listening
-    ? "Gõ từ bạn nghe được..."
-    : reverse
-      ? "Gõ từ tiếng Anh..."
-      : "Gõ nghĩa tiếng Việt...";
-
-  return (
-    <section className="space-y-4 rounded-2xl border border-line bg-surface p-5 text-center">
-      {listening ? (
-        <>
-          <small className="text-xs text-muted">Nghe: 2x | Ctrl+H</small>
-          <button
-            type="button"
-            onClick={onSpeakWord}
-            className="mx-auto flex h-20 w-20 flex-col items-center justify-center rounded-full bg-accent text-white"
-          >
-            ♫<b className="text-[10px]">CTRL + X</b>
-          </button>
-        </>
-      ) : (
-        <div className="flex items-center justify-center gap-2">
-          <button type="button" onClick={onSpeakWord} className="text-accent">
-            ♫
-          </button>
-          <span className="rounded bg-surface-soft px-2 py-0.5 text-xs text-muted">
-            {word.partOfSpeech || "OTHER"}
-          </span>
-        </div>
-      )}
-
-      <h2 className="text-xl font-bold text-ink">{prompt}</h2>
-      <em className="block text-sm text-muted">
-        {flipped && word.example ? word.example : "Chưa có gợi ý"}
-      </em>
-
-      {/* Letter hint */}
-      {hintAnswer && (
-        <div className="flex flex-wrap justify-center gap-1">
-          {[...hintAnswer].map((char, i) => {
-            if (/\s/u.test(char))
-              return <span key={i} className="w-3" />;
-            if (!/[\p{L}\p{N}]/u.test(char))
-              return (
-                <span key={i} className="text-muted">
-                  {char}
-                </span>
-              );
-            const visible = hintRevealed.includes(i);
-            return (
-              <span
-                key={i}
-                className={`flex h-8 w-6 items-center justify-center rounded border text-sm font-bold ${
-                  visible
-                    ? "border-accent text-accent"
-                    : "border-line text-transparent"
-                }`}
-              >
-                {visible ? char : "_"}
-              </span>
-            );
-          })}
-        </div>
-      )}
-
-      <form
-        onSubmit={(e) => {
-          e.preventDefault();
-          onSubmit();
-        }}
-        className="flex items-center justify-center gap-2"
-      >
-        <input
-          value={typed}
-          onChange={(e) => onType(e.target.value)}
-          placeholder={placeholder}
-          className="w-full max-w-sm rounded-lg border border-line bg-surface px-3 py-2 text-sm text-ink"
-          autoFocus
-        />
-        <button
-          type="submit"
-          className="rounded-lg bg-accent px-4 py-2 text-sm font-semibold text-white"
-        >
-          Kiểm tra
-        </button>
-      </form>
-
-      <div className="flex items-center justify-center gap-2">
-        <button
-          type="button"
-          onClick={onToggleExample}
-          className="rounded-lg bg-surface-soft px-3 py-1.5 text-xs font-semibold text-ink2"
-        >
-          Xem ví dụ
-        </button>
-        <button
-          type="button"
-          onClick={onHint}
-          disabled={remainingHints <= 0}
-          className="rounded-lg bg-surface-soft px-3 py-1.5 text-xs font-semibold text-ink2 disabled:opacity-40"
-        >
-          Gợi ý ({remainingHints})
-        </button>
-      </div>
-    </section>
-  );
-}
 
 /* ================================================================== */
 /*  Feedback overlay + result                                          */

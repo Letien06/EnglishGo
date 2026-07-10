@@ -58,10 +58,39 @@ export async function recordStudyActivity(
   const xp = xpForActivity(input.module);
 
   await adminDb.runTransaction(async (tx) => {
-    const snap = await tx.get(ref);
+    const [snap, userSnap] = await Promise.all([
+      tx.get(ref),
+      tx.get(userRef),
+    ]);
     const current = snap.data() as
       | { firstActivityAtMillis?: number; activityCount?: number }
       | undefined;
+    const userData = userSnap.data() ?? {};
+    const previousDateKey = stringValue(userData.studyTodayDateKey);
+    const previousStreak = numberValue(userData.studyStreakDays) ?? 0;
+    const sameDay = previousDateKey === dateKey;
+    const continuedFromYesterday = previousDateKey === addDaysToDateKey(dateKey, -1);
+    const streakDays = sameDay
+      ? Math.max(1, previousStreak)
+      : continuedFromYesterday
+        ? previousStreak + 1
+        : 1;
+    const todayActivityCount = sameDay
+      ? (numberValue(userData.studyTodayActivityCount) ?? 0) + 1
+      : 1;
+    const todayModules = sameDay
+      ? [...new Set([...parseModules(userData.studyTodayModules), input.module])]
+      : [input.module];
+    const previousTodayModuleCounts = sameDay
+      ? parseModuleCounts(userData.studyTodayModuleCounts)
+      : parseModuleCounts(null);
+    const todayModuleCounts = {
+      ...previousTodayModuleCounts,
+      [input.module]: previousTodayModuleCounts[input.module] + 1,
+    };
+    const todayXp = sameDay
+      ? (numberValue(userData.studyTodayXp) ?? 0) + xp
+      : xp;
 
     tx.set(
       ref,
@@ -98,13 +127,21 @@ export async function recordStudyActivity(
       {
         totalStudyXp: FieldValue.increment(xp),
         [`studyModuleTotals.${input.module}`]: FieldValue.increment(1),
+        studyStreakDays: streakDays,
+        studyStudiedToday: true,
+        studyTodayActivityCount: todayActivityCount,
+        studyTodayModules: todayModules,
+        studyTodayModuleCounts: todayModuleCounts,
+        studyTodayXp: todayXp,
+        studyTodayDateKey: dateKey,
+        studyStreakUpdatedAtMillis: now,
+        lastStudyActivityAtMillis: now,
         updatedAt: FieldValue.serverTimestamp(),
       },
       { merge: true },
     );
   });
 
-  await refreshStudyStreakSummary(uid, undefined, now).catch(() => undefined);
 }
 
 export async function getTodayStudySummary(uid: string): Promise<StudyDailySummary> {

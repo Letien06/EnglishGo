@@ -37,9 +37,18 @@ export default function VocabLearnTabClient({ groupId }: { groupId?: string }) {
       if (catalogCache.value || fallbackSetCache.value) return;
       setState({ status: "loading", catalog: null, fallbackSets: [] });
       try {
-        const catalogRes = await fetch("/api/dautoeic/vocab/catalog", { cache: "no-store" });
-        const catalogJson = (await catalogRes.json()) as ApiEnvelope<DauToeicVocabCatalogView>;
-        if (catalogJson.success && catalogJson.data?.cards.length) {
+        // Load the local fallback alongside the external catalog. Previously a
+        // slow/unavailable DauToeic API delayed the fallback by another full
+        // request, making the Learn tab wait several seconds before rendering.
+        const [catalogJson, setsJson] = await Promise.all([
+          fetch("/api/dautoeic/vocab/catalog", { cache: "no-store" })
+            .then((response) => response.json() as Promise<ApiEnvelope<DauToeicVocabCatalogView>>)
+            .catch(() => null),
+          fetch("/api/vocab/sets", { cache: "force-cache" })
+            .then((response) => response.json() as Promise<ApiEnvelope<VocabSetCard[]>>)
+            .catch(() => null),
+        ]);
+        if (catalogJson?.success && catalogJson.data?.cards.length) {
           catalogCache.value = catalogJson.data;
           if (!cancelled) {
             setState({ status: "ready", catalog: catalogJson.data, fallbackSets: [] });
@@ -47,9 +56,7 @@ export default function VocabLearnTabClient({ groupId }: { groupId?: string }) {
           return;
         }
 
-        const setsRes = await fetch("/api/vocab/sets", { cache: "force-cache" });
-        const setsJson = (await setsRes.json()) as ApiEnvelope<VocabSetCard[]>;
-        const sets = setsJson.success && Array.isArray(setsJson.data) ? setsJson.data : [];
+        const sets = setsJson?.success && Array.isArray(setsJson.data) ? setsJson.data : [];
         fallbackSetCache.value = sets;
         if (!cancelled) {
           setState({ status: "ready", catalog: null, fallbackSets: sets });

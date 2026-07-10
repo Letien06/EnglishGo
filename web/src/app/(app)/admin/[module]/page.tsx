@@ -1,6 +1,6 @@
 import Link from "next/link";
 import AppTopbar from "@/components/AppTopbar";
-import { requireRole } from "@/lib/auth/session";
+import { requireAdminPage } from "@/lib/auth/page-guards";
 import { moduleMetrics } from "@/lib/services/admin";
 
 export const dynamic = "force-dynamic";
@@ -17,7 +17,7 @@ interface Props {
 }
 
 export default async function AdminModulePage({ params }: Props) {
-  const user = await requireRole("ADMIN");
+  const user = await requireAdminPage();
   const { module } = await params;
   const title = titles[module] ?? "Content module";
   const metrics = await moduleMetrics();

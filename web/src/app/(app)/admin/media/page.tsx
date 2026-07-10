@@ -1,12 +1,12 @@
 import AppTopbar from "@/components/AppTopbar";
-import { requireRole } from "@/lib/auth/session";
+import { requireAdminPage } from "@/lib/auth/page-guards";
 import { recentMedia } from "@/lib/services/media";
 import AdminMediaUpload from "./AdminMediaUpload";
 
 export const dynamic = "force-dynamic";
 
 export default async function AdminMediaPage() {
-  const user = await requireRole("ADMIN");
+  const user = await requireAdminPage();
   const assets = await recentMedia();
   return (
     <>

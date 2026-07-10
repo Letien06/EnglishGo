@@ -17,6 +17,8 @@ export type VocabProgressStatus = "NEW" | "LEARNING" | "REVIEWING" | "MASTERED";
 
 export interface VocabSetDoc {
   id: number;
+  /** Denormalized count of published words, maintained on every write. */
+  wordCount?: number;
   ownerUid?: string;
   ownerName?: string;
   folderId?: number;

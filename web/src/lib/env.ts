@@ -54,7 +54,7 @@ export const serverEnv = {
     );
   },
   get dauToeicAnonKey() {
-    return required("DAUTOEIC_ANON_KEY");
+    return optional("DAUTOEIC_ANON_KEY");
   },
   get dauToeicMediaBaseUrl() {
     return optional(

@@ -9,7 +9,8 @@
     "lint": "eslint",
     "test": "vitest run",
     "test:watch": "vitest",
-    "test:e2e": "playwright test"
+    "test:e2e": "playwright test",
+    "backfill:vocab-word-count": "node --env-file=.env.local scripts/backfill-vocab-word-count.mjs"
   },
   "dependencies": {
     "@vercel/analytics": "^2.0.1",

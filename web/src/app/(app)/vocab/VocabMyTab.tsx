@@ -30,6 +30,8 @@ export default function VocabMyTab({ uid, folderId, folderSearch }: Props) {
   const [mySets, setMySets] = useState<MyVocabSetCard[]>(cached?.sets ?? []);
   const [myFolders, setMyFolders] = useState<MyVocabFolderCard[]>(cached?.folders ?? []);
   const [loading, setLoading] = useState(!cached);
+  const [actionError, setActionError] = useState("");
+  const [deletingSetId, setDeletingSetId] = useState<number | null>(null);
 
   /* modals */
   const [showCreateSet, setShowCreateSet] = useState(false);
@@ -163,6 +165,12 @@ export default function VocabMyTab({ uid, folderId, folderSearch }: Props) {
         )}
       </div>
 
+      {actionError ? (
+        <p role="alert" className="rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm font-semibold text-red-600">
+          {actionError}
+        </p>
+      ) : null}
+
       {/* Folders */}
       {myFolders.length > 0 && (
         <div className="flex gap-2 flex-wrap">
@@ -269,15 +277,23 @@ export default function VocabMyTab({ uid, folderId, folderSearch }: Props) {
                 <button
                   onClick={async () => {
                     if (!confirm("Xóa bộ từ này?")) return;
-                    await fetch(`/api/vocab/my-sets/${set.id}`, {
-                      method: "DELETE",
-                    });
-                    reload();
+                    setDeletingSetId(set.id);
+                    setActionError("");
+                    try {
+                      const response = await fetch(`/api/vocab/my-sets/${set.id}`, { method: "DELETE" });
+                      await requireApiSuccess(response, "Không thể xóa bộ từ.");
+                      await reload();
+                    } catch (error) {
+                      setActionError(errorMessage(error, "Không thể xóa bộ từ."));
+                    } finally {
+                      setDeletingSetId(null);
+                    }
                   }}
+                  disabled={deletingSetId === set.id}
                   className="ml-auto rounded-full px-3 py-2 text-sm font-bold text-red-500 hover:bg-red-50"
                   title="Xóa bộ từ"
                 >
-                  Xóa
+                  {deletingSetId === set.id ? "Đang xóa..." : "Xóa"}
                 </button>
               </footer>
             </article>
@@ -387,20 +403,28 @@ function CreateSetModal({
   const [desc, setDesc] = useState("");
   const [icon, setIcon] = useState("📖");
   const [busy, setBusy] = useState(false);
+  const [error, setError] = useState("");
 
   const icons = ["📖", "🎯", "💼", "🧪", "🌍", "✈️", "🍴", "🏥", "⚖️", "🎓", "💻", "🎵"];
 
   async function submit() {
     if (!title.trim()) return;
     setBusy(true);
-    await fetch("/api/vocab/my-sets", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ title, description: desc, icon }),
-    });
-    setBusy(false);
-    onCreated();
-    onClose();
+    setError("");
+    try {
+      const response = await fetch("/api/vocab/my-sets", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ title, description: desc, icon }),
+      });
+      await requireApiSuccess(response, "Không thể tạo bộ từ.");
+      await onCreated();
+      onClose();
+    } catch (reason) {
+      setError(errorMessage(reason, "Không thể tạo bộ từ."));
+    } finally {
+      setBusy(false);
+    }
   }
 
   return (
@@ -441,6 +465,7 @@ function CreateSetModal({
           </button>
         ))}
       </div>
+      {error ? <p role="alert" className="text-sm font-semibold text-red-600">{error}</p> : null}
 
       <footer className="flex justify-end gap-2 mt-4">
         <button
@@ -470,18 +495,26 @@ function CreateFolderModal({
 }) {
   const [name, setName] = useState("");
   const [busy, setBusy] = useState(false);
+  const [error, setError] = useState("");
 
   async function submit() {
     if (!name.trim()) return;
     setBusy(true);
-    await fetch("/api/vocab/my-folders", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ name }),
-    });
-    setBusy(false);
-    onCreated();
-    onClose();
+    setError("");
+    try {
+      const response = await fetch("/api/vocab/my-folders", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ name }),
+      });
+      await requireApiSuccess(response, "Không thể tạo folder.");
+      await onCreated();
+      onClose();
+    } catch (reason) {
+      setError(errorMessage(reason, "Không thể tạo folder."));
+    } finally {
+      setBusy(false);
+    }
   }
 
   return (
@@ -496,6 +529,7 @@ function CreateFolderModal({
         className="w-full px-3 py-2 rounded-lg bg-surface-soft border border-line text-ink text-sm"
         autoFocus
       />
+      {error ? <p role="alert" className="text-sm font-semibold text-red-600">{error}</p> : null}
       <footer className="flex justify-end gap-2 mt-4">
         <button
           onClick={onClose}
@@ -528,18 +562,26 @@ function RenameFolderModal({
 }) {
   const [name, setName] = useState(currentName);
   const [busy, setBusy] = useState(false);
+  const [error, setError] = useState("");
 
   async function submit() {
     if (!name.trim()) return;
     setBusy(true);
-    await fetch(`/api/vocab/my-folders/${folderId}`, {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ name }),
-    });
-    setBusy(false);
-    onRenamed();
-    onClose();
+    setError("");
+    try {
+      const response = await fetch(`/api/vocab/my-folders/${folderId}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ name }),
+      });
+      await requireApiSuccess(response, "Không thể đổi tên folder.");
+      await onRenamed();
+      onClose();
+    } catch (reason) {
+      setError(errorMessage(reason, "Không thể đổi tên folder."));
+    } finally {
+      setBusy(false);
+    }
   }
 
   return (
@@ -550,6 +592,7 @@ function RenameFolderModal({
         className="w-full px-3 py-2 rounded-lg bg-surface-soft border border-line text-ink text-sm"
         autoFocus
       />
+      {error ? <p role="alert" className="text-sm font-semibold text-red-600">{error}</p> : null}
       <footer className="flex justify-end gap-2 mt-4">
         <button
           onClick={onClose}
@@ -582,18 +625,26 @@ function RenameSetModal({
 }) {
   const [title, setTitle] = useState(currentTitle);
   const [busy, setBusy] = useState(false);
+  const [error, setError] = useState("");
 
   async function submit() {
     if (!title.trim()) return;
     setBusy(true);
-    await fetch(`/api/vocab/my-sets/${setId}`, {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ title }),
-    });
-    setBusy(false);
-    onRenamed();
-    onClose();
+    setError("");
+    try {
+      const response = await fetch(`/api/vocab/my-sets/${setId}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ title }),
+      });
+      await requireApiSuccess(response, "Không thể đổi tên bộ từ.");
+      await onRenamed();
+      onClose();
+    } catch (reason) {
+      setError(errorMessage(reason, "Không thể đổi tên bộ từ."));
+    } finally {
+      setBusy(false);
+    }
   }
 
   return (
@@ -604,6 +655,7 @@ function RenameSetModal({
         className="w-full px-3 py-2 rounded-lg bg-surface-soft border border-line text-ink text-sm"
         autoFocus
       />
+      {error ? <p role="alert" className="text-sm font-semibold text-red-600">{error}</p> : null}
       <footer className="flex justify-end gap-2 mt-4">
         <button
           onClick={onClose}
@@ -642,11 +694,12 @@ function AddWordsModal({
     { word: "", phonetic: "", meaning: "", partOfSpeech: "", example: "" },
   ]);
   const [pasteText, setPasteText] = useState("");
-  const [aiMode, setAiMode] = useState<"text" | "reading" | "image">("text");
+  const [aiMode, setAiMode] = useState<"text" | "words" | "image">("text");
   const [aiInput, setAiInput] = useState("");
   const [aiCount, setAiCount] = useState(10);
   const [aiImageFile, setAiImageFile] = useState<File | null>(null);
   const [aiStatus, setAiStatus] = useState("");
+  const [aiStage, setAiStage] = useState(0);
   const [aiCandidates, setAiCandidates] = useState<AiVocabCandidate[]>([]);
   const [aiSelected, setAiSelected] = useState<Set<number>>(new Set());
 
@@ -737,8 +790,12 @@ function AddWordsModal({
   async function previewAi() {
     setBusy(true);
     setError("");
-    setAiStatus("AI dang phan tich...");
+    setAiStage(0);
+    setAiStatus("AI đang phân tích...");
     setAiCandidates([]);
+    const timers = [700, 1500, 2500].map((delay, index) =>
+      window.setTimeout(() => setAiStage(index + 1), delay),
+    );
 
     let image: string | undefined;
     let imageMimeType: string | undefined;
@@ -770,6 +827,7 @@ function AddWordsModal({
       setAiStatus("");
       setError(err instanceof Error ? err.message : "AI chua tao duoc tu");
     } finally {
+      timers.forEach(window.clearTimeout);
       setBusy(false);
     }
   }
@@ -902,7 +960,7 @@ function AddWordsModal({
       {tab === "ai" && (
         <div className="space-y-3">
           <div className="grid grid-cols-3 gap-1">
-            {(["text", "reading", "image"] as const).map((m) => (
+            {(["text", "words", "image"] as const).map((m) => (
               <button
                 key={m}
                 type="button"
@@ -915,9 +973,9 @@ function AddWordsModal({
                   aiMode === m ? "bg-accent text-white" : "bg-surface-soft text-ink2"
                 }`}
               >
-                {m === "text" && "Chu de"}
-                {m === "reading" && "Doan van"}
-                {m === "image" && "Hinh anh"}
+                {m === "text" && "Chủ đề"}
+                {m === "words" && "Từ tiếng Anh"}
+                {m === "image" && "Hình ảnh"}
               </button>
             ))}
           </div>
@@ -931,7 +989,15 @@ function AddWordsModal({
               <input
                 type="file"
                 accept="image/jpeg,image/png,image/webp"
-                onChange={(e) => setAiImageFile(e.target.files?.[0] ?? null)}
+                onChange={(e) => {
+                  const file = e.target.files?.[0] ?? null;
+                  if (file && file.size > 5 * 1024 * 1024) {
+                    setError("Ảnh cần nhỏ hơn 5MB.");
+                    return;
+                  }
+                  setAiImageFile(file);
+                  setError("");
+                }}
                 className="hidden"
               />
             </label>
@@ -941,9 +1007,9 @@ function AddWordsModal({
               onChange={(e) => setAiInput(e.target.value)}
               rows={4}
               placeholder={
-                aiMode === "reading"
-                  ? "Paste doan van tieng Anh de AI trich tu nen hoc..."
-                  : "Nhap chu de, vi du: airport announcements, office meeting..."
+                aiMode === "words"
+                  ? "Nhập một hoặc nhiều từ: abandon, ability, broadcast..."
+                  : "Nhập chủ đề, ví dụ: airport announcements, office meeting..."
               }
               className="w-full rounded-lg border border-line bg-surface-soft px-3 py-2 text-sm text-ink"
             />
@@ -966,6 +1032,8 @@ function AddWordsModal({
               {aiStatus}
             </p>
           )}
+
+          {busy && aiCandidates.length === 0 ? <AiThinkingStage stage={aiStage} mode={aiMode} /> : null}
 
           {aiCandidates.length > 0 && (
             <section className="space-y-2">
@@ -1113,4 +1181,46 @@ function AddWordsModal({
       )}
     </ModalShell>
   );
+}
+
+async function requireApiSuccess(response: Response, fallback: string) {
+  const payload = await response.json().catch(() => null);
+  if (!response.ok || payload?.success === false) {
+    throw new Error(payload?.error || fallback);
+  }
+  return payload;
+}
+
+function AiThinkingStage({
+  stage,
+  mode,
+}: {
+  stage: number;
+  mode: "text" | "words" | "image";
+}) {
+  const first = mode === "image"
+    ? "AI đang quét và nhận diện hình ảnh..."
+    : mode === "words"
+      ? "AI đang đọc danh sách từ của bạn..."
+      : "AI đang phân tích chủ đề...";
+  const steps = [
+    first,
+    "AI đang chọn những từ phù hợp...",
+    "AI đang tra cứu từ điển và ví dụ...",
+    "AI đang hoàn thiện danh sách từ vựng...",
+  ];
+  return (
+    <div className="rounded-xl bg-jade/10 px-4 py-4 text-center">
+      <div className="mb-2 flex justify-center gap-2">
+        {steps.map((_, index) => (
+          <span key={index} className={`h-2.5 w-2.5 rounded-full ${index <= stage ? "animate-pulse bg-jade" : "bg-jade/25"}`} />
+        ))}
+      </div>
+      <p className="text-xs font-bold text-jade2">✦ {steps[Math.min(stage, steps.length - 1)]}</p>
+    </div>
+  );
+}
+
+function errorMessage(error: unknown, fallback: string): string {
+  return error instanceof Error && error.message ? error.message : fallback;
 }

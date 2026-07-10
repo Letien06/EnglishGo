@@ -1,11 +1,11 @@
 import AppTopbar from "@/components/AppTopbar";
-import { requireRole } from "@/lib/auth/session";
+import { requireAdminPage } from "@/lib/auth/page-guards";
 import { draftQueue } from "@/lib/services/admin";
 
 export const dynamic = "force-dynamic";
 
 export default async function AdminContentReviewPage() {
-  const user = await requireRole("ADMIN");
+  const user = await requireAdminPage();
   const drafts = await draftQueue();
   return (
     <>

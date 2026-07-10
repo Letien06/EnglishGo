@@ -156,25 +156,38 @@ async function wordKeysForSet(setId: number): Promise<string[]> {
     .filter(Boolean);
 }
 
-async function wordCountBySetId(setIds: number[]): Promise<Map<number, number>> {
+async function resolveLegacyWordCounts(sets: VocabSetDoc[]): Promise<VocabSetDoc[]> {
+  const missing = sets.filter((set) => set.wordCount == null);
+  if (!missing.length) return sets;
+
   const counts = new Map<number, number>();
-  const uniqueIds = [...new Set(setIds)].filter((id) => Number.isFinite(id));
-  for (let i = 0; i < uniqueIds.length; i += 20) {
-    const chunk = uniqueIds.slice(i, i + 20);
-    const results = await Promise.all(
-      chunk.map(async (setId) => {
-        const snap = await adminDb
-          .collection(WORDS)
-          .where("setId", "==", setId)
-          .where("status", "==", "PUBLISHED")
-          .count()
-          .get();
-        return [setId, snap.data().count] as const;
-      }),
-    );
-    for (const [setId, count] of results) counts.set(setId, count);
+  for (let index = 0; index < missing.length; index += 30) {
+    const ids = missing.slice(index, index + 30).map((set) => set.id);
+    const snap = await adminDb
+      .collection(WORDS)
+      .where("setId", "in", ids)
+      .select("setId", "status", "deletedAtMillis")
+      .get();
+    for (const doc of snap.docs) {
+      if (strVal(doc.data(), "status") !== "PUBLISHED" || numVal(doc.data(), "deletedAtMillis")) continue;
+      const setId = numVal(doc.data(), "setId");
+      if (setId != null) counts.set(setId, (counts.get(setId) ?? 0) + 1);
+    }
   }
-  return counts;
+
+  for (let index = 0; index < missing.length; index += 450) {
+    const batch = adminDb.batch();
+    for (const set of missing.slice(index, index + 450)) {
+      batch.set(adminDb.collection(SETS).doc(String(set.id)), {
+        wordCount: counts.get(set.id) ?? 0,
+      }, { merge: true });
+    }
+    await batch.commit();
+  }
+
+  return sets.map((set) => set.wordCount != null
+    ? set
+    : { ...set, wordCount: counts.get(set.id) ?? 0 });
 }
 
 async function userProgressDocs(uid: string): Promise<VocabProgressDoc[]> {
@@ -243,12 +256,49 @@ async function saveProgress(progress: VocabProgressDoc): Promise<void> {
   if (progress.lastReviewedAtMillis != null) {
     data.lastReviewedAtMillis = progress.lastReviewedAtMillis;
   }
-  await adminDb
-    .collection("users")
-    .doc(progress.uid)
-    .collection(PROGRESS)
-    .doc(String(progress.wordId))
-    .set(data, { merge: true });
+  const userRef = adminDb.collection("users").doc(progress.uid);
+  const progressRef = userRef.collection(PROGRESS).doc(String(progress.wordId));
+  const now = Date.now();
+  await adminDb.runTransaction(async (tx) => {
+    const [previousSnap, userSnap] = await Promise.all([
+      tx.get(progressRef),
+      tx.get(userRef),
+    ]);
+    const previous = previousSnap.exists ? toProgressDoc(previousSnap) : null;
+    const userData = userSnap.data() ?? {};
+    const previousMastered = previous?.status === "MASTERED";
+    const nextMastered = progress.status === "MASTERED";
+    const previousDue = previous ? isDueProgress(previous, now) : false;
+    const nextDue = isDueProgress(progress, now);
+    const masteredDelta = Number(nextMastered) - Number(previousMastered);
+    const dueDelta = Number(nextDue) - Number(previousDue);
+    const currentNextDue = numVal(userData, "vocabNextDueAtMillis");
+    const candidateNextDue = progress.nextReviewAtMillis ?? null;
+    const nextDueAtMillis = currentNextDue == null
+      ? candidateNextDue
+      : candidateNextDue == null
+        ? currentNextDue
+        : Math.min(currentNextDue, candidateNextDue);
+
+    tx.set(progressRef, data, { merge: true });
+
+    // New/provisioned users have these aggregates. Legacy users are left
+    // untouched here so the hub can detect the missing values and reconcile
+    // the complete progress collection once, avoiding incorrect partial sums.
+    const hasSummary =
+      typeof userData.vocabMasteredWords === "number" &&
+      typeof userData.vocabDueWords === "number";
+    if (hasSummary) {
+      tx.set(userRef, {
+        ...(masteredDelta
+          ? { vocabMasteredWords: FieldValue.increment(masteredDelta) }
+          : {}),
+        ...(dueDelta ? { vocabDueWords: FieldValue.increment(dueDelta) } : {}),
+        vocabNextDueAtMillis: nextDueAtMillis,
+        vocabSummaryUpdatedAtMillis: now,
+      }, { merge: true });
+    }
+  });
 }
 
 function historyCollection(uid: string) {
@@ -305,6 +355,29 @@ export async function streakDays(uid: string): Promise<number> {
   return streak.streakDays;
 }
 
+export async function refreshVocabHubSummary(uid: string): Promise<{
+  masteredWords: number;
+  dueWords: number;
+  nextDueAtMillis: number | null;
+}> {
+  requireUid(uid);
+  const now = Date.now();
+  const progress = await userProgressDocs(uid);
+  const mastered = progress.filter((item) => item.status === "MASTERED").length;
+  const due = progress.filter((item) => isDueProgress(item, now)).length;
+  const nextDueAtMillis = progress
+    .map((item) => item.nextReviewAtMillis)
+    .filter((value): value is number => typeof value === "number" && value > now)
+    .reduce<number | null>((min, value) => min == null ? value : Math.min(min, value), null);
+  await adminDb.collection("users").doc(uid).set({
+    vocabMasteredWords: mastered,
+    vocabDueWords: due,
+    vocabNextDueAtMillis: nextDueAtMillis,
+    vocabSummaryUpdatedAtMillis: now,
+  }, { merge: true });
+  return { masteredWords: mastered, dueWords: due, nextDueAtMillis };
+}
+
 /* ------------------------------------------------------------------ */
 /*  Public: Set queries                                                */
 /* ------------------------------------------------------------------ */
@@ -321,15 +394,14 @@ export async function findSetCards(topic?: string): Promise<VocabSetCard[]> {
         s.topic.toLowerCase().includes(lower),
       );
   }
-  const wordCounts = await wordCountBySetId(filtered.map((set) => set.id));
-
+  filtered = await resolveLegacyWordCounts(filtered);
   return filtered.map((set) => ({
     id: set.id,
     title: set.title,
     topic: set.topic,
     icon: set.icon,
     level: set.level,
-    wordCount: wordCounts.get(set.id) ?? 0,
+    wordCount: set.wordCount ?? 0,
   }));
 }
 
@@ -339,8 +411,7 @@ export async function findPracticeSetOptions(
   if (!uid) return [];
   const progress = await userProgressDocs(uid);
   const setIds = new Set(progress.map((p) => p.setId));
-  const filteredSets = await liveSetsByIds([...setIds]);
-  const wordCounts = await wordCountBySetId(filteredSets.map((set) => set.id));
+  const filteredSets = await resolveLegacyWordCounts(await liveSetsByIds([...setIds]));
 
   return filteredSets
     .map((set) => ({
@@ -349,7 +420,7 @@ export async function findPracticeSetOptions(
       topic: set.topic,
       icon: set.icon,
       level: set.level,
-      wordCount: wordCounts.get(set.id) ?? 0,
+      wordCount: set.wordCount ?? 0,
     }));
 }
 
@@ -366,7 +437,7 @@ export async function findMySetCards(
   if (folderId != null) {
     mySets = mySets.filter((s) => s.folderId === folderId);
   }
-  const wordCounts = await wordCountBySetId(mySets.map((set) => set.id));
+  mySets = await resolveLegacyWordCounts(mySets);
 
   return mySets.map((set) => {
     const folder = set.folderId != null ? foldersById.get(set.folderId) : undefined;
@@ -376,7 +447,7 @@ export async function findMySetCards(
       topic: set.topic,
       icon: set.icon,
       level: set.level,
-      wordCount: wordCounts.get(set.id) ?? 0,
+      wordCount: set.wordCount ?? 0,
       folderId: set.folderId,
       folderName: folder?.name,
     };
@@ -426,6 +497,7 @@ export async function findMyTabCards(
   if (folderId != null) {
     mySets = mySets.filter((set) => set.folderId === folderId);
   }
+  mySets = await resolveLegacyWordCounts(mySets);
 
   let myFolders = folders;
   if (search?.trim()) {
@@ -433,10 +505,7 @@ export async function findMyTabCards(
     myFolders = myFolders.filter((folder) => folder.name.toLowerCase().includes(lower));
   }
 
-  const [wordCounts, setCountByFolderId] = await Promise.all([
-    wordCountBySetId(mySets.map((set) => set.id)),
-    Promise.resolve(folderCounts(sets)),
-  ]);
+  const setCountByFolderId = folderCounts(sets);
 
   return {
     sets: mySets.map((set) => {
@@ -447,7 +516,7 @@ export async function findMyTabCards(
         topic: set.topic,
         icon: set.icon,
         level: set.level,
-        wordCount: wordCounts.get(set.id) ?? 0,
+        wordCount: set.wordCount ?? 0,
         folderId: set.folderId,
         folderName: folder?.name,
       };
@@ -500,15 +569,16 @@ export async function findCommunitySetCards(
   folderId: number,
 ): Promise<CommunityVocabSetCard[]> {
   const sets = await publishedSets();
-  const folderSets = sets.filter((s) => s.folderId === folderId);
-  const wordCounts = await wordCountBySetId(folderSets.map((set) => set.id));
+  const folderSets = await resolveLegacyWordCounts(
+    sets.filter((s) => s.folderId === folderId),
+  );
 
   return folderSets
     .map((set) => ({
       id: set.id,
       title: set.title,
       topic: set.topic,
-      wordCount: wordCounts.get(set.id) ?? 0,
+      wordCount: set.wordCount ?? 0,
     }));
 }
 
@@ -524,8 +594,7 @@ export async function findProgressSetCards(
   const now = Date.now();
 
   const setIds = new Set(progress.map((p) => p.setId));
-  const relevantSets = await liveSetsByIds([...setIds]);
-  const wordCounts = await wordCountBySetId(relevantSets.map((set) => set.id));
+  const relevantSets = await resolveLegacyWordCounts(await liveSetsByIds([...setIds]));
 
   return relevantSets
     .map((set) => {
@@ -536,7 +605,7 @@ export async function findProgressSetCards(
         title: set.title,
         topic: set.topic,
         icon: set.icon,
-        totalWords: wordCounts.get(set.id) ?? 0,
+        totalWords: set.wordCount ?? 0,
         learnedWords: setProgress.filter((p) => p.status !== "NEW").length,
         masteredWords: setProgress.filter((p) => p.status === "MASTERED")
           .length,
@@ -577,8 +646,7 @@ export async function progressOverview(uid: string): Promise<{
     "MASTERED",
   ]);
   const setIds = [...new Set(progress.map((item) => item.setId))];
-  const relevantSets = await liveSetsByIds(setIds);
-  const wordCounts = await wordCountBySetId(relevantSets.map((set) => set.id));
+  const relevantSets = await resolveLegacyWordCounts(await liveSetsByIds(setIds));
   const progressBySetId = new Map<number, VocabProgressDoc[]>();
   for (const item of progress) {
     const bucket = progressBySetId.get(item.setId);
@@ -594,7 +662,7 @@ export async function progressOverview(uid: string): Promise<{
         title: set.title,
         topic: set.topic,
         icon: set.icon,
-        totalWords: wordCounts.get(set.id) ?? 0,
+        totalWords: set.wordCount ?? 0,
         learnedWords: setProgress.filter((item) => item.status !== "NEW").length,
         masteredWords: setProgress.filter((item) => item.status === "MASTERED").length,
         dueWords: setProgress.filter((item) => isDueProgress(item, now)).length,
@@ -619,7 +687,7 @@ export async function progressOverview(uid: string): Promise<{
       topic: set.topic,
       icon: set.icon,
       level: set.level,
-      wordCount: wordCounts.get(set.id) ?? 0,
+      wordCount: set.wordCount ?? 0,
     })),
   };
 }
@@ -928,6 +996,7 @@ export async function createMySet(
     icon: normalizeIcon(icon),
     status: "PUBLISHED" satisfies ContentStatus,
     sourceType: "MANUAL" satisfies SourceType,
+    wordCount: 0,
     publishedAtMillis: now,
     updatedAtMillis: now,
   };
@@ -1323,7 +1392,9 @@ async function saveCandidates(
   const normalizedCandidates = await mapWithConcurrency(
     candidates.slice(0, limit),
     8,
-    normalizeCandidateForSave,
+    async (candidate) => sourceType === "AI"
+      ? normalizeCandidateWithoutLookup(candidate)
+      : normalizeCandidateForSave(candidate),
   );
   const accepted: AiVocabCandidate[] = [];
   for (const normalizedCandidate of normalizedCandidates) {
@@ -1368,6 +1439,7 @@ async function saveCandidates(
 
   if (writes.length > 0) {
     await adminDb.collection(SETS).doc(String(setId)).update({
+      wordCount: existingWords.length + writes.length,
       updatedAtMillis: Date.now(),
     });
   }
@@ -1392,6 +1464,7 @@ async function copySetAsNew(
     level: sourceSet.level,
     status: "PUBLISHED" satisfies ContentStatus,
     sourceType: "COMMUNITY" satisfies SourceType,
+    wordCount: 0,
     sourceNote: `Copied from set #${sourceSet.id}`,
     publishedAtMillis: now,
     updatedAtMillis: now,
@@ -1404,18 +1477,50 @@ async function copySetAsNew(
   return { id };
 }
 
+/** Explicit list-page action. Unlike an SM-2 review, this means the learner
+ * deliberately marks the word as mastered immediately. */
+export async function markMastered(
+  uid: string,
+  wordId: number,
+): Promise<VocabReviewResponse> {
+  requireUid(uid);
+  const wordSnap = await adminDb.collection(WORDS).doc(String(wordId)).get();
+  const word = wordSnap.exists ? toWordDoc(wordSnap) : null;
+  if (!word || word.status !== "PUBLISHED" || word.deletedAtMillis) {
+    throw NotFound("Word not found");
+  }
+  const previous = await findProgress(uid, wordId);
+  const now = Date.now();
+  const interval = Math.max(30, previous?.interval ?? 0);
+  const updated: VocabProgressDoc = {
+    uid,
+    wordId,
+    setId: word.setId,
+    status: "MASTERED",
+    interval,
+    easeFactor: previous?.easeFactor ?? 2.5,
+    repetitions: Math.max(3, previous?.repetitions ?? 0),
+    nextReviewAtMillis: now + interval * 24 * 60 * 60 * 1000,
+    lastReviewedAtMillis: now,
+  };
+  await saveProgress(updated);
+  await recordStudyActivity(uid, {
+    module: "vocab",
+    activityType: "vocab_mastered",
+    sourceId: wordId,
+    occurredAtMillis: now,
+  }).catch(() => undefined);
+  return {
+    wordId,
+    newStatus: updated.status,
+    nextReviewAtMillis: updated.nextReviewAtMillis,
+  };
+}
+
 async function normalizeCandidateForSave(
   candidate: AiVocabCandidate,
 ): Promise<AiVocabCandidate> {
-  const wordInfo = extractWordAndPartOfSpeech(candidate.word);
-  const baseCandidate: AiVocabCandidate = {
-    ...candidate,
-    word: wordInfo.word,
-    partOfSpeech:
-      candidate.partOfSpeech && candidate.partOfSpeech !== "OTHER"
-        ? candidate.partOfSpeech
-        : wordInfo.partOfSpeech ?? candidate.partOfSpeech ?? "OTHER",
-  };
+  const baseCandidate = normalizeCandidateWithoutLookup(candidate);
 
   if (
     baseCandidate.audioUrl ||
@@ -1428,6 +1533,21 @@ async function normalizeCandidateForSave(
   }
 
   return enrichCandidatePronunciation(baseCandidate);
+}
+
+function normalizeCandidateWithoutLookup(
+  candidate: AiVocabCandidate,
+): AiVocabCandidate {
+  const wordInfo = extractWordAndPartOfSpeech(candidate.word);
+  const baseCandidate: AiVocabCandidate = {
+    ...candidate,
+    word: wordInfo.word,
+    partOfSpeech:
+      candidate.partOfSpeech && candidate.partOfSpeech !== "OTHER"
+        ? candidate.partOfSpeech
+        : wordInfo.partOfSpeech ?? candidate.partOfSpeech ?? "OTHER",
+  };
+  return baseCandidate;
 }
 
 function extractWordAndPartOfSpeech(value: string): {
@@ -1506,6 +1626,12 @@ async function copyWords(
     existingSet.add(normalized);
   }
   await commitWordWrites(writes);
+  if (writes.length > 0) {
+    await adminDb.collection(SETS).doc(String(targetSetId)).update({
+      wordCount: existingWords.length + writes.length,
+      updatedAtMillis: Date.now(),
+    });
+  }
   return writes.length;
 }
 
@@ -1695,6 +1821,7 @@ function toSetDoc(
   const d = doc.data() ?? {};
   return {
     id: numVal(d, "id") ?? parseInt(doc.id, 10),
+    wordCount: numVal(d, "wordCount"),
     ownerUid: strVal(d, "ownerUid"),
     ownerName: strVal(d, "ownerName"),
     folderId: numVal(d, "folderId"),

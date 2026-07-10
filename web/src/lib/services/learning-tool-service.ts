@@ -28,6 +28,10 @@ export interface LearningToolService {
     uid: string | null,
     levels: DauToeicDifficultyLevel[],
   ): Promise<DauToeicDifficultyLevel[]>;
+  applyProgressBatch(
+    uid: string | null,
+    groups: Array<{ part: number; levels: DauToeicDifficultyLevel[] }>,
+  ): Promise<Array<{ part: number; levels: DauToeicDifficultyLevel[] }>>;
   summarize(
     uid: string,
     part: number | null,
@@ -80,6 +84,17 @@ export function createLearningToolService(
     return snap.docs.map(toProgressDoc);
   }
 
+  async function findProgressByParts(
+    uid: string,
+    parts: number[],
+  ): Promise<ListeningProgressDoc[]> {
+    if (parts.length === 0) return [];
+    const snap = await userCol(uid, config.progressCollection)
+      .where("part", "in", parts)
+      .get();
+    return snap.docs.map(toProgressDoc);
+  }
+
   function summarizeRows(
     rows: ListeningProgressDoc[],
     part: number | null,
@@ -91,6 +106,30 @@ export function createLearningToolService(
       rows.map((row) => row.itemId).filter(Boolean),
     ).size;
     return { part, level, done: distinctItems, correct, wrong };
+  }
+
+  function applyRowsToLevels(
+    levels: DauToeicDifficultyLevel[],
+    rows: ListeningProgressDoc[],
+  ): DauToeicDifficultyLevel[] {
+    const rowsByLevel = new Map<number | null, ListeningProgressDoc[]>();
+    for (const row of rows) {
+      const key = row.level ?? null;
+      const bucket = rowsByLevel.get(key);
+      if (bucket) bucket.push(row);
+      else rowsByLevel.set(key, [row]);
+    }
+    return levels.map((level) => {
+      const levelRows = rowsByLevel.get(level.level) ?? [];
+      const summary = summarizeRows(levelRows, level.part, level.level);
+      return {
+        ...level,
+        done: summary.done,
+        correct: summary.correct,
+        wrong: summary.wrong,
+        remaining: Math.max(0, (level.total ?? 0) - summary.done),
+      };
+    });
   }
 
   async function deleteProgressByPartAndLevel(
@@ -126,25 +165,24 @@ export function createLearningToolService(
       // navigation. Progress is still always fresh (not cached).
       const part = levels[0]?.part ?? null;
       const allRows = await findProgressByPart(uid, part);
-      const rowsByLevel = new Map<number | null, ListeningProgressDoc[]>();
+      return applyRowsToLevels(levels, allRows);
+    },
+
+    async applyProgressBatch(uid, groups) {
+      if (!uid || groups.length === 0) return groups;
+      const parts = [...new Set(groups.map((group) => group.part))];
+      const allRows = await findProgressByParts(uid, parts);
+      const rowsByPart = new Map<number, ListeningProgressDoc[]>();
       for (const row of allRows) {
-        const key = row.level ?? null;
-        const bucket = rowsByLevel.get(key);
+        if (row.part == null) continue;
+        const bucket = rowsByPart.get(row.part);
         if (bucket) bucket.push(row);
-        else rowsByLevel.set(key, [row]);
+        else rowsByPart.set(row.part, [row]);
       }
-      return levels.map((level) => {
-        const rows = rowsByLevel.get(level.level) ?? [];
-        const summary = summarizeRows(rows, level.part, level.level);
-        const remaining = Math.max(0, (level.total ?? 0) - summary.done);
-        return {
-          ...level,
-          done: summary.done,
-          correct: summary.correct,
-          wrong: summary.wrong,
-          remaining,
-        };
-      });
+      return groups.map((group) => ({
+        part: group.part,
+        levels: applyRowsToLevels(group.levels, rowsByPart.get(group.part) ?? []),
+      }));
     },
 
     summarize,
@@ -193,14 +231,16 @@ export function createLearningToolService(
           },
           { merge: true },
         );
-      await recordStudyActivity(uid, {
-        module: config.module,
-        activityType: "answer",
-        sourceId: questionId,
-        occurredAtMillis: now,
-      }).catch(() => undefined);
+      const followUpWrites: Promise<unknown>[] = [
+        recordStudyActivity(uid, {
+          module: config.module,
+          activityType: "answer",
+          sourceId: questionId,
+          occurredAtMillis: now,
+        }).catch(() => undefined),
+      ];
       if (isCorrect) {
-        await recordSkillQuestionLeaderboard({
+        followUpWrites.push(recordSkillQuestionLeaderboard({
           uid,
           module: config.module,
           part: request.part!,
@@ -210,8 +250,9 @@ export function createLearningToolService(
           correct: isCorrect,
           occurredAtMillis: now,
           elapsedMillis: Math.max(0, request.elapsedSeconds ?? 0) * 1000,
-        }).catch(() => undefined);
+        }).catch(() => undefined));
       }
+      await Promise.all(followUpWrites);
       return { saved: true, authenticated: true, correct: isCorrect };
     },
 

@@ -159,6 +159,7 @@ export default function LevelDashboardClient({
           skill={skill}
           partNum={partNum}
           endpoint={resetEndpoint}
+          onReset={() => fetchLevels(false)}
           href={`${practiceHrefBase}?part=${partId}&level=${level.level}&mode=normal&assist=30&q=${nextPracticeIndex(level)}`}
           className={levelStyles[index] ?? levelStyles[0]}
         />
@@ -172,6 +173,7 @@ function LevelCard({
   skill,
   partNum,
   endpoint,
+  onReset,
   href,
   className,
 }: {
@@ -179,6 +181,7 @@ function LevelCard({
   skill: "listening" | "reading";
   partNum: number;
   endpoint: string;
+  onReset: () => Promise<void>;
   href: string;
   className: string;
 }) {
@@ -219,7 +222,7 @@ function LevelCard({
       <footer className="mt-5 flex items-center justify-between">
         <span className="text-xs font-extrabold text-muted">{total} item</span>
         <div className="flex items-center gap-3">
-          <ResetLevelButton part={partNum} level={level.level} endpoint={endpoint} />
+          <ResetLevelButton part={partNum} level={level.level} endpoint={endpoint} onReset={onReset} />
           <Link
             href={href}
             data-overdelay={skill === "listening" ? "Đang mở bài luyện nghe..." : "Đang mở bài luyện đọc..."}

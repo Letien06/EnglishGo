@@ -1,6 +1,6 @@
 import Link from "next/link";
 import AppTopbar from "@/components/AppTopbar";
-import { requireRole } from "@/lib/auth/session";
+import { requireAdminPage } from "@/lib/auth/page-guards";
 import { dashboardMetrics } from "@/lib/services/admin";
 
 export const dynamic = "force-dynamic";
@@ -16,7 +16,7 @@ const modules = [
 ];
 
 export default async function AdminPage() {
-  const user = await requireRole("ADMIN");
+  const user = await requireAdminPage();
   const metrics = await dashboardMetrics();
 
   return (

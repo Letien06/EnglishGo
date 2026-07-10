@@ -84,8 +84,15 @@ describe("getHub", () => {
         studyStreakUpdatedAtMillis: Date.now(),
         studyStreakDays: 3,
         studyStudiedToday: true,
-        studyTodayActivityCount: 2,
+        studyTodayActivityCount: 4,
         studyTodayModules: ["practice"],
+        studyTodayXp: 35,
+        studyTodayModuleCounts: {
+          practice: 1,
+          reading: 1,
+          listening: 1,
+          vocab: 1,
+        },
         studyModuleTotals: {
           practice: 3,
           reading: 4,
@@ -93,6 +100,11 @@ describe("getHub", () => {
           vocab: 6,
         },
         lastStudyActivityAtMillis: 123456,
+        practiceCompletedTests: 1,
+        practiceAverageScore: 85,
+        vocabMasteredWords: 1,
+        vocabDueWords: 0,
+        vocabNextDueAtMillis: Date.now() + 86_400_000,
       }),
     });
     practiceAttemptsGet.mockResolvedValue({

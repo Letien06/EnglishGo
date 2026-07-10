@@ -18,12 +18,13 @@ export const GET = withErrorHandling(async (req: NextRequest) => {
   const parts = parseParts(url.searchParams.get("parts"));
   if (parts.length > 0) {
     const user = await getCurrentUser();
-    const levelsByPartEntries = await Promise.all(
-      parts.map(async (part) => {
-        const base = await dautoeic.listDifficultyLevels(part);
-        const levels = await listening.applyProgress(user?.uid ?? null, base);
-        return [`part${part}`, levels] as const;
-      }),
+    const baseGroups = await Promise.all(parts.map(async (part) => ({
+      part,
+      levels: await dautoeic.listDifficultyLevels(part),
+    })));
+    const enrichedGroups = await listening.applyProgressBatch(user?.uid ?? null, baseGroups);
+    const levelsByPartEntries = enrichedGroups.map((group) =>
+      [`part${group.part}`, group.levels] as const,
     );
     return ok({
       levels: levelsByPartEntries[0]?.[1] ?? [],

@@ -6,8 +6,8 @@
  */
 import { adminDb } from "@/lib/firestore/db";
 import type { AppUser } from "@/types";
-import { getStoredStudyStreakSummary, getStudyStreak, getTodayStudySummary } from "./study-activity";
-import { dueWords } from "./vocab";
+import { getStudyStreak, getTodayStudySummary } from "./study-activity";
+import { refreshVocabHubSummary } from "./vocab";
 
 /* ------------------------------------------------------------------ */
 /*  Types                                                              */
@@ -87,41 +87,56 @@ async function loadPracticeSummary(
   }
 }
 
-async function countMasteredWords(uid: string): Promise<number> {
-  try {
-    const snap = await adminDb
-      .collection("users")
-      .doc(uid)
-      .collection("userVocabProgress")
-      .where("status", "==", "MASTERED")
-      .count()
-      .get();
-
-    return snap.data().count;
-  } catch {
-    return 0;
-  }
-}
-
 /* ------------------------------------------------------------------ */
 /*  Main hub function                                                  */
 /* ------------------------------------------------------------------ */
 
 export async function getHub(user: AppUser): Promise<HubView> {
   const uid = user.uid;
-  const [profileSnap, studyStreak, todaySummary, masteredWords, dueVocabWords] = await Promise.all([
-    adminDb.collection("users").doc(uid).get().catch(() => null),
-    getStoredStudyStreakSummary(uid).then((summary) => summary ?? getStudyStreak(uid)),
-    getTodayStudySummary(uid),
-    countMasteredWords(uid),
-    dueWords(uid).catch(() => 0),
+  const profileSnap = await adminDb.collection("users").doc(uid).get().catch(() => null);
+  const profile = profileSnap?.exists ? profileSnap.data() ?? {} : {};
+  const now = Date.now();
+  const todayKey = dateKeyForMillis(now);
+  const profileIsToday = profile.studyTodayDateKey === todayKey;
+  const hasTodaySummary =
+    profileIsToday &&
+    profile.studyTodayModuleCounts != null &&
+    numberValue(profile.studyTodayXp) != null;
+  const storedMastered = numberValue(profile.vocabMasteredWords);
+  const storedDue = numberValue(profile.vocabDueWords);
+  const storedNextDue = numberValue(profile.vocabNextDueAtMillis);
+  const vocabSummaryFresh =
+    storedMastered != null &&
+    storedDue != null &&
+    (storedNextDue == null || storedNextDue > now);
+
+  const [practiceSummary, studyStreak, todaySummary, vocabSummary] = await Promise.all([
+    loadPracticeSummary(uid, profile),
+    profileIsToday
+      ? Promise.resolve({
+          streakDays: numberValue(profile.studyStreakDays) ?? 0,
+          studiedToday: profile.studyStudiedToday === true,
+          todayActivityCount: numberValue(profile.studyTodayActivityCount) ?? 0,
+          todayModules: [],
+          todayDateKey: todayKey,
+        })
+      : getStudyStreak(uid),
+    hasTodaySummary
+      ? Promise.resolve({
+          dateKey: todayKey,
+          totalActivityCount: numberValue(profile.studyTodayActivityCount) ?? 0,
+          xp: numberValue(profile.studyTodayXp) ?? 0,
+          moduleCounts: parseModuleTotals(profile.studyTodayModuleCounts),
+        })
+      : getTodayStudySummary(uid),
+    vocabSummaryFresh
+      ? Promise.resolve({ masteredWords: storedMastered, dueWords: storedDue })
+      : refreshVocabHubSummary(uid).catch(() => ({ masteredWords: 0, dueWords: 0 })),
   ]);
 
-  const profile = profileSnap?.exists ? profileSnap.data() ?? {} : {};
   const profileName = (profile.displayName as string) || null;
   const targetScore = typeof profile.targetScore === "number" ? profile.targetScore : null;
   const level = (profile.level as string) || null;
-  const practiceSummary = await loadPracticeSummary(uid, profile);
   const nextRecommendation = toRecommendation(profile.nextPracticeRecommendation);
   const moduleTotals = parseModuleTotals(profile.studyModuleTotals);
   const lastActivityAtMillis = numberValue(profile.lastStudyActivityAtMillis);
@@ -141,15 +156,24 @@ export async function getHub(user: AppUser): Promise<HubView> {
     todayVocab: todaySummary.moduleCounts.vocab,
     moduleTotals,
     lastActivityAtMillis,
-    dueVocabWords,
+    dueVocabWords: vocabSummary.dueWords,
     nextRecommendation,
     streakDays: studyStreak.streakDays,
     completedTests: practiceSummary.completedTests,
     averageScore: practiceSummary.averageScore,
     targetScore,
     level,
-    masteredWords,
+    masteredWords: vocabSummary.masteredWords,
   };
+}
+
+function dateKeyForMillis(millis: number): string {
+  return new Intl.DateTimeFormat("en-CA", {
+    timeZone: "Asia/Ho_Chi_Minh",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).format(new Date(millis));
 }
 
 function numberValue(value: unknown): number | null {

@@ -1,34 +1,52 @@
 "use client";
 
+import { useState } from "react";
+
 interface Props {
   part: number;
   level: number;
   endpoint: string;
+  onReset?: () => void | Promise<void>;
 }
 
-export default function ResetLevelButton({ part, level, endpoint }: Props) {
+export default function ResetLevelButton({ part, level, endpoint, onReset }: Props) {
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState("");
+
   const handleClick = async () => {
     if (!confirm("Reset tiến độ level này?")) return;
+    setBusy(true);
+    setError("");
     try {
-      await fetch(endpoint, {
+      const response = await fetch(endpoint, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ part, level }),
       });
-      window.location.reload();
-    } catch {
-      // Keep this quiet; the next reload/retry will show current progress.
+      const payload = await response.json().catch(() => null);
+      if (!response.ok || payload?.success === false) {
+        throw new Error(payload?.error || "Không thể reset tiến độ.");
+      }
+      await onReset?.();
+    } catch (reason) {
+      setError(reason instanceof Error ? reason.message : "Không thể reset tiến độ.");
+    } finally {
+      setBusy(false);
     }
   };
 
   return (
-    <button
-      type="button"
-      onClick={handleClick}
-      className="rounded-lg border border-amber-200 bg-white px-4 py-2 text-xs font-extrabold text-muted transition-colors hover:border-red-300 hover:text-red-500"
-      title="Reset tiến độ"
-    >
-      Reset
-    </button>
+    <span className="inline-flex flex-col items-end gap-1">
+      <button
+        type="button"
+        onClick={handleClick}
+        disabled={busy}
+        className="rounded-lg border border-amber-200 bg-white px-4 py-2 text-xs font-extrabold text-muted transition-colors hover:border-red-300 hover:text-red-500 disabled:opacity-50"
+        title="Reset tiến độ"
+      >
+        {busy ? "Đang reset..." : "Reset"}
+      </button>
+      {error ? <small role="alert" className="max-w-40 text-right text-[10px] font-semibold text-red-600">{error}</small> : null}
+    </span>
   );
 }
