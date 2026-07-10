@@ -216,22 +216,22 @@ h1, h2, h3, h4, h5 {
 .overdelay-pill {
   position: fixed;
   left: 50%;
-  top: 10px;
+  top: 18px;
   display: inline-flex;
-  min-width: min(76vw, 250px);
-  max-width: min(82vw, 320px);
+  min-width: min(88vw, 360px);
+  max-width: min(92vw, 460px);
   transform: translateX(-50%) translateY(-6px);
   align-items: center;
-  gap: 9px;
+  gap: 16px;
   border: 1px solid var(--line);
-  border-radius: 999px;
+  border-radius: 22px;
   background: color-mix(in srgb, var(--surface) 92%, transparent);
   box-shadow: var(--shadow);
   color: var(--ink);
-  font-size: 13px;
+  font-size: 20px;
   font-weight: 800;
-  line-height: 1.2;
-  padding: 10px 13px;
+  line-height: 1.25;
+  padding: 18px 22px;
   opacity: 0;
   backdrop-filter: blur(14px);
   transition:
@@ -245,10 +245,10 @@ h1, h2, h3, h4, h5 {
 }
 
 .overdelay-spinner {
-  height: 20px;
-  width: 20px;
+  height: 42px;
+  width: 42px;
   flex: 0 0 auto;
-  border: 3px solid color-mix(in srgb, var(--primary) 22%, transparent);
+  border: 5px solid color-mix(in srgb, var(--primary) 22%, transparent);
   border-top-color: var(--primary);
   border-radius: 999px;
   animation: overdelay-spin 0.8s linear infinite;
@@ -257,14 +257,14 @@ h1, h2, h3, h4, h5 {
 @media (min-width: 768px) {
   .overdelay-pill {
     left: auto;
-    right: 24px;
-    top: 18px;
-    min-width: 280px;
-    max-width: min(42vw, 440px);
+    right: 32px;
+    top: 24px;
+    min-width: 480px;
+    max-width: min(58vw, 720px);
     transform: translateY(-8px);
-    gap: 12px;
-    font-size: 14px;
-    padding: 12px 16px;
+    gap: 18px;
+    font-size: 22px;
+    padding: 22px 26px;
   }
 
   .overdelay-feedback.is-visible .overdelay-pill {
@@ -272,9 +272,9 @@ h1, h2, h3, h4, h5 {
   }
 
   .overdelay-spinner {
-    height: 22px;
-    width: 22px;
-    border-width: 3px;
+    height: 48px;
+    width: 48px;
+    border-width: 5px;
   }
 }
 

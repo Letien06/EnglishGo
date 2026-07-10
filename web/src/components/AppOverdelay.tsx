@@ -9,6 +9,7 @@ const MAX_VISIBLE_MS = 9000;
 const READY_EVENT = "englishgo:overdelay-ready";
 const BEGIN_EVENT = "englishgo:overdelay-begin";
 const ACTIVE_ATTR = "data-overdelay-active";
+const ROUTE_READY_KEY = "route-ready";
 
 function isModifiedClick(event: MouseEvent): boolean {
   return event.metaKey || event.ctrlKey || event.shiftKey || event.altKey || event.button !== 0;
@@ -153,7 +154,11 @@ export default function AppOverdelay() {
 
       const link = target.closest<HTMLAnchorElement>("a[href]");
       if (link && shouldTrackLink(link)) {
-        begin(link.dataset.overdelay || labelForHref(link.href));
+        begin(
+          link.dataset.overdelay || labelForHref(link.href),
+          MAX_VISIBLE_MS,
+          link.dataset.overdelayWaitFor || ROUTE_READY_KEY,
+        );
       }
     }
 
@@ -186,13 +191,21 @@ export default function AppOverdelay() {
   }, []);
 
   useEffect(() => {
-    if (!startedAtRef.current) return;
-    if (waitForRef.current) return;
-    const timer = window.setTimeout(() => {
-      document.documentElement.removeAttribute(ACTIVE_ATTR);
-      setVisible(false);
-    }, MIN_VISIBLE_MS);
-    return () => window.clearTimeout(timer);
+    // A navigation has committed only after the new route tree has rendered.
+    // Waiting for two frames ensures the destination gets a chance to paint
+    // before the generic navigation overlay disappears.
+    let secondFrame = 0;
+    const firstFrame = window.requestAnimationFrame(() => {
+      secondFrame = window.requestAnimationFrame(() => {
+        window.dispatchEvent(new CustomEvent(READY_EVENT, {
+          detail: { key: ROUTE_READY_KEY },
+        }));
+      });
+    });
+    return () => {
+      window.cancelAnimationFrame(firstFrame);
+      if (secondFrame) window.cancelAnimationFrame(secondFrame);
+    };
   }, [routeKey]);
 
   return (
