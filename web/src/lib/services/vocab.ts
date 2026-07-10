@@ -1130,6 +1130,11 @@ export async function previewAiWords(
       clampedCount + 10,
       existingWords,
     );
+  } else if (mode === "words") {
+    suggestedWords = input
+      .split(/[\n,;|]+/)
+      .map((word) => word.trim())
+      .filter(Boolean);
   } else {
     suggestedWords = await suggestWordsFromTopic(
       input,
