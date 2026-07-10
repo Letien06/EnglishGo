@@ -125,8 +125,6 @@ export default function LoginForm() {
 
   return (
     <main className="relative flex min-h-dvh flex-col lg:flex-row">
-      {busy && <LoginLoadingNotice />}
-
       <section className="flex flex-1 flex-col items-center justify-center bg-surface px-6 py-12">
         <Link href="/" className="mb-8 flex items-center gap-3 no-underline">
           <span className="inline-flex h-12 w-12 items-center justify-center rounded-xl bg-primary text-xl font-extrabold text-gold-ink">
@@ -282,22 +280,4 @@ function friendlyAuthError(error: unknown): string {
     return "Không kết nối được Google/Firebase. Vui lòng kiểm tra mạng rồi thử lại.";
   }
   return error instanceof Error ? error.message : "Đã xảy ra lỗi không xác định";
-}
-
-function LoginLoadingNotice() {
-  return (
-    <div className="app-busy-notice">
-      <div className="app-busy-card">
-        <span className="app-busy-spinner" />
-        <div>
-          <p className="app-busy-title">
-            Đang đăng nhập
-          </p>
-          <p className="app-busy-description">
-            Đang kết nối máy chủ, vui lòng chờ...
-          </p>
-        </div>
-      </div>
-    </div>
-  );
 }

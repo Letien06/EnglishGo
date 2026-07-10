@@ -9,10 +9,12 @@ type MilestoneResponse = {
 };
 
 const CHECK_INTERVAL_MS = 30_000;
+const AUTO_DISMISS_SECONDS = 10;
 
 export default function StudyStreakCelebration() {
   const pathname = usePathname();
   const [milestone, setMilestone] = useState<number | null>(null);
+  const [secondsRemaining, setSecondsRemaining] = useState(AUTO_DISMISS_SECONDS);
   const checking = useRef(false);
 
   const checkForMilestone = useCallback(async () => {
@@ -25,6 +27,7 @@ export default function StudyStreakCelebration() {
       });
       const result = (await response.json()) as MilestoneResponse;
       if (response.ok && result.success && typeof result.data === "number") {
+        setSecondsRemaining(AUTO_DISMISS_SECONDS);
         setMilestone(result.data);
       }
     } catch {
@@ -49,6 +52,23 @@ export default function StudyStreakCelebration() {
     };
   }, [checkForMilestone]);
 
+  useEffect(() => {
+    if (milestone == null) return;
+
+    const dismissTimer = window.setTimeout(
+      () => setMilestone(null),
+      AUTO_DISMISS_SECONDS * 1000,
+    );
+    const countdownTimer = window.setInterval(() => {
+      setSecondsRemaining((seconds) => Math.max(0, seconds - 1));
+    }, 1000);
+
+    return () => {
+      window.clearTimeout(dismissTimer);
+      window.clearInterval(countdownTimer);
+    };
+  }, [milestone]);
+
   if (milestone == null) return null;
 
   return (
@@ -70,6 +90,7 @@ export default function StudyStreakCelebration() {
       <p className="streak-celebration-number">
         <AnimatedDayCount value={milestone} /> <span>ngày</span>
       </p>
+      <p className="streak-celebration-countdown">Tự ẩn sau {secondsRemaining} giây</p>
       <button type="button" className="streak-celebration-confirm" onClick={() => setMilestone(null)}>
         Đã rõ
       </button>
