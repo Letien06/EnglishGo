@@ -1,4 +1,5 @@
 import Link from "next/link";
+import NavIcon from "@/components/NavIcon";
 import AppTopbar from "@/components/AppTopbar";
 import { requireUser } from "@/lib/auth/session";
 import { getHub } from "@/lib/services/hub";
@@ -127,9 +128,10 @@ export default async function HubPage() {
                 </div>
                 <Link
                   href="/continue"
-                  className="rounded-lg bg-primary px-4 py-2 text-sm font-extrabold text-gold-ink"
+                  className="inline-flex items-center gap-1.5 rounded-lg bg-primary px-4 py-2 text-sm font-extrabold text-gold-ink"
                 >
                   Học tiếp
+                  <NavIcon name="arrow-right" className="h-4 w-4" />
                 </Link>
               </div>
 
@@ -172,9 +174,10 @@ export default async function HubPage() {
               </p>
               <Link
                 href={primaryRecommendation.href}
-                className="mt-5 inline-flex rounded-lg bg-primary px-4 py-2 text-sm font-extrabold text-gold-ink"
+                className="mt-5 inline-flex items-center gap-1.5 rounded-lg bg-primary px-4 py-2 text-sm font-extrabold text-gold-ink"
               >
                 Mở ngay
+                <NavIcon name="arrow-right" className="h-4 w-4" />
               </Link>
 
               {hub.dueVocabWords > 0 ? (
@@ -187,8 +190,9 @@ export default async function HubPage() {
                   </p>
                   <Link
                     href="/vocab?tab=progress"
-                    className="mt-3 inline-flex text-sm font-extrabold text-primary hover:underline"
+                    className="mt-3 inline-flex items-center gap-1 text-sm font-extrabold text-primary hover:underline"
                   >
+                    <NavIcon name="vocab" className="h-4 w-4" />
                     Ôn từ vựng
                   </Link>
                 </div>
@@ -206,7 +210,8 @@ export default async function HubPage() {
                   {totalActivities} hoạt động đã lưu
                 </h2>
               </div>
-              <Link href="/leaderboard" className="text-sm font-extrabold text-primary hover:underline">
+              <Link href="/leaderboard" className="inline-flex items-center gap-1 text-sm font-extrabold text-primary hover:underline">
+                <NavIcon name="leaderboard" className="h-4 w-4" />
                 Xem bảng xếp hạng
               </Link>
             </div>

@@ -1,4 +1,5 @@
 import Link from "next/link";
+import NavIcon from "@/components/NavIcon";
 import PublicHeader from "@/components/PublicHeader";
 
 const lessonPaths = [
@@ -19,7 +20,9 @@ export default function LessonsPage() {
         {lessonPaths.map((lesson) => <article key={lesson.href} className="rounded-2xl border border-line bg-surface p-6 shadow-sm">
           <h2 className="text-xl font-extrabold text-ink">{lesson.title}</h2>
           <p className="mt-2 text-sm text-muted">{lesson.description}</p>
-          <Link href={lesson.href} className="mt-5 inline-flex rounded-full bg-primary px-5 py-2 text-sm font-extrabold text-gold-ink">Bắt đầu →</Link>
+          <Link href={lesson.href} className="mt-5 inline-flex items-center gap-1.5 rounded-full bg-primary px-5 py-2 text-sm font-extrabold text-gold-ink">
+            Bắt đầu <NavIcon name="arrow-right" className="h-4 w-4" />
+          </Link>
         </article>)}
       </section>
     </main>

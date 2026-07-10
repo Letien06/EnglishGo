@@ -4,15 +4,22 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useEffect, useState } from "react";
 import ThemeToggle from "./ThemeToggle";
+import NavIcon, { type NavIconName } from "./NavIcon";
 
 const navItems = [
-  { href: "/hub", icon: "T", label: "Trang chủ", key: "hub", color: "text-primary" },
-  { href: "/listen", icon: "N", label: "Nghe", key: "listen", color: "text-plum" },
-  { href: "/read", icon: "Đ", label: "Đọc", key: "read", color: "text-azure" },
-  { href: "/vocab", icon: "V", label: "Từ vựng", key: "vocab", color: "text-jade" },
-  { href: "/practice", icon: "ĐT", label: "Đề thi", key: "practice", color: "text-terracotta" },
-  { href: "/leaderboard", icon: "BXH", label: "Bảng xếp hạng", key: "leaderboard", color: "text-primary" },
-] as const;
+  { href: "/hub", icon: "home", label: "Trang chủ", key: "hub", color: "text-primary" },
+  { href: "/listen", icon: "listen", label: "Nghe", key: "listen", color: "text-plum" },
+  { href: "/read", icon: "read", label: "Đọc", key: "read", color: "text-azure" },
+  { href: "/vocab", icon: "vocab", label: "Từ vựng", key: "vocab", color: "text-jade" },
+  { href: "/practice", icon: "practice", label: "Đề thi", key: "practice", color: "text-terracotta" },
+  { href: "/leaderboard", icon: "leaderboard", label: "Bảng xếp hạng", key: "leaderboard", color: "text-primary" },
+] as const satisfies ReadonlyArray<{
+  href: string;
+  icon: NavIconName;
+  label: string;
+  key: string;
+  color: string;
+}>;
 
 interface PublicHeaderProps {
   user?: { displayName: string } | null;
@@ -87,7 +94,7 @@ export default function PublicHeader({ user }: PublicHeaderProps) {
                   isActive ? "text-primary" : "text-ink3 hover:text-ink"
                 }`}
               >
-                <span className={item.color}>{item.icon}</span>
+                <NavIcon name={item.icon} className={`h-4 w-4 ${item.color}`} />
                 <span>{item.label}</span>
               </Link>
             );
@@ -161,7 +168,7 @@ export default function PublicHeader({ user }: PublicHeaderProps) {
                         isActive ? "bg-primary/10 text-primary" : "text-ink hover:bg-surface-soft"
                       }`}
                     >
-                      <span className={`text-xl ${item.color}`}>{item.icon}</span>
+                      <NavIcon name={item.icon} className={`h-5 w-5 ${item.color}`} />
                       <span>{item.label}</span>
                     </Link>
                   </li>

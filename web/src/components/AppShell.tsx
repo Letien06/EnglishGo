@@ -5,15 +5,21 @@ import { usePathname } from "next/navigation";
 import type { ReactNode } from "react";
 import ThemeToggle from "./ThemeToggle";
 import StudyStreakBadge from "./StudyStreakBadge";
+import NavIcon, { type NavIconName } from "./NavIcon";
 
 const navItems = [
-  { href: "/hub", icon: "T", label: "Trang chủ", color: "text-primary" },
-  { href: "/listen", icon: "N", label: "Nghe", color: "text-plum" },
-  { href: "/read", icon: "Đ", label: "Đọc", color: "text-azure" },
-  { href: "/vocab", icon: "V", label: "Từ vựng", color: "text-jade" },
-  { href: "/practice", icon: "ĐT", label: "Đề thi", color: "text-terracotta" },
-  { href: "/leaderboard", icon: "BXH", label: "Bảng xếp hạng", color: "text-primary" },
-] as const;
+  { href: "/hub", icon: "home", label: "Trang chủ", color: "text-primary" },
+  { href: "/listen", icon: "listen", label: "Nghe", color: "text-plum" },
+  { href: "/read", icon: "read", label: "Đọc", color: "text-azure" },
+  { href: "/vocab", icon: "vocab", label: "Từ vựng", color: "text-jade" },
+  { href: "/practice", icon: "practice", label: "Đề thi", color: "text-terracotta" },
+  { href: "/leaderboard", icon: "leaderboard", label: "Bảng xếp hạng", color: "text-primary" },
+] as const satisfies ReadonlyArray<{
+  href: string;
+  icon: NavIconName;
+  label: string;
+  color: string;
+}>;
 
 export default function AppShell({ children }: { children: ReactNode }) {
   const pathname = usePathname();
@@ -53,7 +59,7 @@ export default function AppShell({ children }: { children: ReactNode }) {
                       : "text-ink3 hover:bg-surface-soft hover:text-ink"
                   }`}
                 >
-                  <span className={item.color}>{item.icon}</span>
+                  <NavIcon name={item.icon} className={`h-4 w-4 ${item.color}`} />
                   <span>{item.label}</span>
                 </Link>
               );

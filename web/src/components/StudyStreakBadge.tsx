@@ -83,9 +83,13 @@ export default function StudyStreakBadge({
     ? `Chuoi hoc ${streakDays} ngay - hom nay da hoc`
     : `Chuoi hoc ${streakDays} ngay - hom nay chua hoc`;
 
+  const statusClass = studiedToday
+    ? "border-primary/25 bg-primary/10 text-primary"
+    : "border-line bg-surface-soft text-muted";
+
   return (
     <span
-      className={`inline-flex h-9 items-center gap-1.5 rounded-xl border border-line bg-surface-soft px-3 text-sm font-extrabold text-primary ${className ?? ""}`}
+      className={`inline-flex h-9 items-center gap-1.5 rounded-xl border px-3 text-sm font-extrabold ${statusClass} ${className ?? ""}`}
       title={title}
       aria-label={title}
     >

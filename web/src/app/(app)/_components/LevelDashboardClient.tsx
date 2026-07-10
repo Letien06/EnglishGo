@@ -21,6 +21,7 @@
  */
 import Link from "next/link";
 import { useCallback, useEffect, useRef, useState } from "react";
+import NavIcon from "@/components/NavIcon";
 import ResetLevelButton from "@/components/ResetLevelButton";
 import { markVisited, routeKey } from "@/lib/nav/session-nav";
 import type { DauToeicDifficultyLevel } from "@/types/dautoeic";
@@ -228,9 +229,10 @@ function LevelCard({
             data-overdelay={skill === "listening" ? "Đang mở bài luyện nghe..." : "Đang mở bài luyện đọc..."}
             data-overdelay-timeout="9000"
             data-overdelay-wait-for="practice-ready"
-            className="rounded-lg bg-primary px-5 py-2 text-sm font-extrabold text-gold-ink shadow-md transition-opacity hover:opacity-90"
+            className="inline-flex items-center gap-1.5 rounded-lg bg-primary px-5 py-2 text-sm font-extrabold text-gold-ink shadow-md transition-opacity hover:opacity-90"
           >
-            Luyện ngay →
+            <NavIcon name="play" className="h-4 w-4" />
+            Luyện ngay
           </Link>
         </div>
       </footer>

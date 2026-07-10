@@ -1,5 +1,6 @@
 import Link from "next/link";
 import PublicHeader from "@/components/PublicHeader";
+import NavIcon from "@/components/NavIcon";
 
 const features = [
   {
@@ -87,14 +88,15 @@ export default function HomePage() {
           <div className="mt-12 flex w-full flex-col justify-center gap-4 sm:w-auto sm:flex-row">
             <Link
               href="/login?mode=register"
-              className="inline-flex min-h-16 items-center justify-center rounded-xl bg-primary px-10 text-lg font-extrabold text-gold-ink shadow-[0_20px_45px_rgba(224,149,43,0.25)] transition-opacity hover:opacity-90"
+              className="inline-flex min-h-16 items-center justify-center gap-2 rounded-xl bg-primary px-10 text-lg font-extrabold text-gold-ink shadow-[0_20px_45px_rgba(224,149,43,0.25)] transition-opacity hover:opacity-90"
             >
-              Bắt đầu luyện tập <span className="ml-3">→</span>
+              Bắt đầu luyện tập <NavIcon name="arrow-right" className="h-5 w-5" />
             </Link>
             <Link
               href="/practice"
-              className="inline-flex min-h-16 items-center justify-center rounded-xl border border-line bg-surface px-10 text-lg font-extrabold text-ink2 transition-colors hover:bg-surface-soft hover:text-ink"
+              className="inline-flex min-h-16 items-center justify-center gap-2 rounded-xl border border-line bg-surface px-10 text-lg font-extrabold text-ink2 transition-colors hover:bg-surface-soft hover:text-ink"
             >
+              <NavIcon name="practice" className="h-5 w-5 text-terracotta" />
               Làm bài test thử (demo)
             </Link>
           </div>
@@ -118,8 +120,8 @@ export default function HomePage() {
                 <span className="text-2xl text-primary">{feature.icon}</span>
                 <h2 className="text-lg font-extrabold text-ink">{feature.title}</h2>
                 <p className="flex-1 text-sm text-muted">{feature.desc}</p>
-                <Link href={feature.href} className="text-sm font-extrabold text-primary hover:underline">
-                  Bắt đầu →
+                <Link href={feature.href} className="inline-flex items-center gap-1 text-sm font-extrabold text-primary hover:underline">
+                  Bắt đầu <NavIcon name="arrow-right" className="h-4 w-4" />
                 </Link>
               </article>
             ))}
@@ -157,9 +159,9 @@ export default function HomePage() {
           </p>
           <Link
             href="/login?mode=register"
-            className="inline-flex min-h-14 items-center justify-center rounded-xl bg-primary px-8 text-base font-extrabold text-gold-ink transition-opacity hover:opacity-90"
+            className="inline-flex min-h-14 items-center justify-center gap-2 rounded-xl bg-primary px-8 text-base font-extrabold text-gold-ink transition-opacity hover:opacity-90"
           >
-            Bắt đầu miễn phí <span className="ml-2">→</span>
+            Bắt đầu miễn phí <NavIcon name="arrow-right" className="h-5 w-5" />
           </Link>
         </section>
       </main>
