@@ -13,8 +13,18 @@
  */
 import Link from "next/link";
 import { useEffect, useState } from "react";
+import NavIcon, { type NavIconName } from "@/components/NavIcon";
 
 export type PracticeMode = "normal" | "bilingual" | "fill" | "flip";
+
+const navigationItems = [
+  { href: "/hub", label: "Trang chủ", icon: "home" },
+  { href: "/listen", label: "Nghe", icon: "listen" },
+  { href: "/read", label: "Đọc", icon: "read" },
+  { href: "/vocab", label: "Từ vựng", icon: "vocab" },
+  { href: "/practice", label: "Đề thi", icon: "practice" },
+  { href: "/leaderboard", label: "Bảng xếp hạng", icon: "leaderboard" },
+] as const satisfies ReadonlyArray<{ href: string; label: string; icon: NavIconName }>;
 
 interface Props {
   modes: Array<[PracticeMode, string, string]>;
@@ -86,7 +96,7 @@ export default function PracticeMobileMenu({
           {/* Slide-in panel */}
           <div className="absolute right-0 top-0 flex h-full w-[85vw] max-w-sm flex-col gap-6 overflow-y-auto bg-white p-5 shadow-2xl">
             <div className="flex items-center justify-between">
-              <h2 className="text-lg font-extrabold text-ink">Công cụ luyện tập</h2>
+              <h2 className="text-lg font-extrabold text-ink">Menu & công cụ</h2>
               <button
                 type="button"
                 onClick={() => setOpen(false)}
@@ -96,6 +106,15 @@ export default function PracticeMobileMenu({
                 ✕
               </button>
             </div>
+
+            <nav className="grid grid-cols-2 gap-2" aria-label="Điều hướng chính">
+              {navigationItems.map((item) => (
+                <Link key={item.href} href={item.href} onClick={() => setOpen(false)} className="flex min-h-11 items-center gap-2 rounded-xl border border-slate-200 px-3 text-sm font-extrabold text-ink">
+                  <NavIcon name={item.icon} className="h-4 w-4 text-primary" />
+                  {item.label}
+                </Link>
+              ))}
+            </nav>
 
             {/* Timer */}
             <div className="flex items-center justify-between rounded-xl bg-surface-soft px-4 py-3">

@@ -6,6 +6,7 @@ import type { ReactNode } from "react";
 import ThemeToggle from "./ThemeToggle";
 import StudyStreakBadge from "./StudyStreakBadge";
 import NavIcon, { type NavIconName } from "./NavIcon";
+import MobileNavigationMenu from "./MobileNavigationMenu";
 
 const navItems = [
   { href: "/hub", icon: "home", label: "Trang chủ", color: "text-primary" },
@@ -35,12 +36,12 @@ export default function AppShell({ children }: { children: ReactNode }) {
   return (
     <div className="min-h-dvh bg-[#f1f5fb] text-ink">
       <header className="sticky top-0 z-50 border-b border-line bg-white/95 shadow-sm backdrop-blur-xl">
-        <div className="flex h-16 items-center justify-between px-6">
+        <div className="flex h-16 items-center justify-between px-4 sm:px-6">
           <Link href="/" className="flex items-center gap-3 no-underline">
             <span className="inline-flex h-10 w-10 items-center justify-center rounded-xl bg-primary/10 text-base font-extrabold text-primary">
               E
             </span>
-            <strong className="text-xl font-extrabold tracking-tight text-ink">
+            <strong className="hidden text-xl font-extrabold tracking-tight text-ink sm:block">
               ENGLISHGO
             </strong>
           </Link>
@@ -67,8 +68,9 @@ export default function AppShell({ children }: { children: ReactNode }) {
           </nav>
 
           <div className="flex items-center gap-3">
+            <MobileNavigationMenu />
             <StudyStreakBadge className="hidden sm:inline-flex" />
-            <ThemeToggle className="border border-line bg-surface-soft text-ink" />
+            <ThemeToggle className="!hidden border border-line bg-surface-soft text-ink md:!inline-flex" />
             <Link
               href="/account"
               className={`inline-flex h-11 w-11 items-center justify-center rounded-xl border-2 text-base font-extrabold ${

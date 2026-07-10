@@ -77,7 +77,7 @@ export default function PublicHeader({ user }: PublicHeaderProps) {
           <span className="inline-flex h-12 w-12 items-center justify-center rounded-xl bg-primary/10 text-xl font-extrabold text-primary">
             E
           </span>
-          <strong className="text-2xl font-extrabold tracking-tight text-ink">
+          <strong className="hidden text-2xl font-extrabold tracking-tight text-ink sm:block">
             ENGLISHGO
           </strong>
         </Link>
@@ -115,7 +115,7 @@ export default function PublicHeader({ user }: PublicHeaderProps) {
               <span className="block h-0.5 w-6 rounded bg-current" />
             </span>
           </button>
-          <ThemeToggle className="h-12 w-12 border border-line bg-surface-soft text-ink" />
+          <ThemeToggle className="!hidden h-12 w-12 border border-line bg-surface-soft text-ink sm:!inline-flex" />
           {sessionUser ? (
             <Link
               href="/account"
@@ -175,6 +175,11 @@ export default function PublicHeader({ user }: PublicHeaderProps) {
                 );
               })}
             </ul>
+
+            <div className="mt-4 flex items-center justify-between border-t border-line pt-4">
+              <span className="text-sm font-extrabold text-ink">Giao diện</span>
+              <ThemeToggle className="h-11 w-11 border border-line bg-surface-soft text-ink" />
+            </div>
 
             {!sessionUser && (
               <div className="mt-4 flex flex-col gap-2 border-t border-line pt-4">

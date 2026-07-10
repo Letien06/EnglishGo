@@ -1,6 +1,7 @@
 "use client";
 
 import Image from "next/image";
+import MobileNavigationMenu from "@/components/MobileNavigationMenu";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import type { PracticeQuestion, PracticeSessionView } from "@/lib/services/practice";
@@ -395,6 +396,7 @@ export default function PracticeSessionClient({ session }: { session: PracticeSe
         </button>
         <h1 className="min-w-0 flex-1 text-center text-lg font-extrabold">{title}</h1>
         <div className="flex items-center gap-2">
+          <MobileNavigationMenu inverted />
           {hasListening ? (
             <button
               type="button"
