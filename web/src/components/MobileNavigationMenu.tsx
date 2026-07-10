@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useEffect, useState } from "react";
 import { usePathname } from "next/navigation";
+import { createPortal } from "react-dom";
 import NavIcon, { type NavIconName } from "./NavIcon";
 import ThemeToggle from "./ThemeToggle";
 
@@ -49,34 +50,34 @@ export default function MobileNavigationMenu({ inverted = false }: { inverted?: 
         </span>
       </button>
 
-      {open && (
-        <div className="fixed inset-0 z-[80]" role="dialog" aria-modal="true" aria-label="Điều hướng">
-          <button type="button" className="absolute inset-0 bg-slate-950/50 backdrop-blur-sm" aria-label="Đóng điều hướng" onClick={() => setOpen(false)} />
-          <aside className="absolute right-0 top-0 flex h-full w-[min(86vw,360px)] flex-col bg-surface p-5 shadow-2xl">
-            <div className="flex items-center justify-between border-b border-line pb-4">
-              <div>
+      {open && createPortal(
+        <div className="fixed inset-x-0 bottom-0 top-16 z-[1000] md:hidden" role="dialog" aria-modal="true" aria-label="Điều hướng">
+          <button type="button" className="absolute inset-0 bg-slate-950/30 backdrop-blur-sm" aria-label="Đóng điều hướng" onClick={() => setOpen(false)} />
+          <aside className="absolute inset-x-0 top-0 max-h-full overflow-y-auto border-t border-line bg-surface px-6 pb-[max(1.5rem,env(safe-area-inset-bottom))] pt-6 shadow-2xl">
+            <div className="mx-auto max-w-lg">
+              <div className="flex items-center justify-between border-b border-line pb-4">
                 <p className="text-xs font-extrabold uppercase tracking-widest text-primary">ENGLISHGO</p>
-                <h2 className="mt-1 text-lg font-extrabold text-ink">Điều hướng</h2>
+                <button type="button" className="inline-flex h-10 w-10 items-center justify-center rounded-xl border border-line text-xl text-ink" aria-label="Đóng" onClick={() => setOpen(false)}>×</button>
               </div>
-              <button type="button" className="inline-flex h-10 w-10 items-center justify-center rounded-xl border border-line text-xl text-ink" aria-label="Đóng" onClick={() => setOpen(false)}>×</button>
-            </div>
-            <nav className="mt-5 grid gap-2" aria-label="Điều hướng chính">
+              <nav className="mt-4 grid gap-2" aria-label="Điều hướng chính">
               {navItems.map((item) => {
                 const active = item.href === "/hub" ? pathname === "/hub" : pathname.startsWith(item.href);
                 return (
-                  <Link key={item.href} href={item.href} onClick={() => setOpen(false)} className={`flex min-h-12 items-center gap-3 rounded-xl px-4 text-base font-extrabold ${active ? "bg-primary/10 text-primary" : "text-ink hover:bg-surface-soft"}`}>
-                    <NavIcon name={item.icon} className={`h-5 w-5 ${item.color}`} />
+                  <Link key={item.href} href={item.href} onClick={() => setOpen(false)} className={`flex min-h-14 items-center gap-4 rounded-xl px-4 text-lg font-extrabold ${active ? "bg-primary/10 text-primary" : "text-ink hover:bg-surface-soft"}`}>
+                    <NavIcon name={item.icon} className={`h-6 w-6 ${item.color}`} />
                     {item.label}
                   </Link>
                 );
               })}
-            </nav>
-            <div className="mt-auto flex items-center justify-between border-t border-line pt-4">
-              <Link href="/account" className="inline-flex min-h-11 items-center rounded-xl border border-line px-4 text-sm font-extrabold text-ink">Tài khoản</Link>
-              <ThemeToggle className="h-11 w-11 border border-line bg-surface-soft text-ink" />
+              </nav>
+              <div className="mt-5 flex items-center justify-between border-t border-line pt-4">
+                <Link href="/account" onClick={() => setOpen(false)} className="inline-flex min-h-11 items-center rounded-xl border border-line px-4 text-sm font-extrabold text-ink">Tài khoản</Link>
+                <ThemeToggle className="h-11 w-11 border border-line bg-surface-soft text-ink" />
+              </div>
             </div>
           </aside>
-        </div>
+        </div>,
+        document.body,
       )}
     </div>
   );

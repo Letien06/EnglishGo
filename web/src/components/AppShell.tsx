@@ -67,7 +67,7 @@ export default function AppShell({ children }: { children: ReactNode }) {
             })}
           </nav>
 
-          <div className="flex items-center gap-3">
+          <div className="ml-auto flex items-center gap-3">
             <MobileNavigationMenu />
             <StudyStreakBadge className="hidden sm:inline-flex" />
             <ThemeToggle className="!hidden border border-line bg-surface-soft text-ink md:!inline-flex" />
