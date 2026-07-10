@@ -816,6 +816,7 @@ function cleanDisplayText(value: string | null | undefined): string {
       .replace(/[ \t]+\n/g, "\n")
       .replace(/\n{3,}/g, "\n\n")
       .replace(/[ \t]{2,}/g, " ")
+      .replace(/\s*[|｜]\s*$/, "")
       .trim(),
   );
 }

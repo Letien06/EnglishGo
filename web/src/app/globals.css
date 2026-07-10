@@ -393,6 +393,82 @@ h1, h2, h3, h4, h5 {
   }
 }
 
+.streak-celebration {
+  position: fixed;
+  z-index: 130;
+  top: 5.75rem;
+  right: 1rem;
+  width: min(calc(100vw - 2rem), 330px);
+  overflow: hidden;
+  border: 1px solid color-mix(in srgb, var(--primary) 45%, var(--line));
+  border-radius: 22px;
+  background: linear-gradient(145deg, color-mix(in srgb, var(--surface) 94%, var(--primary) 6%), var(--surface));
+  box-shadow: 0 20px 55px color-mix(in srgb, var(--primary) 22%, transparent), var(--shadow);
+  padding: 1.25rem;
+  text-align: center;
+  animation: streak-celebration-enter 620ms cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+.streak-celebration::before {
+  content: "";
+  position: absolute;
+  inset: -70% 35% auto -35%;
+  height: 150px;
+  transform: rotate(-20deg);
+  background: linear-gradient(90deg, transparent, color-mix(in srgb, var(--gold2) 18%, transparent), transparent);
+  animation: streak-celebration-shine 2.8s ease-in-out infinite;
+  pointer-events: none;
+}
+
+.streak-celebration-close {
+  position: absolute;
+  top: 0.55rem;
+  right: 0.65rem;
+  display: inline-flex;
+  height: 28px;
+  width: 28px;
+  align-items: center;
+  justify-content: center;
+  border: 0;
+  border-radius: 999px;
+  background: transparent;
+  color: var(--muted);
+  font-size: 22px;
+  line-height: 1;
+}
+
+.streak-celebration-close:hover { background: var(--surface-soft); color: var(--ink); }
+
+.streak-celebration-flame {
+  position: relative;
+  display: inline-flex;
+  height: 48px;
+  width: 48px;
+  align-items: center;
+  justify-content: center;
+  border-radius: 16px;
+  background: color-mix(in srgb, var(--primary) 14%, transparent);
+  font-size: 25px;
+  animation: streak-flame-bounce 1.4s ease-in-out infinite;
+}
+
+.streak-celebration-eyebrow { position: relative; margin-top: 0.65rem; color: var(--primary); font-size: 11px; font-weight: 800; letter-spacing: 0.12em; text-transform: uppercase; }
+.streak-celebration-title { position: relative; margin-top: 0.18rem; font-size: 20px; color: var(--ink); }
+.streak-celebration-copy { position: relative; margin-top: 0.45rem; color: var(--muted); font-size: 13px; }
+.streak-celebration-number { position: relative; margin-top: -0.2rem; color: var(--primary); font-family: var(--font-display); font-size: 48px; font-weight: 800; letter-spacing: -0.06em; line-height: 1.15; }
+.streak-celebration-number strong { display: inline-block; animation: streak-number-bounce 720ms cubic-bezier(0.16, 1, 0.3, 1) both; }
+.streak-celebration-number span { color: var(--ink2); font-family: var(--font-body); font-size: 16px; letter-spacing: 0; }
+.streak-celebration-confirm { position: relative; margin-top: 0.8rem; width: 100%; border: 0; border-radius: 12px; background: var(--primary); color: var(--gold-ink); font-size: 14px; font-weight: 800; padding: 0.65rem 1rem; }
+.streak-spark { position: absolute; color: var(--gold2); font-size: 18px; animation: streak-spark 1.8s ease-in-out infinite; }
+.streak-spark-one { top: 1rem; left: 1.2rem; }
+.streak-spark-two { right: 1.55rem; top: 3rem; animation-delay: 0.5s; }
+
+@keyframes streak-celebration-enter { from { opacity: 0; transform: translateY(-18px) scale(0.92); } to { opacity: 1; transform: translateY(0) scale(1); } }
+@keyframes streak-celebration-shine { 0%, 55% { transform: translateX(-110%) rotate(-20deg); } 100% { transform: translateX(310%) rotate(-20deg); } }
+@keyframes streak-flame-bounce { 0%, 100% { transform: translateY(0) rotate(-3deg); } 50% { transform: translateY(-5px) rotate(3deg) scale(1.06); } }
+@keyframes streak-number-bounce { 0% { transform: translateY(18px) scale(0.5); opacity: 0; } 60% { transform: translateY(-5px) scale(1.12); opacity: 1; } 100% { transform: translateY(0) scale(1); } }
+@keyframes streak-spark { 0%, 100% { transform: scale(0.65) rotate(0deg); opacity: 0.35; } 50% { transform: scale(1.15) rotate(45deg); opacity: 1; } }
+
 @media (prefers-reduced-motion: reduce) {
   html {
     scroll-behavior: auto;
@@ -406,7 +482,12 @@ h1, h2, h3, h4, h5 {
 
   .overdelay-progress::before,
   .overdelay-spinner,
-  .app-busy-spinner {
+  .app-busy-spinner,
+  .streak-celebration,
+  .streak-celebration::before,
+  .streak-celebration-flame,
+  .streak-celebration-number strong,
+  .streak-spark {
     animation: none;
   }
 }

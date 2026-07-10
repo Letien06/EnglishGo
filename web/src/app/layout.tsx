@@ -3,6 +3,7 @@ import { Suspense } from "react";
 import { Analytics } from "@vercel/analytics/next";
 import { SpeedInsights } from "@vercel/speed-insights/next";
 import AppOverdelay from "@/components/AppOverdelay";
+import StudyStreakCelebration from "@/components/StudyStreakCelebration";
 import "./globals.css";
 
 const SITE_URL = "https://www.englishgo.io.vn";
@@ -57,6 +58,7 @@ export default function RootLayout({
         <Suspense fallback={null}>
           <AppOverdelay />
         </Suspense>
+        <StudyStreakCelebration />
         {children}
         <Analytics />
         <SpeedInsights />

@@ -6,6 +6,7 @@ const DAILY_SUMMARY_COLLECTION = "dailySummaries";
 const STREAK_LOOKBACK_LIMIT = 500;
 const STUDY_TIME_ZONE = "Asia/Ho_Chi_Minh";
 const SUMMARY_MAX_AGE_MS = 60 * 60 * 1000;
+const STREAK_MILESTONE_STARTERS = new Set([1, 3, 7]);
 
 export type StudyModule = "listening" | "reading" | "practice" | "vocab";
 
@@ -43,6 +44,11 @@ export interface StudyDailySummary {
   moduleCounts: Record<StudyModule, number>;
 }
 
+/** Milestones are 1, 3, 7, then every ten consecutive study days. */
+export function isStudyStreakMilestone(streakDays: number): boolean {
+  return STREAK_MILESTONE_STARTERS.has(streakDays) || (streakDays >= 10 && streakDays % 10 === 0);
+}
+
 export async function recordStudyActivity(
   uid: string,
   input: StudyActivityInput,
@@ -70,6 +76,7 @@ export async function recordStudyActivity(
     const previousStreak = numberValue(userData.studyStreakDays) ?? 0;
     const sameDay = previousDateKey === dateKey;
     const continuedFromYesterday = previousDateKey === addDaysToDateKey(dateKey, -1);
+    const startedNewStreak = !sameDay && !continuedFromYesterday;
     const streakDays = sameDay
       ? Math.max(1, previousStreak)
       : continuedFromYesterday
@@ -136,12 +143,50 @@ export async function recordStudyActivity(
         studyTodayDateKey: dateKey,
         studyStreakUpdatedAtMillis: now,
         lastStudyActivityAtMillis: now,
+        ...(startedNewStreak ? { studyStreakMilestonesSeen: [] } : {}),
         updatedAt: FieldValue.serverTimestamp(),
       },
       { merge: true },
     );
   });
 
+}
+
+/**
+ * Atomically reserves the current milestone so the celebration is shown only
+ * once per streak, even if the learner has the app open in multiple tabs.
+ */
+export async function claimStudyStreakMilestone(uid: string): Promise<number | null> {
+  if (!uid?.trim()) return null;
+
+  const userRef = adminDb.collection("users").doc(uid);
+  const todayKey = dateKeyForMillis(Date.now());
+
+  return adminDb.runTransaction(async (tx) => {
+    const snap = await tx.get(userRef);
+    if (!snap.exists) return null;
+
+    const data = snap.data() ?? {};
+    const streakDays = numberValue(data.studyStreakDays) ?? 0;
+    const studiedToday = data.studyStudiedToday === true && stringValue(data.studyTodayDateKey) === todayKey;
+    if (!studiedToday || !isStudyStreakMilestone(streakDays)) return null;
+
+    const seenMilestones = Array.isArray(data.studyStreakMilestonesSeen)
+      ? data.studyStreakMilestonesSeen.filter((value): value is number => typeof value === "number")
+      : [];
+    if (seenMilestones.includes(streakDays)) return null;
+
+    tx.set(
+      userRef,
+      {
+        studyStreakMilestonesSeen: FieldValue.arrayUnion(streakDays),
+        studyStreakMilestoneLastShownAtMillis: Date.now(),
+        updatedAt: FieldValue.serverTimestamp(),
+      },
+      { merge: true },
+    );
+    return streakDays;
+  });
 }
 
 export async function getTodayStudySummary(uid: string): Promise<StudyDailySummary> {

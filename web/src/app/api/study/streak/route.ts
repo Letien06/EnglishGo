@@ -1,7 +1,11 @@
 import { withErrorHandling } from "@/lib/api/handler";
 import { ok } from "@/lib/api/response";
-import { getCurrentUser } from "@/lib/auth/session";
-import { getStoredStudyStreakSummary, getStudyStreak } from "@/lib/services/study-activity";
+import { getCurrentUser, requireUser } from "@/lib/auth/session";
+import {
+  claimStudyStreakMilestone,
+  getStoredStudyStreakSummary,
+  getStudyStreak,
+} from "@/lib/services/study-activity";
 
 export const GET = withErrorHandling(async () => {
   const user = await getCurrentUser();
@@ -23,4 +27,10 @@ export const GET = withErrorHandling(async () => {
     ...streak,
     authenticated: true,
   });
+});
+
+/** Reserve a newly reached streak milestone for the one-time client celebration. */
+export const POST = withErrorHandling(async () => {
+  const user = await requireUser();
+  return ok(await claimStudyStreakMilestone(user.uid));
 });
