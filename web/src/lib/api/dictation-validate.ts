@@ -30,3 +30,16 @@ export const dictationLessonSchema = z.object({
 });
 
 export const transcriptImportSchema = z.object({ transcript: z.string().min(1).max(300_000) });
+
+const batchSegmentSchema = z.object({
+  startSeconds: z.coerce.number().min(0).max(4 * 60 * 60),
+  endSeconds: z.coerce.number().positive().max(4 * 60 * 60),
+  expectedText: z.string().trim().min(1).max(1_200),
+});
+
+export const dictationBatchImportSchema = z.object({
+  lessons: z.array(dictationLessonSchema.extend({
+    licenseStatus: z.literal("VERIFIED"),
+    segments: z.array(batchSegmentSchema).min(1).max(400),
+  })).min(1).max(8),
+});

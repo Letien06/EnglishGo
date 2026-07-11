@@ -65,6 +65,11 @@ export interface DictationAdminInput {
   rightsEvidenceNote: string;
 }
 
+export interface DictationBatchImportLesson extends DictationAdminInput {
+  licenseStatus: "VERIFIED";
+  segments: Array<{ startSeconds: number; endSeconds: number; expectedText: string }>;
+}
+
 export async function listPublishedLessons(filters: DictationCatalogFilters = {}): Promise<DictationLessonCard[]> {
   const snap = await adminDb.collection(LESSONS).where("status", "==", "PUBLISHED").get();
   return snap.docs
@@ -199,6 +204,60 @@ export async function createDraft(input: DictationAdminInput, uid: string): Prom
   await batch.commit();
   await audit("CREATE_DRAFT", ref.id, uid);
   return lesson;
+}
+
+/**
+ * Imports already-authorized, timestamped transcript data in small admin batches.
+ * Each lesson is committed independently so a long video cannot make the whole batch fail.
+ */
+export async function importPublishedBatch(items: DictationBatchImportLesson[], uid: string): Promise<{ created: DictationLesson[]; skippedYoutubeVideoIds: string[] }> {
+  const created: DictationLesson[] = [];
+  const skippedYoutubeVideoIds: string[] = [];
+  for (const item of items) {
+    const clean = validateAdminInput(item);
+    const duplicate = await adminDb.collection(LESSONS).where("youtubeVideoId", "==", clean.youtubeVideoId).limit(1).get();
+    if (!duplicate.empty) { skippedYoutubeVideoIds.push(clean.youtubeVideoId); continue; }
+
+    const segments = item.segments
+      .map((segment) => ({ startSeconds: Number(segment.startSeconds), endSeconds: Number(segment.endSeconds), expectedText: segment.expectedText.trim() }))
+      .sort((a, b) => a.startSeconds - b.startSeconds);
+    if (segments.some((segment) => !Number.isFinite(segment.startSeconds) || !Number.isFinite(segment.endSeconds) || segment.startSeconds < 0 || segment.endSeconds <= segment.startSeconds || segment.endSeconds > clean.durationSeconds + 2)) throw new ApiError("Invalid batch segment timestamps.");
+
+    const ref = adminDb.collection(LESSONS).doc();
+    const now = Date.now();
+    const wordTotal = segments.reduce((sum, segment) => sum + wordCount(segment.expectedText), 0);
+    const lesson: DictationLesson = {
+      id: ref.id, status: "PUBLISHED", orderIndex: now, title: clean.title, slug: clean.slug,
+      descriptionVi: clean.descriptionVi, sourceName: clean.sourceName, sourceType: clean.sourceType,
+      sourceUrl: clean.sourceUrl, youtubeVideoId: clean.youtubeVideoId,
+      embedUrl: `https://www.youtube-nocookie.com/embed/${clean.youtubeVideoId}`,
+      thumbnailUrl: clean.thumbnailUrl, durationSeconds: clean.durationSeconds, language: "en", accent: null,
+      level: clean.level as DictationLesson["level"], topics: clean.topics, segmentCount: segments.length, wordCount: wordTotal,
+      estimatedWpm: estimateWpm(segments.map((segment) => ({ ...segment, text: segment.expectedText }))), transcriptOrigin: clean.transcriptOrigin, licenseStatus: "VERIFIED",
+      publicAttribution: clean.publicAttribution, rightsId: ref.id, publishedAtMillis: now,
+      createdAtMillis: now, updatedAtMillis: now,
+    };
+    const batch = adminDb.batch();
+    batch.set(ref, { ...lesson, createdByUid: uid, updatedByUid: uid, createdAt: FieldValue.serverTimestamp(), updatedAt: FieldValue.serverTimestamp() });
+    batch.set(adminDb.collection(COLLECTIONS.dictationRights).doc(ref.id), {
+      lessonId: ref.id, licenseType: clean.sourceType, permissionScope: ["YOUTUBE_EMBED", "TRANSCRIPT_DISPLAY", "DICTATION_EXERCISES"],
+      evidenceUrl: null, evidenceNote: clean.rightsEvidenceNote, attributionRequired: true, attributionText: clean.publicAttribution,
+      verifiedByUid: uid, verifiedAtMillis: now, expiresAtMillis: null, reviewStatus: "VERIFIED", updatedAtMillis: now, updatedAt: FieldValue.serverTimestamp(),
+    });
+    segments.forEach((segment, position) => {
+      const id = `s${String(position + 1).padStart(3, "0")}`;
+      batch.set(ref.collection("segments").doc(id), {
+        lessonId: ref.id, index: position + 1, startSeconds: segment.startSeconds, endSeconds: segment.endSeconds,
+        leadInSeconds: 0, tailSeconds: 0, speaker: null, expectedText: segment.expectedText,
+        acceptedNormalizedAnswers: [], translationVi: null, wordCount: wordCount(segment.expectedText), status: "PUBLISHED",
+        createdAtMillis: now, updatedAtMillis: now,
+      });
+    });
+    await batch.commit();
+    await audit("BATCH_IMPORT_PUBLISH", ref.id, uid);
+    created.push(lesson);
+  }
+  return { created, skippedYoutubeVideoIds };
 }
 
 export async function importTranscript(lessonId: string, transcript: string, uid: string): Promise<{ segmentCount: number }> {
