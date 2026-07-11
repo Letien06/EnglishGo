@@ -123,7 +123,7 @@ def write_lesson(db: firestore.Client, video: dict[str, Any], segments: list[dic
         "status": "PUBLISHED",
         "orderIndex": now + position,
         "title": title,
-        "slug": f"kurzgesagt-{video_id.lower()}",
+        "slug": f"kurzgesagt-{re.sub(r'[^a-z0-9-]+', '-', video_id.lower()).strip('-')}",
         "descriptionVi": f"Luyện nghe – chép theo video Kurzgesagt: {title}",
         "sourceName": SOURCE_NAME,
         "sourceType": "PARTNER_PERMISSION",
