@@ -35,6 +35,8 @@ export default function DictationLessonClient({ lesson, initialProgress, isAuthe
   const [isPlaying, setIsPlaying] = useState(false);
   const frameRef = useRef<HTMLIFrameElement | null>(null);
   const stopTimer = useRef<number | null>(null);
+  const activeRef = useRef<DictationLessonView["segments"][number] | null>(null);
+  const stopAtRef = useRef<number | null>(null);
   const active = lesson.segments[index];
   const loadingPrompt = !prompt || prompt.segmentId !== active?.id || prompt.maskPercent !== mask;
   const progressBySegment = useMemo(() => new Map((initialProgress?.segments ?? []).map((item) => [item.segmentId, item])), [initialProgress]);
@@ -45,18 +47,60 @@ export default function DictationLessonClient({ lesson, initialProgress, isAuthe
     frameRef.current?.contentWindow?.postMessage(JSON.stringify({ event: "command", func, args }), "https://www.youtube-nocookie.com");
   }, []);
 
+  const clearStopTimer = useCallback(() => {
+    if (stopTimer.current) window.clearTimeout(stopTimer.current);
+    stopTimer.current = null;
+  }, []);
+
+  const pauseSegment = useCallback(() => {
+    clearStopTimer();
+    playerCommand("pauseVideo");
+    setIsPlaying(false);
+  }, [clearStopTimer, playerCommand]);
+
   const playSegment = useCallback((countReplay = true) => {
     if (!active) return;
-    if (stopTimer.current) window.clearTimeout(stopTimer.current);
-    playerCommand("seekTo", [Math.max(0, active.startSeconds - active.leadInSeconds), true]);
-    playerCommand("playVideo");
+    clearStopTimer();
+    stopAtRef.current = active.endSeconds;
+    // YouTube's native endSeconds stops the player at the segment boundary.
+    playerCommand("loadVideoById", [{ videoId: lesson.youtubeVideoId, startSeconds: active.startSeconds, endSeconds: active.endSeconds }]);
     playerCommand("setPlaybackRate", [rate]);
-    setIsPlaying(true);
-    stopTimer.current = window.setTimeout(() => { playerCommand("pauseVideo"); setIsPlaying(false); }, Math.max(500, (active.endSeconds - active.startSeconds + active.leadInSeconds + active.tailSeconds) * 1000));
     if (countReplay) setReplays((value) => value + 1);
-  }, [active, playerCommand, rate]);
+  }, [active, clearStopTimer, lesson.youtubeVideoId, playerCommand, rate]);
 
-  useEffect(() => () => { if (stopTimer.current) window.clearTimeout(stopTimer.current); }, []);
+  useEffect(() => { activeRef.current = active ?? null; }, [active]);
+  useEffect(() => () => clearStopTimer(), [clearStopTimer]);
+
+  useEffect(() => {
+    const onPlayerMessage = (event: MessageEvent<unknown>) => {
+      if (event.source !== frameRef.current?.contentWindow || !["https://www.youtube-nocookie.com", "https://www.youtube.com"].includes(event.origin)) return;
+      let data: { event?: string; info?: unknown } | null = null;
+      try { data = typeof event.data === "string" ? JSON.parse(event.data) : event.data as { event?: string; info?: unknown }; } catch { return; }
+      if (!data) return;
+      if (data.event === "onStateChange") {
+        if (data.info === 1) {
+          const segment = activeRef.current;
+          if (!segment) return;
+          clearStopTimer();
+          // Fallback for a player that does not honour endSeconds (for example after buffering).
+          stopTimer.current = window.setTimeout(pauseSegment, Math.ceil(((segment.endSeconds - segment.startSeconds) / rate) * 1000) + 350);
+          setIsPlaying(true);
+        } else if (data.info === 0 || data.info === 2) {
+          clearStopTimer();
+          setIsPlaying(false);
+        }
+      }
+      const currentTime = (data.info as { currentTime?: unknown } | undefined)?.currentTime;
+      if (data.event === "infoDelivery" && typeof currentTime === "number" && stopAtRef.current !== null && currentTime >= stopAtRef.current - 0.05) pauseSegment();
+    };
+    window.addEventListener("message", onPlayerMessage);
+    return () => window.removeEventListener("message", onPlayerMessage);
+  }, [clearStopTimer, pauseSegment, rate]);
+
+  const initialisePlayer = useCallback(() => {
+    playerCommand("addEventListener", ["onStateChange"]);
+    playerCommand("setOption", ["captions", "track", {}]);
+  }, [playerCommand]);
 
   useEffect(() => {
     if (!active) return;
@@ -73,10 +117,10 @@ export default function DictationLessonClient({ lesson, initialProgress, isAuthe
     if (!isAuthenticated) localStorage.setItem(key, JSON.stringify({ index, mask, completedIds: [...completedIds], masteredIds: [...masteredIds] }));
   }, [completedIds, index, isAuthenticated, lesson.id, mask, masteredIds]);
 
-  const goTo = useCallback((next: number) => { setIndex(Math.max(0, Math.min(lesson.segments.length - 1, next))); setResult(null); setBlankAnswers({}); setFullAnswer(""); setHints(0); setReplays(0); }, [lesson.segments.length]);
+  const goTo = useCallback((next: number) => { pauseSegment(); setIndex(Math.max(0, Math.min(lesson.segments.length - 1, next))); setResult(null); setBlankAnswers({}); setFullAnswer(""); setHints(0); setReplays(0); }, [lesson.segments.length, pauseSegment]);
   const changeMask = useCallback((next: Mask) => { setMask(next); setResult(null); setBlankAnswers({}); setFullAnswer(""); setHints(0); }, []);
-  const togglePlayback = useCallback(() => { if (isPlaying) { if (stopTimer.current) window.clearTimeout(stopTimer.current); playerCommand("pauseVideo"); setIsPlaying(false); } else playSegment(); }, [isPlaying, playSegment, playerCommand]);
-  const rewindSegment = useCallback(() => { if (!active) return; playerCommand("seekTo", [Math.max(0, active.startSeconds - active.leadInSeconds - 3), true]); }, [active, playerCommand]);
+  const togglePlayback = useCallback(() => { if (isPlaying) pauseSegment(); else playSegment(); }, [isPlaying, pauseSegment, playSegment]);
+  const rewindSegment = useCallback(() => { if (!active) return; playerCommand("seekTo", [Math.max(active.startSeconds, active.startSeconds - 3), true]); }, [active, playerCommand]);
 
   useEffect(() => {
     const handler = (event: KeyboardEvent) => {
@@ -122,8 +166,8 @@ export default function DictationLessonClient({ lesson, initialProgress, isAuthe
     <section className="mx-auto max-w-7xl">
       <header className="mb-4 flex flex-wrap items-center gap-3"><Link href="/listen/dictation" className="rounded-xl border border-line bg-white px-3 py-2 text-sm font-bold text-ink no-underline">← Thư viện</Link><span className="rounded-full bg-primary/10 px-3 py-1 text-xs font-extrabold text-primary">{lesson.level}</span><p className="min-w-0 flex-1 truncate text-sm font-bold text-muted">{lesson.sourceName}</p><a href={lesson.sourceUrl} target="_blank" rel="noreferrer" className="text-sm font-bold text-primary">Video gốc ↗</a></header>
       <div className="grid gap-5 lg:grid-cols-[minmax(0,1fr)_320px]">
-        <section className="space-y-5"><article className="overflow-hidden rounded-2xl bg-black shadow-lg"><div className="aspect-video"><iframe ref={frameRef} title={lesson.title} className="h-full w-full" src={`${lesson.embedUrl}?enablejsapi=1&playsinline=1&rel=0`} allow="autoplay; encrypted-media; picture-in-picture" allowFullScreen /></div></article>
-          <article className="rounded-2xl bg-white p-5 shadow-sm sm:p-6"><div className="flex flex-wrap items-center justify-between gap-3"><div><p className="text-xs font-extrabold uppercase tracking-wide text-primary">Đoạn {active.index}/{lesson.segments.length}</p><h1 className="text-xl font-extrabold text-ink">{lesson.title}</h1>{active.speaker && <p className="text-sm text-muted">{active.speaker}</p>}</div><div className="flex gap-2"><button type="button" onClick={togglePlayback} className="rounded-xl bg-primary px-4 py-2 text-sm font-extrabold text-gold-ink">{isPlaying ? "❚❚ Dừng" : "▶ Nghe"}</button><button type="button" onClick={rewindSegment} className="rounded-xl border border-line px-3 py-2 text-sm font-bold text-ink">↶ 3s</button><select value={rate} onChange={(event) => { const next = Number(event.target.value); setRate(next); playerCommand("setPlaybackRate", [next]); }} className="rounded-xl border border-line px-3 text-sm font-bold"><option value={0.75}>0.75x</option><option value={1}>1x</option><option value={1.25}>1.25x</option></select></div></div>
+        <section className="space-y-5"><article className="overflow-hidden rounded-2xl bg-black shadow-lg"><div className="aspect-video"><iframe ref={frameRef} onLoad={initialisePlayer} title={lesson.title} className="h-full w-full" src={`${lesson.embedUrl}?enablejsapi=1&playsinline=1&rel=0&controls=0&disablekb=1&fs=0&cc_load_policy=0&iv_load_policy=3`} allow="autoplay; encrypted-media; picture-in-picture" /></div></article>
+          <article className="rounded-2xl bg-white p-5 shadow-sm sm:p-6"><div className="flex flex-wrap items-center justify-between gap-3"><div><p className="text-xs font-extrabold uppercase tracking-wide text-primary">Đoạn {active.index}/{lesson.segments.length}</p><h1 className="text-xl font-extrabold text-ink">{lesson.title}</h1><p className="mt-1 text-sm font-semibold text-muted">{formatTime(active.startSeconds)} – {formatTime(active.endSeconds)} · Video tự dừng khi hết đoạn</p>{active.speaker && <p className="text-sm text-muted">{active.speaker}</p>}</div><div className="flex gap-2"><button type="button" onClick={togglePlayback} className="rounded-xl bg-primary px-4 py-2 text-sm font-extrabold text-gold-ink">{isPlaying ? "❚❚ Dừng" : "▶ Nghe"}</button><button type="button" onClick={rewindSegment} className="rounded-xl border border-line px-3 py-2 text-sm font-bold text-ink">↶ Đầu đoạn</button><select value={rate} onChange={(event) => { const next = Number(event.target.value); setRate(next); playerCommand("setPlaybackRate", [next]); }} className="rounded-xl border border-line px-3 text-sm font-bold"><option value={0.75}>0.75x</option><option value={1}>1x</option><option value={1.25}>1.25x</option></select></div></div>
             <div className="mt-5 flex flex-wrap gap-2" aria-label="Mức che">{([30, 50, 100] as Mask[]).map((value) => <button key={value} type="button" onClick={() => changeMask(value)} className={`rounded-lg px-3 py-2 text-sm font-extrabold ${mask === value ? "bg-cyan-600 text-white" : "bg-slate-100 text-ink"}`}>Che {value}%</button>)}</div>
             <div className="mt-5 rounded-xl border border-line bg-slate-50 p-4">{loadingPrompt ? <p className="text-muted">Đang chuẩn bị câu nghe...</p> : prompt?.inputMode === "FULL_TEXT" ? <textarea value={fullAnswer} onChange={(event) => setFullAnswer(event.target.value)} onKeyDown={(event) => { if (event.key === "Enter" && !event.shiftKey) { event.preventDefault(); submit(); } }} placeholder="Nghe và gõ toàn bộ câu..." rows={4} className="w-full resize-y rounded-xl border border-slate-300 bg-white p-3 text-base outline-none focus:ring-2 focus:ring-cyan-500" autoFocus /> : <div className="flex flex-wrap items-center gap-x-1 gap-y-3">{prompt?.prompt.map((token, tokenIndex) => token.kind === "blank" ? <input key={token.blankId} value={blankAnswers[token.blankId] ?? ""} onChange={(event) => setBlankAnswers((value) => ({ ...value, [token.blankId]: event.target.value.replace(/^_+/, "") }))} onKeyDown={(event) => { if (event.key === "Enter") { event.preventDefault(); submit(); } }} style={{ width: `${Math.max(72, token.length * 12)}px` }} className="h-9 rounded-lg border border-cyan-300 bg-white px-2 text-center outline-none focus:ring-2 focus:ring-cyan-500" aria-label="Điền từ còn thiếu" /> : <span key={`${token.kind}-${tokenIndex}`} className={token.kind === "text" ? "font-semibold text-ink" : "whitespace-pre-wrap"}>{token.value}</span>)}</div>}</div>
             <div className="mt-4 flex flex-wrap items-center gap-3"><button type="button" onClick={submit} disabled={submitting || loadingPrompt} className="rounded-xl bg-ink px-5 py-2.5 text-sm font-extrabold text-white disabled:opacity-50">{submitting ? "Đang chấm..." : "Kiểm tra (Enter)"}</button>{mask !== 100 && <button type="button" onClick={showHint} className="rounded-xl border border-line px-4 py-2.5 text-sm font-bold text-ink">Gợi ý</button>}<button type="button" onClick={() => setAutoNext((value) => !value)} className={`rounded-xl border px-4 py-2.5 text-sm font-bold ${autoNext ? "border-cyan-500 bg-cyan-50 text-cyan-800" : "border-line text-ink"}`}>Tự động tiếp: {autoNext ? "Bật" : "Tắt"}</button>{completed && <span className="text-sm font-bold text-emerald-700">✓ Đã hoàn thành</span>}</div>
@@ -138,5 +182,5 @@ export default function DictationLessonClient({ lesson, initialProgress, isAuthe
   </main>;
 }
 
-function Feedback({ result, onNext }: { result: DictationAttemptResult; onNext: () => void }) { return <div className={`mt-5 rounded-xl border p-4 ${result.isCompleted ? "border-emerald-200 bg-emerald-50" : "border-amber-200 bg-amber-50"}`}><p className="font-extrabold text-ink">{result.isCompleted ? "Chính xác!" : `Bạn đạt ${result.scorePercent}%`}{result.isMastered && " · Đã thành thạo"}</p><p className="mt-2 whitespace-pre-wrap text-sm text-ink"><b>Đáp án:</b> {result.expectedText}</p><div className="mt-3 flex flex-wrap gap-2">{result.feedbackTokens.map((token, index) => <span key={`${token.value}-${index}`} className={`rounded-md px-2 py-1 text-xs font-bold ${token.state === "CORRECT" ? "bg-emerald-200 text-emerald-900" : token.state === "MISSING" ? "bg-amber-200 text-amber-900" : "bg-red-200 text-red-900"}`}>{token.value}</span>)}</div><button type="button" onClick={onNext} className="mt-4 rounded-lg bg-ink px-4 py-2 text-sm font-bold text-white">Câu tiếp theo →</button></div>; }
+function Feedback({ result, onNext }: { result: DictationAttemptResult; onNext: () => void }) { return <div className={`mt-5 rounded-xl border p-4 ${result.isCompleted ? "border-emerald-200 bg-emerald-50" : "border-amber-200 bg-amber-50"}`}><p className="font-extrabold text-ink">{result.isCompleted ? "Chính xác!" : `Bạn đạt ${result.scorePercent}%`}{result.isMastered && " · Đã thành thạo"}</p><p className="mt-2 whitespace-pre-wrap text-sm text-ink"><b>Đáp án:</b> {result.expectedText}</p><div className="mt-3 flex flex-wrap gap-2">{result.feedbackTokens.map((token, index) => <span key={`${token.value}-${index}`} className={`rounded-md px-2 py-1 text-xs font-bold ${token.state === "CORRECT" ? "bg-emerald-200 text-emerald-900" : token.state === "MISSING" ? "bg-amber-200 text-amber-900" : "bg-red-200 text-red-900"}`}>{token.value}</span>)}</div>{result.isCompleted ? <button type="button" onClick={onNext} className="mt-4 rounded-lg bg-ink px-4 py-2 text-sm font-bold text-white">Câu tiếp theo →</button> : <p className="mt-4 text-sm font-bold text-amber-900">Nghe lại và sửa đáp án để mở đoạn tiếp theo.</p>}</div>; }
 function formatTime(seconds: number) { const minutes = Math.floor(seconds / 60); return `${minutes}:${String(Math.floor(seconds % 60)).padStart(2, "0")}`; }

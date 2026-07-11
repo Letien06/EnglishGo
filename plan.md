@@ -850,9 +850,10 @@ web/src/app/(app)/admin/dictation/...
 
 YouTube:
 
-- Dung YouTube IFrame Player API de `loadVideoById`, `seekTo(startSeconds)`, play/pause va dat playback rate.
-- Client tu theo doi `currentTime`; khi dat `endSeconds` thi pause. Segment bat dau som hon 0.35-0.5 giay va ket thuc muon hon 0.25-0.5 giay de nguoi hoc khong bi cat am qua sat.
-- Native captions phai de off trong player; transcript/hint chi hien theo state cua bai hoc.
+- Dung YouTube IFrame Player API `loadVideoById({ videoId, startSeconds, endSeconds })` de phat dung bien cua doan. `endSeconds` cua native player la guard chinh; client nghe `onStateChange`/`infoDelivery` va co timer fallback de luon pause tai `endSeconds`.
+- Khong dung lead-in/tail cho che do nghe-chep mac dinh: doan `0:00-0:18` chi phat tu `0:00` den `0:18`, roi dung cho nguoi hoc nhap va cham dap an. Admin chi sua bien segment khi transcript can them ngu canh.
+- Iframe dung `controls=0`, `disablekb=1`, `cc_load_policy=0`, `iv_load_policy=3`; client dat captions track rong. Nhu vay khong hien nut CC hay phu de YouTube trong man nghe-chep; transcript/hint chi hien theo state cua bai hoc.
+- Nut `Cau tiep theo` chi hien sau attempt dat yeu cau. Tuy chon `Tu dong tiep` neu bat se chuyen sau khi dung; nguoi hoc van co the chon doan cu trong danh sach de on lai.
 - Neu video khong embed duoc, bi xoa hoac unavailable: hien thong bao, link mo video goc va bao loi cho admin; khong lam trang hoc crash.
 - Khong dung YouTube Captions API de tai subtitle cua video cua ben khac.
 
