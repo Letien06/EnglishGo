@@ -137,6 +137,27 @@ export async function submitAttempt(
   };
 }
 
+/** Checks one blank without storing progress or revealing any expected answer. */
+export async function checkBlankAnswer(lessonId: string, segmentId: string, input: { maskPercent: number; blankId: string; answer: string }) {
+  const mask = validateMask(input.maskPercent);
+  if (mask === 100) throw new ApiError("Blank checks are only available for masked prompts.");
+  await requirePublishedLesson(lessonId);
+  const segment = await getSegment(lessonId, segmentId);
+  const prompt = buildPrompt(segment.id, segment.expectedText, mask);
+  const blanks = prompt.prompt.filter((token): token is Extract<typeof token, { kind: "blank" }> => token.kind === "blank");
+  const blankIndex = blanks.findIndex((blank) => blank.blankId === input.blankId);
+  if (blankIndex < 0) throw new ApiError("Blank does not belong to this prompt.");
+  const result = gradeDictationAttempt({
+    segmentId,
+    expectedText: segment.expectedText,
+    acceptedNormalizedAnswers: [],
+    maskPercent: mask,
+    blankAnswers: { [input.blankId]: input.answer },
+    fullAnswer: null,
+  });
+  return { blankId: input.blankId, state: result.feedbackTokens[blankIndex]?.state ?? "MISSING" };
+}
+
 export async function getUserLessonProgress(uid: string, lessonId: string): Promise<{ summary: DictationProgressSummary | null; segments: DictationSegmentProgress[] }> {
   const summaryRef = userLessonRef(uid, lessonId);
   const [summarySnap, segmentsSnap] = await Promise.all([summaryRef.get(), summaryRef.collection("segments").get()]);

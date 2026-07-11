@@ -11,6 +11,12 @@ export const dictationAttemptSchema = z.object({
   elapsedSeconds: z.coerce.number().int().min(0).max(3600).default(0),
 });
 
+export const dictationBlankCheckSchema = z.object({
+  maskPercent: z.coerce.number().pipe(mask).refine((value) => value !== 100, "Blank checks are only available for masked prompts."),
+  blankId: z.string().regex(/^b\d{2,3}$/),
+  answer: z.string().max(120).default(""),
+});
+
 export const dictationLessonSchema = z.object({
   title: z.string().trim().min(1).max(180),
   slug: z.string().trim().min(1).max(120).regex(/^[a-z0-9-]+$/),
