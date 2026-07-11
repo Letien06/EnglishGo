@@ -775,6 +775,611 @@ npm run build
 npm run test:e2e
 ```
 
+## 25. Nghe-chep video (Dictation) - dac ta san pham va ke hoach trien khai
+
+### 25.1 Quyet dinh da chot
+
+- EnglishWebApp la web **mien phi hoan toan** cho hoc sinh/sinh vien: khong goi tra phi, khong quang cao, khong ban du lieu hay noi dung.
+- Them mot muc doc lap ten **Nghe-chep** vao sidebar cua `/listen`, dat **ngay sau Part 4**.
+- Nghe-chep khong phai la mot bien the cua TOEIC Part 3. Part 1-4 va route `/listen/practice` giu nguyen, tiep tuc dung du lieu DauToeic.
+- Nghe-chep dung video co quyen su dung ro rang (vi du: Kurzgesagt da cap quyen; VOA; NASA; video CC BY da duoc kiem tra). Video la nguon nghe, con bai tap la transcript da duoc phep dung va tach thanh doan nho.
+- MVP chi ho tro video YouTube embed. Khong tai video YouTube ve server, khong scrape transcript/caption cua video bat ky.
+- Transcript chi duoc nhap tu file/nguon ma chu so huu da cho phep (SRT, VTT, transcript trang nguon, hoac ASR tren media ma app da co quyen dung).
+
+Phan biet ro "mien phi" va "duoc phep dung": web khong thu phi giup mo rong nguon co dieu khoan non-commercial, nhung moi lesson van phai co license/permission duoc luu va kiem tra rieng. Khong dua content vao app chi vi video co the embed tren YouTube.
+
+### 25.2 Muc tieu, pham vi MVP va cac non-goal
+
+Muc tieu MVP:
+
+1. Hoc vien chon mot video theo trinh do, chu de, thoi luong va nguon.
+2. Video duoc chia thanh cac doan nghe 8-18 giay; hoc vien nghe mot doan, dien/chep, nhan feedback va sang doan ke tiep.
+3. Co ba muc do: che 30%, che 50%, che 100% (full dictation).
+4. Dang nhap thi luu tien do, hoc tiep dung doan dang do; khach van hoc duoc nhung chi luu tam trong trinh duyet.
+5. Admin co the them video, transcript, mốc thoi gian va bang chung quyen dung ma khong can deploy code.
+
+Non-goal cua MVP:
+
+- Khong tu dong nhan link YouTube bat ky cua nguoi dung va lay transcript.
+- Khong tao toan bo transcript bang AI tai runtime.
+- Khong lam chuc nang ghi am/shadowing, dich AI, vocab basket, favorite, BXH ngay trong dot dau. Schema va UI phai de mo de them sau.
+- Khong gan diem TOEIC hay dua ket qua Dictation vao BXH chung. Day la luyen tap ky nang, khong phai bai thi.
+
+Quy uoc thuat ngu:
+
+- `muc che` = phan tram tu se bi an. 30% la de nhat (hien 70% noi dung); 100% la phai go toan bo doan.
+- `completed` = hoc vien dat 100% o bat ky muc che.
+- `mastered` = hoc vien dat 100% o muc che 100%, khong dung hint.
+- `segment` = mot doan audio co start/end/timecode va dap an; `lesson` = mot video gom nhieu segment.
+
+### 25.3 Kien truc va route
+
+Khong sua de nhet data Dictation vao `ListenPracticeClient`: component hien tai phu thuoc `DauToeicDifficultySession`, nhom cau hoi A/B/C/D, audio MP3 va progress theo question. Dictation co video, transcript va dap an text nen can service/UI rieng.
+
+Route de xuat:
+
+```text
+/listen?part=part1..part4             # giu nguyen TOEIC dashboard hien tai
+/listen/dictation                     # thu vien Nghe-chep
+/listen/dictation/[lessonId]          # man hoc mot video
+
+/api/dictation/lessons                # GET catalog da publish, co filter/cursor
+/api/dictation/lessons/[lessonId]     # GET metadata lesson + progress, khong tra transcript day du
+/api/dictation/lessons/[lessonId]/segments/[segmentId]/prompt
+/api/dictation/lessons/[lessonId]/segments/[segmentId]/attempt
+/api/dictation/lessons/[lessonId]/progress
+/api/admin/dictation/lessons          # CRUD, admin only
+/api/admin/dictation/lessons/[lessonId]/import-transcript
+/api/admin/dictation/lessons/[lessonId]/publish
+```
+
+File/module du kien:
+
+```text
+web/src/types/dictation.ts
+web/src/lib/services/dictation.ts
+web/src/lib/services/dictation-grading.ts
+web/src/lib/parsers/transcript.ts
+web/src/app/(app)/listen/dictation/page.tsx
+web/src/app/(app)/listen/dictation/DictationLibraryClient.tsx
+web/src/app/(app)/listen/dictation/[lessonId]/page.tsx
+web/src/app/(app)/listen/dictation/[lessonId]/DictationLessonClient.tsx
+web/src/app/api/dictation/...
+web/src/app/(app)/admin/dictation/...
+```
+
+YouTube:
+
+- Dung YouTube IFrame Player API de `loadVideoById`, `seekTo(startSeconds)`, play/pause va dat playback rate.
+- Client tu theo doi `currentTime`; khi dat `endSeconds` thi pause. Segment bat dau som hon 0.35-0.5 giay va ket thuc muon hon 0.25-0.5 giay de nguoi hoc khong bi cat am qua sat.
+- Native captions phai de off trong player; transcript/hint chi hien theo state cua bai hoc.
+- Neu video khong embed duoc, bi xoa hoac unavailable: hien thong bao, link mo video goc va bao loi cho admin; khong lam trang hoc crash.
+- Khong dung YouTube Captions API de tai subtitle cua video cua ben khac.
+
+### 25.4 UI thu vien `/listen/dictation` da chot
+
+Vi tri sidebar trong `src/app/(app)/listen/page.tsx`:
+
+```text
+Part 1: Hinh anh
+Part 2: Hoi - Dap
+Part 3: Hoi thoai ngan
+Part 4: Doc thoai
+Nghe-chep                         <- moi
+```
+
+Desktop wireframe:
+
+```text
+Breadcrumb: Ky nang Nghe / Nghe-chep
+H1: Luyen nghe - chep theo video
+Subcopy: Nghe tung doan ngan, tu de den full dictation.
+
+[ Hoc tiep: thumbnail | ten video | B2 | 14/42 doan | Nut Hoc tiep ]
+
+[ Tim bai hoc........................................................ ]
+[ Tat ca cap do v ] [ Tat ca chu de v ] [ Thoi luong v ] [ Nguon v ]
+
+Noi bat
+[card] [card] [card] [card]
+
+Daily English
+[card] [card] [card] [Xem them]
+
+Science & Technology
+[card] [card] [card] [Xem them]
+```
+
+Thu tu uu tien tren mobile:
+
+1. Nut `Hoc tiep` neu co progress.
+2. Thanh tim kiem va filter dang bottom sheet.
+3. Card dang 1 cot; khong dung carousel ngang bat buoc keo.
+4. Moi category hien toi da 4 card va nut `Xem tat ca`.
+
+Card lesson bat buoc co:
+
+- thumbnail theo URL duoc phep dung;
+- badge CEFR: A2/B1/B2/C1;
+- tieu de toi da 2 dong;
+- `Nguon · thoi luong · N doan` (vi du: `Kurzgesagt · 13 phut · 51 doan`);
+- topic; trang thai `Chua bat dau`, `Dang hoc 14/51`, hoac `Da thanh thao`;
+- attribution nho va clickable link den video goc;
+- khong dung logo cua nguon neu license/permission khong cap quyen dung logo.
+
+Filter da chot:
+
+- Cap do: A2, B1, B2, C1. Khong tao category A1 cho video dai o MVP.
+- Chu de: Daily English, Work & Business, Science & Technology, Space, News & Culture.
+- Thoi luong: duoi 5 phut, 5-10 phut, tren 10 phut.
+- Nguon: Kurzgesagt, VOA Learning English, NASA, CC BY, doi tac khac.
+- Sort: De xuat, Moi nhat, Ngan nhat, Hoc tiep.
+
+Quy tac gan level:
+
+- Level khong chi dua vao ten kenh. Admin gan level sau khi xem toc do noi (WPM), do dai cau, mat do tu vung va do phuc tap cua transcript.
+- Kurzgesagt mac dinh B2/C1; VOA Learning English thuong A2/B1; NASA thuong B2/C1. Tung lesson van co the duoc gan level khac neu noi dung phu hop.
+
+### 25.5 UI man hoc `/listen/dictation/[lessonId]` da chot
+
+Desktop wireframe:
+
+```text
+< Quay lai    [Nguon: Kurzgesagt]  The Most ...       [B2] [Toc do 1x]
+
+---------------------------------------------------+----------------------
+| YouTube player                                   |  Tien do 14 / 51     |
+|                                                   |  o #14 Dang hoc      |
+| [Nghe lai] [Lui 3s] [0.75x 1x 1.25x]             |  o #15 Chua hoc      |
+|                                                   |  o #16 Chua hoc      |
+---------------------------------------------------+----------------------
+| #14  03:12 - 03:25       Muc che: [30%] [50%] [100%]                    |
+| [The scientists ________ .........................................]     |
+| [Hint] [Nghe lai]                                      [Kiem tra / Enter]|
+| Feedback: dung / thieu / sai / du                                          |
+| [Cau truoc]                                            [Cau tiep theo]     |
+---------------------------------------------------+----------------------
+```
+
+Mobile:
+
+- Player nam tren cung; sticky thanh action nho gom `Nghe lai`, toc do va chi so `14/51`.
+- Danh sach segment mo trong bottom sheet qua nut `Danh sach doan`; khong chiem man hinh thuong truc.
+- O nhap va nut kiem tra nam trong vung de cham bang ngon tay, khong bi keyboard che.
+
+Luot hoc cua mot segment:
+
+1. Nguoi hoc chon segment hoac vao `Hoc tiep`.
+2. Player seek den start, phat va dung tai end. Khong hien transcript day du.
+3. UI lay prompt tu server theo muc che dang chon.
+4. Hoc vien go phan bi an (30/50) hoac ca doan (100), bam Enter/`Kiem tra`.
+5. Server cham, luu progress neu da dang nhap va tra feedback theo token.
+6. UI hien tu dung mau xanh, tu thieu mau vang, tu sai/du mau do; sau feedback hien dap an day du va nut `Nghe lai`.
+7. Neu dung: mo nut `Cau tiep theo`; neu bat `Tu dong tiep`, chuyen sau 700-1000ms. Neu sai: cho phep nghe lai va lam lai khong gioi han.
+8. Ket thuc video: hien tong ket so segment completed/mastered, segment can on, nut `On cau sai` va `Ve thu vien`.
+
+Phim tat desktop:
+
+- `Space`: play/pause segment.
+- `R`: nghe lai segment.
+- `Enter`: kiem tra; sau feedback la sang cau tiep theo.
+- `ArrowLeft` / `ArrowRight`: cau truoc / cau sau khi focus khong nam trong input.
+- `1`, `2`, `3`: chon muc che 30/50/100 neu khong dang go.
+
+Quy tac muc che:
+
+- 30%: an `ceil(30% * so-tu-hop-le)`, uu tien cum tu mang nghia va phan bo deu; khong an toan bo mot cau o lesson moi.
+- 50%: an 50% tu, bao gom cum tu, contractions va tu noi quan trong.
+- 100%: khong gui transcript hien thi; dung mot o textarea de go ca segment.
+- Vi tri tu an phai deterministic theo `segmentId + maskPercent`; reload, mobile va desktop luon nhin cung mot prompt.
+- `Hint`: goi y chu cai dau cua mot blank. Dung hint van co the completed, nhung khong du dieu kien mastered.
+
+Cham dap an:
+
+- Bo qua upper/lower case, khoang trang du, Unicode quote va dau cau khong anh huong nghia.
+- Khong tu dong coi moi cach viet khac la dung. Dung `acceptedNormalizedAnswers` duoc admin duyet cho cach viet hop le (vi du contraction/expanded form neu muon chap nhan).
+- 30/50 cham cac blank; 100 cham toan bo chuoi token.
+- Ket qua gom `correctTokenCount`, `expectedTokenCount`, `scorePercent`, `feedbackTokens` va `expectedText` chi sau luc submit.
+- `completed`: score 100%. `mastered`: score 100%, mask 100, `hintCount = 0`.
+
+### 25.6 Firestore schema da chot
+
+Them collection constants vao `web/src/lib/firestore/collections.ts`:
+
+```ts
+dictationLessons: "dictationLessons",
+dictationRights: "dictationRights",
+```
+
+#### A. Lesson public
+
+```text
+dictationLessons/{lessonId}
+```
+
+```json
+{
+  "status": "PUBLISHED",
+  "orderIndex": 100,
+  "title": "The Most Insane Megaproject You Never Heard About",
+  "slug": "most-insane-megaproject",
+  "descriptionVi": "...",
+  "sourceName": "Kurzgesagt - In a Nutshell",
+  "sourceType": "PARTNER_PERMISSION",
+  "sourceUrl": "https://www.youtube.com/watch?v=...",
+  "youtubeVideoId": "...",
+  "embedUrl": "https://www.youtube-nocookie.com/embed/...",
+  "thumbnailUrl": "https://...",
+  "durationSeconds": 786,
+  "language": "en",
+  "accent": "US",
+  "level": "B2",
+  "topics": ["SCIENCE_TECHNOLOGY"],
+  "segmentCount": 51,
+  "wordCount": 1548,
+  "estimatedWpm": 142,
+  "transcriptOrigin": "RIGHTS_HOLDER_FILE",
+  "licenseStatus": "VERIFIED",
+  "publicAttribution": "Video by Kurzgesagt - In a Nutshell. Used with permission.",
+  "rightsId": "dictationRights/{lessonId}",
+  "publishedAtMillis": 0,
+  "createdAtMillis": 0,
+  "updatedAtMillis": 0,
+  "createdByUid": "...",
+  "updatedByUid": "..."
+}
+```
+
+Trang thu vien chi query `status = PUBLISHED`. Khong dat transcript day du trong document lesson: tranh tai document lon va tranh lo dap an khi chi load catalog.
+
+`status`: `DRAFT | REVIEW | PUBLISHED | ARCHIVED`.
+
+`sourceType`: `PARTNER_PERMISSION | CC_BY | PUBLIC_DOMAIN | NC_LICENSE | OTHER_LICENSE`.
+
+#### B. Segment public co dap an chi server doc
+
+```text
+dictationLessons/{lessonId}/segments/{segmentId}
+```
+
+ID nen on dinh: `s001`, `s002`, ... . Schema:
+
+```json
+{
+  "lessonId": "...",
+  "index": 1,
+  "startSeconds": 12.4,
+  "endSeconds": 24.1,
+  "leadInSeconds": 0.4,
+  "tailSeconds": 0.3,
+  "speaker": "Narrator",
+  "expectedText": "...",
+  "acceptedNormalizedAnswers": ["..."],
+  "translationVi": null,
+  "wordCount": 15,
+  "status": "PUBLISHED",
+  "createdAtMillis": 0,
+  "updatedAtMillis": 0
+}
+```
+
+`expectedText` phai chi duoc doc boi Admin SDK/service. Public API lesson khong duoc tra field nay truoc luc submit. Firestore client rules co the cho phep doc segment metadata neu can, nhung front-end hien tai dung server route; uu tien tra DTO da loc field (`id`, `index`, start/end, wordCount, speaker, status).
+
+#### C. Bang chung quyen dung (private)
+
+```text
+dictationRights/{lessonId}
+```
+
+```json
+{
+  "lessonId": "...",
+  "licenseType": "PARTNER_PERMISSION",
+  "permissionScope": ["YOUTUBE_EMBED", "TRANSCRIPT_DISPLAY", "DICTATION_EXERCISES"],
+  "evidenceUrl": "private-admin-only URL or asset reference",
+  "evidenceNote": "Email confirmation on ...",
+  "attributionRequired": true,
+  "attributionText": "...",
+  "verifiedByUid": "...",
+  "verifiedAtMillis": 0,
+  "expiresAtMillis": null,
+  "reviewStatus": "VERIFIED"
+}
+```
+
+Khong dung `mediaAssets` hien tai de luu email/contract quyen dung vi collection do dang public read. `dictationRights` mac dinh khong co Firestore client rule read/write; chi Admin SDK va admin API duoc truy cap.
+
+#### D. Progress user
+
+```text
+users/{uid}/dictationLessonProgress/{lessonId}
+users/{uid}/dictationLessonProgress/{lessonId}/segments/{segmentId}
+```
+
+Summary document:
+
+```json
+{
+  "lessonId": "...",
+  "lessonTitleSnapshot": "...",
+  "sourceNameSnapshot": "...",
+  "levelSnapshot": "B2",
+  "segmentCountSnapshot": 51,
+  "completedCount": 14,
+  "masteredCount": 4,
+  "lastSegmentIndex": 15,
+  "lastMaskPercent": 50,
+  "startedAtMillis": 0,
+  "lastStudiedAtMillis": 0,
+  "completedAtMillis": null,
+  "updatedAtMillis": 0
+}
+```
+
+Segment progress document:
+
+```json
+{
+  "lessonId": "...",
+  "segmentId": "s015",
+  "segmentIndex": 15,
+  "attemptCount": 3,
+  "replayCount": 5,
+  "hintCount": 1,
+  "lastMaskPercent": 50,
+  "highestPassedMaskPercent": 50,
+  "lastScorePercent": 100,
+  "lastAnswer": "...",
+  "completedAtMillis": 0,
+  "masteredAtMillis": null,
+  "lastStudiedAtMillis": 0,
+  "updatedAtMillis": 0
+}
+```
+
+Chi luu `lastAnswer`, khong luu toan bo lich su go tung phim. Neu sau nay can analytics sau, them collection server-only `dictationAttemptEvents`, co TTL, khong can lam MVP.
+
+Guest flow dung `localStorage` key `englishweb:dictation-progress:v1`. Luu toi da summary va progress cua vai lesson gan nhat; khi user dang nhap, khong tu dong merge ma co nut `Luu tien do tren thiet bi nay` de tranh ghi de ket qua server.
+
+#### E. Firestore rules va indexes
+
+Rules can them/sua:
+
+```text
+dictationLessons/{lessonId}
+  read: chi neu status == PUBLISHED
+  write: false
+
+dictationLessons/{lessonId}/segments/{segmentId}
+  read: chi neu lesson cha PUBLISHED
+  write: false
+
+dictationRights/{lessonId}
+  read/write: false
+
+users/{uid}/dictationLessonProgress/{lessonId}
+users/{uid}/dictationLessonProgress/{lessonId}/segments/{segmentId}
+  client write: false; server route dung Admin SDK ghi
+```
+
+Cap nhat generic user-subcollection rule de no khong vo tinh cho client tu ghi `dictationLessonProgress`, neu khong nguoi dung co the fake completed/mastered. APIs server-side la source of truth.
+
+Index du kien:
+
+```text
+dictationLessons: status ASC, level ASC, orderIndex ASC
+dictationLessons: status ASC, topics ARRAY_CONTAINS, orderIndex ASC
+dictationLessons: status ASC, sourceName ASC, orderIndex ASC
+users/{uid}/dictationLessonProgress: lastStudiedAtMillis DESC
+```
+
+Chi tao index sau khi query thuc te bao can; commit vao `firestore.indexes.json` khi da xac dinh query.
+
+### 25.7 API contracts va server flow
+
+#### A. Catalog
+
+`GET /api/dictation/lessons?level=B2&topic=SCIENCE_TECHNOLOGY&source=Kurzgesagt&duration=MEDIUM&cursor=...`
+
+- Public, chi tra lesson PUBLISHED.
+- Response bao gom card DTO va progress summary neu user da dang nhap.
+- Cursor pagination, default 24 card; khong scan toan bo collection o client.
+
+#### B. Load lesson
+
+`GET /api/dictation/lessons/{lessonId}`
+
+- Kiem tra lesson PUBLISHED.
+- Tra metadata, source attribution, player config, danh sach segment metadata va progress cua user.
+- Khong tra `expectedText`, `acceptedNormalizedAnswers` hay transcript day du.
+- Khach nhan progress local o client; user dang nhap nhan server progress.
+
+#### C. Lay prompt
+
+`GET /api/dictation/lessons/{lessonId}/segments/{segmentId}/prompt?maskPercent=30`
+
+- Service load expected text o server, tokenize va chon blank deterministic.
+- Response 30/50 la mang prompt token:
+
+```json
+{
+  "segmentId": "s015",
+  "maskPercent": 50,
+  "prompt": [
+    { "kind": "text", "value": "I" },
+    { "kind": "space", "value": " " },
+    { "kind": "blank", "blankId": "b01", "length": 9 }
+  ]
+}
+```
+
+- Response 100 chi co huong dan va `inputMode: FULL_TEXT`; khong co expected text.
+
+#### D. Submit attempt
+
+`POST /api/dictation/lessons/{lessonId}/segments/{segmentId}/attempt`
+
+Request:
+
+```json
+{
+  "maskPercent": 50,
+  "blankAnswers": { "b01": "wondering" },
+  "fullAnswer": null,
+  "replayCount": 2,
+  "hintCount": 0,
+  "elapsedSeconds": 18
+}
+```
+
+Flow server:
+
+1. Validate lesson/segment PUBLISHED, mask 30/50/100, max input length va rate limit.
+2. Load expected text server-side; tao lai blank mapping deterministic.
+3. Normalize, cham, tinh feedback token-level va `scorePercent`.
+4. Neu da dang nhap: transaction update segment progress + lesson summary; cap nhat study activity module `listening` sau khi completed segment.
+5. Tra feedback. Chi tu thoi diem nay response moi co `expectedText` de hoc vien doi chieu.
+
+Response:
+
+```json
+{
+  "scorePercent": 100,
+  "isCompleted": true,
+  "isMastered": false,
+  "feedbackTokens": [
+    { "value": "wondering", "state": "CORRECT" }
+  ],
+  "expectedText": "...",
+  "nextRecommendedMaskPercent": 100
+}
+```
+
+Khach cung duoc cham nhu tren nhung `saved: false`; client cap nhat localStorage. Khong tin bat ky diem/correct flag nao tu client.
+
+#### E. Progress va restart
+
+- `GET /progress`: load summary + segment progress cua lesson da dang nhap.
+- `POST /progress/merge-guest`: optional, can auth, chi merge khi user bam nut xac nhan.
+- `POST /progress/reset`: can auth, reset mot lesson, co confirm UI. Khong xoa lesson/content.
+
+#### F. Admin content flow
+
+1. Admin tao DRAFT voi title, YouTube ID, source, level, topic va evidence quyen dung.
+2. Service validate YouTube ID format, URL, duration, enum va rang buoc `licenseStatus`.
+3. Admin paste/upload SRT/VTT; parser bo tag, parse timestamp, giu speaker neu co.
+4. Parser merge/split caption thanh segment muc tieu 8-18 giay. Segment qua 25 giay bat buoc admin sua; segment duoi 3 giay duoc merge voi doan ke ben canh.
+5. Admin xem preview player + segment list + prompt 30/50/100; sua text, start/end, speaker va accepted answers.
+6. Admin danh dau rights `VERIFIED`; chi khi day du evidence va co it nhat mot segment moi duoc publish.
+7. Publish chay transaction cap nhat segmentCount, wordCount, WPM, status PUBLISHED va ghi `contentAuditLogs`.
+8. Archive giu progress cu nhung an lesson khoi catalog; lesson dang hoc hien message content da tam an.
+
+### 25.8 Logic transcript, tokenization va grading
+
+Parser SRT/VTT:
+
+- Ho tro `HH:MM:SS,mmm` va `HH:MM:SS.mmm`.
+- Loai HTML/VTT tags, chuan hoa whitespace/Unicode apostrophe; khong tu sua noi dung hoc thuat bang AI.
+- Merge caption lien ke neu khoang cach < 0.8s va tong do dai <= 18s.
+- Tao warning neu timestamp chong cheo, gap lon, khong co text, qua 25s, hoac transcript co ky tu khong phu hop.
+- Admin luon la nguoi quyet dinh ban cuoi cung cua transcript.
+
+Tokenizer:
+
+- Tach `word`, `space`, `punctuation`; chap nhan apostrophe va hyphen trong tu (`don't`, `well-known`).
+- Normalization dung cho cham: lowercase, trim, collapse space, doi curly apostrophe thanh apostrophe, bo punctuation ngoai tu.
+- `expectedText` van giu dung dau cau/capitalization de hien feedback va hoc vien thay mau cau tu nhien.
+
+Blank selection:
+
+- Seed tu `lessonId:segmentId:maskPercent:contentVersion`.
+- Chi an word tokens; khong tao blank o punctuation.
+- Uu tien tu dai, content word va contraction theo heuristic; sau do phan bo deu de tranh 3 blank lien tiep o muc 30%.
+- Neu segment co < 3 word: MVP khong cho 30/50, chi dung 100 hoac merge segment.
+
+Accepted answers:
+
+- Mac dinh mot dap an chinh la `expectedText`.
+- Admin co the them alternative da duyet. Vi du `I am` va `I'm` chi duoc coi la tuong duong neu admin them vao list.
+- Khong dung LLM de tu quyet dinh dap an dung o runtime.
+
+### 25.9 Security, privacy va content governance
+
+- Kiem tra `status PUBLISHED` o moi public endpoint; khong dua DRAFT/REVIEW vao HTML, response hay metadata OpenGraph.
+- `dictationRights` private; khong luu email nguon/contract vao public lesson doc.
+- Admin routes bat buoc `requireRole("ADMIN")`, validate schema, log action publish/archive/import vao `contentAuditLogs`.
+- Bound input: max 1,000 ky tu/attempt, max 10,000 ky tu/transcript segment, gioi han so segment/lesson de tranh abuse.
+- Dat rate limit cho submit attempt theo uid neu da dang nhap, neu khach thi theo IP/session; feedback van uu tien de hoc khong bi block vo ly.
+- Dung attribution o card va page lesson theo `publicAttribution`; link luon mo video goc tab moi.
+- Khi license het han/bi rut: admin archive ngay, khong xoa rights log. Lesson khong con public, progress user van giu de thong ke noi bo.
+
+### 25.10 Thay doi code, rules va data migration
+
+1. Sua `src/app/(app)/listen/page.tsx` de them nav link Nghe-chep sau Part 4. Link nay khong di qua `LevelDashboardClient`.
+2. Them `types/dictation.ts`, collection constants, validation schemas va `dictation.ts` service rieng.
+3. Them parser SRT/VTT va grading pure functions co unit test.
+4. Them public routes/SSR pages, sau do client player/component.
+5. Them admin route/page import va preview. Admin media upload hien tai chi AUDIO/IMAGE; khong sua no de upload video YouTube. Neu can luu file transcript, them media type `TRANSCRIPT` private hoac chi luu parsed segments.
+6. Cap nhat `firestore.rules` va `firestore.indexes.json`; deploy rules truoc hoac cung luc voi API.
+7. Seed thu cong mot collection Kurzgesagt da duoc cap quyen (khong viet script crawl YouTube).
+8. Cap nhat Hub/Continue Learning sau khi Dictation co progress on dinh; khong dua vao scope MVP neu lam cham launch.
+
+### 25.11 Test plan va acceptance criteria
+
+Unit tests:
+
+- Parse SRT/VTT: timestamp hop le, cue chong cheo, tag, speaker, merge/split.
+- Tokenization va normalization: punctuation, quote, contraction, hyphen.
+- Blank selection deterministic cho 30/50/100.
+- Grading: dung, thieu, sai, du, alternative answer, hint/mastery rule.
+- Service transaction: completedCount/masteredCount khong bi dem tang hai lan khi submit lai cung segment.
+
+API tests:
+
+- Catalog khong tra DRAFT va khong tra `expectedText`.
+- Prompt 30/50 khong lam lo blank words; prompt 100 khong co transcript.
+- Attempt chi server-side grade; client `correct` field neu gui kem phai bi bo qua.
+- Guest nhan feedback nhung khong tao Firestore user progress.
+- Admin moi co the import/publish/archive.
+
+Component/E2E tests:
+
+- Mock YouTube Player API: select segment -> seek start -> pause end.
+- Enter cham va chuyen segment; phim R nghe lai; keyboard khong intercept khi focus input.
+- Refresh khi da login hoi phuc `lastSegmentIndex` va progress.
+- Mobile 360px: player, o input, feedback va segment bottom sheet su dung duoc.
+- Video unavailable co fallback link, khong blank page.
+
+Acceptance MVP:
+
+- Sidebar co Nghe-chep ngay sau Part 4; Part 1-4 chay nhu cu.
+- Thu vien filter/load duoc lesson PUBLISHED va the hien dung progress.
+- Mot lesson YouTube co the hoc tung segment, chep va cham 30/50/100.
+- Transcript dap an khong co trong initial lesson payload; chi hien sau submit/hint theo luong duoc phep.
+- Logged-in user resume dung segment; guest co progress local trong cung browser.
+- Admin co the tao, preview, publish va archive lesson ma khong can code/deploy.
+- Khong co content nao duoc publish neu thieu `licenseStatus = VERIFIED`, attribution hoac transcript segment hop le.
+
+### 25.12 Thu tu trien khai khuyen nghi
+
+1. Them type/schema Firestore, service read-only va rules/indexes.
+2. Tao `/listen/dictation` bang seed mock de chot UI library truoc.
+3. Tao man lesson voi fake player adapter + prompt/attempt API; viet grading tests truoc UI phuc tap.
+4. Tich hop YouTube IFrame API, segment playback va keyboard/mobile UX.
+5. Lam admin import SRT/VTT, preview, license gate, audit log.
+6. Nhap 1 lesson Kurzgesagt, QA end-to-end, sau do them 10 lesson dau tien.
+7. Do usage, loi transcript/player va ty le hoan thanh truoc khi them shadowing, vocabulary va recommendations.
+
+Lenh verify sau moi milestone:
+
+```powershell
+cd D:\EnglishWebApp\web
+npm test
+npm run lint
+npm run build
+npm run test:e2e
+```
+
 E2E nen them:
 
 - Anonymous `/continue` redirect login.

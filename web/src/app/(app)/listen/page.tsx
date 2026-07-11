@@ -92,6 +92,13 @@ function ModuleSidebar({ activeId }: { activeId: string }) {
             </Link>
           );
         })}
+        <Link
+          href="/listen/dictation"
+          className="flex items-center gap-3 rounded-xl px-3 py-3 text-sm font-extrabold text-ink2 no-underline transition-colors hover:bg-surface-soft hover:text-ink"
+        >
+          <span className="inline-flex h-9 w-9 items-center justify-center rounded-lg bg-primary/10 text-primary">✎</span>
+          <span>Nghe – chép video</span>
+        </Link>
       </nav>
 
       <p className="mt-40 border-t border-line pt-4 text-[11px] font-extrabold uppercase text-muted">

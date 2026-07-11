@@ -31,6 +31,8 @@ export const COLLECTIONS = {
   listeningNotes: "listeningNotes",
   listeningFavorites: "listeningFavorites",
   listeningVocabBasket: "listeningVocabBasket",
+  dictationLessons: "dictationLessons",
+  dictationRights: "dictationRights",
 
   // --- Reading ---
   readingProgress: "readingProgress",

@@ -13,6 +13,7 @@ const modules = [
   { label: "AI generator", href: "/admin/generate" },
   { label: "Review queue", href: "/admin/content-review" },
   { label: "Media", href: "/admin/media" },
+  { label: "Nghe-chép", href: "/admin/dictation" },
 ];
 
 export default async function AdminPage() {
