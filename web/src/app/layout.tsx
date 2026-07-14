@@ -3,6 +3,8 @@ import { Suspense } from "react";
 import { Analytics } from "@vercel/analytics/next";
 import { SpeedInsights } from "@vercel/speed-insights/next";
 import AppOverdelay from "@/components/AppOverdelay";
+import AppConnectionStatus from "@/components/AppConnectionStatus";
+import AppServiceWorker from "@/components/AppServiceWorker";
 import StudyStreakCelebration from "@/components/StudyStreakCelebration";
 import "./globals.css";
 
@@ -16,6 +18,7 @@ export const metadata: Metadata = {
   title: SITE_TITLE,
   description: SITE_DESCRIPTION,
   applicationName: "ENGLISHGO",
+  manifest: "/manifest.webmanifest",
   openGraph: {
     type: "website",
     siteName: "ENGLISHGO",
@@ -55,11 +58,16 @@ export default function RootLayout({
         <script dangerouslySetInnerHTML={{ __html: themeInitScript }} />
       </head>
       <body className="flex min-h-dvh flex-col">
+        <a href="#main-content" className="skip-link">Bỏ qua điều hướng và đến nội dung chính</a>
         <Suspense fallback={null}>
           <AppOverdelay />
         </Suspense>
+        <AppConnectionStatus />
+        <AppServiceWorker />
         <StudyStreakCelebration />
-        {children}
+        <div id="main-content" tabIndex={-1} className="min-w-0">
+          {children}
+        </div>
         <Analytics />
         <SpeedInsights />
       </body>

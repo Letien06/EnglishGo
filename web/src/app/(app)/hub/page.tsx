@@ -137,6 +137,18 @@ export default async function HubPage() {
                 </Link>
               </div>
 
+              {hub.dailyGoalCompleted === 0 ? (
+                <div className="app-empty-state mt-5">
+                  <span className="app-empty-state-mark" aria-hidden="true">15</span>
+                  <div>
+                    <h2 className="text-base font-extrabold text-ink">Bắt đầu nhẹ nhàng trong 15 phút</h2>
+                    <p className="mt-1 text-sm leading-6 text-muted">
+                      Hoàn thành một hoạt động hôm nay để duy trì nhịp học và mở khóa gợi ý chính xác hơn.
+                    </p>
+                  </div>
+                </div>
+              ) : null}
+
               <div className="mt-5 grid gap-3 md:grid-cols-2">
                 {moduleRows.map((item) => {
                   const share = sharePercent(item.today, hub.dailyGoalCompleted);

@@ -192,6 +192,98 @@ body {
   color: var(--text);
 }
 
+.skip-link {
+  position: fixed;
+  top: 0.75rem;
+  left: 0.75rem;
+  z-index: 2000;
+  transform: translateY(-160%);
+  border-radius: 0.75rem;
+  background: var(--ink);
+  padding: 0.7rem 0.9rem;
+  color: var(--surface);
+  font-size: 0.875rem;
+  font-weight: 800;
+  transition: transform var(--motion-fast) var(--ease-out);
+}
+
+.skip-link:focus { transform: translateY(0); }
+
+.app-connection-status {
+  position: fixed;
+  right: 1rem;
+  bottom: 1rem;
+  z-index: 120;
+  display: inline-flex;
+  max-width: min(26rem, calc(100vw - 2rem));
+  align-items: center;
+  gap: 0.55rem;
+  border: 1px solid color-mix(in srgb, var(--line) 76%, var(--primary) 18%);
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--surface) 92%, transparent);
+  box-shadow: var(--elevation-2);
+  padding: 0.65rem 0.85rem;
+  color: var(--ink);
+  font-size: 0.8rem;
+  font-weight: 750;
+  backdrop-filter: blur(14px);
+  transition: opacity var(--motion-fast) var(--ease-out), transform var(--motion-fast) var(--ease-out);
+}
+
+@starting-style {
+  .app-connection-status { opacity: 0; transform: translateY(0.5rem) scale(0.98); }
+}
+
+.app-connection-status-dot,
+.exam-save-status > span {
+  width: 0.5rem;
+  height: 0.5rem;
+  flex: none;
+  border-radius: var(--radius-pill);
+  background: #10b981;
+  box-shadow: 0 0 0 3px color-mix(in srgb, #10b981 16%, transparent);
+}
+
+.app-connection-status.is-offline .app-connection-status-dot,
+.exam-save-status.is-offline > span { background: #f59e0b; box-shadow: 0 0 0 3px color-mix(in srgb, #f59e0b 20%, transparent); }
+
+.app-error-card,
+.app-empty-state {
+  border: 1px solid color-mix(in srgb, var(--line) 72%, var(--primary) 16%);
+  border-radius: 1.25rem;
+  background: color-mix(in srgb, var(--surface) 92%, transparent);
+  box-shadow: var(--elevation-2), inset 0 1px 0 color-mix(in srgb, white 20%, transparent);
+}
+
+.app-error-mark,
+.app-empty-state-mark {
+  display: inline-grid;
+  width: 3rem;
+  height: 3rem;
+  place-items: center;
+  border-radius: 1rem;
+  background: var(--primary-soft);
+  color: var(--primary);
+  font-weight: 900;
+}
+
+.app-empty-state {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.9rem;
+  padding: 1rem;
+}
+
+.exam-save-status {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+  margin-left: auto;
+  color: color-mix(in srgb, white 85%, transparent);
+  font-size: 0.75rem;
+  font-weight: 700;
+}
+
 /* Design-system primitives keep every route on the same visual and tactile language. */
 :where(button, a, input, select, textarea) {
   -webkit-tap-highlight-color: transparent;

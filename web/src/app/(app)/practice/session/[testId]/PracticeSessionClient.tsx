@@ -69,7 +69,7 @@ export default function PracticeSessionClient({ session }: { session: PracticeSe
   const initialDraft = useMemo(() => readInitialDraft(storageKey, session.draftPayload), [session.draftPayload, storageKey]);
   const [answers, setAnswers] = useState<PracticeAnswers>(initialDraft.answers);
   const [markedQuestionIds, setMarkedQuestionIds] = useState<Set<number>>(() => new Set(initialDraft.markedQuestionIds));
-  const [status, setStatus] = useState("Draft not saved yet");
+  const [status, setStatus] = useState("Đã khôi phục bản nháp trên thiết bị");
   const [remaining, setRemaining] = useState(() => initialRemainingSeconds(session));
   const [submitting, setSubmitting] = useState(false);
   const [online, setOnline] = useState(() => typeof navigator === "undefined" ? true : navigator.onLine);
@@ -122,7 +122,7 @@ export default function PracticeSessionClient({ session }: { session: PracticeSe
         window.localStorage.setItem(storageKey, result.data.payload);
         const nextQuestion = session.questions[serverDraft.currentQuestionIndex];
         if (nextQuestion) setActiveQuestionId(nextQuestion.id);
-        setStatus("Loaded server draft");
+        setStatus("Đã khôi phục bản nháp đã lưu");
       })
       .catch(() => undefined);
     return () => {
@@ -182,9 +182,9 @@ export default function PracticeSessionClient({ session }: { session: PracticeSe
   }
 
   function queueSave() {
-    setStatus(online ? "Changes pending" : "Offline - saved on this device");
+    setStatus(online ? "Đang chuẩn bị lưu câu trả lời..." : "Ngoại tuyến — đã lưu trên thiết bị");
     if (saveTimer.current) clearTimeout(saveTimer.current);
-    saveTimer.current = setTimeout(() => void saveNow(), 8000);
+    saveTimer.current = setTimeout(() => void saveNow(), 2000);
   }
 
   function setAnswer(questionId: number, value: { selectedOptionId?: number | null; textResponse?: string | null }) {
@@ -225,14 +225,14 @@ export default function PracticeSessionClient({ session }: { session: PracticeSe
     const payload = makeDraftPayload();
     window.localStorage.setItem(storageKey, payload);
     if (!navigator.onLine) {
-      setStatus("Offline - saved on this device");
+      setStatus("Ngoại tuyến — đã lưu trên thiết bị");
       return;
     }
     const result = await saveDraftToServer(payload, activeIndex).catch(() => ({
       ok: false,
-      error: "Save failed",
+      error: "Chưa thể lưu trên máy chủ",
     }));
-    setStatus(result.ok ? `Saved at ${new Date().toLocaleTimeString()}` : result.error || "Save failed - saved locally");
+    setStatus(result.ok ? `Đã lưu lúc ${new Date().toLocaleTimeString()}` : result.error || "Chưa thể đồng bộ; bản nháp vẫn an toàn trên thiết bị");
   }
 
   const saveDraftToServer = useCallback(async (payload: string, currentQuestionIndex: number) => {
@@ -256,6 +256,10 @@ export default function PracticeSessionClient({ session }: { session: PracticeSe
 
   async function submit(reason: "manual" | "timeout" = "manual") {
     if (submittingRef.current) return;
+    if (!navigator.onLine) {
+      setStatus("Bạn đang ngoại tuyến. Câu trả lời đã được lưu trên thiết bị; hãy kết nối lại trước khi nộp bài.");
+      return;
+    }
     submittingRef.current = true;
     setSubmitting(true);
     setConfirmSubmit(false);
@@ -392,14 +396,14 @@ export default function PracticeSessionClient({ session }: { session: PracticeSe
       setOnline(true);
       const payload = window.localStorage.getItem(storageKey);
       if (payload && !submittingRef.current) {
-        void saveDraftToServer(payload, activeIndex).then(() => {
-          setStatus(`Synced at ${new Date().toLocaleTimeString()}`);
-        }).catch(() => setStatus("Save failed - saved locally"));
+        void saveDraftToServer(payload, activeIndex).then((result) => {
+          setStatus(result.ok ? `Đã đồng bộ lúc ${new Date().toLocaleTimeString()}` : "Chưa thể đồng bộ; bản nháp vẫn an toàn trên thiết bị");
+        }).catch(() => setStatus("Chưa thể đồng bộ; bản nháp vẫn an toàn trên thiết bị"));
       }
     };
     const onOffline = () => {
       setOnline(false);
-      setStatus("Offline - saved on this device");
+      setStatus("Ngoại tuyến — đã lưu trên thiết bị");
     };
     window.addEventListener("online", onOnline);
     window.addEventListener("offline", onOffline);
@@ -448,6 +452,10 @@ export default function PracticeSessionClient({ session }: { session: PracticeSe
             {submitting ? "Đang nộp..." : "Submit"}
           </button>
         </div>
+        <p className={`exam-save-status ${online ? "is-online" : "is-offline"}`} role="status" aria-live="polite">
+          <span aria-hidden="true" />
+          {online ? status : "Ngoại tuyến — câu trả lời được lưu trên thiết bị"}
+        </p>
       </header>
 
       {currentAudioUrl ? <audio ref={audioRef} src={currentAudioUrl} /> : null}
@@ -486,7 +494,7 @@ export default function PracticeSessionClient({ session }: { session: PracticeSe
         <aside className="h-fit rounded-xl border border-line bg-surface p-5 shadow-sm xl:sticky xl:top-24">
           <div className="flex items-center justify-between">
             <strong className="text-ink">Navigator</strong>
-            <span className="text-xs font-bold text-muted">{status}</span>
+            <span className="text-xs font-bold text-muted" aria-live="polite">{status}</span>
           </div>
           <div className="mt-4 space-y-4">
             {session.config.parts.map((part) => {
@@ -528,7 +536,7 @@ export default function PracticeSessionClient({ session }: { session: PracticeSe
           </div>
           <div className="mt-5 flex gap-2">
             <button type="button" onClick={() => void saveNow()} disabled={submitting} className="flex-1 rounded-lg bg-surface-soft px-3 py-2 text-sm font-semibold text-ink disabled:opacity-60">
-              Save
+              Lưu ngay
             </button>
             <button type="button" onClick={() => setConfirmSubmit(true)} disabled={submitting} className="flex-1 rounded-lg bg-accent px-3 py-2 text-sm font-semibold text-white disabled:opacity-60">
               Submit
