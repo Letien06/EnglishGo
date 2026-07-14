@@ -34,11 +34,11 @@ export default function AppShell({ children }: { children: ReactNode }) {
   }
 
   return (
-    <div className="app-shell min-h-dvh text-ink">
-      <header className="app-shell-header sticky top-0 z-50 border-b bg-glass/90 backdrop-blur-xl">
+    <div className="app-shell design-system min-h-dvh text-ink">
+      <header className="app-shell-header app-primary-nav sticky top-0 z-50 border-b bg-glass/90 backdrop-blur-xl">
         <div className="flex h-16 items-center justify-between px-4 sm:px-6">
-          <Link href="/" className="flex items-center gap-3 no-underline">
-            <span className="inline-flex h-10 w-10 items-center justify-center rounded-xl bg-primary/10 text-base font-extrabold text-primary">
+          <Link href="/" className="app-brand flex items-center gap-3 no-underline">
+            <span className="app-brand-mark inline-flex h-10 w-10 items-center justify-center rounded-xl bg-primary/10 text-base font-extrabold text-primary">
               E
             </span>
             <strong className="hidden text-xl font-extrabold tracking-tight text-ink sm:block">
@@ -55,7 +55,7 @@ export default function AppShell({ children }: { children: ReactNode }) {
                   key={item.href}
                   href={item.href}
                   aria-current={active ? "page" : undefined}
-                  className={`inline-flex items-center gap-2 rounded-lg px-3 py-2 text-sm font-extrabold transition-colors ${
+                  className={`app-primary-nav-link inline-flex items-center gap-2 rounded-lg px-3 py-2 text-sm font-extrabold transition-colors ${
                     active
                       ? "bg-primary/10 text-primary"
                       : "text-ink3 hover:bg-surface-soft hover:text-ink"
@@ -74,7 +74,7 @@ export default function AppShell({ children }: { children: ReactNode }) {
             <ThemeToggle className="!hidden border border-line bg-surface-soft text-ink xl:!inline-flex" />
             <Link
               href="/account"
-              className={`inline-flex h-11 w-11 items-center justify-center rounded-xl border-2 text-base font-extrabold ${
+              className={`app-account-control inline-flex h-11 w-11 items-center justify-center rounded-xl border-2 text-base font-extrabold ${
                 pathname.startsWith("/account")
                   ? "border-primary bg-primary/10 text-primary"
                   : "border-line bg-surface text-primary"

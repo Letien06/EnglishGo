@@ -195,8 +195,8 @@ export default function ReadPracticeClient({
   }, [answeredMap, currentIndex, goTo, handleAnswer, item.questions]);
 
   return (
-    <main className="min-h-dvh bg-white">
-      <header className="sticky top-0 z-40 flex h-16 items-center gap-2 bg-gradient-to-r from-cyan-500 to-blue-800 px-3 text-white shadow-md sm:gap-4 sm:px-7">
+    <main className="skill-workspace skill-workspace--read design-system min-h-dvh bg-white">
+      <header className="skill-workspace-header sticky top-0 z-40 flex h-16 items-center gap-2 bg-gradient-to-r from-cyan-500 to-blue-800 px-3 text-white shadow-md sm:gap-4 sm:px-7">
         <Link
           href={`/read?part=${partId}`}
           className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-white/30 bg-white/10 text-xl font-bold"

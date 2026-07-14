@@ -53,8 +53,30 @@
   --shadow: 0 18px 50px rgba(0, 0, 0, 0.45);
   --motion-fast: 150ms;
   --motion-standard: 180ms;
+  --motion-slow: 260ms;
   --ease-out: cubic-bezier(0.23, 1, 0.32, 1);
   --ease-in-out: cubic-bezier(0.77, 0, 0.175, 1);
+  --ease-drawer: cubic-bezier(0.32, 0.72, 0, 1);
+  --radius-xs: 0.5rem;
+  --radius-sm: 0.75rem;
+  --radius-md: 1rem;
+  --radius-lg: 1.25rem;
+  --radius-xl: 1.75rem;
+  --radius-pill: 999px;
+  --space-1: 0.25rem;
+  --space-2: 0.5rem;
+  --space-3: 0.75rem;
+  --space-4: 1rem;
+  --space-5: 1.25rem;
+  --space-6: 1.5rem;
+  --space-8: 2rem;
+  --space-10: 2.5rem;
+  --focus-ring: 0 0 0 3px color-mix(in srgb, var(--primary) 30%, transparent);
+  --elevation-1: 0 1px 2px rgba(0, 0, 0, 0.16), 0 6px 18px rgba(0, 0, 0, 0.12);
+  --elevation-2: 0 18px 50px rgba(0, 0, 0, 0.32), 0 2px 8px rgba(0, 0, 0, 0.18);
+  --overlay: rgba(4, 7, 14, 0.54);
+  --gradient-brand: linear-gradient(135deg, color-mix(in srgb, var(--primary) 96%, #fff 4%), color-mix(in srgb, var(--terracotta) 72%, var(--primary)));
+  --gradient-surface: linear-gradient(145deg, color-mix(in srgb, var(--surface) 94%, white 6%), color-mix(in srgb, var(--surface-soft) 88%, transparent));
 }
 
 /* ── LIGHT THEME ── */
@@ -96,6 +118,9 @@
   --primary-soft: rgba(224, 149, 43, 0.12);
   --qn-gold-glow: 0 0 0 1px rgba(224, 149, 43, 0.35), 0 0 18px rgba(224, 149, 43, 0.20);
   --shadow: 0 6px 24px rgba(15, 27, 45, 0.08), 0 1px 2px rgba(15, 27, 45, 0.04);
+  --elevation-1: 0 1px 2px rgba(15, 27, 45, 0.04), 0 8px 22px rgba(15, 27, 45, 0.06);
+  --elevation-2: 0 20px 60px rgba(15, 27, 45, 0.15), 0 4px 14px rgba(15, 27, 45, 0.08);
+  --overlay: rgba(15, 23, 42, 0.38);
   --bg: var(--s0);
   --surface: var(--s1);
   --surface-soft: var(--s2);
@@ -142,6 +167,8 @@
   --color-line: var(--line);
   --color-glass: var(--glass);
   --color-glass-soft: var(--glass-soft);
+  --radius-card: var(--radius-lg);
+  --radius-control: var(--radius-sm);
   --font-display: "Plus Jakarta Sans", "Be Vietnam Pro", Inter, ui-sans-serif, system-ui, sans-serif;
   --font-serif: "Fraunces", "Times New Roman", Georgia, serif;
   --font-body: "Be Vietnam Pro", "Plus Jakarta Sans", Inter, ui-sans-serif, system-ui, sans-serif;
@@ -165,6 +192,88 @@ body {
   color: var(--text);
 }
 
+/* Design-system primitives keep every route on the same visual and tactile language. */
+:where(button, a, input, select, textarea) {
+  -webkit-tap-highlight-color: transparent;
+}
+
+:where(button, a, input, select, textarea, summary):focus-visible {
+  outline: 2px solid var(--primary);
+  outline-offset: 3px;
+  box-shadow: var(--focus-ring);
+}
+
+:where(button:not(:disabled), [role="button"]:not([aria-disabled="true"])) {
+  touch-action: manipulation;
+}
+
+:where(button:not(:disabled), a[href], [role="button"]:not([aria-disabled="true"])):active {
+  transform: scale(0.975);
+}
+
+.design-system {
+  min-width: 0;
+}
+
+.design-system :where(input:not([type="checkbox"]):not([type="radio"]), select, textarea) {
+  min-height: 2.75rem;
+  border-color: color-mix(in srgb, var(--line) 76%, var(--ink) 8%);
+  border-radius: var(--radius-control);
+  background: color-mix(in srgb, var(--surface) 94%, transparent);
+  color: var(--ink);
+  box-shadow: inset 0 1px 0 color-mix(in srgb, white 10%, transparent);
+  transition: border-color var(--motion-fast) ease, box-shadow var(--motion-fast) ease, background-color var(--motion-fast) ease;
+}
+
+.design-system :where(input:not([type="checkbox"]):not([type="radio"]), select, textarea)::placeholder {
+  color: color-mix(in srgb, var(--muted) 88%, transparent);
+}
+
+.design-system :where(input:not([type="checkbox"]):not([type="radio"]), select, textarea):focus {
+  border-color: color-mix(in srgb, var(--primary) 72%, var(--line));
+  box-shadow: var(--focus-ring), inset 0 1px 0 color-mix(in srgb, white 14%, transparent);
+  outline: none;
+}
+
+.design-system :where(table) {
+  border-collapse: separate;
+  border-spacing: 0;
+}
+
+.design-system :where(thead) {
+  background: color-mix(in srgb, var(--surface-soft) 82%, transparent);
+}
+
+.design-system :where(th) {
+  color: var(--ink3);
+  font-size: 0.7rem;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+}
+
+.design-system :where(tbody tr) {
+  transition: background-color var(--motion-fast) ease;
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .design-system :where(tbody tr:hover) {
+    background: color-mix(in srgb, var(--primary) 4%, var(--surface));
+  }
+}
+
+.design-system .bg-white {
+  background-color: var(--surface);
+}
+
+.design-system .shadow-sm {
+  box-shadow: var(--elevation-1);
+}
+
+.design-system [role="dialog"] {
+  border-color: color-mix(in srgb, var(--line) 68%, var(--primary) 20%);
+  box-shadow: var(--elevation-2);
+}
+
 .app-shell {
   background:
     radial-gradient(circle at 14% -8%, color-mix(in srgb, var(--azure) 15%, transparent), transparent 30rem),
@@ -175,6 +284,43 @@ body {
 .app-shell-header {
   border-color: color-mix(in srgb, var(--line) 82%, var(--primary) 18%);
   box-shadow: 0 1px 0 color-mix(in srgb, var(--surface) 72%, transparent), 0 14px 34px rgba(15, 23, 42, 0.05);
+}
+
+.app-primary-nav {
+  min-height: 4.25rem;
+  background: color-mix(in srgb, var(--glass) 94%, transparent);
+}
+
+.app-brand {
+  border-radius: var(--radius-sm);
+}
+
+.app-brand-mark {
+  border: 1px solid color-mix(in srgb, var(--primary) 20%, var(--line));
+  background: linear-gradient(145deg, color-mix(in srgb, var(--primary) 17%, var(--surface)), color-mix(in srgb, var(--surface) 95%, transparent));
+  box-shadow: inset 0 1px 0 color-mix(in srgb, white 24%, transparent), 0 10px 22px color-mix(in srgb, var(--primary) 13%, transparent);
+}
+
+.app-primary-nav-link {
+  position: relative;
+  isolation: isolate;
+  transition: transform var(--motion-fast) var(--ease-out), color var(--motion-fast) ease, background-color var(--motion-fast) ease;
+}
+
+.app-primary-nav-link[aria-current="page"] {
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--primary) 16%, transparent), inset 0 1px 0 color-mix(in srgb, white 20%, transparent);
+}
+
+.app-account-control {
+  box-shadow: inset 0 1px 0 color-mix(in srgb, white 22%, transparent), 0 6px 18px color-mix(in srgb, var(--primary) 8%, transparent);
+  transition: transform var(--motion-fast) var(--ease-out), border-color var(--motion-fast) ease, background-color var(--motion-fast) ease;
+}
+
+@media (hover: hover) and (pointer: fine) and (prefers-reduced-motion: no-preference) {
+  .app-primary-nav-link:hover,
+  .app-account-control:hover {
+    transform: translateY(-1px);
+  }
 }
 
 .public-header {
@@ -272,7 +418,7 @@ body {
   transform: rotate(-18deg);
 }
 
-.landing-hero > :not(.landing-hero-orbit) {
+.landing-hero > :not(.landing-hero-orbit):not(.hero-study-preview) {
   position: relative;
   z-index: 1;
 }
@@ -433,10 +579,10 @@ body {
   }
 
   .study-preview-card {
-    border: 1px solid color-mix(in srgb, white 26%, var(--line));
+    border: 1px solid color-mix(in srgb, var(--primary) 22%, var(--line));
     border-radius: 1.65rem;
-    background: color-mix(in srgb, var(--surface) 84%, transparent);
-    box-shadow: 0 32px 55px rgba(15, 23, 42, 0.2), inset 0 1px 0 color-mix(in srgb, white 34%, transparent);
+    background: linear-gradient(145deg, color-mix(in srgb, var(--surface) 97%, var(--azure) 3%), color-mix(in srgb, var(--surface-soft) 92%, var(--primary) 8%));
+    box-shadow: 0 32px 55px rgba(15, 23, 42, 0.24), 0 0 0 1px color-mix(in srgb, var(--surface) 62%, transparent), inset 0 1px 0 color-mix(in srgb, white 38%, transparent);
     padding: 1.2rem;
     backdrop-filter: blur(22px) saturate(140%);
   }
@@ -837,7 +983,7 @@ h1, h2, h3, h4, h5 {
   box-shadow: 0 20px 55px color-mix(in srgb, var(--primary) 22%, transparent), var(--shadow);
   padding: 1.25rem;
   text-align: center;
-  animation: streak-celebration-enter 620ms cubic-bezier(0.16, 1, 0.3, 1) both;
+  animation: streak-celebration-enter 360ms var(--ease-out) both;
 }
 
 .streak-celebration::before {
@@ -898,7 +1044,7 @@ h1, h2, h3, h4, h5 {
 @keyframes streak-celebration-enter { from { opacity: 0; transform: translate(-50%, calc(-50% - 18px)) scale(0.92); } to { opacity: 1; transform: translate(-50%, -50%) scale(1); } }
 @keyframes streak-celebration-shine { 0%, 55% { transform: translateX(-110%) rotate(-20deg); } 100% { transform: translateX(310%) rotate(-20deg); } }
 @keyframes streak-flame-bounce { 0%, 100% { transform: translateY(0) rotate(-3deg); } 50% { transform: translateY(-5px) rotate(3deg) scale(1.06); } }
-@keyframes streak-number-bounce { 0% { transform: translateY(18px) scale(0.5); opacity: 0; } 60% { transform: translateY(-5px) scale(1.12); opacity: 1; } 100% { transform: translateY(0) scale(1); } }
+@keyframes streak-number-bounce { 0% { transform: translateY(12px) scale(0.92); opacity: 0; } 60% { transform: translateY(-3px) scale(1.04); opacity: 1; } 100% { transform: translateY(0) scale(1); } }
 @keyframes streak-spark { 0%, 100% { transform: scale(0.65) rotate(0deg); opacity: 0.35; } 50% { transform: scale(1.15) rotate(45deg); opacity: 1; } }
 
 @media (prefers-reduced-motion: reduce) {
@@ -1008,6 +1154,167 @@ h1, h2, h3, h4, h5 {
 
 .app-busy-title { font-size: 0.9rem; font-weight: 900; line-height: 1.2; }
 .app-busy-description { margin-top: 0.15rem; color: var(--muted); font-size: 0.75rem; font-weight: 700; line-height: 1.35; }
+
+/* Authentication and mobile navigation use the same material hierarchy as the app shell. */
+.auth-shell {
+  isolation: isolate;
+  overflow: hidden;
+  background:
+    radial-gradient(circle at 0% 0%, color-mix(in srgb, var(--azure) 15%, transparent), transparent 31rem),
+    radial-gradient(circle at 96% 14%, color-mix(in srgb, var(--primary) 16%, transparent), transparent 34rem),
+    var(--bg);
+}
+
+.auth-panel { position: relative; }
+
+.auth-panel--form { background: color-mix(in srgb, var(--surface) 90%, transparent); }
+
+.auth-panel--story {
+  overflow: hidden;
+  background:
+    radial-gradient(circle at 56% 20%, color-mix(in srgb, var(--primary) 14%, transparent), transparent 16rem),
+    linear-gradient(145deg, color-mix(in srgb, var(--surface-soft) 76%, transparent), color-mix(in srgb, var(--bg) 92%, transparent));
+}
+
+.auth-brand-mark,
+.auth-story-mark {
+  border: 1px solid color-mix(in srgb, var(--primary) 26%, var(--line));
+  background: var(--gradient-brand);
+  box-shadow: inset 0 1px 0 color-mix(in srgb, white 34%, transparent), 0 16px 34px color-mix(in srgb, var(--primary) 23%, transparent);
+}
+
+.auth-card {
+  border-color: color-mix(in srgb, var(--line) 70%, var(--primary) 12%);
+  background: color-mix(in srgb, var(--surface) 88%, transparent);
+  box-shadow: var(--elevation-2), inset 0 1px 0 color-mix(in srgb, white 18%, transparent);
+}
+
+.auth-stat {
+  background: color-mix(in srgb, var(--surface) 82%, transparent);
+  box-shadow: inset 0 1px 0 color-mix(in srgb, white 16%, transparent);
+}
+
+.mobile-navigation-backdrop { background: var(--overlay); }
+
+.mobile-navigation-sheet {
+  border-color: color-mix(in srgb, var(--line) 74%, var(--primary) 18%);
+  background: color-mix(in srgb, var(--surface) 94%, transparent);
+  box-shadow: var(--elevation-2), inset 0 1px 0 color-mix(in srgb, white 20%, transparent);
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .mobile-navigation-backdrop { animation: mobile-backdrop-in var(--motion-fast) ease both; }
+  .mobile-navigation-sheet { animation: mobile-sheet-in var(--motion-slow) var(--ease-drawer) both; }
+}
+
+@keyframes mobile-backdrop-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes mobile-sheet-in {
+  from { opacity: 0; transform: translateY(-1rem); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+@media (prefers-reduced-transparency: reduce) {
+  .app-primary-nav,
+  .auth-panel--form,
+  .auth-card,
+  .mobile-navigation-sheet {
+    background: var(--surface);
+    backdrop-filter: none;
+  }
+}
+
+@media (prefers-contrast: more) {
+  :where(button, a, input, select, textarea, summary):focus-visible { outline-width: 3px; }
+  .app-primary-nav-link[aria-current="page"],
+  .auth-card,
+  .mobile-navigation-sheet { border: 2px solid var(--primary); }
+}
+
+/* Page and learning-workspace patterns: hierarchy stays strong without replacing study content. */
+.page-heading { border-color: color-mix(in srgb, var(--line) 74%, var(--primary) 16%); }
+
+.page-heading h1 {
+  max-width: 16ch;
+  font-family: var(--font-display);
+  letter-spacing: -0.045em;
+  line-height: 0.98;
+}
+
+.account-side-nav,
+.account-content,
+.continue-card,
+.continue-list {
+  border: 1px solid color-mix(in srgb, var(--line) 76%, var(--primary) 9%);
+  box-shadow: var(--elevation-1), inset 0 1px 0 color-mix(in srgb, white 18%, transparent);
+}
+
+.account-side-nav { background: color-mix(in srgb, var(--surface) 88%, transparent); }
+
+.account-side-nav a {
+  transition: transform var(--motion-fast) var(--ease-out), background-color var(--motion-fast) ease, color var(--motion-fast) ease;
+}
+
+.continue-card {
+  position: relative;
+  overflow: hidden;
+  background: var(--gradient-surface);
+}
+
+.continue-card::after {
+  position: absolute;
+  top: -3.5rem;
+  right: -2.5rem;
+  width: 9rem;
+  height: 9rem;
+  border: 1px solid color-mix(in srgb, var(--primary) 26%, transparent);
+  border-radius: 50%;
+  content: "";
+  pointer-events: none;
+}
+
+.continue-list {
+  overflow: hidden;
+  background: color-mix(in srgb, var(--surface) 91%, transparent);
+}
+
+.continue-list > :is(a, article) { transition: background-color var(--motion-fast) ease; }
+
+.exam-workspace,
+.skill-workspace {
+  background:
+    radial-gradient(circle at 6% -4%, color-mix(in srgb, var(--azure) 12%, transparent), transparent 26rem),
+    var(--bg);
+}
+
+.exam-workspace-header,
+.skill-workspace-header,
+.skill-workspace-footer {
+  border-color: color-mix(in srgb, white 18%, transparent);
+  box-shadow: 0 1px 0 color-mix(in srgb, white 18%, transparent), 0 12px 28px rgba(6, 20, 38, 0.17);
+}
+
+.exam-workspace-header { background: linear-gradient(105deg, #173957, #1f5d7f 58%, color-mix(in srgb, var(--azure) 72%, #193e60)); }
+
+.skill-workspace--listen .skill-workspace-header,
+.skill-workspace--listen .skill-workspace-footer { background: linear-gradient(105deg, #12516e, #147f9c 54%, #23508f); }
+
+.skill-workspace--read .skill-workspace-header,
+.skill-workspace--read .skill-workspace-footer { background: linear-gradient(105deg, #213d6e, #2875a2 55%, #185b7c); }
+
+.exam-workspace :is(section, aside).bg-surface,
+.skill-workspace :is(section, article).bg-white {
+  border-color: color-mix(in srgb, var(--line) 75%, var(--azure) 10%);
+  box-shadow: var(--elevation-1);
+}
+
+@media (hover: hover) and (pointer: fine) and (prefers-reduced-motion: no-preference) {
+  .account-side-nav a:hover { transform: translateX(2px); }
+  .continue-list > a:hover { background: color-mix(in srgb, var(--primary) 5%, var(--surface)); }
+}
 
 /* ── SCROLLBAR (dark theme) ── */
 ::-webkit-scrollbar { width: 6px; height: 6px; }

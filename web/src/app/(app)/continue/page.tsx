@@ -17,10 +17,10 @@ export default async function ContinuePage() {
         userName={user.displayName}
         userEmail={user.email}
       />
-      <main className="flex-1 overflow-y-auto px-4 py-6 lg:px-8">
+      <main className="continue-page app-canvas flex-1 overflow-y-auto px-4 py-6 lg:px-8">
         <div className="mx-auto max-w-5xl space-y-6">
           <section className="grid gap-4 md:grid-cols-2">
-            <article className="rounded-xl border border-line bg-surface p-5">
+            <article className="continue-card rounded-xl border border-line bg-surface p-5">
               <p className="text-xs font-extrabold uppercase tracking-widest text-muted">SRS vocab</p>
               <h2 className="mt-2 text-3xl font-extrabold text-ink">{view.dueVocabWords}</h2>
               <p className="mt-1 text-sm text-muted">tu vung den han on hom nay</p>
@@ -32,7 +32,7 @@ export default async function ContinuePage() {
               </Link>
             </article>
 
-            <article className="rounded-xl border border-line bg-surface p-5">
+            <article className="continue-card rounded-xl border border-line bg-surface p-5">
               <p className="text-xs font-extrabold uppercase tracking-widest text-muted">Goi y practice</p>
               {view.nextPracticeRecommendation ? (
                 <>
@@ -60,7 +60,7 @@ export default async function ContinuePage() {
             </article>
           </section>
 
-          <section className="rounded-xl border border-line bg-surface">
+          <section className="continue-list rounded-xl border border-line bg-surface">
             <div className="border-b border-line p-5">
               <h2 className="text-lg font-extrabold text-ink">Draft bai thi dang lam</h2>
               <p className="mt-1 text-sm text-muted">Lay tu server-side draft gan nhat, uu tien cau dang lam do.</p>
@@ -86,7 +86,7 @@ export default async function ContinuePage() {
             )}
           </section>
 
-          <section className="rounded-xl border border-line bg-surface">
+          <section className="continue-list rounded-xl border border-line bg-surface">
             <div className="border-b border-line p-5">
               <h2 className="text-lg font-extrabold text-ink">Vocab gan day</h2>
               <p className="mt-1 text-sm text-muted">Dung de xem lai chat luong buoi hoc va quay lai vocab nhanh.</p>

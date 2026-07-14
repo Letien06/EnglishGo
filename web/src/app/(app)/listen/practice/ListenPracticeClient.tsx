@@ -241,8 +241,8 @@ export default function ListenPracticeClient({
   const currentQuestion = item.questions[0];
 
   return (
-    <main className="min-h-dvh bg-white">
-      <header className="sticky top-0 z-40 flex h-16 items-center gap-2 bg-gradient-to-r from-cyan-500 to-blue-800 px-3 text-white shadow-md sm:gap-4 sm:px-7">
+    <main className="skill-workspace skill-workspace--listen design-system min-h-dvh bg-white">
+      <header className="skill-workspace-header sticky top-0 z-40 flex h-16 items-center gap-2 bg-gradient-to-r from-cyan-500 to-blue-800 px-3 text-white shadow-md sm:gap-4 sm:px-7">
         <Link
           href={`/listen?part=${partId}`}
           className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-white/30 bg-white/10 text-xl font-bold"
@@ -466,7 +466,7 @@ export default function ListenPracticeClient({
         </section>
       </div>
 
-      <footer className="sticky bottom-0 z-40 flex h-16 items-center justify-between gap-2 bg-gradient-to-r from-cyan-500 to-blue-800 px-3 text-white sm:px-7">
+      <footer className="skill-workspace-footer sticky bottom-0 z-40 flex h-16 items-center justify-between gap-2 bg-gradient-to-r from-cyan-500 to-blue-800 px-3 text-white sm:px-7">
         <div className="flex gap-2 sm:gap-3">
           <button onClick={() => setShowNote((value) => !value)} className="rounded-xl bg-white px-3 py-2 text-sm font-extrabold text-primary sm:px-5" aria-label="Ghi chú">
             ✎<span className="hidden sm:inline"> Ghi chú</span>

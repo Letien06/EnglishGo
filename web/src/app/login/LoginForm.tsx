@@ -124,10 +124,10 @@ export default function LoginForm() {
     });
 
   return (
-    <main className="relative flex min-h-dvh flex-col lg:flex-row">
-      <section className="flex flex-1 flex-col items-center justify-center bg-surface px-6 py-12">
-        <Link href="/" className="mb-8 flex items-center gap-3 no-underline">
-          <span className="inline-flex h-12 w-12 items-center justify-center rounded-xl bg-primary text-xl font-extrabold text-gold-ink">
+    <main className="auth-shell relative flex min-h-dvh flex-col lg:flex-row">
+      <section className="auth-panel auth-panel--form flex flex-1 flex-col items-center justify-center bg-surface px-6 py-12">
+        <Link href="/" className="auth-brand mb-8 flex items-center gap-3 no-underline">
+          <span className="auth-brand-mark inline-flex h-12 w-12 items-center justify-center rounded-xl bg-primary text-xl font-extrabold text-gold-ink">
             E
           </span>
           <strong className="text-xl font-extrabold tracking-tight text-ink">
@@ -135,7 +135,7 @@ export default function LoginForm() {
           </strong>
         </Link>
 
-        <div className="w-full max-w-md rounded-2xl border border-line bg-surface-soft p-7 shadow-[0_18px_55px_rgba(15,27,45,0.08)]">
+        <div className="auth-card w-full max-w-md rounded-2xl border border-line bg-surface-soft p-7 shadow-[0_18px_55px_rgba(15,27,45,0.08)]">
           <h1 className="mb-1 text-2xl font-extrabold text-ink">
             {mode === "register" ? "Tạo tài khoản ENGLISHGO" : "Chào mừng trở lại"}
           </h1>
@@ -209,8 +209,8 @@ export default function LoginForm() {
         </div>
       </section>
 
-      <section className="hidden flex-1 flex-col items-center justify-center bg-bg px-10 py-12 lg:flex">
-        <div className="mb-6 inline-flex h-20 w-20 items-center justify-center rounded-2xl bg-primary text-4xl font-extrabold text-gold-ink">
+      <section className="auth-panel auth-panel--story hidden flex-1 flex-col items-center justify-center bg-bg px-10 py-12 lg:flex">
+        <div className="auth-story-mark mb-6 inline-flex h-20 w-20 items-center justify-center rounded-2xl bg-primary text-4xl font-extrabold text-gold-ink">
           E
         </div>
         <h2 className="mb-2 text-center text-3xl font-extrabold text-ink">
@@ -229,7 +229,7 @@ export default function LoginForm() {
           ].map((stat) => (
             <article
               key={stat.label}
-              className="flex flex-col items-center rounded-xl border border-line bg-surface p-5"
+              className="auth-stat flex flex-col items-center rounded-xl border border-line bg-surface p-5"
             >
               <span className="mb-2 text-xl text-primary">{stat.icon}</span>
               <strong className="text-xl font-extrabold text-ink">{stat.count}</strong>

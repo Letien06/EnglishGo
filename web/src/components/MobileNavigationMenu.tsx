@@ -41,9 +41,9 @@ export default function MobileNavigationMenu({ inverted = false }: { inverted?: 
       </button>
 
       {open && createPortal(
-        <div ref={dialogRef} tabIndex={-1} className="fixed inset-x-0 bottom-0 top-16 z-[1000] xl:hidden" role="dialog" aria-modal="true" aria-label="Điều hướng">
-          <button type="button" className="absolute inset-0 bg-slate-950/30 backdrop-blur-sm" aria-label="Đóng điều hướng" onClick={() => setOpen(false)} />
-          <aside className="absolute inset-x-0 top-0 max-h-full overflow-y-auto border-t border-line bg-surface px-6 pb-[max(1.5rem,env(safe-area-inset-bottom))] pt-6 shadow-2xl">
+        <div ref={dialogRef} tabIndex={-1} className="mobile-navigation-dialog fixed inset-x-0 bottom-0 top-16 z-[1000] xl:hidden" role="dialog" aria-modal="true" aria-label="Điều hướng">
+          <button type="button" className="mobile-navigation-backdrop absolute inset-0 bg-slate-950/30 backdrop-blur-sm" aria-label="Đóng điều hướng" onClick={() => setOpen(false)} />
+          <aside className="mobile-navigation-sheet absolute inset-x-0 top-0 max-h-full overflow-y-auto border-t border-line bg-surface px-6 pb-[max(1.5rem,env(safe-area-inset-bottom))] pt-6 shadow-2xl">
             <div className="mx-auto max-w-lg">
               <div className="flex items-center justify-between border-b border-line pb-4">
                 <p className="text-xs font-extrabold uppercase tracking-widest text-primary">ENGLISHGO</p>
