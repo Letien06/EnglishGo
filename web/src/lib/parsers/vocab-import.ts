@@ -3,7 +3,7 @@
  * Port of parsing logic from `VocabService.java` (parseDelimitedWords,
  * parseExcelWords, parseCsv, readTextFile, extractPdfText).
  *
- * Replaces Apache POI (Excel) with `xlsx` and PDFBox with `pdf-parse`.
+ * Uses `exceljs` for modern Excel files and `pdf-parse` for PDFs.
  */
 import type { AiVocabCandidate } from "@/types/vocab";
 
@@ -13,7 +13,7 @@ import type { AiVocabCandidate } from "@/types/vocab";
 
 /**
  * Parse a file buffer into vocab candidates.
- * Supports CSV, TSV, TXT, XLSX, XLS, PDF.
+ * Supports CSV, TSV, TXT, XLSX, PDF.
  */
 export async function parseImportFile(
   buffer: Buffer,
@@ -21,8 +21,11 @@ export async function parseImportFile(
 ): Promise<AiVocabCandidate[]> {
   const lower = filename.toLowerCase();
 
-  if (lower.endsWith(".xlsx") || lower.endsWith(".xls")) {
+  if (lower.endsWith(".xlsx")) {
     return parseExcelWords(buffer);
+  }
+  if (lower.endsWith(".xls")) {
+    throw new Error("Định dạng .xls cũ không còn được hỗ trợ. Hãy lưu lại file dưới dạng .xlsx hoặc .csv.");
   }
   if (lower.endsWith(".pdf")) {
     return parsePdfWords(buffer);
@@ -96,25 +99,21 @@ function parseCsvLine(line: string): string[] {
 }
 
 /* ------------------------------------------------------------------ */
-/*  Excel (XLSX/XLS)                                                   */
+/*  Excel (XLSX)                                                       */
 /* ------------------------------------------------------------------ */
 
 async function parseExcelWords(buffer: Buffer): Promise<AiVocabCandidate[]> {
-  // Dynamic import to avoid bundling xlsx on every page
-  const XLSX = await import("xlsx");
-  const workbook = XLSX.read(buffer, { type: "buffer" });
-  const sheetName = workbook.SheetNames[0];
-  if (!sheetName) return [];
+  const ExcelJS = await import("exceljs");
+  const workbook = new ExcelJS.Workbook();
+  await workbook.xlsx.load(buffer as unknown as ArrayBuffer);
+  const sheet = workbook.worksheets[0];
+  if (!sheet) return [];
 
-  const sheet = workbook.Sheets[sheetName];
-  const jsonRows: unknown[][] = XLSX.utils.sheet_to_json(sheet, {
-    header: 1,
-    defval: "",
+  const rows: string[][] = [];
+  sheet.eachRow({ includeEmpty: false }, (row) => {
+    const values = Array.isArray(row.values) ? row.values.slice(1) : [];
+    rows.push(values.map((cell) => String(cell ?? "").trim()));
   });
-
-  const rows: string[][] = jsonRows.map((row) =>
-    (row as unknown[]).map((cell) => String(cell ?? "").trim()),
-  );
 
   return rowsToCandidates(rows);
 }

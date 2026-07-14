@@ -1099,7 +1099,7 @@ function AddWordsModal({
             </p>
             <input
               type="file"
-              accept=".csv,.tsv,.txt,.xlsx,.xls,.pdf"
+              accept=".csv,.tsv,.txt,.xlsx,.pdf"
               onChange={submitFile}
               className="hidden"
             />
