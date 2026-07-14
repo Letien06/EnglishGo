@@ -86,6 +86,7 @@ export default function PracticeSessionClient({ session }: { session: PracticeSe
   const draftUpdatedAtRef = useRef(initialDraft.updatedAtMillis);
   const submittingRef = useRef(false);
   const submitRef = useRef<(reason?: "manual" | "timeout") => void>(() => {});
+  const exitGuardIdRef = useRef(`practice-exit-guard-${Math.random().toString(36).slice(2)}`);
 
   useEffect(() => {
     answersRef.current = answers;
@@ -349,6 +350,29 @@ export default function PracticeSessionClient({ session }: { session: PracticeSe
   }, []);
 
   useEffect(() => {
+    const guardId = exitGuardIdRef.current;
+    const withExitGuard = (state: unknown) => ({
+      ...(state && typeof state === "object" ? state : {}),
+      practiceExitGuard: guardId,
+    });
+    const restoreExitGuard = (state: unknown) => {
+      window.history.pushState(withExitGuard(state), "", window.location.href);
+    };
+
+    if (window.history.state?.practiceExitGuard !== guardId) {
+      restoreExitGuard(window.history.state);
+    }
+
+    const onPopState = (event: PopStateEvent) => {
+      restoreExitGuard(event.state);
+      if (!submittingRef.current) setConfirmExit(true);
+    };
+
+    window.addEventListener("popstate", onPopState);
+    return () => window.removeEventListener("popstate", onPopState);
+  }, []);
+
+  useEffect(() => {
     const flush = () => {
       const payload = makeDraftPayload();
       window.localStorage.setItem(storageKey, payload);
@@ -393,7 +417,7 @@ export default function PracticeSessionClient({ session }: { session: PracticeSe
           onClick={() => setConfirmExit(true)}
           className="rounded-lg bg-white/10 px-3 py-2 text-sm font-bold hover:bg-white/20"
         >
-          ← Thoát
+          ← Kết thúc
         </button>
         <h1 className="min-w-0 flex-1 text-center text-lg font-extrabold">{title}</h1>
         <div className="flex items-center gap-2">
@@ -525,11 +549,11 @@ export default function PracticeSessionClient({ session }: { session: PracticeSe
 
       {confirmExit ? (
         <ConfirmDialog
-          title="Thoát bài thi?"
-          description="Đáp án nháp đã lưu sẽ được giữ lại cho đúng cấu hình bài thi này."
-          confirmLabel="Thoát"
+          title="Kết thúc và nộp bài?"
+          description={`Bài thi sẽ được nộp ngay để chấm điểm. Bạn đã làm ${answeredCount}/${totalQuestions} câu.${answeredCount < totalQuestions ? ` Còn ${totalQuestions - answeredCount} câu chưa trả lời.` : ""}`}
+          confirmLabel="Nộp bài và kết thúc"
           onCancel={() => setConfirmExit(false)}
-          onConfirm={() => router.push("/practice")}
+          onConfirm={() => void submit("manual")}
         />
       ) : null}
     </main>
