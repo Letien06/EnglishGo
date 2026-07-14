@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import ThemeToggle from "./ThemeToggle";
 import NavIcon, { type NavIconName } from "./NavIcon";
 import useDialogFocus from "./useDialogFocus";
@@ -32,7 +32,28 @@ export default function PublicHeader({ user }: PublicHeaderProps) {
   const pathname = usePathname();
   const [sessionUser, setSessionUser] = useState<SessionUser | null | undefined>(user);
   const [menuOpen, setMenuOpen] = useState(false);
+  const [menuClosing, setMenuClosing] = useState(false);
   const menuDialogRef = useRef<HTMLElement>(null);
+  const menuCloseTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const closeMenu = useCallback(() => {
+    if (!menuOpen || menuClosing) return;
+    setMenuClosing(true);
+    menuCloseTimerRef.current = setTimeout(() => {
+      setMenuOpen(false);
+      setMenuClosing(false);
+      menuCloseTimerRef.current = null;
+    }, 220);
+  }, [menuClosing, menuOpen]);
+
+  const openMenu = useCallback(() => {
+    if (menuCloseTimerRef.current) {
+      clearTimeout(menuCloseTimerRef.current);
+      menuCloseTimerRef.current = null;
+    }
+    setMenuClosing(false);
+    setMenuOpen(true);
+  }, []);
 
   useEffect(() => {
     const controller = new AbortController();
@@ -58,12 +79,11 @@ export default function PublicHeader({ user }: PublicHeaderProps) {
     return () => controller.abort();
   }, []);
 
-  useEffect(() => {
-    const timer = window.setTimeout(() => setMenuOpen(false), 0);
-    return () => window.clearTimeout(timer);
-  }, [pathname]);
+  useEffect(() => () => {
+    if (menuCloseTimerRef.current) clearTimeout(menuCloseTimerRef.current);
+  }, []);
 
-  useDialogFocus(menuOpen, () => setMenuOpen(false), menuDialogRef);
+  useDialogFocus(menuOpen, closeMenu, menuDialogRef);
 
   return (
     <header className="public-header sticky top-0 z-50 border-b border-line bg-glass/90 backdrop-blur-xl">
@@ -100,7 +120,11 @@ export default function PublicHeader({ user }: PublicHeaderProps) {
         <div className="flex items-center gap-2 sm:gap-3">
           <button
             type="button"
-            onClick={() => setMenuOpen((open) => !open)}
+            onClick={() => {
+              if (menuClosing) openMenu();
+              else if (menuOpen) closeMenu();
+              else openMenu();
+            }}
             className="public-header-control inline-flex h-12 w-12 items-center justify-center rounded-xl border border-line bg-surface-soft text-ink lg:hidden"
             aria-label="Menu"
             aria-expanded={menuOpen}
@@ -140,11 +164,11 @@ export default function PublicHeader({ user }: PublicHeaderProps) {
       </div>
 
       {menuOpen && (
-        <div className="lg:hidden">
+        <div className={`public-mobile-menu ${menuClosing ? "is-closing" : "is-open"} lg:hidden`}>
           <button
             type="button"
             aria-label="Đóng menu"
-            onClick={() => setMenuOpen(false)}
+            onClick={closeMenu}
             className="fixed inset-0 top-20 z-40 bg-slate-900/40 backdrop-blur-sm"
           />
           <nav
@@ -152,7 +176,7 @@ export default function PublicHeader({ user }: PublicHeaderProps) {
             tabIndex={-1}
             role="dialog"
             aria-modal="true"
-            className="absolute inset-x-0 top-20 z-50 border-b border-line bg-surface px-5 pb-6 pt-2 shadow-xl"
+            className="public-mobile-menu-sheet absolute inset-x-0 top-20 z-50 border-b border-line bg-surface px-5 pb-6 pt-2 shadow-xl"
             aria-label="Điều hướng mobile"
           >
             <ul className="flex flex-col gap-1">
@@ -164,7 +188,7 @@ export default function PublicHeader({ user }: PublicHeaderProps) {
                     <Link
                       href={item.href}
                       aria-current={isActive ? "page" : undefined}
-                      onClick={() => setMenuOpen(false)}
+                      onClick={closeMenu}
                       className={`flex items-center gap-3 rounded-xl px-4 py-3 text-lg font-extrabold transition-colors ${
                         isActive ? "bg-primary/10 text-primary" : "text-ink hover:bg-surface-soft"
                       }`}
@@ -186,14 +210,14 @@ export default function PublicHeader({ user }: PublicHeaderProps) {
               <div className="mt-4 flex flex-col gap-2 border-t border-line pt-4">
                 <Link
                   href="/login"
-                  onClick={() => setMenuOpen(false)}
+                  onClick={closeMenu}
                   className="flex items-center justify-center rounded-xl border border-line px-4 py-3 text-base font-extrabold text-ink"
                 >
                   Đăng nhập
                 </Link>
                 <Link
                   href="/login?mode=register"
-                  onClick={() => setMenuOpen(false)}
+                  onClick={closeMenu}
                   className="flex items-center justify-center rounded-xl bg-primary px-4 py-3 text-base font-extrabold text-gold-ink"
                 >
                   Đăng ký

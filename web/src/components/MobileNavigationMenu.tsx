@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { usePathname } from "next/navigation";
 import { createPortal } from "react-dom";
 import NavIcon, { type NavIconName } from "./NavIcon";
@@ -20,15 +20,40 @@ const navItems = [
 export default function MobileNavigationMenu({ inverted = false }: { inverted?: boolean }) {
   const pathname = usePathname();
   const [open, setOpen] = useState(false);
+  const [closing, setClosing] = useState(false);
   const dialogRef = useRef<HTMLDivElement>(null);
+  const closeTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  useDialogFocus(open, () => setOpen(false), dialogRef);
+  function closeMenu() {
+    if (!open || closing) return;
+    setClosing(true);
+    closeTimerRef.current = setTimeout(() => {
+      setOpen(false);
+      setClosing(false);
+      closeTimerRef.current = null;
+    }, 220);
+  }
+
+  function openMenu() {
+    if (closeTimerRef.current) {
+      clearTimeout(closeTimerRef.current);
+      closeTimerRef.current = null;
+    }
+    setClosing(false);
+    setOpen(true);
+  }
+
+  useEffect(() => () => {
+    if (closeTimerRef.current) clearTimeout(closeTimerRef.current);
+  }, []);
+
+  useDialogFocus(open, closeMenu, dialogRef);
 
   return (
     <div className="xl:hidden">
       <button
         type="button"
-        onClick={() => setOpen(true)}
+        onClick={openMenu}
         aria-label="Mở điều hướng"
         aria-expanded={open}
         className={`inline-flex h-11 w-11 items-center justify-center rounded-xl border ${inverted ? "border-white/30 bg-white/10 text-white" : "border-line bg-surface-soft text-ink"}`}
@@ -41,19 +66,19 @@ export default function MobileNavigationMenu({ inverted = false }: { inverted?: 
       </button>
 
       {open && createPortal(
-        <div ref={dialogRef} tabIndex={-1} className="mobile-navigation-dialog fixed inset-x-0 bottom-0 top-16 z-[1000] xl:hidden" role="dialog" aria-modal="true" aria-label="Điều hướng">
-          <button type="button" className="mobile-navigation-backdrop absolute inset-0 bg-slate-950/30 backdrop-blur-sm" aria-label="Đóng điều hướng" onClick={() => setOpen(false)} />
+        <div ref={dialogRef} tabIndex={-1} className={`mobile-navigation-dialog ${closing ? "is-closing" : "is-open"} fixed inset-x-0 bottom-0 top-16 z-[1000] xl:hidden`} role="dialog" aria-modal="true" aria-label="Điều hướng">
+          <button type="button" className="mobile-navigation-backdrop absolute inset-0 bg-slate-950/30 backdrop-blur-sm" aria-label="Đóng điều hướng" onClick={closeMenu} />
           <aside className="mobile-navigation-sheet absolute inset-x-0 top-0 max-h-full overflow-y-auto border-t border-line bg-surface px-6 pb-[max(1.5rem,env(safe-area-inset-bottom))] pt-6 shadow-2xl">
             <div className="mx-auto max-w-lg">
               <div className="flex items-center justify-between border-b border-line pb-4">
                 <p className="text-xs font-extrabold uppercase tracking-widest text-primary">ENGLISHGO</p>
-                <button type="button" data-dialog-initial-focus className="inline-flex h-10 w-10 items-center justify-center rounded-xl border border-line text-xl text-ink" aria-label="Đóng" onClick={() => setOpen(false)}>×</button>
+                <button type="button" data-dialog-initial-focus className="inline-flex h-10 w-10 items-center justify-center rounded-xl border border-line text-xl text-ink" aria-label="Đóng" onClick={closeMenu}>×</button>
               </div>
               <nav className="mt-4 grid gap-2" aria-label="Điều hướng chính">
               {navItems.map((item) => {
                 const active = item.href === "/hub" ? pathname === "/hub" : pathname.startsWith(item.href);
                 return (
-                  <Link key={item.href} href={item.href} aria-current={active ? "page" : undefined} onClick={() => setOpen(false)} className={`flex min-h-14 items-center gap-4 rounded-xl px-4 text-lg font-extrabold ${active ? "bg-primary/10 text-primary" : "text-ink hover:bg-surface-soft"}`}>
+                  <Link key={item.href} href={item.href} aria-current={active ? "page" : undefined} onClick={closeMenu} className={`flex min-h-14 items-center gap-4 rounded-xl px-4 text-lg font-extrabold ${active ? "bg-primary/10 text-primary" : "text-ink hover:bg-surface-soft"}`}>
                     <NavIcon name={item.icon} className={`h-6 w-6 ${item.color}`} />
                     {item.label}
                   </Link>
@@ -61,7 +86,7 @@ export default function MobileNavigationMenu({ inverted = false }: { inverted?: 
               })}
               </nav>
               <div className="mt-5 flex items-center justify-between border-t border-line pt-4">
-                <Link href="/account" onClick={() => setOpen(false)} className="inline-flex min-h-11 items-center rounded-xl border border-line px-4 text-sm font-extrabold text-ink">Tài khoản</Link>
+                <Link href="/account" onClick={closeMenu} className="inline-flex min-h-11 items-center rounded-xl border border-line px-4 text-sm font-extrabold text-ink">Tài khoản</Link>
                 <ThemeToggle className="h-11 w-11 border border-line bg-surface-soft text-ink" />
               </div>
             </div>

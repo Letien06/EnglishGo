@@ -208,7 +208,7 @@ body {
 }
 
 :where(button:not(:disabled), a[href], [role="button"]:not([aria-disabled="true"])):active {
-  transform: scale(0.975);
+  transform: scale(0.97);
 }
 
 .design-system {
@@ -308,7 +308,20 @@ body {
 }
 
 .app-primary-nav-link[aria-current="page"] {
-  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--primary) 16%, transparent), inset 0 1px 0 color-mix(in srgb, white 20%, transparent);
+  background: color-mix(in srgb, var(--primary) 11%, var(--surface));
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--primary) 20%, transparent), inset 0 1px 0 color-mix(in srgb, white 20%, transparent);
+}
+
+.app-primary-nav-link[aria-current="page"]::after {
+  position: absolute;
+  right: 0.75rem;
+  bottom: 0.28rem;
+  left: 0.75rem;
+  height: 2px;
+  border-radius: var(--radius-pill);
+  background: var(--gradient-brand);
+  box-shadow: 0 2px 8px color-mix(in srgb, var(--primary) 34%, transparent);
+  content: "";
 }
 
 .app-account-control {
@@ -346,6 +359,17 @@ body {
   box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--primary) 12%, transparent);
 }
 
+.public-nav-link.is-active::after {
+  position: absolute;
+  right: 0.72rem;
+  bottom: 0.28rem;
+  left: 0.72rem;
+  height: 2px;
+  border-radius: var(--radius-pill);
+  background: var(--primary);
+  content: "";
+}
+
 .public-header-control {
   box-shadow: inset 0 1px 0 color-mix(in srgb, white 24%, transparent);
 }
@@ -367,6 +391,32 @@ body {
 @media (hover: hover) and (pointer: fine) and (prefers-reduced-motion: no-preference) {
   .public-register:hover,
   .public-avatar:hover { transform: translateY(-1px); }
+}
+
+.public-mobile-menu > button {
+  opacity: 0;
+  transition: opacity var(--motion-fast) var(--ease-out);
+}
+
+.public-mobile-menu-sheet {
+  opacity: 0;
+  transform: translateY(-0.75rem) scale(0.985);
+  transform-origin: top center;
+  transition: opacity 180ms var(--ease-out), transform 220ms var(--ease-drawer);
+}
+
+.public-mobile-menu.is-open > button,
+.public-mobile-menu.is-open .public-mobile-menu-sheet {
+  opacity: 1;
+}
+
+.public-mobile-menu.is-open .public-mobile-menu-sheet {
+  transform: translateY(0) scale(1);
+}
+
+@starting-style {
+  .public-mobile-menu.is-open > button { opacity: 0; }
+  .public-mobile-menu.is-open .public-mobile-menu-sheet { opacity: 0; transform: translateY(-0.75rem) scale(0.985); }
 }
 
 .app-canvas {
@@ -797,13 +847,14 @@ body {
 .premium-primary {
   border: 1px solid color-mix(in srgb, var(--primary) 68%, transparent);
   background: linear-gradient(135deg, var(--primary), var(--gold2));
-  box-shadow: 0 10px 24px color-mix(in srgb, var(--primary) 25%, transparent);
+  box-shadow: inset 0 1px 0 color-mix(in srgb, white 34%, transparent), 0 10px 24px color-mix(in srgb, var(--primary) 25%, transparent);
   color: var(--gold-ink);
 }
 
 .premium-secondary {
-  border: 1px solid var(--line);
+  border: 1px solid color-mix(in srgb, var(--line) 82%, var(--ink) 8%);
   background: color-mix(in srgb, var(--surface-soft) 78%, transparent);
+  box-shadow: inset 0 1px 0 color-mix(in srgb, white 20%, transparent);
   color: var(--ink);
 }
 
@@ -853,7 +904,7 @@ h1, h2, h3, h4, h5 {
 }
 
 @media (prefers-reduced-motion: no-preference) and (hover: hover) and (pointer: fine) {
-  :where(a, button, [role="button"], summary):active { transform: translateY(1px) scale(0.99); }
+  :where(a, button, [role="button"], summary):active { transform: translateY(1px) scale(0.97); }
 }
 
 .overdelay-feedback {
@@ -1194,27 +1245,42 @@ h1, h2, h3, h4, h5 {
   box-shadow: inset 0 1px 0 color-mix(in srgb, white 16%, transparent);
 }
 
-.mobile-navigation-backdrop { background: var(--overlay); }
+.mobile-navigation-backdrop {
+  background: var(--overlay);
+  opacity: 0;
+  transition: opacity var(--motion-fast) var(--ease-out);
+}
 
 .mobile-navigation-sheet {
   border-color: color-mix(in srgb, var(--line) 74%, var(--primary) 18%);
   background: color-mix(in srgb, var(--surface) 94%, transparent);
   box-shadow: var(--elevation-2), inset 0 1px 0 color-mix(in srgb, white 20%, transparent);
+  opacity: 0;
+  transform: translateY(-1rem) scale(0.985);
+  transform-origin: top center;
+  transition: opacity 180ms var(--ease-out), transform 220ms var(--ease-drawer);
 }
 
-@media (prefers-reduced-motion: no-preference) {
-  .mobile-navigation-backdrop { animation: mobile-backdrop-in var(--motion-fast) ease both; }
-  .mobile-navigation-sheet { animation: mobile-sheet-in var(--motion-slow) var(--ease-drawer) both; }
+.mobile-navigation-dialog.is-open .mobile-navigation-backdrop,
+.mobile-navigation-dialog.is-open .mobile-navigation-sheet {
+  opacity: 1;
 }
 
-@keyframes mobile-backdrop-in {
-  from { opacity: 0; }
-  to { opacity: 1; }
+.mobile-navigation-dialog.is-open .mobile-navigation-sheet {
+  transform: translateY(0) scale(1);
 }
 
-@keyframes mobile-sheet-in {
-  from { opacity: 0; transform: translateY(-1rem); }
-  to { opacity: 1; transform: translateY(0); }
+@starting-style {
+  .mobile-navigation-dialog.is-open .mobile-navigation-backdrop { opacity: 0; }
+  .mobile-navigation-dialog.is-open .mobile-navigation-sheet { opacity: 0; transform: translateY(-1rem) scale(0.985); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  :where(button:not(:disabled), a[href], [role="button"]:not([aria-disabled="true"])):active { transform: none; }
+  .public-mobile-menu-sheet,
+  .mobile-navigation-sheet { transform: none; transition: opacity var(--motion-fast) var(--ease-out); }
+  .public-mobile-menu.is-open .public-mobile-menu-sheet,
+  .mobile-navigation-dialog.is-open .mobile-navigation-sheet { transform: none; }
 }
 
 @media (prefers-reduced-transparency: reduce) {
