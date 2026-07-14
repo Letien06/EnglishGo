@@ -98,7 +98,7 @@ export default function VocabLearnTabClient({ groupId }: { groupId?: string }) {
               <Link
                 key={group.id}
                 href={`/vocab?tab=learn&group=${encodeURIComponent(group.id)}`}
-                data-overdelay="Dang doi nhom tu vung..."
+                data-overdelay="Đang đổi nhóm từ vựng..."
                 className={`whitespace-nowrap rounded-full border px-4 py-2 text-xs font-extrabold transition-colors ${
                   selected
                     ? "border-primary bg-primary text-gold-ink"
@@ -128,20 +128,20 @@ export default function VocabLearnTabClient({ groupId }: { groupId?: string }) {
                     </h2>
                   </div>
                 </header>
-                <p className="mt-3 text-sm text-muted">{card.wordCount} tu vung</p>
+                <p className="mt-3 text-sm text-muted">{card.wordCount} từ vựng</p>
                 <div className="mt-4 h-2 overflow-hidden rounded-full bg-slate-100">
                   <span className="block h-full rounded-full bg-primary" style={{ width: `${percent}%` }} />
                 </div>
                 <div className="mt-2 flex flex-wrap gap-x-3 gap-y-1 text-xs font-bold text-muted">
-                  <span>{card.masteredWords}/{card.wordCount} tu da thuoc</span>
-                  {card.dueWords > 0 ? <span className="text-red-600">{card.dueWords} can on</span> : null}
+                  <span>{card.masteredWords}/{card.wordCount} từ đã thuộc</span>
+                  {card.dueWords > 0 ? <span className="text-red-600">{card.dueWords} cần ôn</span> : null}
                 </div>
                 <Link
                   href={`/vocab/dautoeic/${encodeURIComponent(card.id)}`}
-                  data-overdelay="Dang mo bo tu vung..."
+                  data-overdelay="Đang mở bộ từ vựng..."
                   className="mt-5 inline-flex w-full items-center justify-center rounded-full border border-emerald-300 px-4 py-2 text-xs font-extrabold text-emerald-700 hover:bg-emerald-50"
                 >
-                  Vao hoc
+                  Vào học
                 </Link>
               </article>
             );
@@ -171,17 +171,17 @@ export default function VocabLearnTabClient({ groupId }: { groupId?: string }) {
             <div className="mt-5 flex flex-wrap gap-2">
               <Link
                 href={`/vocab/${set.id}`}
-                data-overdelay="Dang mo chi tiet bo tu..."
+                data-overdelay="Đang mở chi tiết bộ từ..."
                 className="rounded-full border border-amber-200 px-4 py-2 text-xs font-extrabold text-ink hover:bg-amber-50"
               >
-                Xem chi tiet
+                Xem chi tiết
               </Link>
               <Link
                 href={`/vocab/${set.id}/flashcards?mode=menu`}
-                data-overdelay="Dang nap game tu vung..."
+                data-overdelay="Đang nạp game từ vựng..."
                 className="rounded-full bg-primary px-4 py-2 text-xs font-extrabold text-gold-ink hover:opacity-90"
               >
-                Chon mode hoc
+                Chọn chế độ học
               </Link>
             </div>
           </article>
@@ -192,8 +192,8 @@ export default function VocabLearnTabClient({ groupId }: { groupId?: string }) {
 
   return (
     <EmptyPanel
-      title={state.status === "error" ? "Chua tai duoc bo tu goi y" : "Chua co bo tu goi y"}
-      description="Ban van co the vao muc Tu vung cua toi de tao bo rieng, import file va luyen tap voi cac che do game."
+      title={state.status === "error" ? "Chưa tải được bộ từ gợi ý" : "Chưa có bộ từ gợi ý"}
+      description="Bạn vẫn có thể vào mục Từ vựng của tôi để tạo bộ riêng, nhập file và luyện tập với các chế độ game."
     />
   );
 }

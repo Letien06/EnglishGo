@@ -176,7 +176,7 @@ export default function VocabMyTab({ uid, folderId, folderSearch }: Props) {
         <div className="flex gap-2 flex-wrap">
           <Link
             href="/vocab?tab=my"
-            data-overdelay="Dang mo tat ca bo tu..."
+            data-overdelay="Đang mở tất cả bộ từ..."
             className={`px-3 py-1.5 rounded-lg text-sm font-semibold transition-colors no-underline ${
               !folderId
                 ? "bg-accent text-white"
@@ -189,7 +189,7 @@ export default function VocabMyTab({ uid, folderId, folderSearch }: Props) {
             <div key={folder.id} className="flex items-center gap-1">
               <Link
                 href={`/vocab?tab=my&folderId=${folder.id}`}
-                data-overdelay="Dang mo folder..."
+                data-overdelay="Đang mở thư mục..."
                 className={`px-3 py-1.5 rounded-lg text-sm font-semibold transition-colors no-underline ${
                   folderId === folder.id
                     ? "bg-accent text-white"
@@ -229,7 +229,7 @@ export default function VocabMyTab({ uid, folderId, folderSearch }: Props) {
               <header className="flex items-start justify-between gap-2 mb-3">
                 <Link
                   href={`/vocab/${set.id}`}
-                  data-overdelay="Dang mo chi tiet bo tu..."
+                  data-overdelay="Đang mở chi tiết bộ từ..."
                   className="min-w-0 no-underline"
                 >
                   <div className="flex items-center gap-2">
@@ -251,14 +251,14 @@ export default function VocabMyTab({ uid, folderId, folderSearch }: Props) {
               <footer className="flex items-center gap-2 border-t border-line pt-3">
                 <Link
                   href={`/vocab/${set.id}`}
-                  data-overdelay="Dang mo chi tiet bo tu..."
+                  data-overdelay="Đang mở chi tiết bộ từ..."
                   className="rounded-full bg-accent px-4 py-2 text-sm font-bold text-white no-underline"
                 >
                   Xem
                 </Link>
                 <Link
                   href={`/vocab/${set.id}/flashcards?mode=menu`}
-                  data-overdelay="Dang nap game tu vung..."
+                  data-overdelay="Đang nạp game từ vựng..."
                   className="rounded-full px-3 py-2 text-sm font-bold text-ink2 no-underline hover:bg-surface-soft"
                   title="Chọn 6 game và lịch sử chơi"
                 >
@@ -751,12 +751,12 @@ function AddWordsModal({
       });
       const data = await res.json().catch(() => null);
       if (!res.ok || data?.success === false) {
-        throw new Error(data?.error || "Khong the them tu vung");
+        throw new Error(data?.error || "Không thể thêm từ vựng");
       }
       onAdded();
       onClose();
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Khong the them tu vung");
+      setError(err instanceof Error ? err.message : "Không thể thêm từ vựng");
     } finally {
       setBusy(false);
     }
@@ -776,12 +776,12 @@ function AddWordsModal({
       });
       const data = await res.json().catch(() => null);
       if (!res.ok || data?.success === false) {
-        throw new Error(data?.error || "Khong the import file");
+        throw new Error(data?.error || "Không thể nhập file");
       }
       onAdded();
       onClose();
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Khong the import file");
+      setError(err instanceof Error ? err.message : "Không thể nhập file");
     } finally {
       setBusy(false);
     }
@@ -818,14 +818,14 @@ function AddWordsModal({
       });
       const data = await res.json().catch(() => null);
       if (!res.ok || data?.success === false || !Array.isArray(data?.data)) {
-        throw new Error(data?.error || "AI chua tao duoc tu");
+        throw new Error(data?.error || "AI chưa tạo được từ");
       }
       setAiCandidates(data.data);
       setAiSelected(new Set(data.data.map((_: AiVocabCandidate, index: number) => index)));
-      setAiStatus(`Da tao ${data.data.length} tu, hay chon tu muon luu.`);
+      setAiStatus(`Đã tạo ${data.data.length} từ, hãy chọn từ muốn lưu.`);
     } catch (err) {
       setAiStatus("");
-      setError(err instanceof Error ? err.message : "AI chua tao duoc tu");
+      setError(err instanceof Error ? err.message : "AI chưa tạo được từ");
     } finally {
       timers.forEach(window.clearTimeout);
       setBusy(false);
@@ -838,7 +838,7 @@ function AddWordsModal({
 
     setBusy(true);
     setError("");
-    setAiStatus("Dang luu tu AI...");
+    setAiStatus("Đang lưu từ AI...");
     try {
       const res = await fetch(`/api/vocab/sets/${targetSetId}/ai-words/save`, {
         method: "POST",
@@ -847,13 +847,13 @@ function AddWordsModal({
       });
       const data = await res.json().catch(() => null);
       if (!res.ok || data?.success === false) {
-        throw new Error(data?.error || "Khong the luu tu AI");
+        throw new Error(data?.error || "Không thể lưu từ AI");
       }
       onAdded();
       onClose();
     } catch (err) {
       setAiStatus("");
-      setError(err instanceof Error ? err.message : "Khong the luu tu AI");
+      setError(err instanceof Error ? err.message : "Không thể lưu từ AI");
     } finally {
       setBusy(false);
     }
@@ -907,8 +907,8 @@ function AddWordsModal({
             }`}
           >
             {t === "manual" && "✍️ Nhập tay"}
-            {t === "file" && "📄 File"}
-            {t === "paste" && "📋 Paste"}
+            {t === "file" && "📄 Tệp"}
+            {t === "paste" && "📋 Dán nội dung"}
           </button>
         ))}
       </nav>
@@ -930,13 +930,13 @@ function AddWordsModal({
               <input
                 value={row.word}
                 onChange={(e) => updateRow(i, "word", e.target.value)}
-                placeholder="Word"
+                placeholder="Từ tiếng Anh"
                 className="flex-1 px-2 py-1 rounded bg-surface-soft border border-line text-xs text-ink min-w-0"
               />
               <input
                 value={row.meaning}
                 onChange={(e) => updateRow(i, "meaning", e.target.value)}
-                placeholder="Meaning"
+                placeholder="Nghĩa tiếng Việt"
                 className="flex-1 px-2 py-1 rounded bg-surface-soft border border-line text-xs text-ink min-w-0"
               />
               <button
@@ -983,9 +983,9 @@ function AddWordsModal({
           {aiMode === "image" ? (
             <label className="block cursor-pointer rounded-xl border-2 border-dashed border-line bg-surface-soft px-4 py-5 text-center hover:border-accent/40">
               <span className="block text-sm font-semibold text-ink">
-                {aiImageFile ? aiImageFile.name : "Chon anh de AI lay tu vung"}
+                {aiImageFile ? aiImageFile.name : "Chọn ảnh để AI lấy từ vựng"}
               </span>
-              <span className="text-xs text-muted">JPG, PNG, WEBP toi da 5MB</span>
+              <span className="text-xs text-muted">JPG, PNG, WEBP tối đa 5MB</span>
               <input
                 type="file"
                 accept="image/jpeg,image/png,image/webp"
@@ -1039,14 +1039,14 @@ function AddWordsModal({
             <section className="space-y-2">
               <div className="flex items-center justify-between gap-3">
                 <strong className="text-sm text-ink">
-                  Da chon {aiSelected.size}/{aiCandidates.length}
+                  Đã chọn {aiSelected.size}/{aiCandidates.length}
                 </strong>
                 <button
                   type="button"
                   onClick={toggleAllAiCandidates}
                   className="text-xs font-semibold text-accent"
                 >
-                  {aiSelected.size === aiCandidates.length ? "Bo chon tat ca" : "Chon tat ca"}
+                  {aiSelected.size === aiCandidates.length ? "Bỏ chọn tất cả" : "Chọn tất cả"}
                 </button>
               </div>
               <div className="max-h-56 space-y-2 overflow-y-auto pr-1">
@@ -1148,7 +1148,7 @@ function AddWordsModal({
             onClick={onClose}
             className="px-4 py-2 rounded-lg bg-surface-soft text-ink2 text-sm"
           >
-            Huy
+            Hủy
           </button>
           {aiCandidates.length === 0 ? (
             <button
@@ -1160,7 +1160,7 @@ function AddWordsModal({
               }
               className="px-4 py-2 rounded-lg bg-accent text-white text-sm font-semibold disabled:opacity-50"
             >
-              {busy ? "Dang tao..." : "Tao bang AI"}
+              {busy ? "Đang tạo..." : "Tạo bằng AI"}
             </button>
           ) : (
             <button
@@ -1168,7 +1168,7 @@ function AddWordsModal({
               disabled={busy || aiSelected.size === 0}
               className="px-4 py-2 rounded-lg bg-accent text-white text-sm font-semibold disabled:opacity-50"
             >
-              {busy ? "Dang luu..." : `Luu ${aiSelected.size} tu`}
+              {busy ? "Đang lưu..." : `Lưu ${aiSelected.size} từ`}
             </button>
           )}
         </footer>

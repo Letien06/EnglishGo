@@ -64,10 +64,10 @@ export default function VocabProgressTabClient() {
   if (unauthorized) {
     return (
       <EmptyPanel
-        title="Dang nhap de xem tien do"
-        description="Tien do hoc, lich on va so tu da thuoc duoc luu theo tai khoan cua ban."
+        title="Đăng nhập để xem tiến độ"
+        description="Tiến độ học, lịch ôn và số từ đã thuộc được lưu theo tài khoản của bạn."
         actionHref="/login?redirect=/vocab%3Ftab%3Dprogress"
-        actionLabel="Dang nhap"
+        actionLabel="Đăng nhập"
       />
     );
   }
@@ -77,10 +77,10 @@ export default function VocabProgressTabClient() {
   if (error || !payload) {
     return (
       <EmptyPanel
-        title="Chua tai duoc tien do"
-        description="Du lieu tien do chua san sang. Hay thu lai sau hoac vao Bo tu cua toi de hoc tiep."
+        title="Chưa tải được tiến độ"
+        description="Dữ liệu tiến độ chưa sẵn sàng. Hãy thử lại sau hoặc vào Bộ từ của tôi để học tiếp."
         actionHref="/vocab?tab=my"
-        actionLabel="Bo tu cua toi"
+        actionLabel="Bộ từ của tôi"
       />
     );
   }
@@ -95,17 +95,17 @@ export default function VocabProgressTabClient() {
       <article className="rounded-2xl border border-amber-100 bg-white p-5 shadow-sm">
         <div className="flex flex-wrap items-center justify-between gap-4">
           <div>
-            <h2 className="text-xl font-extrabold text-ink">Muc tieu hom nay</h2>
+            <h2 className="text-xl font-extrabold text-ink">Mục tiêu hôm nay</h2>
             <p className="mt-1 text-sm text-muted">
-              {payload.dueWords} tu can on · chuoi hoc {payload.streakDays} ngay
+              {payload.dueWords} từ cần ôn · chuỗi học {payload.streakDays} ngày
             </p>
           </div>
           <Link
             href="/vocab?tab=my"
-            data-overdelay="Dang mo bo tu cua toi..."
+            data-overdelay="Đang mở bộ từ của tôi..."
             className="rounded-full border border-amber-200 px-4 py-2 text-xs font-extrabold text-ink hover:bg-amber-50"
           >
-            Quan ly bo tu
+            Quản lý bộ từ
           </Link>
         </div>
         <div className="mt-5 grid gap-4 md:grid-cols-2">
@@ -125,16 +125,16 @@ export default function VocabProgressTabClient() {
       </article>
 
       <section className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-        <StatCard label="Tong the" value={payload.totalWords} />
-        <StatCard label="Da hoc" value={payload.learnedWords} />
-        <StatCard label="Thanh thao" value={payload.masteredWords} />
-        <StatCard label="Can on" value={payload.dueWords} />
+        <StatCard label="Tổng thể" value={payload.totalWords} />
+        <StatCard label="Đã học" value={payload.learnedWords} />
+        <StatCard label="Thành thạo" value={payload.masteredWords} />
+        <StatCard label="Cần ôn" value={payload.dueWords} />
       </section>
 
       {payload.progressSets.length === 0 ? (
         <EmptyPanel
-          title="Chua co tien do hoc"
-          description="Hoc mot bo tu hoac mo game trong Bo tu cua toi de he thong luu tien do va lich on."
+          title="Chưa có tiến độ học"
+          description="Học một bộ từ hoặc mở game trong Bộ từ của tôi để hệ thống lưu tiến độ và lịch ôn."
         />
       ) : (
         <section className="grid gap-4 md:grid-cols-2">
@@ -159,24 +159,24 @@ export default function VocabProgressTabClient() {
                   <span className="block h-full rounded-full bg-primary" style={{ width: `${masteredPercent}%` }} />
                 </div>
                 <div className="mt-3 flex flex-wrap gap-x-4 gap-y-1 text-xs font-bold text-muted">
-                  <span>{set.masteredWords}/{set.totalWords} da thuoc</span>
-                  <span>{set.learnedWords} da hoc</span>
-                  <span>{learningWords} dang hoc</span>
+                  <span>{set.masteredWords}/{set.totalWords} đã thuộc</span>
+                  <span>{set.learnedWords} đã học</span>
+                  <span>{learningWords} đang học</span>
                 </div>
                 <footer className="mt-5 flex flex-wrap gap-2">
                   <Link
                     href={`/vocab/${set.id}`}
-                    data-overdelay="Dang mo chi tiet bo tu..."
+                    data-overdelay="Đang mở chi tiết bộ từ..."
                     className="rounded-full border border-amber-200 px-4 py-2 text-xs font-extrabold text-ink hover:bg-amber-50"
                   >
-                    Xem chi tiet
+                    Xem chi tiết
                   </Link>
                   <Link
                     href={set.dueWords > 0 ? `/vocab/${set.id}/flashcards?mode=menu&mastery=due&order=random&amount=20` : `/vocab/${set.id}/flashcards?mode=menu`}
-                    data-overdelay="Dang nap game tu vung..."
+                    data-overdelay="Đang nạp game từ vựng..."
                     className="rounded-full bg-primary px-4 py-2 text-xs font-extrabold text-gold-ink hover:opacity-90"
                   >
-                    {set.dueWords > 0 ? "Chon mode on" : "Hoc tiep"}
+                    {set.dueWords > 0 ? "Chọn chế độ ôn" : "Học tiếp"}
                   </Link>
                 </footer>
               </article>
@@ -236,7 +236,7 @@ function EmptyPanel({
         {actionHref && actionLabel ? (
           <Link
             href={actionHref}
-            data-overdelay="Dang mo trang..."
+            data-overdelay="Đang mở trang..."
             className="mt-5 inline-flex rounded-full bg-primary px-5 py-2 text-xs font-extrabold text-gold-ink"
           >
             {actionLabel}

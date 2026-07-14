@@ -57,7 +57,7 @@ export default async function VocabPage({
               <Link
                 key={tab.key}
                 href={`/vocab?tab=${tab.key}`}
-                data-overdelay={`Dang mo ${tab.label}...`}
+                data-overdelay={`Đang mở ${tab.label}...`}
                 aria-current={selected ? "page" : undefined}
                 className={`vocab-tab inline-flex items-center gap-2 whitespace-nowrap rounded-full px-4 py-2 text-xs font-extrabold transition-colors ${
                   selected

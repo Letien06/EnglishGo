@@ -366,7 +366,7 @@ export default function FlashcardGame({
     <main className="flex-1 overflow-y-auto px-4 py-6 lg:px-8 space-y-6">
       {filterPending && (
         <div className="fixed inset-x-0 top-16 z-50 mx-auto w-fit rounded-full border border-amber-200 bg-white px-4 py-2 text-xs font-extrabold text-ink shadow-lg">
-          Dang nap bo loc tu vung...
+          Đang nạp bộ lọc từ vựng...
         </div>
       )}
 
