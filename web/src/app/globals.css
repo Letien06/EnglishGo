@@ -234,6 +234,17 @@ body {
   .app-connection-status { opacity: 0; transform: translateY(0.5rem) scale(0.98); }
 }
 
+@media (prefers-reduced-motion: reduce) {
+  .app-connection-status {
+    transform: none;
+    transition: opacity var(--motion-fast) var(--ease-out);
+  }
+
+  @starting-style {
+    .app-connection-status { opacity: 0; transform: none; }
+  }
+}
+
 .app-connection-status-dot,
 .exam-save-status > span {
   width: 0.5rem;
