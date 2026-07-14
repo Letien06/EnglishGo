@@ -1524,7 +1524,7 @@ function PlaySurface({
         />
       )}
 
-      {status.text && (
+      {status.text && !feedback && (
         <p className={`text-center text-sm font-semibold ${statusToneClass}`}>{status.text}</p>
       )}
 
@@ -1540,7 +1540,8 @@ function PlaySurface({
             value={typed}
             onChange={(event) => setTyped(event.target.value)}
             placeholder={reverse ? "Gõ từ tiếng Anh" : "Gõ nghĩa tiếng Việt"}
-            className="min-h-12 flex-1 rounded-xl border border-line bg-white px-4 text-base font-semibold text-ink outline-none focus:border-accent"
+            disabled={!!feedback}
+            className="min-h-12 flex-1 rounded-xl border border-line bg-white px-4 text-base font-semibold text-ink outline-none focus:border-accent disabled:cursor-not-allowed disabled:opacity-60"
           />
           <button
             type="submit"
@@ -1641,13 +1642,13 @@ function FeedbackOverlay({
     activeMode === "matching" && isMatchingDone ? "Xem kết quả" : "Tiếp tục";
   return (
     <section
-      className={`fixed inset-x-0 bottom-0 z-40 border-t p-4 ${
+      className={`w-full rounded-2xl border p-4 shadow-lg ${
         feedback.correct
-          ? "border-green-500 bg-green-500/10"
-          : "border-red-500 bg-red-500/10"
+          ? "border-green-200 bg-green-50"
+          : "border-red-200 bg-red-50"
       }`}
     >
-      <div className="mx-auto flex max-w-3xl items-center gap-4">
+      <div className="mx-auto flex max-w-3xl flex-col items-center gap-4 sm:flex-row">
         <button
           type="button"
           onClick={onSpeak}
