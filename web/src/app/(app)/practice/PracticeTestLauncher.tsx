@@ -141,7 +141,7 @@ export default function PracticeTestLauncher({ tests }: Props) {
     <>
       <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3">
         {tests.map((test) => (
-          <article key={test.id} className="rounded-xl border border-line bg-surface p-5">
+          <article key={test.id} className="premium-card premium-card--interactive p-5">
             <header className="space-y-1">
               <h2 className="font-bold text-ink">{test.title}</h2>
               <p className="text-xs text-muted">
@@ -157,20 +157,20 @@ export default function PracticeTestLauncher({ tests }: Props) {
               <button
                 type="button"
                 onClick={() => openModal(test, "exam")}
-                className="flex-1 rounded-lg bg-accent px-4 py-2 text-sm font-semibold text-white"
+                className="premium-primary flex-1 px-4 py-2 text-sm"
               >
                 Thi thử
               </button>
               <button
                 type="button"
                 onClick={() => openModal(test, "practice")}
-                className="flex-1 rounded-lg bg-surface-soft px-4 py-2 text-sm font-semibold text-ink"
+                className="premium-secondary flex-1 px-4 py-2 text-sm"
               >
                 Luyện tập
               </button>
               <Link
                 href="/practice/history"
-                className="rounded-lg border border-line px-4 py-2 text-sm font-semibold text-ink"
+                className="premium-secondary px-4 py-2 text-sm"
               >
                 Lịch sử
               </Link>

@@ -70,9 +70,10 @@ export default function HomePage() {
     <>
       <PublicHeader />
 
-      <main className="flex-1">
-        <section className="mx-auto flex min-h-[calc(100dvh-5rem)] max-w-7xl flex-col items-center justify-center px-5 py-16 text-center sm:px-8 md:py-24">
-          <span className="inline-flex rounded-full bg-primary/10 px-5 py-3 text-base font-extrabold text-primary">
+      <main className="app-canvas flex-1">
+        <section className="premium-hero premium-reveal mx-4 mt-4 flex min-h-[calc(100dvh-7rem)] max-w-none flex-col items-center justify-center px-5 py-16 text-center sm:mx-6 sm:px-8 md:mx-8 md:py-24 lg:mx-auto lg:max-w-7xl">
+          <div className="premium-hero-orbit" aria-hidden="true" />
+          <span className="premium-metric inline-flex px-5 py-3 text-base font-extrabold text-primary">
             ✦ Nền tảng luyện TOEIC miễn phí cho người học
           </span>
           <h1 className="mt-10 max-w-5xl text-5xl font-extrabold leading-[1.05] text-ink sm:text-6xl lg:text-7xl">
@@ -88,13 +89,13 @@ export default function HomePage() {
           <div className="mt-12 flex w-full flex-col justify-center gap-4 sm:w-auto sm:flex-row">
             <Link
               href="/login?mode=register"
-              className="inline-flex min-h-16 items-center justify-center gap-2 rounded-xl bg-primary px-10 text-lg font-extrabold text-gold-ink shadow-[0_20px_45px_rgba(224,149,43,0.25)] transition-opacity hover:opacity-90"
+              className="premium-primary inline-flex min-h-16 gap-2 px-10 text-lg"
             >
               Bắt đầu luyện tập <NavIcon name="arrow-right" className="h-5 w-5" />
             </Link>
             <Link
               href="/practice"
-              className="inline-flex min-h-16 items-center justify-center gap-2 rounded-xl border border-line bg-surface px-10 text-lg font-extrabold text-ink2 transition-colors hover:bg-surface-soft hover:text-ink"
+              className="premium-secondary inline-flex min-h-16 gap-2 px-10 text-lg text-ink2"
             >
               <NavIcon name="practice" className="h-5 w-5 text-terracotta" />
               Làm bài test thử (demo)
@@ -115,7 +116,7 @@ export default function HomePage() {
             {features.map((feature) => (
               <article
                 key={feature.title}
-                className="card-elevated flex min-h-56 flex-col gap-3 rounded-xl border border-line bg-surface p-5 transition-colors hover:border-primary/40"
+                className="premium-card premium-card--interactive flex min-h-56 flex-col gap-3 p-5"
               >
                 <span className="text-2xl text-primary">{feature.icon}</span>
                 <h2 className="text-lg font-extrabold text-ink">{feature.title}</h2>
@@ -128,7 +129,7 @@ export default function HomePage() {
           </div>
         </section>
 
-        <section className="bg-surface-soft px-5 py-16 sm:px-8 md:py-20">
+        <section className="mx-4 mb-6 rounded-[1.75rem] border border-line bg-surface-soft/70 px-5 py-16 sm:mx-6 sm:px-8 md:mx-8 md:py-20 lg:mx-auto lg:max-w-7xl">
           <h2 className="mb-10 text-center text-3xl font-extrabold text-ink">
             Cách hoạt động
           </h2>
@@ -136,7 +137,7 @@ export default function HomePage() {
             {steps.map((step) => (
               <article
                 key={step.num}
-                className="card-elevated flex gap-4 rounded-xl border border-line bg-surface p-6"
+                className="premium-card flex gap-4 p-6"
               >
                 <span className="shrink-0 text-2xl font-extrabold text-primary">
                   {step.num}
@@ -159,7 +160,7 @@ export default function HomePage() {
           </p>
           <Link
             href="/login?mode=register"
-            className="inline-flex min-h-14 items-center justify-center gap-2 rounded-xl bg-primary px-8 text-base font-extrabold text-gold-ink transition-opacity hover:opacity-90"
+            className="premium-primary inline-flex min-h-14 gap-2 px-8 text-base"
           >
             Bắt đầu miễn phí <NavIcon name="arrow-right" className="h-5 w-5" />
           </Link>

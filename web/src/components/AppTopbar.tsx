@@ -19,7 +19,7 @@ export default function AppTopbar({
   const displayLabel = userName || userEmail || "Tài khoản";
 
   return (
-    <header className="sticky top-0 z-40 flex items-center justify-between gap-4 px-5 py-3 bg-glass backdrop-blur-xl border-b border-line lg:px-8">
+    <header className="app-shell-header sticky top-0 z-40 flex items-center justify-between gap-4 border-b bg-glass/90 px-5 py-3 backdrop-blur-xl lg:px-8">
       <div className="min-w-0">
         <p className="text-[11px] uppercase tracking-widest text-muted font-semibold mb-0.5">
           Không gian học tập

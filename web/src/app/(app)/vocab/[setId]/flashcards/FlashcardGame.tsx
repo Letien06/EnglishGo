@@ -558,7 +558,7 @@ function Hub({
               onClick={() =>
                 card.quiz ? onOpenQuizChooser() : onStartMode(card.key)
               }
-              className={`relative flex min-h-[170px] flex-col items-center justify-center gap-2 overflow-hidden rounded-2xl border p-5 text-center shadow-sm transition-[transform,box-shadow,border-color,background-color] duration-150 hover:-translate-y-0.5 hover:shadow-md ${tone.card}`}
+              className={`premium-card premium-card--interactive relative flex min-h-[170px] flex-col items-center justify-center gap-2 overflow-hidden p-5 text-center ${tone.card}`}
             >
               {card.hot && (
                 <em className="absolute right-3 top-3 rounded bg-red-500 px-2 py-0.5 text-[10px] font-bold not-italic text-white">
@@ -1440,14 +1440,14 @@ function PlaySurface({
         </button>
         <div className="h-1.5 w-full overflow-hidden rounded-full bg-surface-soft">
           <div
-            className="h-full origin-left rounded-full bg-accent transition-transform duration-150"
+            className="h-full origin-left rounded-full bg-accent transition-transform duration-150 motion-reduce:transition-none"
             style={{ transform: `scaleX(${progressPercent / 100})` }}
           />
         </div>
         {usesTimer && (
           <div className="h-1 w-full overflow-hidden rounded-full bg-surface-soft">
             <div
-              className="h-full origin-left rounded-full bg-amber-400 transition-transform duration-150"
+              className="h-full origin-left rounded-full bg-amber-400 transition-transform duration-150 motion-reduce:transition-none"
               style={{ transform: `scaleX(${timer / 30})` }}
             />
           </div>

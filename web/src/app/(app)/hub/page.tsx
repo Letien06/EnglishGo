@@ -64,15 +64,16 @@ export default async function HubPage() {
         userEmail={user.email}
       />
 
-      <main className="flex-1 overflow-y-auto px-4 py-6 lg:px-8">
+      <main className="app-canvas flex-1 overflow-y-auto px-4 py-6 lg:px-8">
         <div className="mx-auto flex max-w-7xl flex-col gap-6">
-          <section className="rounded-2xl border border-line bg-surface p-5 shadow-sm lg:p-6">
+          <section className="premium-hero premium-reveal p-5 sm:p-7 lg:p-8">
+            <div className="premium-hero-orbit" aria-hidden="true" />
             <div className="flex flex-col gap-5 lg:flex-row lg:items-end lg:justify-between">
               <div className="min-w-0">
                 <p className="text-xs font-extrabold uppercase tracking-widest text-primary">
                   ENGLISHGO
                 </p>
-                <h1 className="mt-2 text-2xl font-extrabold text-ink lg:text-3xl">
+                <h1 className="mt-2 max-w-2xl text-3xl font-extrabold text-ink sm:text-4xl lg:text-5xl">
                   {hub.greetingName}, hôm nay học gì?
                 </h1>
                 <p className="mt-2 max-w-2xl text-sm leading-relaxed text-muted">
@@ -117,7 +118,7 @@ export default async function HubPage() {
           </section>
 
           <section className="grid gap-4 lg:grid-cols-[1.2fr_0.8fr]">
-            <article className="rounded-2xl border border-line bg-surface p-5 shadow-sm">
+            <article className="premium-card p-5 sm:p-6">
               <div className="flex flex-wrap items-center justify-between gap-3">
                 <div>
                   <p className="text-xs font-extrabold uppercase tracking-widest text-muted">
@@ -129,7 +130,7 @@ export default async function HubPage() {
                 </div>
                 <Link
                   href="/continue"
-                  className="inline-flex items-center gap-1.5 rounded-lg bg-primary px-4 py-2 text-sm font-extrabold text-gold-ink"
+                  className="premium-primary inline-flex gap-1.5 px-4 py-2 text-sm"
                 >
                   Học tiếp
                   <NavIcon name="arrow-right" className="h-4 w-4" />
@@ -143,7 +144,7 @@ export default async function HubPage() {
                     <Link
                       key={item.key}
                       href={item.href}
-                      className="rounded-xl border border-line bg-surface-soft p-4 transition-colors hover:border-primary/30"
+                      className="premium-card premium-card--interactive rounded-2xl p-4"
                     >
                       <div className="flex items-center justify-between gap-3">
                         <div>
@@ -163,7 +164,7 @@ export default async function HubPage() {
               </div>
             </article>
 
-            <article className="rounded-2xl border border-line bg-surface p-5 shadow-sm">
+            <article className="premium-card p-5 sm:p-6">
               <p className="text-xs font-extrabold uppercase tracking-widest text-muted">
                 Gợi ý tiếp theo
               </p>
@@ -175,7 +176,7 @@ export default async function HubPage() {
               </p>
               <Link
                 href={primaryRecommendation.href}
-                className="mt-5 inline-flex items-center gap-1.5 rounded-lg bg-primary px-4 py-2 text-sm font-extrabold text-gold-ink"
+                className="premium-primary mt-5 inline-flex gap-1.5 px-4 py-2 text-sm"
               >
                 Mở ngay
                 <NavIcon name="arrow-right" className="h-4 w-4" />
@@ -201,7 +202,7 @@ export default async function HubPage() {
             </article>
           </section>
 
-          <section className="rounded-2xl border border-line bg-surface p-5 shadow-sm">
+          <section className="premium-card p-5 sm:p-6">
             <div className="flex flex-wrap items-center justify-between gap-3">
               <div>
                 <p className="text-xs font-extrabold uppercase tracking-widest text-muted">
@@ -222,7 +223,7 @@ export default async function HubPage() {
                 <Link
                   key={item.key}
                   href={item.href}
-                  className={`rounded-xl border border-line ${item.bg} p-4 transition-colors hover:border-primary/30`}
+                  className={`premium-card premium-card--interactive ${item.bg} p-4`}
                 >
                   <span className={`text-xs font-extrabold uppercase tracking-widest ${item.tone}`}>
                     {item.label}
@@ -245,7 +246,7 @@ export default async function HubPage() {
 
 function MiniMetric({ label, value }: { label: string; value: string | number }) {
   return (
-    <div className="rounded-xl border border-line bg-surface-soft px-3 py-3">
+    <div className="premium-metric px-3 py-3">
       <small className="block truncate text-[11px] font-bold text-muted">{label}</small>
       <strong className="mt-1 block truncate text-base font-extrabold text-ink">
         {value}
@@ -266,7 +267,7 @@ function StatCard({
   tone: string;
 }) {
   return (
-    <article className="rounded-xl border border-line bg-surface p-4 shadow-sm">
+    <article className="premium-stat p-4">
       <small className="text-xs font-bold text-muted">{label}</small>
       <strong className={`mt-2 block text-2xl font-extrabold ${tone}`}>
         {value}

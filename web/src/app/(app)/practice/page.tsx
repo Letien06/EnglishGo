@@ -29,7 +29,7 @@ export default async function PracticePage({ searchParams }: Props) {
         userName={user?.displayName}
         userEmail={user?.email}
       />
-      <main className="flex-1 overflow-y-auto bg-white px-4 py-6 lg:px-8 space-y-6">
+      <main className="app-canvas flex-1 space-y-6 overflow-y-auto px-4 py-6 lg:px-8">
         <PracticeTestLauncher tests={tests.items} />
 
         {tests.items.length === 0 && (

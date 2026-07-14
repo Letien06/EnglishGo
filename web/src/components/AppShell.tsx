@@ -34,8 +34,8 @@ export default function AppShell({ children }: { children: ReactNode }) {
   }
 
   return (
-    <div className="min-h-dvh bg-bg text-ink">
-      <header className="sticky top-0 z-50 border-b border-line bg-glass shadow-sm backdrop-blur-xl">
+    <div className="app-shell min-h-dvh text-ink">
+      <header className="app-shell-header sticky top-0 z-50 border-b bg-glass/90 backdrop-blur-xl">
         <div className="flex h-16 items-center justify-between px-4 sm:px-6">
           <Link href="/" className="flex items-center gap-3 no-underline">
             <span className="inline-flex h-10 w-10 items-center justify-center rounded-xl bg-primary/10 text-base font-extrabold text-primary">

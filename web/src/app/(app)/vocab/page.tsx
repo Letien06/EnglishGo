@@ -29,14 +29,15 @@ export default async function VocabPage({
   const groupId = typeof params.group === "string" ? params.group : undefined;
 
   return (
-    <main className="min-h-[calc(100dvh-4rem)] bg-bg px-5 py-10">
+    <main className="app-canvas min-h-[calc(100dvh-4rem)] px-4 py-6 sm:px-5 sm:py-10">
       <div className="mx-auto max-w-5xl space-y-7">
-        <section className="flex min-h-48 items-center justify-between rounded-3xl border border-amber-200 bg-gradient-to-r from-amber-50 via-white to-slate-100 px-9 py-8 shadow-sm">
+        <section className="premium-hero premium-reveal flex min-h-52 items-center justify-between px-6 py-7 sm:px-9 sm:py-8">
+          <div className="premium-hero-orbit" aria-hidden="true" />
           <div>
-            <span className="inline-flex rounded-full bg-white px-4 py-1 text-xs font-extrabold text-primary shadow-sm">
+            <span className="premium-metric inline-flex px-4 py-1 text-xs font-extrabold text-primary">
               ✦ Spaced Repetition System
             </span>
-            <h1 className="mt-6 text-4xl font-extrabold text-ink">
+            <h1 className="mt-5 text-3xl font-extrabold text-ink sm:text-4xl">
               Chinh phục <span className="text-primary">Từ vựng TOEIC</span>
             </h1>
             <p className="mt-3 max-w-2xl text-sm leading-relaxed text-muted">
@@ -44,12 +45,12 @@ export default async function VocabPage({
               Nhớ lâu hơn và học gọn hơn.
             </p>
           </div>
-          <div className="hidden h-32 w-32 items-center justify-center rounded-3xl bg-primary text-5xl font-extrabold text-gold-ink shadow-xl lg:flex">
+          <div className="premium-hero-icon hidden h-32 w-32 items-center justify-center rounded-3xl text-5xl font-extrabold text-white lg:flex">
             ▦
           </div>
         </section>
 
-        <nav className="inline-flex max-w-full gap-1 overflow-x-auto rounded-full border border-amber-200 bg-amber-50 p-1" aria-label="Vocabulary tabs">
+        <nav className="premium-tabs inline-flex max-w-full gap-1 overflow-x-auto rounded-full p-1" aria-label="Vocabulary tabs">
           {tabs.map((tab) => {
             const selected = active === tab.key;
             return (

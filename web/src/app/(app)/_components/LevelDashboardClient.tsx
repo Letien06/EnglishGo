@@ -20,7 +20,7 @@
  * finishing a practice session and navigating back).
  */
 import Link from "next/link";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState, type CSSProperties } from "react";
 import NavIcon from "@/components/NavIcon";
 import ResetLevelButton from "@/components/ResetLevelButton";
 import { markVisited, routeKey } from "@/lib/nav/session-nav";
@@ -190,7 +190,7 @@ function LevelCard({
   const progress = total > 0 ? Math.round((level.done / total) * 100) : 0;
 
   return (
-    <article className={`rounded-xl bg-white p-5 shadow-sm ${className}`}>
+    <article className={`premium-card premium-card--interactive p-5 ${className}`}>
       <header className="mb-4 flex items-start gap-4">
         <span className="inline-flex h-10 w-10 items-center justify-center rounded-lg bg-surface-soft text-xs font-extrabold text-primary">
           Lv{level.level}
@@ -209,8 +209,8 @@ function LevelCard({
           <span>Tiến độ</span>
           <span>{progress}%</span>
         </div>
-        <div className="h-1 overflow-hidden rounded-full bg-slate-200">
-          <span className="block h-full rounded-full bg-primary" style={{ width: `${progress}%` }} />
+        <div className="progress-bar h-1 bg-surface-soft">
+          <span style={{ "--progress": progress / 100 } as CSSProperties} />
         </div>
       </div>
 
@@ -229,7 +229,7 @@ function LevelCard({
             data-overdelay={skill === "listening" ? "Đang mở bài luyện nghe..." : "Đang mở bài luyện đọc..."}
             data-overdelay-timeout="9000"
             data-overdelay-wait-for="practice-ready"
-            className="inline-flex items-center gap-1.5 rounded-lg bg-primary px-5 py-2 text-sm font-extrabold text-gold-ink shadow-md transition-opacity hover:opacity-90"
+            className="premium-primary inline-flex gap-1.5 px-5 py-2 text-sm"
           >
             <NavIcon name="play" className="h-4 w-4" />
             Luyện ngay
@@ -256,7 +256,7 @@ function SkeletonGrid() {
       {Array.from({ length: 5 }).map((_, i) => (
         <div
           key={i}
-          className="h-52 animate-pulse rounded-xl border-l-4 border-l-slate-200 bg-white p-5 shadow-sm"
+          className="premium-card h-52 animate-pulse border-l-4 border-l-slate-200 p-5"
         >
           <div className="mb-4 flex items-center gap-4">
             <div className="h-10 w-10 rounded-lg bg-slate-200" />
@@ -279,7 +279,7 @@ function SkeletonGrid() {
 
 function LoadError() {
   return (
-    <section className="rounded-2xl border border-amber-200 bg-white p-8 text-center text-ink shadow-sm">
+    <section className="premium-card p-8 text-center text-ink">
       <h2 className="text-xl font-extrabold">Tải dữ liệu từ server bị lỗi.</h2>
       <p className="mt-2 text-sm text-muted">Vui lòng thử tải lại trang sau ít phút.</p>
     </section>
@@ -288,7 +288,7 @@ function LoadError() {
 
 function EmptyState() {
   return (
-    <section className="rounded-2xl bg-white p-8 text-center text-muted shadow-sm">
+    <section className="premium-card p-8 text-center text-muted">
       <p className="text-lg font-extrabold text-ink">Chưa có dữ liệu cho phần này.</p>
       <p className="mt-1 text-sm">Vui lòng thử lại sau.</p>
     </section>

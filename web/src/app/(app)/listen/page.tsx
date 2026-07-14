@@ -17,7 +17,7 @@ export default async function ListenPage({
   const activePart = parts.find((part) => part.id === partParam) ?? parts[0];
 
   return (
-    <main className="min-h-[calc(100dvh-4rem)] bg-[#eaf0f8] px-5 py-5 lg:px-8">
+    <main className="app-canvas min-h-[calc(100dvh-4rem)] px-4 py-5 lg:px-8">
       <div className="grid gap-8 lg:grid-cols-[250px_1fr]">
         <ModuleSidebar activeId={activePart.id} />
 
@@ -59,7 +59,7 @@ export default async function ListenPage({
 
 function ModuleSidebar({ activeId }: { activeId: string }) {
   return (
-    <aside className="rounded-2xl bg-white p-4 shadow-[0_12px_35px_rgba(15,27,45,0.08)]">
+    <aside className="premium-sidebar p-4">
       <header className="mb-4 border-b border-line pb-4">
         <div className="flex items-center gap-3">
           <span className="inline-flex h-12 w-12 items-center justify-center rounded-xl bg-gradient-to-br from-blue-600 to-cyan-500 text-2xl font-extrabold text-white">
@@ -110,12 +110,13 @@ function ModuleSidebar({ activeId }: { activeId: string }) {
 
 function Hero({ part }: { part: (typeof parts)[number] }) {
   return (
-    <article className="flex min-h-48 items-center justify-between overflow-hidden rounded-3xl border border-blue-100 bg-gradient-to-r from-sky-100 via-white to-amber-100 px-8 py-8 shadow-[0_20px_45px_rgba(15,27,45,0.08)]">
+    <article className="premium-hero premium-reveal flex min-h-52 items-center justify-between px-6 py-7 sm:px-8 sm:py-8">
+      <div className="premium-hero-orbit" aria-hidden="true" />
       <div>
         <h1 className="text-4xl font-extrabold text-ink">{part.title}</h1>
         <p className="mt-3 text-base text-muted">{part.desc}</p>
       </div>
-      <div className="hidden h-32 w-32 items-center justify-center rounded-3xl bg-gradient-to-br from-blue-600 to-cyan-500 text-5xl font-extrabold text-white shadow-2xl lg:flex">
+      <div className="premium-hero-icon hidden h-32 w-32 items-center justify-center rounded-3xl text-5xl font-extrabold text-white lg:flex">
         {part.badge}
       </div>
     </article>

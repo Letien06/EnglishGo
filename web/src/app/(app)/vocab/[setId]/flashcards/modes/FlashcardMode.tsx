@@ -26,7 +26,7 @@ export default function FlashcardMode({
           onFlip();
         }
       }}
-      className="mx-auto flex min-h-[360px] max-w-2xl cursor-pointer flex-col items-center justify-center rounded-2xl border border-line bg-surface p-10 text-center shadow-lg transition-transform hover:-translate-y-0.5 focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-primary"
+      className="premium-card premium-card--interactive mx-auto flex min-h-[360px] max-w-2xl cursor-pointer flex-col items-center justify-center p-10 text-center focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-primary"
     >
       <small className="text-[10px] font-extrabold uppercase tracking-widest text-muted">
         {flipped ? (reverse ? "TỪ TIẾNG ANH" : "NGHĨA TIẾNG VIỆT") : (reverse ? "NGHĨA TIẾNG VIỆT" : "TỪ TIẾNG ANH")}
