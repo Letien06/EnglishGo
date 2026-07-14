@@ -15,7 +15,16 @@ export default function StudyStreakCelebration() {
   const pathname = usePathname();
   const [milestone, setMilestone] = useState<number | null>(null);
   const [secondsRemaining, setSecondsRemaining] = useState(AUTO_DISMISS_SECONDS);
+  const [reduceMotion, setReduceMotion] = useState(false);
   const checking = useRef(false);
+
+  useEffect(() => {
+    const query = window.matchMedia("(prefers-reduced-motion: reduce)");
+    const update = () => setReduceMotion(query.matches);
+    update();
+    query.addEventListener("change", update);
+    return () => query.removeEventListener("change", update);
+  }, []);
 
   const checkForMilestone = useCallback(async () => {
     if (checking.current || milestone != null) return;
@@ -72,7 +81,8 @@ export default function StudyStreakCelebration() {
   if (milestone == null) return null;
 
   return (
-    <section className="streak-celebration" role="status" aria-live="assertive" aria-label={`Bạn đã đạt chuỗi học ${milestone} ngày`}>
+    <section className="streak-celebration" aria-labelledby="streak-celebration-title">
+      <p className="sr-only" role="status">Bạn đã đạt chuỗi học {milestone} ngày.</p>
       <span className="streak-spark streak-spark-one" aria-hidden="true">✦</span>
       <span className="streak-spark streak-spark-two" aria-hidden="true">✦</span>
       <button
@@ -85,12 +95,12 @@ export default function StudyStreakCelebration() {
       </button>
       <div className="streak-celebration-flame" aria-hidden="true">🔥</div>
       <p className="streak-celebration-eyebrow">Mốc chuỗi mới</p>
-      <h2 className="streak-celebration-title">Bạn đang học rất đều!</h2>
+      <h2 id="streak-celebration-title" className="streak-celebration-title">Bạn đang học rất đều!</h2>
       <p className="streak-celebration-copy">Bạn đã duy trì liên tiếp</p>
       <p className="streak-celebration-number">
-        <AnimatedDayCount value={milestone} /> <span>ngày</span>
+        <AnimatedDayCount value={milestone} reduceMotion={reduceMotion} /> <span>ngày</span>
       </p>
-      <p className="streak-celebration-countdown">Tự ẩn sau {secondsRemaining} giây</p>
+      <p className="streak-celebration-countdown" aria-hidden="true">Tự ẩn sau {secondsRemaining} giây</p>
       <button type="button" className="streak-celebration-confirm" onClick={() => setMilestone(null)}>
         Đã rõ
       </button>
@@ -98,10 +108,12 @@ export default function StudyStreakCelebration() {
   );
 }
 
-function AnimatedDayCount({ value }: { value: number }) {
+function AnimatedDayCount({ value, reduceMotion }: { value: number; reduceMotion: boolean }) {
   const [displayed, setDisplayed] = useState(0);
 
   useEffect(() => {
+    if (reduceMotion) return;
+
     let frame = 0;
     const startedAt = performance.now();
     const duration = 720;
@@ -115,7 +127,7 @@ function AnimatedDayCount({ value }: { value: number }) {
 
     frame = requestAnimationFrame(tick);
     return () => cancelAnimationFrame(frame);
-  }, [value]);
+  }, [reduceMotion, value]);
 
-  return <strong key={value}>{displayed}</strong>;
+  return <strong key={value}>{reduceMotion ? value : displayed}</strong>;
 }

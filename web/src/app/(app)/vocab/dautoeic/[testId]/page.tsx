@@ -28,7 +28,7 @@ export default async function DautoeicVocabTestPage({ params }: Props) {
         userName={user.displayName}
         userEmail={user.email}
       />
-      <main className="flex-1 overflow-y-auto bg-[#f1f5fb] px-5 py-8">
+      <main className="flex-1 overflow-y-auto bg-bg px-5 py-8">
         <div className="mx-auto max-w-5xl space-y-6">
           <Link href="/vocab?tab=learn" className="text-sm font-extrabold text-primary">
             ← Quay lại từ vựng

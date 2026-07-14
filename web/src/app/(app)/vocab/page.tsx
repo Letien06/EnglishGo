@@ -29,7 +29,7 @@ export default async function VocabPage({
   const groupId = typeof params.group === "string" ? params.group : undefined;
 
   return (
-    <main className="min-h-[calc(100dvh-4rem)] bg-[#f1f5fb] px-5 py-10">
+    <main className="min-h-[calc(100dvh-4rem)] bg-bg px-5 py-10">
       <div className="mx-auto max-w-5xl space-y-7">
         <section className="flex min-h-48 items-center justify-between rounded-3xl border border-amber-200 bg-gradient-to-r from-amber-50 via-white to-slate-100 px-9 py-8 shadow-sm">
           <div>

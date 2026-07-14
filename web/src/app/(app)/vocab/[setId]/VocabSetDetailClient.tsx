@@ -2,6 +2,7 @@
 
 import { useMemo, useRef, useState } from "react";
 import type { AiVocabCandidate, VocabWordCard } from "@/types/vocab";
+import useDialogFocus from "@/components/useDialogFocus";
 import DictionaryAddModal from "./DictionaryAddModal";
 
 type Filter = "all" | "mastered" | "learning";
@@ -115,4 +116,21 @@ function ThinkingStage({ stage, mode }: { stage: number; mode: "topic" | "words"
 }
 
 async function fileToBase64(file: File): Promise<string> { return new Promise((resolve, reject) => { const reader = new FileReader(); reader.onload = () => resolve(String(reader.result).split(",")[1] || ""); reader.onerror = () => reject(new Error("Không thể đọc ảnh.")); reader.readAsDataURL(file); }); }
-function Dialog({ title, onClose, children }: { title: string; onClose: () => void; children: React.ReactNode }) { return <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4"><div className="max-h-[90vh] w-full max-w-6xl overflow-y-auto rounded-[28px] border border-line bg-surface p-5 shadow-2xl sm:p-7"><header className="flex items-center justify-between"><h2 className="text-xl font-extrabold text-ink">{title}</h2><button onClick={onClose} className="text-2xl text-ink2" aria-label="Đóng">×</button></header>{children}</div></div>; }
+function Dialog({ title, onClose, children }: { title: string; onClose: () => void; children: React.ReactNode }) {
+  const dialogRef = useRef<HTMLDivElement>(null);
+  const titleId = `dialog-${title.replace(/\s+/g, "-").toLowerCase()}`;
+  useDialogFocus(true, onClose, dialogRef);
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4">
+      <button type="button" className="absolute inset-0 cursor-default" aria-label={`Đóng ${title}`} onClick={onClose} />
+      <div ref={dialogRef} tabIndex={-1} role="dialog" aria-modal="true" aria-labelledby={titleId} className="relative max-h-[90vh] w-full max-w-6xl overflow-y-auto rounded-[28px] border border-line bg-surface p-5 shadow-2xl sm:p-7">
+        <header className="flex items-center justify-between">
+          <h2 id={titleId} className="text-xl font-extrabold text-ink">{title}</h2>
+          <button type="button" data-dialog-initial-focus onClick={onClose} className="text-2xl text-ink2" aria-label="Đóng">×</button>
+        </header>
+        {children}
+      </div>
+    </div>
+  );
+}

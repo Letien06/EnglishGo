@@ -30,7 +30,7 @@ export default async function LeaderboardPage({ searchParams }: Props) {
     : [[] as StudyStreakLeaderboardEntry[], await getPracticeLeaderboard(scope, period, 100)];
 
   return (
-    <main className="min-h-[calc(100dvh-4rem)] bg-[#f1f5fb] px-5 py-8 lg:px-8">
+    <main className="min-h-[calc(100dvh-4rem)] bg-bg px-5 py-8 lg:px-8">
       <section className="mx-auto max-w-6xl space-y-5">
         <header className="flex flex-wrap items-end justify-between gap-4">
           <div>

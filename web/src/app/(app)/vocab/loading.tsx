@@ -1,6 +1,6 @@
 export default function VocabLoading() {
   return (
-    <main className="min-h-[calc(100dvh-4rem)] bg-[#f1f5fb] px-5 py-10">
+    <main className="min-h-[calc(100dvh-4rem)] bg-bg px-5 py-10">
       <div className="mx-auto max-w-5xl space-y-7">
         <section className="h-48 animate-pulse rounded-3xl border border-amber-200 bg-white shadow-sm" />
         <div className="flex gap-2 overflow-hidden">

@@ -40,6 +40,7 @@ export default function DictationLessonClient({ lesson, initialProgress, isAuthe
   const activeRef = useRef<DictationLessonView["segments"][number] | null>(null);
   const stopAtRef = useRef<number | null>(null);
   const pendingAutoplayRef = useRef(false);
+  const autoAdvanceRef = useRef<number | null>(null);
   const active = lesson.segments[index];
   const loadingPrompt = !prompt || prompt.segmentId !== active?.id || prompt.maskPercent !== mask;
   const progressBySegment = useMemo(() => new Map((initialProgress?.segments ?? []).map((item) => [item.segmentId, item])), [initialProgress]);
@@ -122,6 +123,10 @@ export default function DictationLessonClient({ lesson, initialProgress, isAuthe
 
   const goTo = useCallback((next: number, options?: { autoplay?: boolean }) => {
     const target = Math.max(0, Math.min(lesson.segments.length - 1, next));
+    if (autoAdvanceRef.current !== null) {
+      window.clearTimeout(autoAdvanceRef.current);
+      autoAdvanceRef.current = null;
+    }
     pauseSegment();
     pendingAutoplayRef.current = Boolean(options?.autoplay && target !== index);
     setIndex(target);
@@ -167,10 +172,20 @@ export default function DictationLessonClient({ lesson, initialProgress, isAuthe
         }
         if (body.data.isCompleted) setCompletedIds((items) => new Set([...items, active.id]));
         if (body.data.isMastered) setMasteredIds((items) => new Set([...items, active.id]));
-        if (body.data.isCompleted && autoNext && index < lesson.segments.length - 1) window.setTimeout(() => goTo(index + 1, { autoplay: true }), 850);
+        if (body.data.isCompleted && autoNext && index < lesson.segments.length - 1) {
+          if (autoAdvanceRef.current !== null) window.clearTimeout(autoAdvanceRef.current);
+          autoAdvanceRef.current = window.setTimeout(() => {
+            autoAdvanceRef.current = null;
+            goTo(index + 1, { autoplay: true });
+          }, 850);
+        }
       }
     } finally { setSubmitting(false); }
   };
+
+  useEffect(() => () => {
+    if (autoAdvanceRef.current !== null) window.clearTimeout(autoAdvanceRef.current);
+  }, []);
 
   const checkBlank = async (blankId: string) => {
     if (!active || mask === 100 || checkingBlankId) return;

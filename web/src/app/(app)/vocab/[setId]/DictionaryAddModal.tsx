@@ -1,6 +1,7 @@
 "use client";
 
-import { type ReactNode, useState } from "react";
+import { type ReactNode, useRef, useState } from "react";
+import useDialogFocus from "@/components/useDialogFocus";
 
 type AddMode = "form" | "paste";
 type Draft = {
@@ -56,6 +57,9 @@ export default function DictionaryAddModal({
   const [lookups, setLookups] = useState<Record<number, LookupState>>({});
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
+  const dialogRef = useRef<HTMLElement>(null);
+
+  useDialogFocus(true, onClose, dialogRef);
 
   const update = (key: number, field: keyof Draft, value: string) => {
     setRows((current) => current.map((row) => row.key === key ? { ...row, [field]: value } : row));
@@ -163,16 +167,16 @@ export default function DictionaryAddModal({
   }
 
   return (
-    <div className="fixed inset-0 z-[90] flex items-end bg-slate-950/50 p-0 backdrop-blur-sm sm:items-center sm:justify-center sm:p-5" role="dialog" aria-modal="true" aria-labelledby="add-vocab-title">
+    <div className="fixed inset-0 z-[90] flex items-end bg-slate-950/50 p-0 backdrop-blur-sm sm:items-center sm:justify-center sm:p-5">
       <button type="button" className="absolute inset-0 cursor-default" aria-label="Đóng" onClick={onClose} />
-      <section className="relative flex max-h-[92dvh] w-full max-w-6xl flex-col overflow-hidden rounded-t-[28px] bg-surface shadow-2xl sm:rounded-[28px]">
+      <section ref={dialogRef} tabIndex={-1} role="dialog" aria-modal="true" aria-labelledby="add-vocab-title" className="relative flex max-h-[92dvh] w-full max-w-6xl flex-col overflow-hidden rounded-t-[28px] bg-surface shadow-2xl sm:rounded-[28px]">
         <header className="flex items-start justify-between gap-4 border-b border-line px-5 py-5 sm:px-7">
           <div>
             <p className="text-xs font-extrabold uppercase tracking-widest text-jade">Từ vựng cá nhân</p>
             <h2 id="add-vocab-title" className="mt-1 text-xl font-extrabold text-ink">Thêm từ vựng</h2>
             <p className="mt-1 text-sm text-muted">Tra từ trước khi điền để dùng dữ liệu đã kiểm chứng.</p>
           </div>
-          <button type="button" onClick={onClose} className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-full border border-line text-xl text-ink2 hover:bg-surface-soft" aria-label="Đóng">×</button>
+          <button type="button" data-dialog-initial-focus onClick={onClose} className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-full border border-line text-xl text-ink2 hover:bg-surface-soft" aria-label="Đóng">×</button>
         </header>
 
         <div className="flex flex-wrap gap-2 border-b border-line px-5 py-3 sm:px-7">

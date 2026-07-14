@@ -1,6 +1,6 @@
 export default function DautoeicVocabTestLoading() {
   return (
-    <main className="flex-1 overflow-y-auto bg-[#f1f5fb] px-5 py-8">
+    <main className="flex-1 overflow-y-auto bg-bg px-5 py-8">
       <div className="mx-auto max-w-5xl space-y-6">
         <div className="h-4 w-32 animate-pulse rounded-full bg-slate-200" />
         <section className="rounded-2xl border border-sky-100 bg-white p-6 shadow-sm">

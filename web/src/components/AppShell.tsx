@@ -34,8 +34,8 @@ export default function AppShell({ children }: { children: ReactNode }) {
   }
 
   return (
-    <div className="min-h-dvh bg-[#f1f5fb] text-ink">
-      <header className="sticky top-0 z-50 border-b border-line bg-white/95 shadow-sm backdrop-blur-xl">
+    <div className="min-h-dvh bg-bg text-ink">
+      <header className="sticky top-0 z-50 border-b border-line bg-glass shadow-sm backdrop-blur-xl">
         <div className="flex h-16 items-center justify-between px-4 sm:px-6">
           <Link href="/" className="flex items-center gap-3 no-underline">
             <span className="inline-flex h-10 w-10 items-center justify-center rounded-xl bg-primary/10 text-base font-extrabold text-primary">
@@ -46,7 +46,7 @@ export default function AppShell({ children }: { children: ReactNode }) {
             </strong>
           </Link>
 
-          <nav className="hidden items-center gap-2 md:flex" aria-label="Điều hướng học tập">
+          <nav className="hidden items-center gap-2 xl:flex" aria-label="Điều hướng học tập">
             {navItems.map((item) => {
               const active =
                 item.href === "/hub" ? pathname === "/hub" : pathname.startsWith(item.href);
@@ -54,6 +54,7 @@ export default function AppShell({ children }: { children: ReactNode }) {
                 <Link
                   key={item.href}
                   href={item.href}
+                  aria-current={active ? "page" : undefined}
                   className={`inline-flex items-center gap-2 rounded-lg px-3 py-2 text-sm font-extrabold transition-colors ${
                     active
                       ? "bg-primary/10 text-primary"
@@ -70,7 +71,7 @@ export default function AppShell({ children }: { children: ReactNode }) {
           <div className="ml-auto flex items-center gap-3">
             <MobileNavigationMenu />
             <StudyStreakBadge className="hidden sm:inline-flex" />
-            <ThemeToggle className="!hidden border border-line bg-surface-soft text-ink md:!inline-flex" />
+            <ThemeToggle className="!hidden border border-line bg-surface-soft text-ink xl:!inline-flex" />
             <Link
               href="/account"
               className={`inline-flex h-11 w-11 items-center justify-center rounded-xl border-2 text-base font-extrabold ${

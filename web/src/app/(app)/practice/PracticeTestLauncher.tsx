@@ -4,6 +4,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import type { PracticeTestCard } from "@/lib/services/practice";
+import useDialogFocus from "@/components/useDialogFocus";
 
 const PARTS = [
   { part: 1, label: "Part 1", group: "LISTENING", questions: 6, minutes: 4 },
@@ -32,6 +33,7 @@ export default function PracticeTestLauncher({ tests }: Props) {
   const [durationMinutes, setDurationMinutes] = useState(FULL_TEST_MINUTES);
   const [startingLabel, setStartingLabel] = useState("");
   const lastWarmupKey = useRef("");
+  const modalRef = useRef<HTMLElement>(null);
 
   function openModal(test: PracticeTestCard, nextTab: ModalTab) {
     setSelectedTest(test);
@@ -48,6 +50,8 @@ export default function PracticeTestLauncher({ tests }: Props) {
   function closeModal() {
     setSelectedTest(null);
   }
+
+  useDialogFocus(Boolean(selectedTest), closeModal, modalRef);
 
   function chooseFullTest() {
     setTab("exam");
@@ -179,10 +183,11 @@ export default function PracticeTestLauncher({ tests }: Props) {
 
       {selectedTest ? (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4">
-          <section className="max-h-[92dvh] w-full max-w-2xl overflow-y-auto rounded-2xl border border-line bg-surface p-6 shadow-2xl">
+          <button type="button" className="absolute inset-0 cursor-default" aria-label="Đóng chọn chế độ" onClick={closeModal} />
+          <section ref={modalRef} tabIndex={-1} role="dialog" aria-modal="true" aria-labelledby="practice-launcher-title" className="relative max-h-[92dvh] w-full max-w-2xl overflow-y-auto rounded-2xl border border-line bg-surface p-6 shadow-2xl">
             <header className="flex items-start justify-between gap-4">
               <div>
-                <h2 className="text-xl font-extrabold text-ink">Chọn chế độ</h2>
+                <h2 id="practice-launcher-title" className="text-xl font-extrabold text-ink">Chọn chế độ</h2>
                 <p className="mt-1 text-sm text-muted">{selectedTest.title}</p>
               </div>
               <button
@@ -299,6 +304,7 @@ export default function PracticeTestLauncher({ tests }: Props) {
                 </button>
                 <button
                   type="button"
+                  data-dialog-initial-focus
                   onClick={() => start(false)}
                   disabled={startDisabled || Boolean(startingLabel)}
                   className="rounded-lg bg-accent px-5 py-2 text-sm font-extrabold text-white disabled:cursor-not-allowed disabled:opacity-50"

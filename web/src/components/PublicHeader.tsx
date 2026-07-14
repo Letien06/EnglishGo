@@ -2,9 +2,10 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import ThemeToggle from "./ThemeToggle";
 import NavIcon, { type NavIconName } from "./NavIcon";
+import useDialogFocus from "./useDialogFocus";
 
 const navItems = [
   { href: "/hub", icon: "home", label: "Trang chủ", key: "hub", color: "text-primary" },
@@ -31,6 +32,7 @@ export default function PublicHeader({ user }: PublicHeaderProps) {
   const pathname = usePathname();
   const [sessionUser, setSessionUser] = useState<SessionUser | null | undefined>(user);
   const [menuOpen, setMenuOpen] = useState(false);
+  const menuDialogRef = useRef<HTMLElement>(null);
 
   useEffect(() => {
     const controller = new AbortController();
@@ -61,14 +63,7 @@ export default function PublicHeader({ user }: PublicHeaderProps) {
     return () => window.clearTimeout(timer);
   }, [pathname]);
 
-  useEffect(() => {
-    if (!menuOpen) return;
-    const previous = document.body.style.overflow;
-    document.body.style.overflow = "hidden";
-    return () => {
-      document.body.style.overflow = previous;
-    };
-  }, [menuOpen]);
+  useDialogFocus(menuOpen, () => setMenuOpen(false), menuDialogRef);
 
   return (
     <header className="sticky top-0 z-50 border-b border-line bg-glass backdrop-blur-xl">
@@ -90,6 +85,7 @@ export default function PublicHeader({ user }: PublicHeaderProps) {
               <Link
                 key={item.key}
                 href={item.href}
+                aria-current={isActive ? "page" : undefined}
                 className={`flex items-center gap-2 text-sm font-extrabold transition-colors ${
                   isActive ? "text-primary" : "text-ink3 hover:text-ink"
                 }`}
@@ -152,6 +148,10 @@ export default function PublicHeader({ user }: PublicHeaderProps) {
             className="fixed inset-0 top-20 z-40 bg-slate-900/40 backdrop-blur-sm"
           />
           <nav
+            ref={menuDialogRef}
+            tabIndex={-1}
+            role="dialog"
+            aria-modal="true"
             className="absolute inset-x-0 top-20 z-50 border-b border-line bg-surface px-5 pb-6 pt-2 shadow-xl"
             aria-label="Điều hướng mobile"
           >
@@ -163,6 +163,7 @@ export default function PublicHeader({ user }: PublicHeaderProps) {
                   <li key={item.key}>
                     <Link
                       href={item.href}
+                      aria-current={isActive ? "page" : undefined}
                       onClick={() => setMenuOpen(false)}
                       className={`flex items-center gap-3 rounded-xl px-4 py-3 text-lg font-extrabold transition-colors ${
                         isActive ? "bg-primary/10 text-primary" : "text-ink hover:bg-surface-soft"

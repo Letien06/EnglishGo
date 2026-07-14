@@ -224,7 +224,7 @@ export default function VocabMyTab({ uid, folderId, folderSearch }: Props) {
           {mySets.map((set) => (
             <article
               key={set.id}
-              className="p-4 rounded-xl bg-surface border border-line hover:border-accent/40 transition-all"
+              className="rounded-xl border border-line bg-surface p-4 transition-colors hover:border-accent/40"
             >
               <header className="flex items-start justify-between gap-2 mb-3">
                 <Link

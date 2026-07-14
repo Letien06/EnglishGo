@@ -1,4 +1,5 @@
 import Link from "next/link";
+import type { CSSProperties } from "react";
 import NavIcon from "@/components/NavIcon";
 import AppTopbar from "@/components/AppTopbar";
 import { requireUser } from "@/lib/auth/session";
@@ -154,7 +155,7 @@ export default async function HubPage() {
                         <strong className={`text-lg ${item.tone}`}>{share}%</strong>
                       </div>
                       <div className="progress-bar mt-3">
-                        <span style={{ width: `${share}%` }} />
+                        <span style={{ "--progress": share / 100 } as CSSProperties} />
                       </div>
                     </Link>
                   );

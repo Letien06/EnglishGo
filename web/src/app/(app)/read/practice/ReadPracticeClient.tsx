@@ -54,6 +54,7 @@ export default function ReadPracticeClient({
   const [favorite, setFavorite] = useState(false);
   const [toolStatus, setToolStatus] = useState("");
   const startedAtRef = useRef(0);
+  const autoAdvanceRef = useRef<number | null>(null);
   const item = items[currentIndex] ?? items[0];
   const firstQuestion = item.questions[0];
 
@@ -120,6 +121,10 @@ export default function ReadPracticeClient({
 
   const goTo = useCallback((index: number) => {
     if (index < 0 || index >= items.length) return;
+    if (autoAdvanceRef.current !== null) {
+      window.clearTimeout(autoAdvanceRef.current);
+      autoAdvanceRef.current = null;
+    }
     setCurrentIndex(index);
     setShowNote(false);
     setFavorite(false);
@@ -155,9 +160,17 @@ export default function ReadPracticeClient({
     }
 
     if (correct && auto && currentIndex < items.length - 1) {
-      window.setTimeout(() => goTo(currentIndex + 1), 450);
+      if (autoAdvanceRef.current !== null) window.clearTimeout(autoAdvanceRef.current);
+      autoAdvanceRef.current = window.setTimeout(() => {
+        autoAdvanceRef.current = null;
+        goTo(currentIndex + 1);
+      }, 450);
     }
   }, [activeMode, answeredMap, auto, currentIndex, elapsed, goTo, item.id, items.length, level, partNum]);
+
+  useEffect(() => () => {
+    if (autoAdvanceRef.current !== null) window.clearTimeout(autoAdvanceRef.current);
+  }, []);
 
   useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent) => {

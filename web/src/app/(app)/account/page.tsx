@@ -10,7 +10,7 @@ export default async function AccountPage() {
   const settings = await getSettings(user.uid);
 
   return (
-    <main className="min-h-[calc(100dvh-4rem)] bg-[#f1f5fb] px-5 py-12">
+    <main className="min-h-[calc(100dvh-4rem)] bg-bg px-5 py-12">
       <div className="mx-auto max-w-7xl">
         <header className="mb-8 flex items-end justify-between border-b border-amber-200 pb-8">
           <div>

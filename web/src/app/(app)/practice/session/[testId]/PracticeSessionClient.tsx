@@ -2,6 +2,7 @@
 
 import Image from "next/image";
 import MobileNavigationMenu from "@/components/MobileNavigationMenu";
+import useDialogFocus from "@/components/useDialogFocus";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import type { PracticeQuestion, PracticeSessionView } from "@/lib/services/practice";
@@ -686,13 +687,17 @@ function ConfirmDialog({
   onCancel: () => void;
   onConfirm: () => void;
 }) {
+  const dialogRef = useRef<HTMLElement>(null);
+  useDialogFocus(true, onCancel, dialogRef);
+
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4">
-      <section className="w-full max-w-lg rounded-xl border border-line bg-surface p-6 shadow-2xl">
-        <h2 className="text-xl font-extrabold text-ink">{title}</h2>
+      <button type="button" className="absolute inset-0 cursor-default" aria-label="Hủy xác nhận" onClick={onCancel} />
+      <section ref={dialogRef} tabIndex={-1} role="dialog" aria-modal="true" aria-labelledby="practice-confirm-title" className="relative w-full max-w-lg rounded-xl border border-line bg-surface p-6 shadow-2xl">
+        <h2 id="practice-confirm-title" className="text-xl font-extrabold text-ink">{title}</h2>
         <p className="mt-3 text-sm leading-relaxed text-muted">{description}</p>
         <div className="mt-6 flex justify-end gap-2">
-          <button type="button" onClick={onCancel} className="rounded-lg border border-line px-4 py-2 text-sm font-bold text-ink">
+          <button type="button" data-dialog-initial-focus onClick={onCancel} className="rounded-lg border border-line px-4 py-2 text-sm font-bold text-ink">
             Quay lại
           </button>
           <button type="button" onClick={onConfirm} className="rounded-lg bg-accent px-4 py-2 text-sm font-extrabold text-white">

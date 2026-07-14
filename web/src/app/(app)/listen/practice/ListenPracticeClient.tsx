@@ -75,6 +75,7 @@ export default function ListenPracticeClient({
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const replayCountRef = useRef(0);
   const startedAtRef = useRef(0);
+  const autoAdvanceRef = useRef<number | null>(null);
   const item = items[currentIndex] ?? items[0];
 
   useEffect(() => {
@@ -180,6 +181,10 @@ export default function ListenPracticeClient({
 
   const goTo = useCallback((index: number, options: { play?: boolean } = {}) => {
     if (index < 0 || index >= items.length) return;
+    if (autoAdvanceRef.current !== null) {
+      window.clearTimeout(autoAdvanceRef.current);
+      autoAdvanceRef.current = null;
+    }
     audioRef.current?.pause();
     setCurrentIndex(index);
     setShowNote(false);
@@ -221,9 +226,17 @@ export default function ListenPracticeClient({
     }
 
     if (correct && auto && currentIndex < items.length - 1) {
-      window.setTimeout(() => goTo(currentIndex + 1, { play: true }), 450);
+      if (autoAdvanceRef.current !== null) window.clearTimeout(autoAdvanceRef.current);
+      autoAdvanceRef.current = window.setTimeout(() => {
+        autoAdvanceRef.current = null;
+        goTo(currentIndex + 1, { play: true });
+      }, 450);
     }
   }, [activeAssist, activeMode, answeredMap, auto, currentIndex, elapsed, goTo, item.id, items.length, level, partNum]);
+
+  useEffect(() => () => {
+    if (autoAdvanceRef.current !== null) window.clearTimeout(autoAdvanceRef.current);
+  }, []);
 
   const currentQuestion = item.questions[0];
 

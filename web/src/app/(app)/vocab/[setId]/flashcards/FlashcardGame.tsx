@@ -24,6 +24,7 @@ import type {
   VocabSetSession,
   VocabWordCard,
 } from "@/types/vocab";
+import useDialogFocus from "@/components/useDialogFocus";
 
 interface Props {
   session: VocabSetSession;
@@ -557,7 +558,7 @@ function Hub({
               onClick={() =>
                 card.quiz ? onOpenQuizChooser() : onStartMode(card.key)
               }
-              className={`relative flex min-h-[170px] flex-col items-center justify-center gap-2 overflow-hidden rounded-2xl border p-5 text-center shadow-sm transition-all hover:-translate-y-0.5 hover:shadow-md ${tone.card}`}
+              className={`relative flex min-h-[170px] flex-col items-center justify-center gap-2 overflow-hidden rounded-2xl border p-5 text-center shadow-sm transition-[transform,box-shadow,border-color,background-color] duration-150 hover:-translate-y-0.5 hover:shadow-md ${tone.card}`}
             >
               {card.hot && (
                 <em className="absolute right-3 top-3 rounded bg-red-500 px-2 py-0.5 text-[10px] font-bold not-italic text-white">
@@ -680,6 +681,8 @@ function QuizChooser({
   onClose: () => void;
   onSelect: (mode: QuizMode) => void;
 }) {
+  const dialogRef = useRef<HTMLDivElement>(null);
+  useDialogFocus(true, onClose, dialogRef);
   const choices: { mode: QuizMode; title: string; desc: string; tone: string }[] = [
     {
       mode: "wordMeaning",
@@ -702,16 +705,18 @@ function QuizChooser({
   ];
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
-      <div className="absolute inset-0" onClick={onClose} />
-      <article className="relative w-full max-w-md space-y-3 rounded-2xl border border-line bg-surface p-6 shadow-xl">
+      <button type="button" className="absolute inset-0 cursor-default" aria-label="Đóng chọn chế độ Quiz" onClick={onClose} />
+      <div ref={dialogRef} tabIndex={-1} role="dialog" aria-modal="true" aria-labelledby="quiz-chooser-title" className="relative w-full max-w-md space-y-3 rounded-2xl border border-line bg-surface p-6 shadow-xl">
         <button
           type="button"
+          data-dialog-initial-focus
           onClick={onClose}
           className="absolute right-4 top-4 text-xl text-muted hover:text-ink"
+          aria-label="Đóng"
         >
           ×
         </button>
-        <h2 className="text-lg font-bold text-ink">Chọn chế độ Quiz</h2>
+        <h2 id="quiz-chooser-title" className="text-lg font-bold text-ink">Chọn chế độ Quiz</h2>
         {choices.map((c) => (
           <button
             key={c.mode}
@@ -723,7 +728,7 @@ function QuizChooser({
             <span className="text-xs text-muted">{c.desc}</span>
           </button>
         ))}
-      </article>
+      </div>
     </div>
   );
 }
@@ -1435,15 +1440,15 @@ function PlaySurface({
         </button>
         <div className="h-1.5 w-full overflow-hidden rounded-full bg-surface-soft">
           <div
-            className="h-full rounded-full bg-accent transition-all"
-            style={{ width: `${progressPercent}%` }}
+            className="h-full origin-left rounded-full bg-accent transition-transform duration-150"
+            style={{ transform: `scaleX(${progressPercent / 100})` }}
           />
         </div>
         {usesTimer && (
           <div className="h-1 w-full overflow-hidden rounded-full bg-surface-soft">
             <div
-              className="h-full rounded-full bg-amber-400 transition-all"
-              style={{ width: `${(timer / 30) * 100}%` }}
+              className="h-full origin-left rounded-full bg-amber-400 transition-transform duration-150"
+              style={{ transform: `scaleX(${timer / 30})` }}
             />
           </div>
         )}

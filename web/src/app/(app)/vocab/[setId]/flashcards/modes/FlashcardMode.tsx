@@ -14,7 +14,20 @@ export default function FlashcardMode({
   const front = reverse ? word.meaning : word.word;
   const back = reverse ? word.word : word.meaning;
   return (
-    <div onClick={onFlip} className="mx-auto flex min-h-[360px] max-w-2xl cursor-pointer flex-col items-center justify-center rounded-2xl border border-line bg-white p-10 text-center shadow-lg transition-transform hover:-translate-y-0.5">
+    <div
+      role="button"
+      tabIndex={0}
+      aria-pressed={flipped}
+      aria-label="Lật thẻ từ vựng"
+      onClick={onFlip}
+      onKeyDown={(event) => {
+        if (event.key === " " || event.key === "Enter") {
+          event.preventDefault();
+          onFlip();
+        }
+      }}
+      className="mx-auto flex min-h-[360px] max-w-2xl cursor-pointer flex-col items-center justify-center rounded-2xl border border-line bg-surface p-10 text-center shadow-lg transition-transform hover:-translate-y-0.5 focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-primary"
+    >
       <small className="text-[10px] font-extrabold uppercase tracking-widest text-muted">
         {flipped ? (reverse ? "TỪ TIẾNG ANH" : "NGHĨA TIẾNG VIỆT") : (reverse ? "NGHĨA TIẾNG VIỆT" : "TỪ TIẾNG ANH")}
       </small>
