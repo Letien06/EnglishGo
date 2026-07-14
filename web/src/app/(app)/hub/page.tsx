@@ -250,6 +250,21 @@ export default async function HubPage() {
               ))}
             </div>
           </section>
+
+          <section className="premium-card p-5 sm:p-6" aria-label="Lộ trình học hôm nay">
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <div>
+                <p className="text-xs font-extrabold uppercase tracking-widest text-muted">Lộ trình hôm nay</p>
+                <h2 className="mt-1 text-lg font-extrabold text-ink">Ba bước nhỏ, một hướng đi rõ ràng</h2>
+              </div>
+              <span className="rounded-full bg-primary/10 px-3 py-1 text-xs font-extrabold text-primary">Theo tiến độ của bạn</span>
+            </div>
+            <ol className="mt-5 grid gap-3 md:grid-cols-3">
+              <PlanStep number="01" title={primaryRecommendation.label} detail={primaryRecommendation.reason} href={primaryRecommendation.href} action="Bắt đầu" />
+              <PlanStep number="02" title="Ghi nhận điểm yếu" detail="Sau mỗi bài luyện, xem lại câu sai để chọn kỹ năng cần cải thiện." href="/practice/history" action="Xem lịch sử" />
+              <PlanStep number="03" title="Khép lại bằng ôn tập" detail={hub.dueVocabWords > 0 ? "Có từ vựng đến hạn đang chờ bạn." : "Ôn một nhóm từ để củng cố trí nhớ."} href="/vocab?tab=progress" action="Ôn từ" />
+            </ol>
+          </section>
         </div>
       </main>
     </>
@@ -286,6 +301,19 @@ function StatCard({
       </strong>
       <p className="mt-1 text-xs text-muted">{sub}</p>
     </article>
+  );
+}
+
+function PlanStep({ number, title, detail, href, action }: { number: string; title: string; detail: string; href: string; action: string }) {
+  return (
+    <li className="app-empty-state">
+      <span className="app-empty-state-mark" aria-hidden="true">{number}</span>
+      <div className="min-w-0">
+        <h3 className="text-sm font-extrabold text-ink">{title}</h3>
+        <p className="mt-1 text-xs leading-5 text-muted">{detail}</p>
+        <Link href={href} className="mt-3 inline-flex text-xs font-extrabold text-primary hover:underline">{action} →</Link>
+      </div>
+    </li>
   );
 }
 

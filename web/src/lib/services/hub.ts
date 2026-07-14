@@ -137,10 +137,16 @@ export async function getHub(user: AppUser): Promise<HubView> {
   const profileName = (profile.displayName as string) || null;
   const targetScore = typeof profile.targetScore === "number" ? profile.targetScore : null;
   const level = (profile.level as string) || null;
-  const nextRecommendation = toRecommendation(profile.nextPracticeRecommendation);
+  const todayCompleted = todaySummary.totalActivityCount || studyStreak.todayActivityCount;
+  const nextRecommendation = toRecommendation(profile.nextPracticeRecommendation)
+    ?? buildRecommendation({
+      dueVocabWords: vocabSummary.dueWords,
+      completedTests: practiceSummary.completedTests,
+      averageScore: practiceSummary.averageScore,
+      dailyGoalCompleted: todayCompleted,
+    });
   const moduleTotals = parseModuleTotals(profile.studyModuleTotals);
   const lastActivityAtMillis = numberValue(profile.lastStudyActivityAtMillis);
-  const todayCompleted = todaySummary.totalActivityCount || studyStreak.todayActivityCount;
 
   // Greeting name
   const greetingName = profileName || user.displayName || user.email;
@@ -198,6 +204,47 @@ function toRecommendation(value: unknown): HubView["nextRecommendation"] {
   const reason = stringValue(data.reason);
   if (!label || !href || !reason) return null;
   return { label, href, reason };
+}
+
+function buildRecommendation(input: {
+  dueVocabWords: number;
+  completedTests: number;
+  averageScore: number;
+  dailyGoalCompleted: number;
+}): NonNullable<HubView["nextRecommendation"]> {
+  if (input.dueVocabWords > 0) {
+    return {
+      label: `Ôn ${input.dueVocabWords} từ đến hạn`,
+      href: "/vocab?tab=progress",
+      reason: "Ôn đúng lúc giúp ghi nhớ từ vựng lâu hơn trước khi mở bài mới.",
+    };
+  }
+  if (input.completedTests === 0) {
+    return {
+      label: "Làm bài chẩn đoán đầu tiên",
+      href: "/practice",
+      reason: "Một bài luyện ngắn giúp hệ thống nhận ra điểm cần ưu tiên của bạn.",
+    };
+  }
+  if (input.averageScore < 600) {
+    return {
+      label: "Củng cố nền tảng bằng một Part ngắn",
+      href: "/practice",
+      reason: "Chia bài luyện thành Part nhỏ giúp cải thiện điểm yếu mà không quá tải.",
+    };
+  }
+  if (input.dailyGoalCompleted === 0) {
+    return {
+      label: "Khởi động 15 phút nghe tiếng Anh",
+      href: "/listen",
+      reason: "Một phiên ngắn hôm nay giúp giữ nhịp học và chuỗi ngày của bạn.",
+    };
+  }
+  return {
+    label: "Tiếp tục lộ trình học hôm nay",
+    href: "/continue",
+    reason: "Bạn đã hoàn thành mục tiêu trước mắt; hãy tiếp tục từ hoạt động gần nhất.",
+  };
 }
 
 function stringValue(value: unknown): string | null {
