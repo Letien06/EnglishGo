@@ -29,9 +29,9 @@ export default async function VocabPage({
   const groupId = typeof params.group === "string" ? params.group : undefined;
 
   return (
-    <main className="app-canvas min-h-[calc(100dvh-4rem)] px-4 py-6 sm:px-5 sm:py-10">
+    <main className="app-canvas vocab-page min-h-[calc(100dvh-4rem)] px-4 py-6 sm:px-5 sm:py-10">
       <div className="mx-auto max-w-5xl space-y-7">
-        <section className="premium-hero premium-reveal flex min-h-52 items-center justify-between px-6 py-7 sm:px-9 sm:py-8">
+        <section className="premium-hero premium-reveal vocab-hero flex min-h-52 items-center justify-between px-6 py-7 sm:px-9 sm:py-8">
           <div className="premium-hero-orbit" aria-hidden="true" />
           <div>
             <span className="premium-metric inline-flex px-4 py-1 text-xs font-extrabold text-primary">
@@ -50,7 +50,7 @@ export default async function VocabPage({
           </div>
         </section>
 
-        <nav className="premium-tabs inline-flex max-w-full gap-1 overflow-x-auto rounded-full p-1" aria-label="Vocabulary tabs">
+        <nav className="premium-tabs vocab-tabs inline-flex max-w-full gap-1 overflow-x-auto rounded-full p-1" aria-label="Vocabulary tabs">
           {tabs.map((tab) => {
             const selected = active === tab.key;
             return (
@@ -58,7 +58,8 @@ export default async function VocabPage({
                 key={tab.key}
                 href={`/vocab?tab=${tab.key}`}
                 data-overdelay={`Dang mo ${tab.label}...`}
-                className={`inline-flex items-center gap-2 whitespace-nowrap rounded-full px-4 py-2 text-xs font-extrabold transition-colors ${
+                aria-current={selected ? "page" : undefined}
+                className={`vocab-tab inline-flex items-center gap-2 whitespace-nowrap rounded-full px-4 py-2 text-xs font-extrabold transition-colors ${
                   selected
                     ? "bg-primary text-gold-ink"
                     : "text-muted hover:bg-white hover:text-ink"

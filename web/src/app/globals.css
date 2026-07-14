@@ -1316,7 +1316,566 @@ h1, h2, h3, h4, h5 {
   .continue-list > a:hover { background: color-mix(in srgb, var(--primary) 5%, var(--surface)); }
 }
 
+/* Flashcard motion: the learning card is the one place allowed to feel physical. */
+.flashcard-experience { perspective: 1400px; }
+
+.flashcard-scene {
+  min-height: 23rem;
+  cursor: pointer;
+  transform-style: preserve-3d;
+  transition: transform 180ms var(--ease-out);
+  will-change: transform;
+}
+
+.flashcard-card {
+  position: relative;
+  min-height: 23rem;
+  transform-style: preserve-3d;
+  transition: transform 280ms var(--ease-out);
+  will-change: transform;
+}
+
+.flashcard-scene.is-flipped .flashcard-card { transform: rotateY(180deg); }
+
+.flashcard-face {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: stretch;
+  justify-content: center;
+  overflow: hidden;
+  border: 1px solid color-mix(in srgb, var(--primary) 20%, var(--line));
+  border-radius: 1.75rem;
+  backface-visibility: hidden;
+  background:
+    radial-gradient(circle at 8% 2%, color-mix(in srgb, var(--azure) 16%, transparent), transparent 18rem),
+    linear-gradient(145deg, color-mix(in srgb, var(--surface) 97%, var(--azure) 3%), color-mix(in srgb, var(--surface-soft) 90%, var(--primary) 10%));
+  box-shadow: 0 26px 52px rgba(15, 23, 42, 0.17), inset 0 1px 0 color-mix(in srgb, white 34%, transparent);
+}
+
+.flashcard-face--back {
+  transform: rotateY(180deg);
+  background:
+    radial-gradient(circle at 92% 8%, color-mix(in srgb, var(--primary) 24%, transparent), transparent 19rem),
+    linear-gradient(145deg, color-mix(in srgb, var(--surface) 97%, var(--primary) 3%), color-mix(in srgb, var(--surface-soft) 86%, var(--azure) 14%));
+}
+
+.flashcard-face::before {
+  position: absolute;
+  top: 0;
+  right: 11%;
+  left: 11%;
+  height: 1px;
+  background: color-mix(in srgb, white 68%, transparent);
+  content: "";
+}
+
+.flashcard-face-glow {
+  position: absolute;
+  right: -4rem;
+  bottom: -5rem;
+  width: 13rem;
+  aspect-ratio: 1;
+  border: 1px solid color-mix(in srgb, var(--primary) 19%, transparent);
+  border-radius: 50%;
+  box-shadow: inset 0 0 0 1.25rem color-mix(in srgb, var(--primary) 6%, transparent), inset 0 0 0 3rem color-mix(in srgb, var(--azure) 5%, transparent);
+}
+
+.flashcard-face-content {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  width: min(100%, 38rem);
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: clamp(1.5rem, 5vw, 3.25rem);
+  text-align: center;
+}
+
+.flashcard-side-label {
+  color: var(--muted);
+  font-size: 0.68rem;
+  font-weight: 850;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+}
+
+.flashcard-term {
+  max-width: 100%;
+  margin: 0.8rem 0;
+  color: var(--ink);
+  font-family: var(--font-display);
+  font-size: clamp(2.25rem, 6vw, 4.6rem);
+  font-weight: 800;
+  letter-spacing: -0.06em;
+  line-height: 0.98;
+  overflow-wrap: anywhere;
+}
+
+.flashcard-part-of-speech {
+  border: 1px solid color-mix(in srgb, var(--line) 72%, var(--primary) 16%);
+  border-radius: var(--radius-pill);
+  background: color-mix(in srgb, var(--surface) 72%, transparent);
+  color: var(--ink3);
+  font-size: 0.68rem;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  padding: 0.25rem 0.55rem;
+}
+
+.flashcard-phonetics {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 0.35rem 0.75rem;
+  margin-top: 0.85rem;
+  color: var(--ink3);
+  font-size: 0.83rem;
+  font-weight: 650;
+}
+
+.flashcard-example {
+  max-width: 36rem;
+  margin: 1rem 0 0;
+  color: var(--ink2);
+  font-size: clamp(0.9rem, 2vw, 1.02rem);
+  font-style: italic;
+  line-height: 1.6;
+}
+
+.flashcard-audio-controls {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
+  gap: 0.55rem;
+  margin-top: 1.4rem;
+}
+
+.flashcard-audio-button,
+.flashcard-example-audio,
+.flashcard-flip-button,
+.flashcard-control,
+.flashcard-icon-control,
+.game-utility-button {
+  position: relative;
+  isolation: isolate;
+  overflow: hidden;
+  transition: transform var(--motion-fast) var(--ease-out), background-color var(--motion-fast) ease, border-color var(--motion-fast) ease;
+}
+
+.flashcard-audio-button::before,
+.flashcard-flip-button::before,
+.flashcard-control--next::before,
+.game-utility-button::before {
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  background: linear-gradient(105deg, transparent 20%, color-mix(in srgb, white 28%, transparent) 48%, transparent 76%);
+  content: "";
+  opacity: 0;
+  transform: translateX(-44%);
+  transition: opacity var(--motion-fast) ease, transform 220ms var(--ease-out);
+}
+
+.flashcard-audio-button {
+  min-height: 2.25rem;
+  border: 1px solid color-mix(in srgb, var(--line) 76%, var(--primary) 14%);
+  border-radius: var(--radius-pill);
+  background: color-mix(in srgb, var(--surface) 82%, transparent);
+  color: var(--ink2);
+  font-size: 0.72rem;
+  font-weight: 850;
+  letter-spacing: 0.06em;
+  padding: 0.45rem 0.8rem;
+}
+
+.flashcard-audio-button--primary,
+.flashcard-flip-button,
+.flashcard-control--next {
+  border: 1px solid color-mix(in srgb, var(--primary) 72%, transparent);
+  background: var(--gradient-brand);
+  box-shadow: 0 10px 20px color-mix(in srgb, var(--primary) 20%, transparent), inset 0 1px 0 color-mix(in srgb, white 32%, transparent);
+  color: var(--gold-ink);
+}
+
+.flashcard-example-audio {
+  border: 0;
+  background: transparent;
+  color: var(--primary);
+  font-size: 0.75rem;
+  font-weight: 850;
+}
+
+.flashcard-flip-hint {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
+  gap: 0.7rem 1rem;
+  margin-top: 1rem;
+}
+
+.flashcard-flip-hint p {
+  margin: 0;
+  color: var(--muted);
+  font-size: 0.75rem;
+  font-weight: 650;
+}
+
+.flashcard-flip-button {
+  display: inline-flex;
+  min-height: 2.45rem;
+  align-items: center;
+  gap: 0.45rem;
+  border-radius: var(--radius-pill);
+  font-size: 0.78rem;
+  font-weight: 850;
+  padding: 0.55rem 0.9rem;
+}
+
+.flashcard-play-header {
+  border-color: color-mix(in srgb, var(--line) 74%, var(--primary) 12%);
+  background: color-mix(in srgb, var(--surface) 88%, transparent);
+  box-shadow: var(--elevation-1), inset 0 1px 0 color-mix(in srgb, white 18%, transparent);
+}
+
+.flashcard-answer-input { box-shadow: var(--elevation-1); }
+.flashcard-actions { margin-top: 0.2rem; }
+
+.flashcard-control,
+.flashcard-icon-control {
+  min-height: 2.6rem;
+  border: 1px solid color-mix(in srgb, var(--line) 82%, transparent);
+  box-shadow: inset 0 1px 0 color-mix(in srgb, white 18%, transparent);
+}
+
+.flashcard-icon-control { display: inline-grid; width: 2.6rem; place-items: center; }
+.flashcard-control--forgot { border-color: color-mix(in srgb, var(--danger) 24%, var(--line)); }
+.flashcard-control--known { border-color: color-mix(in srgb, var(--success) 24%, var(--line)); }
+.flashcard-control--check { border-color: color-mix(in srgb, var(--success) 50%, transparent); box-shadow: 0 10px 20px color-mix(in srgb, var(--success) 20%, transparent); }
+
+.flashcard-feedback {
+  transform: translateY(0) scale(1);
+  transition: opacity 180ms var(--ease-out), transform 180ms var(--ease-out);
+}
+
+@starting-style {
+  .flashcard-feedback { opacity: 0; transform: translateY(0.5rem) scale(0.985); }
+}
+
+.game-mode-card::after {
+  position: absolute;
+  top: -60%;
+  left: -25%;
+  width: 50%;
+  height: 220%;
+  background: linear-gradient(90deg, transparent, color-mix(in srgb, white 34%, transparent), transparent);
+  content: "";
+  opacity: 0;
+  transform: rotate(18deg) translateX(-160%);
+  transition: opacity var(--motion-fast) ease, transform 260ms var(--ease-out);
+  pointer-events: none;
+}
+
+@media (hover: hover) and (pointer: fine) and (prefers-reduced-motion: no-preference) {
+  .flashcard-scene:hover { transform: translateY(-0.5rem) rotateX(1.5deg) rotateZ(-0.25deg); }
+  .flashcard-scene:hover .flashcard-face { box-shadow: 0 34px 64px rgba(15, 23, 42, 0.22), inset 0 1px 0 color-mix(in srgb, white 38%, transparent); }
+  .flashcard-audio-button:hover,
+  .flashcard-flip-button:hover,
+  .flashcard-control:hover,
+  .flashcard-icon-control:hover,
+  .game-utility-button:hover { transform: translateY(-2px); }
+  .flashcard-audio-button:hover::before,
+  .flashcard-flip-button:hover::before,
+  .flashcard-control--next:hover::before,
+  .game-utility-button:hover::before { opacity: 1; transform: translateX(44%); }
+  .game-mode-card:hover::after { opacity: 1; transform: rotate(18deg) translateX(420%); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .flashcard-scene,
+  .flashcard-card,
+  .flashcard-feedback { transform: none !important; transition: opacity var(--motion-fast) ease; }
+  .flashcard-face { transform: none; opacity: 1; transition: opacity var(--motion-fast) ease; }
+  .flashcard-face--back { opacity: 0; pointer-events: none; }
+  .flashcard-scene.is-flipped .flashcard-face--front { opacity: 0; pointer-events: none; }
+  .flashcard-scene.is-flipped .flashcard-face--back { opacity: 1; pointer-events: auto; }
+}
+
 /* ── SCROLLBAR (dark theme) ── */
+/* ── LEARNING SURFACES: DASHBOARD, SKILLS, PRACTICE, LEADERBOARD ── */
+.hub-page,
+.vocab-page,
+.skill-index-page,
+.practice-page,
+.leaderboard-page {
+  position: relative;
+  isolation: isolate;
+}
+
+.hub-page::before,
+.vocab-page::before,
+.skill-index-page::before,
+.practice-page::before,
+.leaderboard-page::before {
+  position: absolute;
+  z-index: -1;
+  width: min(42rem, 56vw);
+  height: min(42rem, 56vw);
+  border-radius: 50%;
+  background: radial-gradient(circle, color-mix(in srgb, var(--primary) 8%, transparent), transparent 68%);
+  content: "";
+  filter: blur(3px);
+  pointer-events: none;
+}
+
+.hub-page::before { top: -18rem; right: -16rem; }
+.vocab-page::before { top: -17rem; right: -18rem; }
+.skill-index-page::before { top: -20rem; right: -17rem; }
+.practice-page::before { top: -22rem; right: -20rem; }
+.leaderboard-page::before { top: -24rem; left: -18rem; }
+
+.hub-hero {
+  overflow: hidden;
+  box-shadow: var(--elevation-3), inset 0 1px 0 color-mix(in srgb, white 30%, transparent);
+}
+
+.hub-hero .premium-metric {
+  border-color: color-mix(in srgb, var(--line) 68%, var(--primary) 18%);
+  background: color-mix(in srgb, var(--surface) 74%, transparent);
+  box-shadow: inset 0 1px 0 color-mix(in srgb, white 28%, transparent);
+}
+
+.hub-stat {
+  position: relative;
+  overflow: hidden;
+  border-color: color-mix(in srgb, var(--line) 84%, var(--primary) 16%);
+  transition: transform var(--motion-standard) var(--ease-out), border-color var(--motion-fast) ease;
+}
+
+.hub-stat::after {
+  position: absolute;
+  top: 0;
+  left: 1rem;
+  width: 2.2rem;
+  height: 2px;
+  border-radius: var(--radius-pill);
+  background: var(--gradient-brand);
+  content: "";
+}
+
+.hub-activity-card,
+.hub-recommendation,
+.hub-overview {
+  border-color: color-mix(in srgb, var(--line) 82%, var(--primary) 12%);
+  box-shadow: var(--elevation-1), inset 0 1px 0 color-mix(in srgb, white 25%, transparent);
+}
+
+.hub-recommendation {
+  background: linear-gradient(145deg, color-mix(in srgb, var(--surface) 94%, white), color-mix(in srgb, var(--primary) 4%, var(--surface)));
+}
+
+.hub-module-card,
+.hub-overview-card {
+  border-color: color-mix(in srgb, var(--line) 84%, var(--primary) 12%);
+}
+
+.vocab-hero { box-shadow: var(--elevation-3), inset 0 1px 0 color-mix(in srgb, white 30%, transparent); }
+
+.vocab-tabs {
+  border: 1px solid color-mix(in srgb, var(--line) 78%, var(--primary) 12%);
+  background: color-mix(in srgb, var(--surface) 80%, transparent);
+  box-shadow: var(--elevation-1), inset 0 1px 0 color-mix(in srgb, white 26%, transparent);
+  scrollbar-width: none;
+}
+
+.vocab-tabs::-webkit-scrollbar { display: none; }
+
+.vocab-tab {
+  position: relative;
+  transition: transform var(--motion-fast) var(--ease-out), background-color var(--motion-fast) ease, color var(--motion-fast) ease;
+}
+
+.vocab-tab[aria-current="page"] { box-shadow: 0 8px 18px color-mix(in srgb, var(--primary) 22%, transparent); }
+
+.skill-index-layout { align-items: start; }
+.skill-index-sidebar { position: sticky; top: 1.25rem; }
+
+.skill-index-hero {
+  overflow: hidden;
+  box-shadow: var(--elevation-3), inset 0 1px 0 color-mix(in srgb, white 30%, transparent);
+}
+
+.skill-index-page--listen .skill-index-hero .premium-hero-icon,
+.skill-index-page--listen .skill-index-sidebar header > div > span {
+  background: linear-gradient(145deg, #2563eb, #06b6d4);
+  box-shadow: 0 18px 34px color-mix(in srgb, #0ea5e9 24%, transparent);
+}
+
+.skill-index-page--read .skill-index-hero .premium-hero-icon,
+.skill-index-page--read .skill-index-sidebar header > div > span {
+  background: linear-gradient(145deg, #7c3aed, #3b82f6);
+  box-shadow: 0 18px 34px color-mix(in srgb, #6366f1 24%, transparent);
+}
+
+.skill-index-nav-link {
+  position: relative;
+  border: 1px solid transparent;
+  transition: transform var(--motion-fast) var(--ease-out), background-color var(--motion-fast) ease, border-color var(--motion-fast) ease, color var(--motion-fast) ease;
+}
+
+.skill-index-nav-link[aria-current="page"] {
+  border-color: color-mix(in srgb, white 26%, transparent);
+  box-shadow: 0 14px 26px color-mix(in srgb, var(--primary) 20%, transparent), inset 0 1px 0 color-mix(in srgb, white 26%, transparent);
+}
+
+.practice-test-grid { perspective: 1000px; }
+
+.practice-test-card {
+  position: relative;
+  overflow: hidden;
+  min-height: 13.5rem;
+  border-color: color-mix(in srgb, var(--line) 82%, var(--primary) 13%);
+  background: linear-gradient(145deg, color-mix(in srgb, var(--surface) 96%, white), color-mix(in srgb, var(--primary) 4%, var(--surface)));
+}
+
+.practice-test-card::before {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 3px;
+  background: var(--gradient-brand);
+  content: "";
+}
+
+.practice-test-card header { padding-right: 1.2rem; }
+
+.practice-launcher-backdrop {
+  background: color-mix(in srgb, #0f172a 54%, transparent);
+  backdrop-filter: blur(8px);
+}
+
+.practice-launcher-dialog {
+  border-color: color-mix(in srgb, var(--line) 78%, var(--primary) 14%);
+  box-shadow: 0 32px 80px rgba(15, 23, 42, 0.32), inset 0 1px 0 color-mix(in srgb, white 30%, transparent);
+  transform: translateY(0) scale(1);
+  transition: opacity var(--motion-standard) var(--ease-out), transform var(--motion-standard) var(--ease-out);
+}
+
+@starting-style {
+  .practice-launcher-dialog { opacity: 0; transform: translateY(0.75rem) scale(0.985); }
+}
+
+.practice-mode-switch {
+  border: 1px solid color-mix(in srgb, var(--line) 80%, transparent);
+  box-shadow: inset 0 1px 2px color-mix(in srgb, var(--ink) 6%, transparent);
+}
+
+.practice-mode-switch button {
+  transition: transform var(--motion-fast) var(--ease-out), background-color var(--motion-fast) ease, color var(--motion-fast) ease;
+}
+
+.practice-choice-card {
+  border-color: color-mix(in srgb, var(--line) 82%, var(--primary) 13%);
+  box-shadow: inset 0 1px 0 color-mix(in srgb, white 22%, transparent);
+}
+
+.practice-part-option {
+  transition: transform var(--motion-fast) var(--ease-out), background-color var(--motion-fast) ease, border-color var(--motion-fast) ease;
+}
+
+.practice-empty-state {
+  border-style: dashed;
+  box-shadow: inset 0 1px 0 color-mix(in srgb, white 28%, transparent);
+}
+
+.practice-next-link {
+  transition: transform var(--motion-fast) var(--ease-out), background-color var(--motion-fast) ease, border-color var(--motion-fast) ease;
+}
+
+.leaderboard-summary {
+  position: relative;
+  overflow: hidden;
+  padding: clamp(1.25rem, 3vw, 2rem);
+  border: 1px solid color-mix(in srgb, var(--line) 78%, var(--primary) 12%);
+  border-radius: 1.75rem;
+  background: linear-gradient(120deg, color-mix(in srgb, var(--surface) 96%, white), color-mix(in srgb, var(--primary) 5%, var(--surface)));
+  box-shadow: var(--elevation-2), inset 0 1px 0 color-mix(in srgb, white 30%, transparent);
+}
+
+.leaderboard-summary::after {
+  position: absolute;
+  top: -7rem;
+  right: -5rem;
+  width: 15rem;
+  aspect-ratio: 1;
+  border: 1px solid color-mix(in srgb, var(--primary) 17%, transparent);
+  border-radius: 50%;
+  box-shadow: inset 0 0 0 1.5rem color-mix(in srgb, var(--primary) 5%, transparent), inset 0 0 0 3.3rem color-mix(in srgb, var(--primary) 4%, transparent);
+  content: "";
+  pointer-events: none;
+}
+
+.leaderboard-summary > * { position: relative; z-index: 1; }
+.leaderboard-count { box-shadow: 0 12px 24px color-mix(in srgb, var(--primary) 12%, transparent), inset 0 1px 0 color-mix(in srgb, white 30%, transparent); }
+
+.leaderboard-tab {
+  position: relative;
+  transition: transform var(--motion-fast) var(--ease-out), background-color var(--motion-fast) ease, border-color var(--motion-fast) ease, color var(--motion-fast) ease;
+}
+
+.leaderboard-tab[aria-current="page"] { box-shadow: 0 9px 18px color-mix(in srgb, var(--primary) 23%, transparent); }
+
+.leaderboard-board {
+  border-color: color-mix(in srgb, var(--line) 78%, var(--primary) 12%);
+  box-shadow: var(--elevation-2), inset 0 1px 0 color-mix(in srgb, white 28%, transparent);
+}
+
+.leaderboard-row {
+  transition: background-color var(--motion-fast) ease, transform var(--motion-fast) var(--ease-out);
+}
+
+@media (hover: hover) and (pointer: fine) and (prefers-reduced-motion: no-preference) {
+  .hub-stat:hover,
+  .vocab-tab:hover,
+  .skill-index-nav-link:hover,
+  .practice-mode-switch button:hover,
+  .practice-part-option:hover,
+  .practice-next-link:hover,
+  .leaderboard-tab:hover { transform: translateY(-2px); }
+  .hub-module-card:hover,
+  .hub-overview-card:hover { transform: translateY(-3px); }
+  .practice-test-card:hover { transform: translateY(-4px) rotateX(1deg); }
+  .leaderboard-row:hover { transform: translateX(0.2rem); background: color-mix(in srgb, var(--primary) 4%, var(--surface)); }
+}
+
+@media (max-width: 1023px) {
+  .skill-index-sidebar { position: static; }
+}
+
+@media (max-width: 640px) {
+  .leaderboard-summary { border-radius: 1.25rem; }
+  .practice-launcher-backdrop { padding: 0.75rem; }
+  .practice-launcher-dialog { padding: 1.1rem; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .hub-stat,
+  .vocab-tab,
+  .skill-index-nav-link,
+  .practice-test-card,
+  .practice-launcher-dialog,
+  .practice-mode-switch button,
+  .practice-part-option,
+  .practice-next-link,
+  .leaderboard-tab,
+  .leaderboard-row { transform: none !important; }
+  .practice-launcher-backdrop { backdrop-filter: none; }
+}
+
 ::-webkit-scrollbar { width: 6px; height: 6px; }
 ::-webkit-scrollbar-track { background: transparent; }
 ::-webkit-scrollbar-thumb { background: var(--muted); border-radius: 999px; }

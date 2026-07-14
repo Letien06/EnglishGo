@@ -139,9 +139,9 @@ export default function PracticeTestLauncher({ tests }: Props) {
 
   return (
     <>
-      <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3">
+      <div className="practice-test-grid grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3">
         {tests.map((test) => (
-          <article key={test.id} className="premium-card premium-card--interactive p-5">
+          <article key={test.id} className="premium-card premium-card--interactive practice-test-card p-5">
             <header className="space-y-1">
               <h2 className="font-bold text-ink">{test.title}</h2>
               <p className="text-xs text-muted">
@@ -182,9 +182,9 @@ export default function PracticeTestLauncher({ tests }: Props) {
       {startingLabel ? <PracticeBusyOverlay title={startingLabel} description="Đang tải dữ liệu đề, audio và ảnh..." /> : null}
 
       {selectedTest ? (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4">
+        <div className="practice-launcher-backdrop fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4">
           <button type="button" className="absolute inset-0 cursor-default" aria-label="Đóng chọn chế độ" onClick={closeModal} />
-          <section ref={modalRef} tabIndex={-1} role="dialog" aria-modal="true" aria-labelledby="practice-launcher-title" className="relative max-h-[92dvh] w-full max-w-2xl overflow-y-auto rounded-2xl border border-line bg-surface p-6 shadow-2xl">
+          <section ref={modalRef} tabIndex={-1} role="dialog" aria-modal="true" aria-labelledby="practice-launcher-title" className="practice-launcher-dialog relative max-h-[92dvh] w-full max-w-2xl overflow-y-auto rounded-2xl border border-line bg-surface p-6 shadow-2xl">
             <header className="flex items-start justify-between gap-4">
               <div>
                 <h2 id="practice-launcher-title" className="text-xl font-extrabold text-ink">Chọn chế độ</h2>
@@ -200,7 +200,7 @@ export default function PracticeTestLauncher({ tests }: Props) {
               </button>
             </header>
 
-            <div className="mt-5 grid grid-cols-2 rounded-xl bg-surface-soft p-1">
+            <div className="practice-mode-switch mt-5 grid grid-cols-2 rounded-xl bg-surface-soft p-1">
               <button
                 type="button"
                 onClick={chooseFullTest}
@@ -224,7 +224,7 @@ export default function PracticeTestLauncher({ tests }: Props) {
             </div>
 
             <div className="mt-5 space-y-4">
-              <article className={`rounded-xl border p-4 ${allPartsSelected && tab === "exam" ? "border-accent bg-accent/5" : "border-line bg-surface"}`}>
+              <article className={`practice-choice-card rounded-xl border p-4 ${allPartsSelected && tab === "exam" ? "border-accent bg-accent/5" : "border-line bg-surface"}`}>
                 <div className="flex flex-wrap items-center justify-between gap-3">
                   <button type="button" onClick={chooseFullTest} className="text-left">
                     <strong className="text-ink">Full Test (200 câu)</strong>
@@ -243,7 +243,7 @@ export default function PracticeTestLauncher({ tests }: Props) {
                 </div>
               </article>
 
-              <article className="rounded-xl border border-line bg-surface p-4">
+              <article className="practice-choice-card rounded-xl border border-line bg-surface p-4">
                 <div className="flex flex-wrap items-center justify-between gap-3">
                   <div>
                     <strong className="text-ink">Thi theo Part</strong>
@@ -265,7 +265,7 @@ export default function PracticeTestLauncher({ tests }: Props) {
                 </div>
               </article>
 
-              <article className="rounded-xl border border-line bg-surface p-4">
+              <article className="practice-choice-card rounded-xl border border-line bg-surface p-4">
                 <label className="text-sm font-extrabold text-ink" htmlFor="practice-duration">
                   Thời gian làm bài
                 </label>
@@ -352,7 +352,7 @@ function PartGroup({
               key={item.part}
               type="button"
               onClick={() => onToggle(item.part)}
-              className={`flex items-center justify-between rounded-lg border px-3 py-2 text-sm ${
+              className={`practice-part-option flex items-center justify-between rounded-lg border px-3 py-2 text-sm ${
                 selected ? "border-accent bg-accent/5 text-ink" : "border-line bg-surface text-muted"
               }`}
             >

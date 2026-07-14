@@ -29,11 +29,11 @@ export default async function PracticePage({ searchParams }: Props) {
         userName={user?.displayName}
         userEmail={user?.email}
       />
-      <main className="app-canvas flex-1 space-y-6 overflow-y-auto px-4 py-6 lg:px-8">
+      <main className="app-canvas practice-page flex-1 space-y-6 overflow-y-auto px-4 py-6 lg:px-8">
         <PracticeTestLauncher tests={tests.items} />
 
         {tests.items.length === 0 && (
-          <section className="p-8 rounded-xl bg-surface border border-line text-center text-muted">
+          <section className="practice-empty-state p-8 rounded-xl bg-surface border border-line text-center text-muted">
             No tests found.
           </section>
         )}
@@ -42,7 +42,7 @@ export default async function PracticePage({ searchParams }: Props) {
           <div className="flex justify-end">
             <Link
               href={`/practice?cursor=${encodeURIComponent(tests.nextCursor)}`}
-              className="px-4 py-2 rounded-lg bg-surface border border-line text-sm font-semibold text-ink"
+              className="practice-next-link px-4 py-2 rounded-lg bg-surface border border-line text-sm font-semibold text-ink"
             >
               Next
             </Link>

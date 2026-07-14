@@ -30,9 +30,9 @@ export default async function LeaderboardPage({ searchParams }: Props) {
     : [[] as StudyStreakLeaderboardEntry[], await getPracticeLeaderboard(scope, period, 100)];
 
   return (
-    <main className="min-h-[calc(100dvh-4rem)] bg-bg px-5 py-8 lg:px-8">
-      <section className="mx-auto max-w-6xl space-y-5">
-        <header className="flex flex-wrap items-end justify-between gap-4">
+    <main className="app-canvas leaderboard-page min-h-[calc(100dvh-4rem)] bg-bg px-5 py-8 lg:px-8">
+      <section className="leaderboard-shell mx-auto max-w-6xl space-y-5">
+        <header className="leaderboard-summary flex flex-wrap items-end justify-between gap-4">
           <div>
             <p className="text-xs font-extrabold uppercase tracking-widest text-primary">
               Bảng xếp hạng
@@ -44,7 +44,7 @@ export default async function LeaderboardPage({ searchParams }: Props) {
               Điểm nghe, đọc và đề thi chỉ tính bài làm hợp lệ; làm lại vẫn lưu lịch sử nhưng không cộng dồn vào bảng xếp hạng.
             </p>
           </div>
-          <div className="rounded-2xl border border-amber-100 bg-white px-4 py-3 text-sm font-extrabold text-primary shadow-sm">
+          <div className="leaderboard-count rounded-2xl border border-amber-100 bg-white px-4 py-3 text-sm font-extrabold text-primary shadow-sm">
             {tab === "streak" ? `${streakEntries.length}/100 người` : `${practiceEntries.length}/100 lượt xếp hạng`}
           </div>
         </header>
@@ -101,7 +101,7 @@ function PracticeBoard({
   period: PracticeLeaderboardPeriod;
 }) {
   return (
-    <section className="overflow-hidden rounded-[28px] border border-line bg-white shadow-sm">
+    <section className="leaderboard-board overflow-hidden rounded-[28px] border border-line bg-white shadow-sm">
       <div className="grid grid-cols-[72px_1fr_120px_120px_96px] gap-3 border-b border-line bg-slate-50 px-5 py-3 text-xs font-extrabold uppercase tracking-wide text-slate-600 max-md:grid-cols-[56px_1fr_96px]">
         <span>Hạng</span>
         <span>Người dùng</span>
@@ -119,7 +119,7 @@ function PracticeBoard({
           {entries.map((entry) => (
             <article
               key={entry.uid}
-              className={`grid grid-cols-[72px_1fr_120px_120px_96px] items-center gap-3 px-5 py-4 max-md:grid-cols-[56px_1fr_96px] ${
+              className={`leaderboard-row grid grid-cols-[72px_1fr_120px_120px_96px] items-center gap-3 px-5 py-4 max-md:grid-cols-[56px_1fr_96px] ${
                 entry.uid === currentUid ? "bg-amber-50/70" : "bg-white"
               }`}
             >
@@ -165,7 +165,7 @@ function StreakBoard({
   currentUid: string | null;
 }) {
   return (
-    <section className="overflow-hidden rounded-[28px] border border-line bg-white shadow-sm">
+    <section className="leaderboard-board overflow-hidden rounded-[28px] border border-line bg-white shadow-sm">
       <div className="grid grid-cols-[88px_1fr_112px] border-b border-line bg-slate-50 px-5 py-3 text-xs font-extrabold uppercase tracking-wide text-slate-600">
         <span>Hạng</span>
         <span>Người dùng</span>
@@ -181,7 +181,7 @@ function StreakBoard({
           {entries.map((entry) => (
             <article
               key={entry.uid}
-              className={`grid grid-cols-[88px_1fr_112px] items-center px-5 py-4 ${
+              className={`leaderboard-row grid grid-cols-[88px_1fr_112px] items-center px-5 py-4 ${
                 entry.uid === currentUid ? "bg-amber-50/70" : "bg-white"
               }`}
             >
@@ -227,7 +227,8 @@ function TabLink({
   return (
     <Link
       href={href}
-      className={`${compact ? "px-3 py-1.5 text-xs" : "px-4 py-2 text-sm"} rounded-lg font-extrabold ${
+      aria-current={active ? "page" : undefined}
+      className={`leaderboard-tab ${compact ? "px-3 py-1.5 text-xs" : "px-4 py-2 text-sm"} rounded-lg font-extrabold ${
         active ? "bg-primary text-white" : "border border-line bg-white text-ink hover:bg-surface-soft"
       }`}
     >

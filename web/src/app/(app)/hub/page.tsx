@@ -64,9 +64,9 @@ export default async function HubPage() {
         userEmail={user.email}
       />
 
-      <main className="app-canvas flex-1 overflow-y-auto px-4 py-6 lg:px-8">
+      <main className="app-canvas hub-page flex-1 overflow-y-auto px-4 py-6 lg:px-8">
         <div className="mx-auto flex max-w-7xl flex-col gap-6">
-          <section className="premium-hero premium-reveal p-5 sm:p-7 lg:p-8">
+          <section className="premium-hero premium-reveal hub-hero p-5 sm:p-7 lg:p-8">
             <div className="premium-hero-orbit" aria-hidden="true" />
             <div className="flex flex-col gap-5 lg:flex-row lg:items-end lg:justify-between">
               <div className="min-w-0">
@@ -118,7 +118,7 @@ export default async function HubPage() {
           </section>
 
           <section className="grid gap-4 lg:grid-cols-[1.2fr_0.8fr]">
-            <article className="premium-card p-5 sm:p-6">
+            <article className="premium-card hub-activity-card p-5 sm:p-6">
               <div className="flex flex-wrap items-center justify-between gap-3">
                 <div>
                   <p className="text-xs font-extrabold uppercase tracking-widest text-muted">
@@ -144,7 +144,7 @@ export default async function HubPage() {
                     <Link
                       key={item.key}
                       href={item.href}
-                      className="premium-card premium-card--interactive rounded-2xl p-4"
+                      className="premium-card premium-card--interactive hub-module-card rounded-2xl p-4"
                     >
                       <div className="flex items-center justify-between gap-3">
                         <div>
@@ -164,7 +164,7 @@ export default async function HubPage() {
               </div>
             </article>
 
-            <article className="premium-card p-5 sm:p-6">
+            <article className="premium-card hub-recommendation p-5 sm:p-6">
               <p className="text-xs font-extrabold uppercase tracking-widest text-muted">
                 Gợi ý tiếp theo
               </p>
@@ -202,7 +202,7 @@ export default async function HubPage() {
             </article>
           </section>
 
-          <section className="premium-card p-5 sm:p-6">
+          <section className="premium-card hub-overview p-5 sm:p-6">
             <div className="flex flex-wrap items-center justify-between gap-3">
               <div>
                 <p className="text-xs font-extrabold uppercase tracking-widest text-muted">
@@ -223,7 +223,7 @@ export default async function HubPage() {
                 <Link
                   key={item.key}
                   href={item.href}
-                  className={`premium-card premium-card--interactive ${item.bg} p-4`}
+                  className={`premium-card premium-card--interactive hub-overview-card ${item.bg} p-4`}
                 >
                   <span className={`text-xs font-extrabold uppercase tracking-widest ${item.tone}`}>
                     {item.label}
@@ -267,7 +267,7 @@ function StatCard({
   tone: string;
 }) {
   return (
-    <article className="premium-stat p-4">
+    <article className="premium-stat hub-stat p-4">
       <small className="text-xs font-bold text-muted">{label}</small>
       <strong className={`mt-2 block text-2xl font-extrabold ${tone}`}>
         {value}

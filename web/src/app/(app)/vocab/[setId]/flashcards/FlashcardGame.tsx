@@ -558,7 +558,7 @@ function Hub({
               onClick={() =>
                 card.quiz ? onOpenQuizChooser() : onStartMode(card.key)
               }
-              className={`premium-card premium-card--interactive relative flex min-h-[170px] flex-col items-center justify-center gap-2 overflow-hidden p-5 text-center ${tone.card}`}
+              className={`game-mode-card premium-card premium-card--interactive relative flex min-h-[170px] flex-col items-center justify-center gap-2 overflow-hidden p-5 text-center ${tone.card}`}
             >
               {card.hot && (
                 <em className="absolute right-3 top-3 rounded bg-red-500 px-2 py-0.5 text-[10px] font-bold not-italic text-white">
@@ -585,7 +585,7 @@ function Hub({
         <button
           type="button"
           onClick={() => onStartMode("flashcard")}
-          className="shrink-0 rounded-xl bg-violet-600 px-5 py-2.5 text-sm font-semibold text-white hover:bg-violet-700"
+          className="game-utility-button shrink-0 rounded-xl bg-violet-600 px-5 py-2.5 text-sm font-semibold text-white hover:bg-violet-700"
         >
           Bắt đầu ôn tập
         </button>
@@ -1403,9 +1403,9 @@ function PlaySurface({
         : "text-muted";
 
   return (
-    <article className="space-y-4">
+    <article className="flashcard-play space-y-4">
       {/* Play header */}
-      <section className="mx-auto flex max-w-3xl flex-wrap items-center gap-3 rounded-2xl border border-line bg-white p-4 shadow-sm">
+      <section className="flashcard-play-header mx-auto flex max-w-3xl flex-wrap items-center gap-3 rounded-2xl border border-line bg-white p-4 shadow-sm">
         <span className="rounded-full bg-amber-400/20 px-3 py-1 text-xs font-bold text-amber-600">
           ~<b>{score}</b> GAME
         </span>
@@ -1546,12 +1546,12 @@ function PlaySurface({
             onChange={(event) => setTyped(event.target.value)}
             placeholder={reverse ? "Gõ từ tiếng Anh" : "Gõ nghĩa tiếng Việt"}
             disabled={!!feedback}
-            className="min-h-12 flex-1 rounded-xl border border-line bg-white px-4 text-base font-semibold text-ink outline-none focus:border-accent disabled:cursor-not-allowed disabled:opacity-60"
+            className="flashcard-answer-input min-h-12 flex-1 rounded-xl border border-line bg-white px-4 text-base font-semibold text-ink outline-none focus:border-accent disabled:cursor-not-allowed disabled:opacity-60"
           />
           <button
             type="submit"
             disabled={!typed.trim() || !!feedback}
-            className="rounded-xl bg-green-600 px-6 py-3 text-sm font-extrabold text-white disabled:opacity-50"
+            className="flashcard-control flashcard-control--check rounded-xl bg-green-600 px-6 py-3 text-sm font-extrabold text-white disabled:opacity-50"
           >
             Check
           </button>
@@ -1560,39 +1560,39 @@ function PlaySurface({
 
       {/* Common flashcard actions */}
       {activeMode === "flashcard" && (
-        <div className="flex flex-wrap items-center justify-center gap-3">
+        <div className="flashcard-actions flex flex-wrap items-center justify-center gap-3">
           <button
             type="button"
             onClick={goPrev}
-            className="rounded-lg bg-surface-soft px-4 py-2 text-sm font-semibold text-ink2"
+            className="flashcard-control rounded-lg bg-surface-soft px-4 py-2 text-sm font-semibold text-ink2"
           >
             ‹ Trước
           </button>
           <button
             type="button"
             onClick={speakWord}
-            className="rounded-full bg-surface-soft px-3 py-2 text-sm"
+            className="flashcard-icon-control rounded-full bg-surface-soft px-3 py-2 text-sm"
           >
             ♫
           </button>
           <button
             type="button"
             onClick={() => markKnown(false)}
-            className="rounded-lg bg-red-500/20 px-4 py-2 text-sm font-semibold text-red-500 hover:bg-red-500/30"
+            className="flashcard-control flashcard-control--forgot rounded-lg bg-red-500/20 px-4 py-2 text-sm font-semibold text-red-500 hover:bg-red-500/30"
           >
             × Quên
           </button>
           <button
             type="button"
             onClick={() => markKnown(true)}
-            className="rounded-lg bg-green-500/20 px-4 py-2 text-sm font-semibold text-green-500 hover:bg-green-500/30"
+            className="flashcard-control flashcard-control--known rounded-lg bg-green-500/20 px-4 py-2 text-sm font-semibold text-green-500 hover:bg-green-500/30"
           >
             ✓ Thuộc
           </button>
           <button
             type="button"
             onClick={goNext}
-            className="rounded-lg bg-accent px-4 py-2 text-sm font-semibold text-white"
+            className="flashcard-control flashcard-control--next rounded-lg bg-accent px-4 py-2 text-sm font-semibold text-white"
           >
             Tiếp ›
           </button>
@@ -1647,7 +1647,7 @@ function FeedbackOverlay({
     activeMode === "matching" && isMatchingDone ? "Xem kết quả" : "Tiếp tục";
   return (
     <section
-      className={`w-full rounded-2xl border p-4 shadow-lg ${
+      className={`flashcard-feedback w-full rounded-2xl border p-4 shadow-lg ${
         feedback.correct
           ? "border-green-200 bg-green-50"
           : "border-red-200 bg-red-50"

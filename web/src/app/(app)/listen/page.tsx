@@ -17,11 +17,11 @@ export default async function ListenPage({
   const activePart = parts.find((part) => part.id === partParam) ?? parts[0];
 
   return (
-    <main className="app-canvas min-h-[calc(100dvh-4rem)] px-4 py-5 lg:px-8">
-      <div className="grid gap-8 lg:grid-cols-[250px_1fr]">
+    <main className="app-canvas skill-index-page skill-index-page--listen min-h-[calc(100dvh-4rem)] px-4 py-5 lg:px-8">
+      <div className="skill-index-layout grid gap-8 lg:grid-cols-[250px_1fr]">
         <ModuleSidebar activeId={activePart.id} />
 
-        <section className="space-y-8">
+        <section className="skill-index-content space-y-8">
           <Hero part={activePart} />
 
           <section>
@@ -59,7 +59,7 @@ export default async function ListenPage({
 
 function ModuleSidebar({ activeId }: { activeId: string }) {
   return (
-    <aside className="premium-sidebar p-4">
+    <aside className="premium-sidebar skill-index-sidebar p-4">
       <header className="mb-4 border-b border-line pb-4">
         <div className="flex items-center gap-3">
           <span className="inline-flex h-12 w-12 items-center justify-center rounded-xl bg-gradient-to-br from-blue-600 to-cyan-500 text-2xl font-extrabold text-white">
@@ -79,7 +79,8 @@ function ModuleSidebar({ activeId }: { activeId: string }) {
             <Link
               key={part.id}
               href={`/listen?part=${part.id}`}
-              className={`flex items-center gap-3 rounded-xl px-3 py-3 text-sm font-extrabold no-underline transition-colors ${
+              aria-current={active ? "page" : undefined}
+              className={`skill-index-nav-link flex items-center gap-3 rounded-xl px-3 py-3 text-sm font-extrabold no-underline transition-colors ${
                 active
                   ? "bg-gradient-to-r from-blue-600 to-cyan-500 text-white shadow-lg shadow-blue-500/20"
                   : "text-ink2 hover:bg-surface-soft hover:text-ink"
@@ -94,7 +95,7 @@ function ModuleSidebar({ activeId }: { activeId: string }) {
         })}
         <Link
           href="/listen/dictation"
-          className="flex items-center gap-3 rounded-xl px-3 py-3 text-sm font-extrabold text-ink2 no-underline transition-colors hover:bg-surface-soft hover:text-ink"
+          className="skill-index-nav-link flex items-center gap-3 rounded-xl px-3 py-3 text-sm font-extrabold text-ink2 no-underline transition-colors hover:bg-surface-soft hover:text-ink"
         >
           <span className="inline-flex h-9 w-9 items-center justify-center rounded-lg bg-primary/10 text-primary">✎</span>
           <span>Nghe – chép video</span>
@@ -110,7 +111,7 @@ function ModuleSidebar({ activeId }: { activeId: string }) {
 
 function Hero({ part }: { part: (typeof parts)[number] }) {
   return (
-    <article className="premium-hero premium-reveal flex min-h-52 items-center justify-between px-6 py-7 sm:px-8 sm:py-8">
+    <article className="premium-hero premium-reveal skill-index-hero flex min-h-52 items-center justify-between px-6 py-7 sm:px-8 sm:py-8">
       <div className="premium-hero-orbit" aria-hidden="true" />
       <div>
         <h1 className="text-4xl font-extrabold text-ink">{part.title}</h1>
