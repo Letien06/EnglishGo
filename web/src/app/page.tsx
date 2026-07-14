@@ -1,6 +1,8 @@
 import Link from "next/link";
+import { redirect } from "next/navigation";
 import PublicHeader from "@/components/PublicHeader";
 import NavIcon from "@/components/NavIcon";
+import { getCurrentUser } from "@/lib/auth/session";
 
 const features = [
   {
@@ -65,28 +67,31 @@ const steps = [
   },
 ];
 
-export default function HomePage() {
+export default async function HomePage() {
+  const user = await getCurrentUser();
+  if (user) redirect("/hub");
+
   return (
     <>
       <PublicHeader />
 
       <main className="app-canvas flex-1">
-        <section className="premium-hero premium-reveal mx-4 mt-4 flex min-h-[calc(100dvh-7rem)] max-w-none flex-col items-center justify-center px-5 py-16 text-center sm:mx-6 sm:px-8 md:mx-8 md:py-24 lg:mx-auto lg:max-w-7xl">
-          <div className="premium-hero-orbit" aria-hidden="true" />
-          <span className="premium-metric inline-flex px-5 py-3 text-base font-extrabold text-primary">
+        <section className="landing-hero mx-4 mt-4 flex min-h-[calc(100dvh-7rem)] max-w-none flex-col items-center justify-center px-5 py-16 text-center sm:mx-6 sm:px-8 md:mx-8 md:py-24 lg:mx-auto lg:max-w-7xl">
+          <div className="landing-hero-orbit" aria-hidden="true" />
+          <span className="landing-kicker landing-reveal inline-flex px-5 py-3 text-base font-extrabold text-primary">
             ✦ Nền tảng luyện TOEIC miễn phí cho người học
           </span>
-          <h1 className="mt-10 max-w-5xl text-5xl font-extrabold leading-[1.05] text-ink sm:text-6xl lg:text-7xl">
+          <h1 className="landing-display landing-reveal mt-10 max-w-5xl text-5xl font-extrabold leading-[1.05] text-ink sm:text-6xl lg:text-7xl">
             Luyện TOEIC hiệu quả
             <br />
             <strong className="font-extrabold text-primary">
               Đạt mục tiêu nhanh hơn
             </strong>
           </h1>
-          <p className="mt-6 max-w-3xl text-xl font-medium leading-relaxed text-muted">
+          <p className="landing-copy landing-reveal mt-6 max-w-3xl text-xl font-medium leading-relaxed text-muted">
             Luyện nghe 4 chế độ, luyện đề, học từ vựng, ngữ pháp - tất cả trong một nền tảng.
           </p>
-          <div className="mt-12 flex w-full flex-col justify-center gap-4 sm:w-auto sm:flex-row">
+          <div className="landing-actions landing-reveal mt-12 flex w-full flex-col justify-center gap-4 sm:w-auto sm:flex-row">
             <Link
               href="/login?mode=register"
               className="premium-primary inline-flex min-h-16 gap-2 px-10 text-lg"
@@ -101,14 +106,15 @@ export default function HomePage() {
               Làm bài test thử (demo)
             </Link>
           </div>
-          <div className="mt-10 flex flex-wrap justify-center gap-x-12 gap-y-3 text-base font-medium text-muted">
+          <div className="landing-proof landing-reveal mt-10 flex flex-wrap justify-center gap-x-12 gap-y-3 text-base font-medium text-muted">
             <span className="text-jade">✓ <span className="text-muted">Đăng ký miễn phí, bắt đầu ngay</span></span>
             <span className="text-jade">✓ <span className="text-muted">Theo dõi tiến độ học tập</span></span>
             <span className="text-jade">✓ <span className="text-muted">Giải thích chi tiết từng câu</span></span>
           </div>
+          <LandingStudyPreview />
         </section>
 
-        <section id="features" className="px-5 py-16 sm:px-8 md:py-20">
+        <section id="features" className="landing-section px-5 py-16 sm:px-8 md:py-20">
           <p className="mx-auto mb-10 max-w-3xl text-center text-base font-medium text-muted">
             Hệ thống luyện tập toàn diện, từ ngữ pháp đến luyện nghe, từ vựng đến luyện đề.
           </p>
@@ -116,7 +122,7 @@ export default function HomePage() {
             {features.map((feature) => (
               <article
                 key={feature.title}
-                className="premium-card premium-card--interactive flex min-h-56 flex-col gap-3 p-5"
+                className="landing-feature-card premium-card premium-card--interactive flex min-h-56 flex-col gap-3 p-5"
               >
                 <span className="text-2xl text-primary">{feature.icon}</span>
                 <h2 className="text-lg font-extrabold text-ink">{feature.title}</h2>
@@ -129,7 +135,7 @@ export default function HomePage() {
           </div>
         </section>
 
-        <section className="mx-4 mb-6 rounded-[1.75rem] border border-line bg-surface-soft/70 px-5 py-16 sm:mx-6 sm:px-8 md:mx-8 md:py-20 lg:mx-auto lg:max-w-7xl">
+        <section className="landing-steps mx-4 mb-6 rounded-[1.75rem] px-5 py-16 sm:mx-6 sm:px-8 md:mx-8 md:py-20 lg:mx-auto lg:max-w-7xl">
           <h2 className="mb-10 text-center text-3xl font-extrabold text-ink">
             Cách hoạt động
           </h2>
@@ -137,7 +143,7 @@ export default function HomePage() {
             {steps.map((step) => (
               <article
                 key={step.num}
-                className="premium-card flex gap-4 p-6"
+                className="landing-step-card premium-card flex gap-4 p-6"
               >
                 <span className="shrink-0 text-2xl font-extrabold text-primary">
                   {step.num}
@@ -151,7 +157,7 @@ export default function HomePage() {
           </div>
         </section>
 
-        <section className="px-5 py-16 text-center sm:px-8 md:py-20">
+        <section className="landing-cta mx-4 mb-6 px-5 py-16 text-center sm:mx-6 sm:px-8 md:mx-8 md:py-20 lg:mx-auto lg:max-w-7xl">
           <h2 className="mb-3 text-3xl font-extrabold text-ink">
             Sẵn sàng nâng cao điểm TOEIC?
           </h2>
@@ -160,7 +166,7 @@ export default function HomePage() {
           </p>
           <Link
             href="/login?mode=register"
-            className="premium-primary inline-flex min-h-14 gap-2 px-8 text-base"
+            className="landing-primary-action inline-flex min-h-14 gap-2 px-8 text-base"
           >
             Bắt đầu miễn phí <NavIcon name="arrow-right" className="h-5 w-5" />
           </Link>
@@ -211,6 +217,46 @@ export default function HomePage() {
         </p>
       </footer>
     </>
+  );
+}
+
+function LandingStudyPreview() {
+  return (
+    <aside className="hero-study-preview" aria-label="Minh họa lộ trình học TOEIC">
+      <div className="study-preview-glow" aria-hidden="true" />
+      <div className="study-preview-card landing-reveal">
+        <div className="study-preview-topline">
+          <span>Hôm nay</span>
+          <strong>15 phút tập trung</strong>
+        </div>
+        <div className="study-preview-score">
+          <span>TOEIC target</span>
+          <strong>750</strong>
+          <small>+ 30 điểm từ lộ trình</small>
+        </div>
+        <div className="study-preview-plan">
+          <div className="study-plan-icon">01</div>
+          <div>
+            <strong>Nghe Part 2</strong>
+            <span>8 câu phản xạ nhanh</span>
+          </div>
+          <b>08′</b>
+        </div>
+        <div className="study-preview-plan is-next">
+          <div className="study-plan-icon">02</div>
+          <div>
+            <strong>Ôn từ vựng</strong>
+            <span>12 từ đến hạn hôm nay</span>
+          </div>
+          <b>07′</b>
+        </div>
+        <div className="study-preview-progress">
+          <div><span>Tiến độ tuần này</span><strong>4 / 5 ngày</strong></div>
+          <i><b /></i>
+        </div>
+      </div>
+      <p className="study-preview-note">Luôn biết bước tiếp theo để tiến gần mục tiêu.</p>
+    </aside>
   );
 }
 

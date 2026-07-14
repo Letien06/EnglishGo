@@ -66,10 +66,10 @@ export default function PublicHeader({ user }: PublicHeaderProps) {
   useDialogFocus(menuOpen, () => setMenuOpen(false), menuDialogRef);
 
   return (
-    <header className="sticky top-0 z-50 border-b border-line bg-glass backdrop-blur-xl">
+    <header className="public-header sticky top-0 z-50 border-b border-line bg-glass/90 backdrop-blur-xl">
       <div className="mx-auto flex h-20 max-w-7xl items-center justify-between gap-4 px-5 sm:px-8">
-        <Link href="/" className="flex items-center gap-3 no-underline">
-          <span className="inline-flex h-12 w-12 items-center justify-center rounded-xl bg-primary/10 text-xl font-extrabold text-primary">
+        <Link href="/" className="public-brand flex items-center gap-3 no-underline">
+          <span className="public-brand-mark inline-flex h-12 w-12 items-center justify-center rounded-xl text-xl font-extrabold text-primary">
             E
           </span>
           <strong className="hidden text-2xl font-extrabold tracking-tight text-ink sm:block">
@@ -77,7 +77,7 @@ export default function PublicHeader({ user }: PublicHeaderProps) {
           </strong>
         </Link>
 
-        <nav className="hidden items-center gap-5 lg:flex" aria-label="Điều hướng chính">
+        <nav className="public-nav hidden items-center gap-1 lg:flex" aria-label="Điều hướng chính">
           {navItems.map((item) => {
             const isActive =
               item.href === "/hub" ? pathname === "/hub" : pathname.startsWith(item.href);
@@ -86,8 +86,8 @@ export default function PublicHeader({ user }: PublicHeaderProps) {
                 key={item.key}
                 href={item.href}
                 aria-current={isActive ? "page" : undefined}
-                className={`flex items-center gap-2 text-sm font-extrabold transition-colors ${
-                  isActive ? "text-primary" : "text-ink3 hover:text-ink"
+                className={`public-nav-link flex items-center gap-2 text-sm font-extrabold ${
+                  isActive ? "is-active text-primary" : "text-ink3 hover:text-ink"
                 }`}
               >
                 <NavIcon name={item.icon} className={`h-4 w-4 ${item.color}`} />
@@ -101,7 +101,7 @@ export default function PublicHeader({ user }: PublicHeaderProps) {
           <button
             type="button"
             onClick={() => setMenuOpen((open) => !open)}
-            className="inline-flex h-12 w-12 items-center justify-center rounded-xl border border-line bg-surface-soft text-ink lg:hidden"
+            className="public-header-control inline-flex h-12 w-12 items-center justify-center rounded-xl border border-line bg-surface-soft text-ink lg:hidden"
             aria-label="Menu"
             aria-expanded={menuOpen}
           >
@@ -111,11 +111,11 @@ export default function PublicHeader({ user }: PublicHeaderProps) {
               <span className="block h-0.5 w-6 rounded bg-current" />
             </span>
           </button>
-          <ThemeToggle className="!hidden h-12 w-12 border border-line bg-surface-soft text-ink sm:!inline-flex" />
+          <ThemeToggle className="public-header-control !hidden h-12 w-12 border border-line bg-surface-soft text-ink sm:!inline-flex" />
           {sessionUser ? (
             <Link
               href="/account"
-              className="inline-flex h-12 min-w-12 items-center justify-center rounded-full bg-primary px-4 text-sm font-extrabold text-gold-ink shadow-[0_12px_28px_rgba(224,149,43,0.25)]"
+              className="public-avatar inline-flex h-12 min-w-12 items-center justify-center rounded-full bg-primary px-4 text-sm font-extrabold text-gold-ink"
               aria-label="Tài khoản"
             >
               {(sessionUser.displayName || "E").charAt(0).toUpperCase()}
@@ -124,13 +124,13 @@ export default function PublicHeader({ user }: PublicHeaderProps) {
             <>
               <Link
                 href="/login"
-                className="hidden text-base font-extrabold text-ink transition-colors hover:text-primary sm:inline-flex"
+                className="public-login hidden text-base font-extrabold text-ink sm:inline-flex"
               >
                 Đăng nhập
               </Link>
               <Link
                 href="/login?mode=register"
-                className="inline-flex h-12 items-center rounded-xl bg-primary px-6 text-base font-extrabold text-gold-ink shadow-[0_12px_28px_rgba(224,149,43,0.22)] transition-opacity hover:opacity-90"
+                className="public-register inline-flex h-12 items-center rounded-xl bg-primary px-6 text-base font-extrabold text-gold-ink"
               >
                 Đăng ký
               </Link>
