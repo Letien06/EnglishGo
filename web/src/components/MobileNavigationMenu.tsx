@@ -9,7 +9,7 @@ import ThemeToggle from "./ThemeToggle";
 import useDialogFocus from "./useDialogFocus";
 
 const navItems = [
-  { href: "/pet", icon: "pet", label: "Mèo cưng", color: "text-primary" },
+  { href: "/pet", icon: "pet", label: "Thú cưng", color: "text-primary" },
   { href: "/hub", icon: "home", label: "Trang chủ", color: "text-primary" },
   { href: "/listen", icon: "listen", label: "Nghe", color: "text-plum" },
   { href: "/read", icon: "read", label: "Đọc", color: "text-azure" },

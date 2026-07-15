@@ -4,7 +4,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 
 const navItems = [
-  { href: "/pet", shortLabel: "M", label: "Mèo cưng" },
+  { href: "/pet", shortLabel: "M", label: "Thú cưng" },
   { href: "/hub", shortLabel: "T", label: "Trang chủ" },
   { href: "/listen", shortLabel: "N", label: "Nghe" },
   { href: "/read", shortLabel: "Đ", label: "Đọc" },
