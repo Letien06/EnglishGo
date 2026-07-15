@@ -7,8 +7,10 @@ import ThemeToggle from "./ThemeToggle";
 import StudyStreakBadge from "./StudyStreakBadge";
 import NavIcon, { type NavIconName } from "./NavIcon";
 import MobileNavigationMenu from "./MobileNavigationMenu";
+import PetFloatingWidget from "./PetFloatingWidget";
 
 const navItems = [
+  { href: "/pet", icon: "pet", label: "Mèo cưng", color: "text-primary" },
   { href: "/hub", icon: "home", label: "Trang chủ", color: "text-primary" },
   { href: "/listen", icon: "listen", label: "Nghe", color: "text-plum" },
   { href: "/read", icon: "read", label: "Đọc", color: "text-azure" },
@@ -88,6 +90,7 @@ export default function AppShell({ children }: { children: ReactNode }) {
       </header>
 
       {children}
+      <PetFloatingWidget />
     </div>
   );
 }

@@ -2,6 +2,7 @@ import { FieldValue } from "firebase-admin/firestore";
 import { adminDb } from "../firestore/db";
 import { ApiError } from "../api/response";
 import { recordSkillQuestionLeaderboard } from "./leaderboard";
+import { grantPetCoins } from "./pet";
 import { recordStudyActivity, type StudyModule } from "./study-activity";
 import type { DauToeicDifficultyLevel } from "../../types/dautoeic";
 import type {
@@ -250,6 +251,13 @@ export function createLearningToolService(
           correct: isCorrect,
           occurredAtMillis: now,
           elapsedMillis: Math.max(0, request.elapsedSeconds ?? 0) * 1000,
+        }).catch(() => undefined));
+        followUpWrites.push(grantPetCoins({
+          uid,
+          sourceKey: `skill:${config.module}:${questionId}`,
+          amount: 3,
+          title: `Trả lời đúng câu ${config.module === "listening" ? "nghe" : "đọc"}`,
+          occurredAtMillis: now,
         }).catch(() => undefined));
       }
       await Promise.all(followUpWrites);

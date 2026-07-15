@@ -4,6 +4,7 @@ import { adminDb } from "@/lib/firestore/db";
 import { COLLECTIONS } from "@/lib/firestore/collections";
 import { mergeTranscriptCues, parseTranscript } from "@/lib/parsers/transcript";
 import { buildPrompt, gradeDictationAttempt, type MaskPercent } from "@/lib/services/dictation-grading";
+import { grantPetCoins } from "@/lib/services/pet";
 import type {
   DictationAttemptRequest,
   DictationAttemptResult,
@@ -123,6 +124,14 @@ export async function submitAttempt(
 
   if (uid) {
     await saveProgress(uid, lesson, segment, request, result.normalizedAnswer, result.scorePercent, passed, masteredNow, mask);
+    if (passed) {
+      await grantPetCoins({
+        uid,
+        sourceKey: `dictation:${lessonId}:${segmentId}`,
+        amount: 4,
+        title: "Hoàn thành đoạn dictation",
+      }).catch(() => undefined);
+    }
   }
 
   return {

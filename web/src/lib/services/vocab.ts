@@ -41,6 +41,7 @@ import {
 import { enrichCandidatePronunciation, enrichWithDictionary } from "./dictionary";
 import { parseImportFile, parseDelimitedWords } from "@/lib/parsers/vocab-import";
 import { getStoredStudyStreakSummary, getStudyStreak, recordStudyActivity } from "./study-activity";
+import { grantPetCoins, petDateKeyForMillis } from "./pet";
 import { enforceDailyActionLimit } from "./rate-limit";
 
 /* ------------------------------------------------------------------ */
@@ -969,6 +970,13 @@ export async function recordStudyHistory(
     sourceId: input.externalPartId ?? input.externalTestId ?? input.setId,
     occurredAtMillis: finishedAtMillis,
   }).catch(() => undefined);
+  await grantPetCoins({
+    uid,
+    sourceKey: `vocab:game:${id}`,
+    amount: 10,
+    title: "Hoàn thành game từ vựng",
+    occurredAtMillis: finishedAtMillis,
+  }).catch(() => undefined);
   return { id };
 }
 
@@ -1318,6 +1326,15 @@ export async function review(
     sourceId: wordId,
     occurredAtMillis: updated.lastReviewedAtMillis,
   }).catch(() => undefined);
+  if (quality >= 3 && updated.lastReviewedAtMillis) {
+    await grantPetCoins({
+      uid,
+      sourceKey: `vocab:review:${wordId}:${petDateKeyForMillis(updated.lastReviewedAtMillis)}`,
+      amount: 2,
+      title: "Ôn từ vựng tốt",
+      occurredAtMillis: updated.lastReviewedAtMillis,
+    }).catch(() => undefined);
+  }
 
   return {
     wordId,
@@ -1508,6 +1525,13 @@ export async function markMastered(
     module: "vocab",
     activityType: "vocab_mastered",
     sourceId: wordId,
+    occurredAtMillis: now,
+  }).catch(() => undefined);
+  await grantPetCoins({
+    uid,
+    sourceKey: `vocab:mastered:${wordId}`,
+    amount: 5,
+    title: "Đã thành thạo từ mới",
     occurredAtMillis: now,
   }).catch(() => undefined);
   return {
