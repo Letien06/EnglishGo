@@ -17,9 +17,9 @@ type DragState = {
   moved: boolean;
 };
 
-const HIDDEN_PREFIXES = ["/listen/practice", "/read/practice", "/practice/session"];
 const PET_POSITION_KEY = "englishgo:pet-position:v1";
 const SCREEN_EDGE = 12;
+export const PET_PROFILE_UPDATED_EVENT = "englishgo:pet-profile-updated";
 
 export default function PetFloatingWidget() {
   const pathname = usePathname();
@@ -32,15 +32,21 @@ export default function PetFloatingWidget() {
   const suppressClickRef = useRef(false);
 
   useEffect(() => {
-    if (HIDDEN_PREFIXES.some((prefix) => pathname.startsWith(prefix))) return;
     let active = true;
-    void fetch("/api/pet", { cache: "no-store" })
-      .then(async (response) => ({ response, body: await response.json() as ApiEnvelope<PetDashboard> }))
-      .then(({ response, body }) => {
-        if (active && response.ok && body.success && body.data) setDashboard(body.data);
-      })
-      .catch(() => undefined);
-    return () => { active = false; };
+    const loadDashboard = () => {
+      void fetch("/api/pet", { cache: "no-store" })
+        .then(async (response) => ({ response, body: await response.json() as ApiEnvelope<PetDashboard> }))
+        .then(({ response, body }) => {
+          if (active && response.ok && body.success && body.data) setDashboard(body.data);
+        })
+        .catch(() => undefined);
+    };
+    loadDashboard();
+    window.addEventListener(PET_PROFILE_UPDATED_EVENT, loadDashboard);
+    return () => {
+      active = false;
+      window.removeEventListener(PET_PROFILE_UPDATED_EVENT, loadDashboard);
+    };
   }, [pathname]);
 
   useEffect(() => {
@@ -80,7 +86,7 @@ export default function PetFloatingWidget() {
     return () => window.cancelAnimationFrame(frame);
   }, [open, position]);
 
-  if (HIDDEN_PREFIXES.some((prefix) => pathname.startsWith(prefix)) || !dashboard) return null;
+  if (!dashboard || !dashboard.profile.floatingEnabled) return null;
   const { profile, wallet } = dashboard;
   const nextProgress = profile.nextEvolutionCareXp
     ? Math.min(100, Math.round((profile.careXpTotal / profile.nextEvolutionCareXp) * 100))
@@ -152,7 +158,7 @@ export default function PetFloatingWidget() {
       {open ? (
         <div className="pet-floating-panel">
           <div className="flex items-start gap-3">
-            <PetCat mood={profile.mood} stage={profile.evolutionStage} compact />
+            <PetCat mood={profile.mood} stage={profile.evolutionStage} companionId={profile.equippedCompanionId} compact />
             <div className="min-w-0 flex-1">
               <div className="flex items-center justify-between gap-2">
                 <strong className="truncate text-sm text-ink">{profile.name}</strong>
@@ -187,7 +193,7 @@ export default function PetFloatingWidget() {
         onClick={toggleOpen}
         className="pet-floating-trigger"
       >
-        <PetCat mood={profile.mood} stage={profile.evolutionStage} compact />
+        <PetCat mood={profile.mood} stage={profile.evolutionStage} companionId={profile.equippedCompanionId} compact />
         <span className="pet-floating-coin">{wallet.balance}</span>
       </button>
     </aside>

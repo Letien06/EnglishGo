@@ -2,6 +2,8 @@ import { FieldValue } from "firebase-admin/firestore";
 import { BadRequest } from "@/lib/api/response";
 import { adminDb } from "@/lib/firestore/db";
 import type {
+  PetCompanionDefinition,
+  PetCompanionId,
   PetDashboard,
   PetFoodDefinition,
   PetFoodId,
@@ -31,6 +33,8 @@ interface StoredPetProfile {
   lastStatusAtMillis: number;
   totalFeedings: number;
   rankOptIn: boolean;
+  floatingEnabled: boolean;
+  equippedCompanionId: PetCompanionId;
   createdAtMillis: number;
 }
 
@@ -74,6 +78,36 @@ export const PET_FOOD_CATALOG: Record<PetFoodId, PetFoodDefinition> = {
     fullness: 90,
     happiness: 28,
     careXp: 55,
+  },
+};
+
+export const PET_COMPANION_CATALOG: Record<PetCompanionId, PetCompanionDefinition> = {
+  MUC: {
+    id: "MUC",
+    name: "Mực",
+    description: "Người bạn mèo đầu tiên luôn đồng hành cùng bạn.",
+    rarity: "starter",
+    price: 0,
+    assetPath: "/pets/muc-cat.png",
+    visualVariant: "sunset",
+  },
+  MOCHI: {
+    id: "MOCHI",
+    name: "Mochi",
+    description: "Mèo cam đào hiếm, luôn mang theo năng lượng tích cực.",
+    rarity: "rare",
+    price: 350,
+    assetPath: "/pets/muc-cat.png",
+    visualVariant: "berry",
+  },
+  LUNA: {
+    id: "LUNA",
+    name: "Luna",
+    description: "Mèo đêm huyền thoại dành cho người học bền bỉ.",
+    rarity: "legendary",
+    price: 900,
+    assetPath: "/pets/muc-cat.png",
+    visualVariant: "midnight",
   },
 };
 
@@ -178,10 +212,11 @@ export async function grantPetCoins(input: GrantPetCoinsInput): Promise<PetRewar
 export async function getPetDashboard(uid: string): Promise<PetDashboard> {
   await ensurePet(uid);
   const pet = petRefs(uid);
-  const [profileSnap, walletSnap, inventorySnap, historySnap] = await Promise.all([
+  const [profileSnap, walletSnap, inventorySnap, companionSnap, historySnap] = await Promise.all([
     pet.profile.get(),
     pet.wallet.get(),
     pet.inventory.get(),
+    pet.companions.get(),
     pet.ledger.orderBy("occurredAtMillis", "desc").limit(HISTORY_LIMIT).get(),
   ]);
   const storedProfile = toStoredProfile(profileSnap.data());
@@ -189,6 +224,10 @@ export async function getPetDashboard(uid: string): Promise<PetDashboard> {
   const inventoryByFood = new Map<PetFoodId, number>();
   for (const item of inventorySnap.docs) {
     if (isPetFoodId(item.id)) inventoryByFood.set(item.id, Math.max(0, numberValue(item.get("quantity")) ?? 0));
+  }
+  const ownedCompanionIds = new Set<PetCompanionId>(["MUC"]);
+  for (const item of companionSnap.docs) {
+    if (isPetCompanionId(item.id)) ownedCompanionIds.add(item.id);
   }
 
   return {
@@ -199,6 +238,8 @@ export async function getPetDashboard(uid: string): Promise<PetDashboard> {
       quantity: inventoryByFood.get(foodId as PetFoodId) ?? 0,
     })),
     catalog: Object.values(PET_FOOD_CATALOG),
+    companionCatalog: Object.values(PET_COMPANION_CATALOG),
+    ownedCompanionIds: Object.keys(PET_COMPANION_CATALOG).filter((id): id is PetCompanionId => ownedCompanionIds.has(id as PetCompanionId)),
     history: historySnap.docs.map(toLedgerEntry),
   };
 }
@@ -238,6 +279,54 @@ export async function buyPetFood(uid: string, foodId: PetFoodId): Promise<PetAct
       amount: -food.price,
       title: `Mua ${food.name}`,
       foodId: food.id,
+      occurredAtMillis: now,
+      balanceAfter: nextBalance,
+    }));
+  });
+
+  return { dashboard: await getPetDashboard(uid), evolved: false };
+}
+
+export async function buyPetCompanion(uid: string, companionId: PetCompanionId): Promise<PetActionResult> {
+  const companion = requireCompanion(companionId);
+  if (companion.price <= 0) throw BadRequest(`${companion.name} đã là pet khởi đầu của bạn.`);
+  await ensurePet(uid);
+  const now = Date.now();
+  const pet = petRefs(uid);
+
+  await adminDb.runTransaction(async (tx) => {
+    const [walletSnap, ownershipSnap] = await Promise.all([
+      tx.get(pet.wallet),
+      tx.get(pet.companions.doc(companion.id)),
+    ]);
+    if (ownershipSnap.exists) throw BadRequest(`Bạn đã có ${companion.name} rồi.`);
+    const wallet = toWallet(walletSnap.data());
+    if (wallet.balance < companion.price) {
+      throw BadRequest(`Bạn cần thêm ${companion.price - wallet.balance} Mèo Xu để đổi ${companion.name}.`);
+    }
+    const nextBalance = wallet.balance - companion.price;
+    tx.set(pet.wallet, {
+      balance: nextBalance,
+      lifetimeEarned: wallet.lifetimeEarned,
+      lifetimeSpent: wallet.lifetimeSpent + companion.price,
+      updatedAtMillis: now,
+      updatedAt: FieldValue.serverTimestamp(),
+    }, { merge: true });
+    tx.set(pet.companions.doc(companion.id), {
+      companionId: companion.id,
+      acquiredAtMillis: now,
+      createdAt: FieldValue.serverTimestamp(),
+    });
+    tx.set(pet.profile, {
+      equippedCompanionId: companion.id,
+      updatedAtMillis: now,
+      updatedAt: FieldValue.serverTimestamp(),
+    }, { merge: true });
+    tx.set(pet.ledger.doc(), ledgerPayload({
+      type: "PURCHASE",
+      amount: -companion.price,
+      title: `Chào đón ${companion.name}`,
+      companionId: companion.id,
       occurredAtMillis: now,
       balanceAfter: nextBalance,
     }));
@@ -324,24 +413,39 @@ export async function feedPet(uid: string, foodId: PetFoodId): Promise<PetAction
 
 export async function updatePetProfile(
   uid: string,
-  input: { name?: string; rankOptIn?: boolean },
+  input: {
+    name?: string;
+    rankOptIn?: boolean;
+    floatingEnabled?: boolean;
+    equippedCompanionId?: PetCompanionId;
+  },
 ): Promise<PetDashboard> {
   await ensurePet(uid);
   const now = Date.now();
   const pet = petRefs(uid);
   await adminDb.runTransaction(async (tx) => {
+    const currentProfileSnap = await tx.get(pet.profile);
+    const currentProfile = toStoredProfile(currentProfileSnap.data());
+    const equippedCompanionId = input.equippedCompanionId ?? currentProfile.equippedCompanionId;
     const [profileSnap, userSnap, weeklySnap] = await Promise.all([
-      tx.get(pet.profile),
+      Promise.resolve(currentProfileSnap),
       tx.get(adminDb.collection("users").doc(uid)),
       tx.get(leaderboardEntryRef("weekly", uid, now)),
     ]);
     const profile = toStoredProfile(profileSnap.data());
+    const ownedSnap = equippedCompanionId === "MUC" ? null : await tx.get(pet.companions.doc(equippedCompanionId));
+    if (equippedCompanionId !== "MUC" && !ownedSnap?.exists) {
+      throw BadRequest("Bạn chưa sở hữu pet này.");
+    }
     const name = input.name == null ? profile.name : normalizePetName(input.name);
     const rankOptIn = input.rankOptIn == null ? profile.rankOptIn : input.rankOptIn;
-    const nextProfile = { ...profile, name, rankOptIn };
+    const floatingEnabled = input.floatingEnabled == null ? profile.floatingEnabled : input.floatingEnabled;
+    const nextProfile = { ...profile, name, rankOptIn, floatingEnabled, equippedCompanionId };
     tx.set(pet.profile, {
       name,
       rankOptIn,
+      floatingEnabled,
+      equippedCompanionId,
       updatedAtMillis: now,
       updatedAt: FieldValue.serverTimestamp(),
     }, { merge: true });
@@ -449,6 +553,8 @@ async function ensurePet(uid: string): Promise<void> {
       lastStatusAtMillis: now,
       totalFeedings: 0,
       rankOptIn: false,
+      floatingEnabled: true,
+      equippedCompanionId: "MUC",
       createdAtMillis: now,
       updatedAtMillis: now,
       createdAt: FieldValue.serverTimestamp(),
@@ -485,6 +591,7 @@ function petRefs(uid: string) {
     profile: root.doc("profile"),
     wallet: root.doc("wallet"),
     inventory: root.doc("inventory").collection("items"),
+    companions: root.doc("companions").collection("items"),
     rewardClaims: root.doc("rewardClaims").collection("items"),
     rewardDays: root.doc("rewardDays").collection("items"),
     ledger: root.doc("ledger").collection("entries"),
@@ -529,6 +636,7 @@ function ledgerPayload(input: {
   amount: number;
   title: string;
   foodId?: PetFoodId;
+  companionId?: PetCompanionId;
   occurredAtMillis: number;
   balanceAfter: number | null;
 }) {
@@ -537,6 +645,7 @@ function ledgerPayload(input: {
     amount: Math.trunc(input.amount),
     title: input.title,
     foodId: input.foodId ?? null,
+    companionId: input.companionId ?? null,
     occurredAtMillis: input.occurredAtMillis,
     balanceAfter: input.balanceAfter,
     createdAt: FieldValue.serverTimestamp(),
@@ -555,6 +664,8 @@ function toStoredProfile(data: Record<string, unknown> | undefined): StoredPetPr
     lastStatusAtMillis: Math.max(0, numberValue(data?.lastStatusAtMillis) ?? now),
     totalFeedings: Math.max(0, numberValue(data?.totalFeedings) ?? 0),
     rankOptIn: data?.rankOptIn === true,
+    floatingEnabled: data?.floatingEnabled !== false,
+    equippedCompanionId: isPetCompanionId(data?.equippedCompanionId) ? data.equippedCompanionId : "MUC",
     createdAtMillis: Math.max(0, numberValue(data?.createdAtMillis) ?? now),
   };
 }
@@ -575,6 +686,8 @@ function toProfileView(
     mood: status.mood,
     totalFeedings: profile.totalFeedings,
     rankOptIn: profile.rankOptIn,
+    floatingEnabled: profile.floatingEnabled,
+    equippedCompanionId: profile.equippedCompanionId,
   };
 }
 
@@ -595,6 +708,7 @@ function toLedgerEntry(doc: FirebaseFirestore.QueryDocumentSnapshot): PetLedgerE
     amount: numberValue(data.amount) ?? 0,
     title: stringValue(data.title) ?? "Hoạt động cùng Mực",
     foodId: isPetFoodId(data.foodId) ? data.foodId : null,
+    companionId: isPetCompanionId(data.companionId) ? data.companionId : null,
     occurredAtMillis: numberValue(data.occurredAtMillis) ?? 0,
     balanceAfter: numberValue(data.balanceAfter),
   };
@@ -622,8 +736,18 @@ function requireFood(foodId: PetFoodId): PetFoodDefinition {
   return food;
 }
 
+function requireCompanion(companionId: PetCompanionId): PetCompanionDefinition {
+  const companion = PET_COMPANION_CATALOG[companionId];
+  if (!companion) throw BadRequest("Pet không hợp lệ");
+  return companion;
+}
+
 function isPetFoodId(value: unknown): value is PetFoodId {
   return typeof value === "string" && value in PET_FOOD_CATALOG;
+}
+
+function isPetCompanionId(value: unknown): value is PetCompanionId {
+  return typeof value === "string" && value in PET_COMPANION_CATALOG;
 }
 
 function normalizePetName(value: string): string {

@@ -313,3 +313,24 @@ Admin SDK bỏ qua Firestore rules, nên API server tiếp tục thực hiện t
 - Mèo có phản hồi trạng thái, tiến hoá đúng năm mốc và fallback khi giảm motion.
 - BXH tuần/tổng không lộ email và yêu cầu opt-in.
 - Typecheck, lint, unit test và production build xanh; rules được cập nhật.
+
+## 15. Bổ sung: pet sưu tầm và quyền hiển thị
+
+Bản mở rộng này thay thế giới hạn "một con mèo" ở MVP:
+
+- Asset chính là minh hoạ mèo 3D nền trong suốt tại
+  `web/public/pets/muc-cat.png`; `PetCat.tsx` dùng asset này thay cho mô hình
+  CSS robot cũ. Ba biến thể màu giúp các pet vẫn phân biệt rõ ở hero, tủ pet
+  và widget nổi.
+- Catalog server-side `PET_COMPANION_CATALOG` gồm `MUC` (starter), `MOCHI`
+  (350 Mèo Xu) và `LUNA` (900 Mèo Xu). Giá được tính trong Firebase Admin
+  transaction, không nhận từ client. Mua pet tự động trang bị và ghi ledger.
+- Quyền sở hữu lưu ở `users/{uid}/pet/companions/items/{companionId}`;
+  profile có thêm `equippedCompanionId` và `floatingEnabled`. Chỉ pet đã sở
+  hữu mới có thể được trang bị.
+- Công tắc **Hiện pet nổi trên các trang** ở tab Nhà Mèo được lưu theo tài
+  khoản. Khi tắt, widget biến mất ở toàn bộ app; khi bật lại, widget tải lại
+  ngay bằng event client nội bộ. Người học luôn có thể quay lại `/pet` từ
+  header để bật lại.
+- API mới: `POST /api/pet/companions/buy` với body `{ companionId }`; PATCH
+  `/api/pet/profile` nhận thêm `{ floatingEnabled?, equippedCompanionId? }`.

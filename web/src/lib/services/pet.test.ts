@@ -10,6 +10,7 @@ import {
   derivePetStatus,
   evolutionForCareXp,
   nextEvolutionForCareXp,
+  PET_COMPANION_CATALOG,
   PET_FOOD_CATALOG,
 } from "./pet";
 
@@ -63,5 +64,12 @@ describe("pet economy configuration", () => {
 
   it("uses Ho Chi Minh time for weekly boards", () => {
     expect(currentPetWeekKey(new Date("2026-07-15T12:00:00.000Z"))).toBe("2026-W29");
+  });
+
+  it("keeps higher-cost companion pets server-configured", () => {
+    expect(PET_COMPANION_CATALOG.MUC.price).toBe(0);
+    expect(PET_COMPANION_CATALOG.MOCHI.price).toBeGreaterThan(PET_COMPANION_CATALOG.MUC.price);
+    expect(PET_COMPANION_CATALOG.LUNA.price).toBeGreaterThan(PET_COMPANION_CATALOG.MOCHI.price);
+    expect(PET_COMPANION_CATALOG.MOCHI.assetPath).toBe("/pets/muc-cat.png");
   });
 });

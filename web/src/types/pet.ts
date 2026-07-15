@@ -1,5 +1,7 @@
 export type PetFoodId = "KIBBLE" | "SALMON" | "PATE" | "CAKE";
 
+export type PetCompanionId = "MUC" | "MOCHI" | "LUNA";
+
 export type PetMood = "happy" | "content" | "hungry" | "sleepy";
 
 export type PetLeaderboardScope = "weekly" | "all-time";
@@ -15,6 +17,16 @@ export interface PetFoodDefinition {
   careXp: number;
 }
 
+export interface PetCompanionDefinition {
+  id: PetCompanionId;
+  name: string;
+  description: string;
+  rarity: "starter" | "rare" | "legendary";
+  price: number;
+  assetPath: string;
+  visualVariant: "sunset" | "berry" | "midnight";
+}
+
 export interface PetProfileView {
   name: string;
   evolutionStage: number;
@@ -26,6 +38,8 @@ export interface PetProfileView {
   mood: PetMood;
   totalFeedings: number;
   rankOptIn: boolean;
+  floatingEnabled: boolean;
+  equippedCompanionId: PetCompanionId;
 }
 
 export interface PetWalletView {
@@ -45,6 +59,7 @@ export interface PetLedgerEntry {
   amount: number;
   title: string;
   foodId: PetFoodId | null;
+  companionId: PetCompanionId | null;
   occurredAtMillis: number;
   balanceAfter: number | null;
 }
@@ -54,6 +69,8 @@ export interface PetDashboard {
   wallet: PetWalletView;
   inventory: PetInventoryItem[];
   catalog: PetFoodDefinition[];
+  companionCatalog: PetCompanionDefinition[];
+  ownedCompanionIds: PetCompanionId[];
   history: PetLedgerEntry[];
 }
 
