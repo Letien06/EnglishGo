@@ -494,8 +494,10 @@ function mapWordToDoc(
     meaning: cleanName(firstMeaning.meaning ?? firstMeaning.definition_vi ?? firstMeaning.definition) || "",
     partOfSpeech: normalizePartOfSpeech(firstMeaning.pos ?? firstMeaning.part_of_speech),
     phonetic: word.ipa,
-    phoneticUs: parsedIpa.us,
-    phoneticUk: parsedIpa.uk,
+    // Firestore rejects `undefined`; the external source frequently omits
+    // one or both regional IPA values, so store an explicit null instead.
+    phoneticUs: parsedIpa.us ?? null,
+    phoneticUk: parsedIpa.uk ?? null,
     example: cleanName(firstMeaning.example),
     audioUrl: word.audioUrl,
     audioUsUrl: word.audioUsUrl,
