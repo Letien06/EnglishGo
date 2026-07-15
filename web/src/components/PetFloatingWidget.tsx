@@ -41,11 +41,19 @@ export default function PetFloatingWidget() {
         })
         .catch(() => undefined);
     };
+    const syncDashboard = (event: Event) => {
+      const detail = (event as CustomEvent<PetDashboard | undefined>).detail;
+      if (detail) {
+        setDashboard(detail);
+        return;
+      }
+      loadDashboard();
+    };
     loadDashboard();
-    window.addEventListener(PET_PROFILE_UPDATED_EVENT, loadDashboard);
+    window.addEventListener(PET_PROFILE_UPDATED_EVENT, syncDashboard);
     return () => {
       active = false;
-      window.removeEventListener(PET_PROFILE_UPDATED_EVENT, loadDashboard);
+      window.removeEventListener(PET_PROFILE_UPDATED_EVENT, syncDashboard);
     };
   }, [pathname]);
 
@@ -153,7 +161,7 @@ export default function PetFloatingWidget() {
       ref={widgetRef}
       style={widgetStyle}
       className={`pet-floating-widget ${open ? "is-open" : ""} ${isDragging ? "is-dragging" : ""}`}
-      aria-label="Mèo đồng hành"
+      aria-label="Thú cưng đồng hành"
     >
       {open ? (
         <div className="pet-floating-panel">
@@ -177,15 +185,15 @@ export default function PetFloatingWidget() {
           </div>
           <div className="mt-3 flex gap-2">
             <Link href="/pet?tab=inventory" className="pet-widget-primary">Cho ăn</Link>
-            <Link href="/pet" className="pet-widget-secondary">Nhà Mèo</Link>
+            <Link href="/pet" className="pet-widget-secondary">Nhà Pet</Link>
           </div>
         </div>
       ) : null}
       <button
         type="button"
         aria-expanded={open}
-        aria-label={open ? "Đóng Mèo đồng hành" : "Mở Mèo đồng hành"}
-        title="Kéo để di chuyển · Bấm để mở Mèo đồng hành"
+        aria-label={open ? "Đóng thú cưng đồng hành" : "Mở thú cưng đồng hành"}
+        title="Kéo để di chuyển · Bấm để mở thú cưng đồng hành"
         onPointerDown={beginDrag}
         onPointerMove={drag}
         onPointerUp={endDrag}

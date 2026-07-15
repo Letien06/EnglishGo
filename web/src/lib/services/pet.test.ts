@@ -70,6 +70,13 @@ describe("pet economy configuration", () => {
     expect(PET_COMPANION_CATALOG.MUC.price).toBe(0);
     expect(PET_COMPANION_CATALOG.MOCHI.price).toBeGreaterThan(PET_COMPANION_CATALOG.MUC.price);
     expect(PET_COMPANION_CATALOG.LUNA.price).toBeGreaterThan(PET_COMPANION_CATALOG.MOCHI.price);
-    expect(PET_COMPANION_CATALOG.MOCHI.assetPath).toBe("/pets/muc-cat.png");
+    expect(PET_COMPANION_CATALOG.MOCHI.assetPath).toBe("/pets/british-shorthair-cat.png");
+    expect(PET_COMPANION_CATALOG.CORGI).toMatchObject({ species: "dog", price: 50, assetPath: "/pets/corgi-dog.png" });
+    expect(PET_COMPANION_CATALOG.MOCHI.assetPath).toBe("/pets/british-shorthair-cat.png");
+    expect(PET_COMPANION_CATALOG.LUNA.assetPath).toBe("/pets/maine-coon-cat.png");
+    expect(PET_COMPANION_CATALOG.SHIBA.assetPath).toBe("/pets/shiba-dog.png");
+    expect(PET_COMPANION_CATALOG.HUSKY.assetPath).toBe("/pets/husky-dog.png");
+    expect(PET_COMPANION_CATALOG.SHIBA.price).toBeGreaterThan(PET_COMPANION_CATALOG.CORGI.price);
+    expect(PET_COMPANION_CATALOG.HUSKY.price).toBeGreaterThan(PET_COMPANION_CATALOG.SHIBA.price);
   });
 });

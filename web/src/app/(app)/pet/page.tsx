@@ -22,8 +22,8 @@ export default async function PetPage({
   return (
     <>
       <AppTopbar
-        pageTitle="Mèo cưng"
-        pageSubtitle="Học chăm chỉ để Mực lớn lên từng ngày"
+        pageTitle="Thú cưng"
+        pageSubtitle="Học chăm chỉ để người bạn đồng hành lớn lên từng ngày"
         userName={user.displayName}
         userEmail={user.email}
       />

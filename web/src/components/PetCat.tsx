@@ -1,12 +1,15 @@
 "use client";
 
 import Image from "next/image";
-import type { PetCompanionId, PetMood } from "@/types/pet";
+import type { PetCompanionDefinition, PetCompanionId, PetMood } from "@/types/pet";
 
-const VARIANT_BY_COMPANION: Record<PetCompanionId, "sunset" | "berry" | "midnight"> = {
-  MUC: "sunset",
-  MOCHI: "berry",
-  LUNA: "midnight",
+const VISUAL_BY_COMPANION: Record<PetCompanionId, Pick<PetCompanionDefinition, "assetPath" | "visualVariant" | "species">> = {
+  MUC: { assetPath: "/pets/muc-cat.png", visualVariant: "muc-cat", species: "cat" },
+  MOCHI: { assetPath: "/pets/british-shorthair-cat.png", visualVariant: "british-cat", species: "cat" },
+  LUNA: { assetPath: "/pets/maine-coon-cat.png", visualVariant: "maine-coon-cat", species: "cat" },
+  CORGI: { assetPath: "/pets/corgi-dog.png", visualVariant: "corgi-dog", species: "dog" },
+  SHIBA: { assetPath: "/pets/shiba-dog.png", visualVariant: "shiba-dog", species: "dog" },
+  HUSKY: { assetPath: "/pets/husky-dog.png", visualVariant: "husky-dog", species: "dog" },
 };
 
 export default function PetCat({
@@ -22,17 +25,19 @@ export default function PetCat({
   compact?: boolean;
   reacting?: boolean;
 }) {
+  const visual = VISUAL_BY_COMPANION[companionId];
   return (
     <div
-      className={`pet-cat-scene pet-cat-scene--${VARIANT_BY_COMPANION[companionId]} ${compact ? "pet-cat-scene--compact" : ""} ${reacting ? "is-reacting" : ""}`}
+      className={`pet-cat-scene pet-cat-scene--${visual.visualVariant} ${compact ? "pet-cat-scene--compact" : ""} ${reacting ? "is-reacting" : ""}`}
       data-mood={mood}
       data-stage={stage}
+      data-species={visual.species}
       aria-hidden="true"
     >
       <span className="pet-cat-shadow" />
       {stage >= 4 ? <span className="pet-cat-aura" /> : null}
       <Image
-        src="/pets/muc-cat.png"
+        src={visual.assetPath}
         alt=""
         width={512}
         height={512}

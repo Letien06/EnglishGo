@@ -9,12 +9,12 @@ import ThemeToggle from "./ThemeToggle";
 import useDialogFocus from "./useDialogFocus";
 
 const navItems = [
-  { href: "/pet", icon: "pet", label: "Thú cưng", color: "text-primary" },
   { href: "/hub", icon: "home", label: "Trang chủ", color: "text-primary" },
   { href: "/listen", icon: "listen", label: "Nghe", color: "text-plum" },
   { href: "/read", icon: "read", label: "Đọc", color: "text-azure" },
   { href: "/vocab", icon: "vocab", label: "Từ vựng", color: "text-jade" },
   { href: "/practice", icon: "practice", label: "Đề thi", color: "text-terracotta" },
+  { href: "/pet", icon: "pet", label: "Thú cưng", color: "text-primary" },
   { href: "/leaderboard", icon: "leaderboard", label: "Bảng xếp hạng", color: "text-primary" },
 ] as const satisfies ReadonlyArray<{ href: string; icon: NavIconName; label: string; color: string }>;
 

@@ -9,7 +9,7 @@ const schema = z.object({
   name: z.string().trim().min(1).max(24).optional(),
   rankOptIn: z.boolean().optional(),
   floatingEnabled: z.boolean().optional(),
-  equippedCompanionId: z.enum(["MUC", "MOCHI", "LUNA"]).optional(),
+  equippedCompanionId: z.enum(["MUC", "MOCHI", "LUNA", "CORGI", "SHIBA", "HUSKY"]).optional(),
 });
 
 export const PATCH = withErrorHandling(async (req) => {

@@ -84,39 +84,72 @@ export const PET_FOOD_CATALOG: Record<PetFoodId, PetFoodDefinition> = {
 export const PET_COMPANION_CATALOG: Record<PetCompanionId, PetCompanionDefinition> = {
   MUC: {
     id: "MUC",
-    name: "Mực",
-    description: "Người bạn mèo đầu tiên luôn đồng hành cùng bạn.",
+    name: "Mực · Mèo mướp nhà",
+    description: "Người bạn mèo mướp đầu tiên luôn đồng hành cùng bạn.",
+    species: "cat",
     rarity: "starter",
     price: 0,
     assetPath: "/pets/muc-cat.png",
-    visualVariant: "sunset",
+    visualVariant: "muc-cat",
   },
   MOCHI: {
     id: "MOCHI",
-    name: "Mochi",
-    description: "Mèo cam đào hiếm, luôn mang theo năng lượng tích cực.",
+    name: "Mèo Anh lông ngắn",
+    description: "Giống mèo hiếm điềm tĩnh, phù hợp cho những buổi học dài.",
+    species: "cat",
     rarity: "rare",
     price: 350,
-    assetPath: "/pets/muc-cat.png",
-    visualVariant: "berry",
+    assetPath: "/pets/british-shorthair-cat.png",
+    visualVariant: "british-cat",
   },
   LUNA: {
     id: "LUNA",
-    name: "Luna",
-    description: "Mèo đêm huyền thoại dành cho người học bền bỉ.",
+    name: "Maine Coon",
+    description: "Giống mèo khổng lồ huyền thoại dành cho người học bền bỉ.",
+    species: "cat",
     rarity: "legendary",
     price: 900,
-    assetPath: "/pets/muc-cat.png",
-    visualVariant: "midnight",
+    assetPath: "/pets/maine-coon-cat.png",
+    visualVariant: "maine-coon-cat",
+  },
+  CORGI: {
+    id: "CORGI",
+    name: "Corgi",
+    description: "Chú chó chân ngắn vui nhộn, pet chó đầu tiên chỉ 50 Mèo Xu.",
+    species: "dog",
+    rarity: "starter",
+    price: 50,
+    assetPath: "/pets/corgi-dog.png",
+    visualVariant: "corgi-dog",
+  },
+  SHIBA: {
+    id: "SHIBA",
+    name: "Shiba Inu",
+    description: "Giống chó hiếm tinh nghịch, luôn biết cách cổ vũ đúng lúc.",
+    species: "dog",
+    rarity: "rare",
+    price: 350,
+    assetPath: "/pets/shiba-dog.png",
+    visualVariant: "shiba-dog",
+  },
+  HUSKY: {
+    id: "HUSKY",
+    name: "Siberian Husky",
+    description: "Chú chó huyền thoại cho những mục tiêu học tập đầy thử thách.",
+    species: "dog",
+    rarity: "legendary",
+    price: 900,
+    assetPath: "/pets/husky-dog.png",
+    visualVariant: "husky-dog",
   },
 };
 
 export const PET_EVOLUTION_STAGES = [
-  { stage: 1, name: "Mèo Con", careXp: 0 },
-  { stage: 2, name: "Mèo Nghịch Ngợm", careXp: 150 },
-  { stage: 3, name: "Mèo Thám Hiểm", careXp: 500 },
+  { stage: 1, name: "Pet Nhỏ", careXp: 0 },
+  { stage: 2, name: "Pet Nghịch Ngợm", careXp: 150 },
+  { stage: 3, name: "Pet Thám Hiểm", careXp: 500 },
   { stage: 4, name: "Hộ Vệ Học Tập", careXp: 1_200 },
-  { stage: 5, name: "Mèo Thiên Tài", careXp: 2_500 },
+  { stage: 5, name: "Pet Thiên Tài", careXp: 2_500 },
 ] as const;
 
 export interface GrantPetCoinsInput {
@@ -419,21 +452,21 @@ export async function updatePetProfile(
     floatingEnabled?: boolean;
     equippedCompanionId?: PetCompanionId;
   },
-): Promise<PetDashboard> {
+): Promise<PetProfileView> {
   await ensurePet(uid);
   const now = Date.now();
   const pet = petRefs(uid);
+  let updatedProfile: PetProfileView | null = null;
   await adminDb.runTransaction(async (tx) => {
-    const currentProfileSnap = await tx.get(pet.profile);
-    const currentProfile = toStoredProfile(currentProfileSnap.data());
-    const equippedCompanionId = input.equippedCompanionId ?? currentProfile.equippedCompanionId;
-    const [profileSnap, userSnap, weeklySnap] = await Promise.all([
-      Promise.resolve(currentProfileSnap),
-      tx.get(adminDb.collection("users").doc(uid)),
-      tx.get(leaderboardEntryRef("weekly", uid, now)),
-    ]);
+    const profileSnap = await tx.get(pet.profile);
     const profile = toStoredProfile(profileSnap.data());
-    const ownedSnap = equippedCompanionId === "MUC" ? null : await tx.get(pet.companions.doc(equippedCompanionId));
+    const equippedCompanionId = input.equippedCompanionId ?? profile.equippedCompanionId;
+    const needsLeaderboardSync = input.rankOptIn != null || input.name != null;
+    const [userSnap, weeklySnap, ownedSnap] = await Promise.all([
+      needsLeaderboardSync ? tx.get(adminDb.collection("users").doc(uid)) : Promise.resolve(null),
+      needsLeaderboardSync ? tx.get(leaderboardEntryRef("weekly", uid, now)) : Promise.resolve(null),
+      equippedCompanionId === "MUC" ? Promise.resolve(null) : tx.get(pet.companions.doc(equippedCompanionId)),
+    ]);
     if (equippedCompanionId !== "MUC" && !ownedSnap?.exists) {
       throw BadRequest("Bạn chưa sở hữu pet này.");
     }
@@ -441,6 +474,7 @@ export async function updatePetProfile(
     const rankOptIn = input.rankOptIn == null ? profile.rankOptIn : input.rankOptIn;
     const floatingEnabled = input.floatingEnabled == null ? profile.floatingEnabled : input.floatingEnabled;
     const nextProfile = { ...profile, name, rankOptIn, floatingEnabled, equippedCompanionId };
+    updatedProfile = toProfileView(nextProfile, derivePetStatus(nextProfile, now));
     tx.set(pet.profile, {
       name,
       rankOptIn,
@@ -450,17 +484,18 @@ export async function updatePetProfile(
       updatedAt: FieldValue.serverTimestamp(),
     }, { merge: true });
 
+    if (!needsLeaderboardSync) return;
     if (!rankOptIn) {
       tx.delete(leaderboardEntryRef("weekly", uid, now));
       tx.delete(leaderboardEntryRef("all-time", uid, now));
       return;
     }
-    const user = userSnap.data() ?? {};
+    const user = userSnap?.data() ?? {};
     tx.set(leaderboardEntryRef("weekly", uid, now), leaderboardPayload({
       uid,
       profile: nextProfile,
       user,
-      score: Math.max(0, numberValue(weeklySnap.get("score")) ?? 0),
+      score: Math.max(0, numberValue(weeklySnap?.get("score")) ?? 0),
       now,
     }), { merge: true });
     tx.set(leaderboardEntryRef("all-time", uid, now), leaderboardPayload({
@@ -471,7 +506,8 @@ export async function updatePetProfile(
       now,
     }), { merge: true });
   });
-  return getPetDashboard(uid);
+  if (!updatedProfile) throw new Error("Không thể cập nhật thú cưng lúc này.");
+  return updatedProfile;
 }
 
 export async function getPetLeaderboard(

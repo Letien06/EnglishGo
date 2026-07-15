@@ -2232,11 +2232,17 @@ h1, h2, h3, h4, h5 {
   animation: pet-image-drift 4.8s cubic-bezier(0.45, 0, 0.55, 1) infinite;
 }
 
-.pet-cat-scene--berry .pet-cat-image { filter: hue-rotate(324deg) saturate(1.22) drop-shadow(0 0.75rem 0.75rem color-mix(in srgb, #be185d 28%, transparent)); }
-.pet-cat-scene--midnight .pet-cat-image { filter: hue-rotate(142deg) saturate(0.9) brightness(0.83) contrast(1.08) drop-shadow(0 0.75rem 0.85rem color-mix(in srgb, #312e81 44%, transparent)); }
+.pet-cat-scene--british-cat .pet-cat-image { filter: drop-shadow(0 0.75rem 0.75rem color-mix(in srgb, #64748b 30%, transparent)); }
+.pet-cat-scene--maine-coon-cat .pet-cat-image { filter: drop-shadow(0 0.75rem 0.85rem color-mix(in srgb, #7c2d12 30%, transparent)); }
+.pet-cat-scene--corgi-dog .pet-cat-image { filter: drop-shadow(0 0.75rem 0.75rem color-mix(in srgb, #b45309 28%, transparent)); }
+.pet-cat-scene--shiba-dog .pet-cat-image { filter: drop-shadow(0 0.75rem 0.75rem color-mix(in srgb, #c2410c 30%, transparent)); }
+.pet-cat-scene--husky-dog .pet-cat-image { filter: drop-shadow(0 0.75rem 0.85rem color-mix(in srgb, #1d4ed8 34%, transparent)); }
 .pet-cat-scene[data-mood="hungry"] .pet-cat-image { animation-duration: 6.1s; filter: saturate(0.82) brightness(0.96) drop-shadow(0 0.75rem 0.75rem color-mix(in srgb, #2b1b55 18%, transparent)); }
-.pet-cat-scene[data-mood="hungry"].pet-cat-scene--berry .pet-cat-image { filter: hue-rotate(324deg) saturate(0.92) brightness(0.96) drop-shadow(0 0.75rem 0.75rem color-mix(in srgb, #be185d 20%, transparent)); }
-.pet-cat-scene[data-mood="hungry"].pet-cat-scene--midnight .pet-cat-image { filter: hue-rotate(142deg) saturate(0.72) brightness(0.78) contrast(1.08) drop-shadow(0 0.75rem 0.85rem color-mix(in srgb, #312e81 34%, transparent)); }
+.pet-cat-scene[data-mood="hungry"].pet-cat-scene--british-cat .pet-cat-image { filter: saturate(0.75) brightness(0.94) drop-shadow(0 0.75rem 0.75rem color-mix(in srgb, #64748b 20%, transparent)); }
+.pet-cat-scene[data-mood="hungry"].pet-cat-scene--maine-coon-cat .pet-cat-image { filter: saturate(0.72) brightness(0.92) drop-shadow(0 0.75rem 0.85rem color-mix(in srgb, #7c2d12 20%, transparent)); }
+.pet-cat-scene[data-mood="hungry"].pet-cat-scene--corgi-dog .pet-cat-image { filter: saturate(0.8) brightness(0.94) drop-shadow(0 0.75rem 0.75rem color-mix(in srgb, #b45309 20%, transparent)); }
+.pet-cat-scene[data-mood="hungry"].pet-cat-scene--shiba-dog .pet-cat-image { filter: saturate(0.78) brightness(0.92) drop-shadow(0 0.75rem 0.75rem color-mix(in srgb, #c2410c 20%, transparent)); }
+.pet-cat-scene[data-mood="hungry"].pet-cat-scene--husky-dog .pet-cat-image { filter: saturate(0.72) brightness(0.92) drop-shadow(0 0.75rem 0.85rem color-mix(in srgb, #1d4ed8 24%, transparent)); }
 .pet-cat-scene[data-mood="sleepy"] .pet-cat-image { animation-duration: 6.8s; transform: scale(1.08) rotate(-2deg); }
 .pet-cat-scene.is-reacting .pet-cat-image { animation: pet-image-react 1.15s cubic-bezier(0.23, 1, 0.32, 1); }
 
@@ -2300,6 +2306,31 @@ h1, h2, h3, h4, h5 {
 
 .pet-companion-card.is-selected { border-color: color-mix(in srgb, var(--primary) 58%, var(--line)); background: color-mix(in srgb, var(--primary) 8%, var(--surface)); box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--primary) 14%, transparent); }
 .pet-companion-card:disabled { cursor: default; }
+
+.pet-preference {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 1rem;
+  cursor: pointer;
+  border: 1px solid var(--line);
+  border-radius: 1rem;
+  background: var(--surface-soft);
+  padding: 1rem;
+  transition: border-color 160ms var(--ease-out), background-color 160ms var(--ease-out), box-shadow 160ms var(--ease-out), transform 160ms var(--ease-out);
+}
+
+.pet-preference--accent { border-color: color-mix(in srgb, var(--primary) 23%, var(--line)); background: color-mix(in srgb, var(--primary) 5%, var(--surface)); }
+.pet-preference > input { position: absolute; inline-size: 1px; block-size: 1px; opacity: 0; pointer-events: none; }
+.pet-preference-switch { display: inline-flex; width: 2.8rem; height: 1.65rem; flex: 0 0 auto; align-items: center; border-radius: 999px; background: color-mix(in srgb, var(--muted) 42%, transparent); box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--ink) 10%, transparent); padding: 0.18rem; transition: background-color 160ms var(--ease-out), box-shadow 160ms var(--ease-out); }
+.pet-preference-switch > span { display: block; width: 1.28rem; height: 1.28rem; border-radius: 999px; background: white; box-shadow: 0 0.12rem 0.3rem color-mix(in srgb, #0f172a 24%, transparent); transition: transform 160ms var(--ease-out); }
+.pet-preference > input:checked ~ .pet-preference-switch { background: var(--primary); box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--primary) 70%, white); }
+.pet-preference > input:checked ~ .pet-preference-switch > span { transform: translateX(1.15rem); }
+.pet-preference > input:focus-visible ~ .pet-preference-switch { outline: 3px solid color-mix(in srgb, var(--primary) 36%, transparent); outline-offset: 3px; }
+
+@media (hover: hover) and (pointer: fine) {
+  .pet-preference:hover { border-color: color-mix(in srgb, var(--primary) 42%, var(--line)); box-shadow: var(--elevation-1); transform: translateY(-1px); }
+}
 
 .pet-shop-companion {
   position: relative;

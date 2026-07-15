@@ -8,6 +8,7 @@ import type {
   PetFoodId,
   PetLeaderboardEntry,
   PetLeaderboardScope,
+  PetProfileView,
 } from "@/types/pet";
 
 type Tab = "home" | "shop" | "inventory" | "leaderboard";
@@ -62,13 +63,17 @@ export default function PetDashboardClient({
     return payload.data;
   }
 
+  function publishDashboard(nextDashboard: PetDashboard) {
+    window.dispatchEvent(new CustomEvent<PetDashboard>(PET_PROFILE_UPDATED_EVENT, { detail: nextDashboard }));
+  }
+
   async function buy(foodId: PetFoodId) {
     setBusy(`buy:${foodId}`);
     setMessage(null);
     try {
       const result = await request<PetAction>("/api/pet/shop/buy", "POST", { foodId });
       setDashboard(result.dashboard);
-      window.dispatchEvent(new Event(PET_PROFILE_UPDATED_EVENT));
+      publishDashboard(result.dashboard);
       setMessage("Đã thêm thức ăn vào kho của Mực.");
     } catch (error) {
       setMessage(error instanceof Error ? error.message : "Không thể mua thức ăn.");
@@ -83,7 +88,7 @@ export default function PetDashboardClient({
     try {
       const result = await request<PetAction>("/api/pet/feed", "POST", { foodId });
       setDashboard(result.dashboard);
-      window.dispatchEvent(new Event(PET_PROFILE_UPDATED_EVENT));
+      publishDashboard(result.dashboard);
       setReacting(true);
       window.setTimeout(() => setReacting(false), 1_500);
       setMessage(result.evolved ? `Mực đã tiến hoá thành ${result.dashboard.profile.evolutionName}!` : "Mực ăn ngon lành và vui hơn rồi!");
@@ -101,26 +106,36 @@ export default function PetDashboardClient({
     floatingEnabled?: boolean;
     equippedCompanionId?: PetCompanionId;
   }) {
+    const previousDashboard = dashboard;
+    const optimisticDashboard: PetDashboard = {
+      ...dashboard,
+      profile: { ...dashboard.profile, ...next },
+    };
+    setDashboard(optimisticDashboard);
+    publishDashboard(optimisticDashboard);
     setBusy("profile");
     setMessage(null);
     try {
-      const updated = await request<PetDashboard>("/api/pet/profile", "PATCH", next);
-      setDashboard(updated);
-      window.dispatchEvent(new Event(PET_PROFILE_UPDATED_EVENT));
-      setPetName(updated.profile.name);
+      const updatedProfile = await request<PetProfileView>("/api/pet/profile", "PATCH", next);
+      const updatedDashboard = { ...optimisticDashboard, profile: updatedProfile };
+      setDashboard(updatedDashboard);
+      publishDashboard(updatedDashboard);
+      setPetName(updatedProfile.name);
       setMessage(
         next.floatingEnabled === false
-          ? "Đã ẩn pet nổi trên các trang. Bạn vẫn có thể bật lại ở Nhà Mèo."
+          ? "Đã ẩn pet nổi trên các trang. Bạn vẫn có thể bật lại ở Nhà Pet."
           : next.floatingEnabled === true
             ? "Pet nổi đã hiện lại trên các trang."
             : next.equippedCompanionId
-              ? `${updated.profile.name} đã đổi người bạn đồng hành.`
+              ? `${updatedProfile.name} đã đổi người bạn đồng hành.`
               : next.rankOptIn === false
                 ? "Mực đã ẩn khỏi bảng xếp hạng."
                 : "Đã lưu thông tin của Mực.",
       );
       if (next.rankOptIn) void loadLeaderboard(leaderScope);
     } catch (error) {
+      setDashboard(previousDashboard);
+      publishDashboard(previousDashboard);
       setMessage(error instanceof Error ? error.message : "Không thể lưu thông tin.");
     } finally {
       setBusy(null);
@@ -133,7 +148,7 @@ export default function PetDashboardClient({
     try {
       const result = await request<PetAction>("/api/pet/companions/buy", "POST", { companionId });
       setDashboard(result.dashboard);
-      window.dispatchEvent(new Event(PET_PROFILE_UPDATED_EVENT));
+      publishDashboard(result.dashboard);
       setMessage(`${result.dashboard.profile.name} đã chào đón pet mới và tự động trang bị ngay!`);
     } catch (error) {
       setMessage(error instanceof Error ? error.message : "Không thể đổi pet mới.");
@@ -164,11 +179,11 @@ export default function PetDashboardClient({
           <div className="relative grid items-center gap-6 lg:grid-cols-[minmax(0,1fr)_360px]">
             <div className="min-w-0">
               <div className="flex flex-wrap items-center gap-2">
-                <span className="rounded-full bg-white/70 px-3 py-1 text-xs font-extrabold text-primary">Mèo đồng hành</span>
+                <span className="rounded-full bg-white/70 px-3 py-1 text-xs font-extrabold text-primary">Pet đồng hành</span>
                 <span className="rounded-full bg-slate-950/5 px-3 py-1 text-xs font-extrabold text-ink">Cấp {profile.evolutionStage}</span>
               </div>
               <h1 className="mt-4 text-3xl font-extrabold tracking-tight text-ink sm:text-4xl">{profile.name} · {profile.evolutionName}</h1>
-              <p className="mt-2 max-w-xl text-sm leading-6 text-ink2">Hoàn thành bài học để kiếm Mèo Xu, đổi thức ăn và giúp Mực trưởng thành. Mèo chỉ cổ vũ bạn — không bao giờ phạt khi bạn bận.</p>
+              <p className="mt-2 max-w-xl text-sm leading-6 text-ink2">Hoàn thành bài học để kiếm Mèo Xu, đổi thức ăn và giúp {profile.name} trưởng thành. Pet chỉ cổ vũ bạn — không bao giờ phạt khi bạn bận.</p>
               <div className="mt-5 grid max-w-xl grid-cols-2 gap-3 sm:grid-cols-4">
                 <Metric icon="🪙" label="Mèo Xu" value={dashboard.wallet.balance} />
                 <Metric icon="♥" label="No bụng" value={`${profile.fullness}%`} />
@@ -187,8 +202,8 @@ export default function PetDashboardClient({
           </div>
         </section>
 
-        <nav className="flex gap-2 overflow-x-auto pb-1" aria-label="Khu vực Mèo cưng">
-          <TabButton active={tab === "home"} onClick={() => setTab("home")}>Nhà Mèo</TabButton>
+        <nav className="flex gap-2 overflow-x-auto pb-1" aria-label="Khu vực thú cưng">
+          <TabButton active={tab === "home"} onClick={() => setTab("home")}>Nhà Pet</TabButton>
           <TabButton active={tab === "shop"} onClick={() => setTab("shop")}>Cửa hàng</TabButton>
           <TabButton active={tab === "inventory"} onClick={() => setTab("inventory")}>Kho đồ</TabButton>
           <TabButton active={tab === "leaderboard"} onClick={() => setTab("leaderboard")}>Bảng xếp hạng</TabButton>
@@ -210,18 +225,20 @@ export default function PetDashboardClient({
             <article className="premium-card p-5 sm:p-6">
               <p className="text-xs font-extrabold uppercase tracking-widest text-muted">Thông tin công khai</p>
               <h2 className="mt-1 text-xl font-extrabold text-ink">Đặt tên cho người bạn học</h2>
-              <label className="mt-5 block text-xs font-extrabold text-muted" htmlFor="pet-name">Tên mèo</label>
+              <label className="mt-5 block text-xs font-extrabold text-muted" htmlFor="pet-name">Tên pet</label>
               <div className="mt-2 flex gap-2">
                 <input id="pet-name" value={petName} maxLength={24} onChange={(event) => setPetName(event.target.value)} className="min-w-0 flex-1 rounded-xl border border-line bg-surface px-3 py-2.5 text-sm font-bold text-ink outline-none focus:border-primary" />
                 <button type="button" disabled={busy === "profile" || petName.trim() === profile.name} onClick={() => void saveProfile({ name: petName })} className="rounded-xl bg-ink px-4 py-2 text-sm font-extrabold text-white disabled:opacity-50">Lưu</button>
               </div>
-              <label className="mt-5 flex cursor-pointer items-start gap-3 rounded-2xl border border-line bg-surface-soft p-4">
-                <input type="checkbox" checked={profile.rankOptIn} disabled={busy === "profile"} onChange={(event) => void saveProfile({ rankOptIn: event.target.checked })} className="mt-0.5 h-4 w-4 accent-primary" />
-                <span><strong className="block text-sm text-ink">Hiển thị Mực trên BXH</strong><small className="mt-1 block leading-5 text-muted">Chỉ hiển thị tên mèo, nickname, cấp và Điểm chăm sóc. Email không bao giờ được công khai.</small></span>
+              <label className="pet-preference mt-5">
+                <input type="checkbox" checked={profile.rankOptIn} onChange={(event) => void saveProfile({ rankOptIn: event.target.checked })} />
+                <span className="min-w-0"><strong className="block text-sm text-ink">Hiển thị pet trên BXH</strong><small className="mt-1 block leading-5 text-muted">Chỉ hiển thị tên pet, nickname, cấp và Điểm chăm sóc. Email không bao giờ được công khai.</small></span>
+                <span className="pet-preference-switch" aria-hidden="true"><span /></span>
               </label>
-              <label className="mt-3 flex cursor-pointer items-start gap-3 rounded-2xl border border-primary/20 bg-primary/5 p-4">
-                <input type="checkbox" checked={profile.floatingEnabled} disabled={busy === "profile"} onChange={(event) => void saveProfile({ floatingEnabled: event.target.checked })} className="mt-0.5 h-4 w-4 accent-primary" />
-                <span><strong className="block text-sm text-ink">Hiện pet nổi trên các trang</strong><small className="mt-1 block leading-5 text-muted">Bạn có thể kéo pet đi bất kỳ đâu. Tắt mục này để tập trung; Nhà Mèo vẫn luôn mở từ header.</small></span>
+              <label className="pet-preference pet-preference--accent mt-3">
+                <input type="checkbox" checked={profile.floatingEnabled} onChange={(event) => void saveProfile({ floatingEnabled: event.target.checked })} />
+                <span className="min-w-0"><strong className="block text-sm text-ink">Hiện pet nổi trên các trang</strong><small className="mt-1 block leading-5 text-muted">Chuyển trạng thái ngay lập tức; bạn có thể kéo pet đi bất kỳ đâu hoặc tắt để tập trung.</small></span>
+                <span className="pet-preference-switch" aria-hidden="true"><span /></span>
               </label>
             </article>
           </section>
@@ -248,14 +265,14 @@ export default function PetDashboardClient({
         {tab === "shop" ? (
           <section className="space-y-6">
             <div>
-              <div className="mb-3 flex flex-wrap items-end justify-between gap-3"><div><p className="text-xs font-extrabold uppercase tracking-widest text-muted">Mèo mới</p><h2 className="mt-1 text-xl font-extrabold text-ink">Đổi pet bằng Mèo Xu</h2></div><p className="text-sm font-bold text-muted">Số dư: <span className="text-primary">🪙 {dashboard.wallet.balance}</span></p></div>
+              <div className="mb-3 flex flex-wrap items-end justify-between gap-3"><div><p className="text-xs font-extrabold uppercase tracking-widest text-muted">Pet mới</p><h2 className="mt-1 text-xl font-extrabold text-ink">Giống mèo và chó để đồng hành</h2></div><p className="text-sm font-bold text-muted">Số dư: <span className="text-primary">🪙 {dashboard.wallet.balance}</span></p></div>
               <div className="grid gap-4 lg:grid-cols-3">
                 {dashboard.companionCatalog.map((companion) => {
                   const owned = dashboard.ownedCompanionIds.includes(companion.id);
                   const selected = profile.equippedCompanionId === companion.id;
                   return <article key={companion.id} className={`pet-shop-companion pet-shop-companion--${companion.rarity}`}>
                     <PetCat mood={profile.mood} stage={profile.evolutionStage} companionId={companion.id} />
-                    <div className="relative min-w-0"><span className="pet-rarity">{companion.rarity === "starter" ? "Khởi đầu" : companion.rarity === "rare" ? "Hiếm" : "Huyền thoại"}</span><h3 className="mt-2 text-xl font-extrabold text-ink">{companion.name}</h3><p className="mt-1 text-sm leading-6 text-muted">{companion.description}</p><button type="button" disabled={selected || busy === `companion:${companion.id}`} onClick={() => companion.id === "MUC" || owned ? void saveProfile({ equippedCompanionId: companion.id }) : void buyCompanion(companion.id)} className="premium-primary mt-4 w-full text-sm disabled:cursor-not-allowed disabled:opacity-60">{selected ? "Đang đồng hành" : owned ? "Trang bị" : `🪙 ${companion.price} · Đổi pet`}</button></div>
+                    <div className="relative min-w-0"><span className="pet-rarity">{companion.species === "dog" ? "Chó" : "Mèo"} · {companion.rarity === "starter" ? "Khởi đầu" : companion.rarity === "rare" ? "Hiếm" : "Huyền thoại"}</span><h3 className="mt-2 text-xl font-extrabold text-ink">{companion.name}</h3><p className="mt-1 text-sm leading-6 text-muted">{companion.description}</p><button type="button" disabled={selected || busy === `companion:${companion.id}`} onClick={() => companion.id === "MUC" || owned ? void saveProfile({ equippedCompanionId: companion.id }) : void buyCompanion(companion.id)} className="premium-primary mt-4 w-full text-sm disabled:cursor-not-allowed disabled:opacity-60">{selected ? "Đang đồng hành" : owned ? "Trang bị" : `🪙 ${companion.price} · Đổi pet`}</button></div>
                   </article>;
                 })}
               </div>
@@ -295,7 +312,7 @@ export default function PetDashboardClient({
           <section className="grid gap-5 lg:grid-cols-[1.1fr_0.9fr]">
             <article className="premium-card overflow-hidden p-0">
               <div className="flex flex-wrap items-center justify-between gap-3 p-5 sm:p-6">
-                <div><p className="text-xs font-extrabold uppercase tracking-widest text-muted">Cuộc đua nhẹ nhàng</p><h2 className="mt-1 text-xl font-extrabold text-ink">Ai chăm mèo đều đặn nhất?</h2></div>
+                <div><p className="text-xs font-extrabold uppercase tracking-widest text-muted">Cuộc đua nhẹ nhàng</p><h2 className="mt-1 text-xl font-extrabold text-ink">Ai chăm pet đều đặn nhất?</h2></div>
                 <div className="flex rounded-xl bg-surface-soft p-1">
                   <ScopeButton active={leaderScope === "weekly"} onClick={() => { setLeaderScope("weekly"); void loadLeaderboard("weekly"); }}>Tuần này</ScopeButton>
                   <ScopeButton active={leaderScope === "all-time"} onClick={() => setLeaderScope("all-time")}>Tổng</ScopeButton>

@@ -1,6 +1,6 @@
 export type PetFoodId = "KIBBLE" | "SALMON" | "PATE" | "CAKE";
 
-export type PetCompanionId = "MUC" | "MOCHI" | "LUNA";
+export type PetCompanionId = "MUC" | "MOCHI" | "LUNA" | "CORGI" | "SHIBA" | "HUSKY";
 
 export type PetMood = "happy" | "content" | "hungry" | "sleepy";
 
@@ -21,10 +21,11 @@ export interface PetCompanionDefinition {
   id: PetCompanionId;
   name: string;
   description: string;
+  species: "cat" | "dog";
   rarity: "starter" | "rare" | "legendary";
   price: number;
   assetPath: string;
-  visualVariant: "sunset" | "berry" | "midnight";
+  visualVariant: "muc-cat" | "british-cat" | "maine-coon-cat" | "corgi-dog" | "shiba-dog" | "husky-dog";
 }
 
 export interface PetProfileView {

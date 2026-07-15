@@ -334,3 +334,19 @@ Bản mở rộng này thay thế giới hạn "một con mèo" ở MVP:
   header để bật lại.
 - API mới: `POST /api/pet/companions/buy` với body `{ companionId }`; PATCH
   `/api/pet/profile` nhận thêm `{ floatingEnabled?, equippedCompanionId? }`.
+
+## 16. Mở rộng giống pet và tối ưu thao tác
+
+- Cửa hàng có 6 người bạn đồng hành: Mực (mèo mướp, starter), Mèo Anh lông ngắn
+  (350 Mèo Xu), Maine Coon (900 Mèo Xu), Corgi (50 Mèo Xu), Shiba Inu (350 Mèo Xu)
+  và Siberian Husky (900 Mèo Xu). Giá theo ba bậc khởi đầu, hiếm và huyền thoại; mọi
+  giá vẫn được kiểm tra ở server transaction.
+- Asset từng giống được đặt tại `web/public/pets/` (mèo Anh lông ngắn, Maine Coon,
+  Corgi, Shiba Inu và Siberian Husky); các pet được hiển thị bằng `PetCat.tsx` để giữ
+  widget, hero và cửa hàng đồng nhất.
+- Công tắc BXH và pet nổi cập nhật lạc quan tại chỗ, phát event nội bộ cho widget và chỉ
+  hoàn tác khi API lỗi. Endpoint profile nay chỉ trả profile đã xác nhận thay vì đọc lại
+  toàn bộ dashboard, giảm đáng kể số lượt đọc Firestore cho từng lần tích/bỏ tích.
+- Bảng xếp hạng tổng có tab **Thú cưng**, hỗ trợ tất cả/tuần này và chỉ hiện các tài khoản
+  đã opt-in. Header desktop, mobile và public đặt mục **Thú cưng** sau **Đề thi**, trước
+  **Bảng xếp hạng**.

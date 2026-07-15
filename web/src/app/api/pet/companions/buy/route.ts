@@ -6,7 +6,7 @@ import { requireUser } from "@/lib/auth/session";
 import { buyPetCompanion } from "@/lib/services/pet";
 
 const schema = z.object({
-  companionId: z.enum(["MOCHI", "LUNA"]),
+  companionId: z.enum(["MOCHI", "LUNA", "CORGI", "SHIBA", "HUSKY"]),
 });
 
 export const POST = withErrorHandling(async (req) => {
