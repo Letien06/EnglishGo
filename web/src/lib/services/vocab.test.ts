@@ -72,3 +72,15 @@ describe("recordStudyHistory", () => {
     }));
   });
 });
+
+describe("vocabDayStartForMillis", () => {
+  it("uses the Vietnam learning day instead of the server timezone", async () => {
+    const { vocabDayStartForMillis } = await import("./vocab");
+
+    const afterVietnamMidnight = Date.parse("2026-07-15T17:30:00.000Z");
+
+    expect(vocabDayStartForMillis(afterVietnamMidnight)).toBe(
+      Date.parse("2026-07-15T17:00:00.000Z"),
+    );
+  });
+});

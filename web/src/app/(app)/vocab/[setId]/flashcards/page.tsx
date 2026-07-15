@@ -47,6 +47,12 @@ export default async function FlashcardsPage({ params, searchParams }: Props) {
   const practiceOptionsPromise = user
     ? vocab.findPracticeSetOptions(uid)
     : Promise.resolve([]);
+  const returnParams = new URLSearchParams({ mode });
+  if (mastery) returnParams.set("mastery", mastery);
+  if (order) returnParams.set("order", order);
+  if (amount) returnParams.set("amount", amount);
+  if (partId) returnParams.set("partId", partId);
+  const returnPath = `/vocab/${id}/flashcards?${returnParams.toString()}`;
 
   const [session, practiceOptions] = await Promise.all([
     sessionPromise,
@@ -59,6 +65,8 @@ export default async function FlashcardsPage({ params, searchParams }: Props) {
       initialMode={mode}
       practiceOptions={practiceOptions}
       reviewMode={false}
+      isAuthenticated={Boolean(user)}
+      loginHref={`/login?redirect=${encodeURIComponent(returnPath)}`}
       selectedMastery={mastery ?? "learning"}
       selectedOrder={order ?? "random"}
       selectedAmount={amount ?? "20"}

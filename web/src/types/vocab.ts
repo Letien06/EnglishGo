@@ -140,6 +140,8 @@ export interface VocabProgressSetCard {
   title: string;
   topic: string;
   icon?: string;
+  sourceType?: SourceType;
+  externalTestId?: string;
   totalWords: number;
   learnedWords: number;
   masteredWords: number;

@@ -22,11 +22,9 @@ interface ProgressPayload {
   practiceOptions: VocabSetCard[];
 }
 
-const progressCache: { value: ProgressPayload | null } = { value: null };
-
 export default function VocabProgressTabClient() {
-  const [payload, setPayload] = useState<ProgressPayload | null>(progressCache.value);
-  const [loading, setLoading] = useState(!progressCache.value);
+  const [payload, setPayload] = useState<ProgressPayload | null>(null);
+  const [loading, setLoading] = useState(true);
   const [unauthorized, setUnauthorized] = useState(false);
   const [error, setError] = useState(false);
 
@@ -34,7 +32,9 @@ export default function VocabProgressTabClient() {
     let cancelled = false;
 
     async function load() {
-      setLoading(!progressCache.value);
+      setLoading(true);
+      setError(false);
+      setUnauthorized(false);
       try {
         const res = await fetch("/api/vocab/progress", { cache: "no-store" });
         if (res.status === 401) {
@@ -43,13 +43,12 @@ export default function VocabProgressTabClient() {
         }
         const json = (await res.json()) as ApiEnvelope<ProgressPayload>;
         if (!json.success || !json.data) throw new Error(json.error ?? "Cannot load progress");
-        progressCache.value = json.data;
         if (!cancelled) {
           setPayload(json.data);
           setError(false);
         }
       } catch {
-        if (!cancelled && !progressCache.value) setError(true);
+        if (!cancelled) setError(true);
       } finally {
         if (!cancelled) setLoading(false);
       }
@@ -125,7 +124,7 @@ export default function VocabProgressTabClient() {
       </article>
 
       <section className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-        <StatCard label="Tổng thể" value={payload.totalWords} />
+        <StatCard label="Đã theo dõi" value={payload.totalWords} />
         <StatCard label="Đã học" value={payload.learnedWords} />
         <StatCard label="Thành thạo" value={payload.masteredWords} />
         <StatCard label="Cần ôn" value={payload.dueWords} />
@@ -141,6 +140,10 @@ export default function VocabProgressTabClient() {
           {payload.progressSets.map((set) => {
             const masteredPercent = set.totalWords > 0 ? Math.round((set.masteredWords / set.totalWords) * 100) : 0;
             const learningWords = Math.max(0, set.learnedWords - set.masteredWords);
+            const dautoeicHref = set.sourceType === "DAUTOEIC" && set.externalTestId
+              ? `/vocab/dautoeic/${encodeURIComponent(set.externalTestId)}`
+              : null;
+            const detailHref = dautoeicHref ?? `/vocab/${set.id}`;
             return (
               <article key={set.id} className="rounded-2xl border border-amber-100 bg-white p-5 shadow-sm">
                 <header className="flex items-start gap-3">
@@ -165,18 +168,18 @@ export default function VocabProgressTabClient() {
                 </div>
                 <footer className="mt-5 flex flex-wrap gap-2">
                   <Link
-                    href={`/vocab/${set.id}`}
+                    href={detailHref}
                     data-overdelay="Đang mở chi tiết bộ từ..."
                     className="rounded-full border border-amber-200 px-4 py-2 text-xs font-extrabold text-ink hover:bg-amber-50"
                   >
-                    Xem chi tiết
+                    {dautoeicHref ? "Chọn Part" : "Xem chi tiết"}
                   </Link>
                   <Link
-                    href={set.dueWords > 0 ? `/vocab/${set.id}/flashcards?mode=menu&mastery=due&order=random&amount=20` : `/vocab/${set.id}/flashcards?mode=menu`}
+                    href={dautoeicHref ?? (set.dueWords > 0 ? `/vocab/${set.id}/flashcards?mode=menu&mastery=due&order=random&amount=20` : `/vocab/${set.id}/flashcards?mode=menu`)}
                     data-overdelay="Đang nạp game từ vựng..."
                     className="rounded-full bg-primary px-4 py-2 text-xs font-extrabold text-gold-ink hover:opacity-90"
                   >
-                    {set.dueWords > 0 ? "Chọn chế độ ôn" : "Học tiếp"}
+                    {dautoeicHref ? "Chọn Part để học" : set.dueWords > 0 ? "Chọn chế độ ôn" : "Học tiếp"}
                   </Link>
                 </footer>
               </article>

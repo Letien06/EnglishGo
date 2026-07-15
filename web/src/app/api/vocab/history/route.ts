@@ -18,7 +18,10 @@ const historySchema = z.object({
   wrongWords: z.coerce.number().int().min(0),
   accuracy: z.coerce.number().min(0).max(100),
   score: z.coerce.number().min(0),
-});
+}).refine(
+  (session) => session.correctWords + session.wrongWords <= session.totalWords,
+  { message: "Correct and wrong word totals cannot exceed total words" },
+);
 
 export const GET = withErrorHandling(async (req: NextRequest) => {
   const user = await requireUser();

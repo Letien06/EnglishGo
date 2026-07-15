@@ -342,7 +342,7 @@ export function dailyNewWordGoal(): number {
 
 export async function studiedWordsToday(uid: string): Promise<number> {
   requireUid(uid);
-  const todayStart = startOfDay(Date.now());
+  const todayStart = vocabDayStartForMillis(Date.now());
   const snap = await progressCollection(uid)
     .where("lastReviewedAtMillis", ">=", todayStart)
     .count()
@@ -606,6 +606,8 @@ export async function findProgressSetCards(
         title: set.title,
         topic: set.topic,
         icon: set.icon,
+        sourceType: set.sourceType,
+        externalTestId: set.externalTestId,
         totalWords: set.wordCount ?? 0,
         learnedWords: setProgress.filter((p) => p.status !== "NEW").length,
         masteredWords: setProgress.filter((p) => p.status === "MASTERED")
@@ -636,7 +638,7 @@ export async function progressOverview(uid: string): Promise<{
 }> {
   requireUid(uid);
   const now = Date.now();
-  const todayStart = startOfDay(now);
+  const todayStart = vocabDayStartForMillis(now);
   const [progress, studyStreak] = await Promise.all([
     userProgressDocs(uid),
     getStoredStudyStreakSummary(uid).then((summary) => summary ?? getStudyStreak(uid)),
@@ -663,6 +665,8 @@ export async function progressOverview(uid: string): Promise<{
         title: set.title,
         topic: set.topic,
         icon: set.icon,
+        sourceType: set.sourceType,
+        externalTestId: set.externalTestId,
         totalWords: set.wordCount ?? 0,
         learnedWords: setProgress.filter((item) => item.status !== "NEW").length,
         masteredWords: setProgress.filter((item) => item.status === "MASTERED").length,
@@ -1476,9 +1480,9 @@ async function copySetAsNew(
     ownerUid: uid,
     title: sourceSet.title,
     topic: sourceSet.topic,
-    description: sourceSet.description,
-    icon: sourceSet.icon,
-    level: sourceSet.level,
+    description: sourceSet.description ?? null,
+    icon: sourceSet.icon ?? null,
+    level: sourceSet.level ?? null,
     status: "PUBLISHED" satisfies ContentStatus,
     sourceType: "COMMUNITY" satisfies SourceType,
     wordCount: 0,
@@ -1633,14 +1637,14 @@ async function copyWords(
         setId: targetSetId,
         word: word.word,
         meaning: word.meaning,
-        partOfSpeech: word.partOfSpeech,
-        phonetic: word.phonetic,
-        phoneticUs: word.phoneticUs,
-        phoneticUk: word.phoneticUk,
-        example: word.example,
-        audioUrl: word.audioUrl,
-        audioUsUrl: word.audioUsUrl,
-        audioUkUrl: word.audioUkUrl,
+        partOfSpeech: word.partOfSpeech ?? "OTHER",
+        phonetic: word.phonetic ?? null,
+        phoneticUs: word.phoneticUs ?? null,
+        phoneticUk: word.phoneticUk ?? null,
+        example: word.example ?? null,
+        audioUrl: word.audioUrl ?? null,
+        audioUsUrl: word.audioUsUrl ?? null,
+        audioUkUrl: word.audioUkUrl ?? null,
         status: "PUBLISHED" satisfies ContentStatus,
         sourceType: "COMMUNITY" satisfies SourceType,
         publishedAtMillis: now,
@@ -2043,10 +2047,10 @@ function boolVal(data: Record<string, unknown>, key: string): boolean {
   return false;
 }
 
-function startOfDay(millis: number): number {
-  const d = new Date(millis);
-  d.setHours(0, 0, 0, 0);
-  return d.getTime();
+export function vocabDayStartForMillis(millis: number): number {
+  const dayKey = petDateKeyForMillis(millis);
+  const localMidnight = Date.parse(`${dayKey}T00:00:00+07:00`);
+  return Number.isFinite(localMidnight) ? localMidnight : millis;
 }
 
 function shuffleArray<T>(array: T[]): T[] {

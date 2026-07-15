@@ -25,12 +25,15 @@ import type {
   VocabWordCard,
 } from "@/types/vocab";
 import useDialogFocus from "@/components/useDialogFocus";
+import { consolidateVocabGameAnswers } from "@/lib/vocab-game-results";
 
 interface Props {
   session: VocabSetSession;
   initialMode: string;
   practiceOptions: VocabSetCard[];
   reviewMode: boolean;
+  isAuthenticated: boolean;
+  loginHref: string;
   selectedMastery?: string;
   selectedOrder?: string;
   selectedAmount?: string;
@@ -254,6 +257,8 @@ export default function FlashcardGame({
   initialMode,
   practiceOptions,
   reviewMode,
+  isAuthenticated,
+  loginHref,
   selectedMastery = "learning",
   selectedOrder = "random",
   selectedAmount = "20",
@@ -401,6 +406,8 @@ export default function FlashcardGame({
           selectedMastery={selectedMastery}
           selectedOrder={selectedOrder}
           selectedAmount={selectedAmount}
+          isAuthenticated={isAuthenticated}
+          loginHref={loginHref}
           muted={muted}
           history={history}
           quizChooser={quizChooser}
@@ -425,6 +432,8 @@ export default function FlashcardGame({
           mode={mode}
           quizMode={quizMode}
           muted={muted}
+          isAuthenticated={isAuthenticated}
+          loginHref={loginHref}
           onExit={goHub}
           onFinish={(record) => {
             recordHistory(record);
@@ -478,6 +487,8 @@ function Hub({
   selectedMastery,
   selectedOrder,
   selectedAmount,
+  isAuthenticated,
+  loginHref,
   muted,
   history,
   quizChooser,
@@ -495,6 +506,8 @@ function Hub({
   selectedMastery: string;
   selectedOrder: string;
   selectedAmount: string;
+  isAuthenticated: boolean;
+  loginHref: string;
   muted: boolean;
   history: HistoryEntry[];
   quizChooser: boolean;
@@ -513,6 +526,19 @@ function Hub({
 }) {
   return (
     <div className="space-y-6">
+      {!isAuthenticated ? (
+        <aside className="flex flex-col items-start gap-3 rounded-2xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-950 sm:flex-row sm:items-center sm:justify-between">
+          <p>
+            Bạn đang học thử. <strong>Đăng nhập</strong> để lưu kết quả, lịch ôn và điểm thưởng.
+          </p>
+          <Link
+            href={loginHref}
+            className="shrink-0 rounded-full bg-primary px-4 py-2 text-xs font-extrabold text-gold-ink"
+          >
+            Đăng nhập để lưu
+          </Link>
+        </aside>
+      ) : null}
       {/* Filters */}
       <section className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
         <FilterSelect
@@ -779,6 +805,8 @@ function PlaySurface({
   mode,
   quizMode,
   muted,
+  isAuthenticated,
+  loginHref,
   onExit,
   onFinish,
 }: {
@@ -790,6 +818,8 @@ function PlaySurface({
   mode: PlayMode;
   quizMode: QuizMode;
   muted: boolean;
+  isAuthenticated: boolean;
+  loginHref: string;
   onExit: () => void;
   onFinish: (record: {
     mode: string;
@@ -833,6 +863,7 @@ function PlaySurface({
   const timerRef = useRef<number | null>(null);
   const draftTimerRef = useRef<number | null>(null);
   const hydratedDraftRef = useRef(false);
+  const reviewsSavedRef = useRef(false);
   const draftStorageKey = `englishgo-vocab-draft-${setId}-${externalPartId ?? "all"}-${mode}-${quizMode}`;
 
   const activeMode: PlayMode = useMemo(() => {
@@ -841,6 +872,13 @@ function PlaySurface({
   }, [mode, index]);
 
   const word = words[index] ?? words[0];
+  const resultAnswers = useMemo(
+    () => consolidateVocabGameAnswers(answers).map(({ answer, needsReview }) => ({
+      ...answer,
+      correct: answer.correct && !needsReview,
+    })),
+    [answers],
+  );
 
   const usesTimer = activeMode === "quiz" || activeMode === "matching";
 
@@ -856,6 +894,7 @@ function PlaySurface({
   }, [answers, attempts, index, score]);
 
   const saveDraftToServer = useCallback(async (payload: string) => {
+    if (!isAuthenticated) return;
     await fetch("/api/vocab/game-draft", {
       method: "PUT",
       headers: { "Content-Type": "application/json" },
@@ -867,7 +906,7 @@ function PlaySurface({
         payload,
       }),
     }).catch(() => undefined);
-  }, [externalPartId, mode, quizMode, setId]);
+  }, [externalPartId, isAuthenticated, mode, quizMode, setId]);
 
   const applyDraft = useCallback((draft: VocabGameDraftPayload) => {
     if (!words.length || showResult) return;
@@ -888,6 +927,12 @@ function PlaySurface({
         if (!cancelled) applyDraft(localDraft);
       }, 0);
       hydratedDraftRef.current = true;
+    }
+    if (!isAuthenticated) {
+      hydratedDraftRef.current = true;
+      return () => {
+        cancelled = true;
+      };
     }
     const params = new URLSearchParams({
       setId: String(setId),
@@ -913,12 +958,13 @@ function PlaySurface({
     return () => {
       cancelled = true;
     };
-  }, [applyDraft, draftStorageKey, externalPartId, mode, quizMode, setId]);
+  }, [applyDraft, draftStorageKey, externalPartId, isAuthenticated, mode, quizMode, setId]);
 
   useEffect(() => {
-    if (!hydratedDraftRef.current || showResult) return;
+    if (!hydratedDraftRef.current) return;
     const payload = makeDraftPayload();
     window.localStorage.setItem(draftStorageKey, payload);
+    if (showResult) return;
     if (draftTimerRef.current) window.clearTimeout(draftTimerRef.current);
     draftTimerRef.current = window.setTimeout(() => {
       void saveDraftToServer(payload);
@@ -1111,6 +1157,7 @@ function PlaySurface({
     setAnswers([]);
     setShowResult(false);
     setSaveError("");
+    reviewsSavedRef.current = false;
     if (activeMode === "matching") {
       setMatchedIds([]);
       setLives(5);
@@ -1275,29 +1322,34 @@ function PlaySurface({
   /* ---- Save & complete ---- */
   async function saveAndComplete() {
     if (saving) return;
-    setSaving(true);
-    setSaveError("");
-    const latest = [
-      ...new Map(
-        answers.filter((a) => a && a.id).map((a) => [a.id, a]),
-      ).values(),
-    ];
-    const statuses = await Promise.all(
-      latest.map((a) => submitReview(a.id, a.correct ? 5 : 2)),
-    );
-    const failures = statuses.filter((s) => s && s !== 200 && s !== 204);
-    if (failures.length) {
-      setSaving(false);
-      setSaveError(
-        failures.includes(401)
-          ? "Bạn cần đăng nhập để lưu tiến độ học."
-          : "Chưa lưu được kết quả. Vui lòng thử lại.",
-      );
+    if (!isAuthenticated) {
+      window.localStorage.setItem(draftStorageKey, makeDraftPayload());
+      setSaveError("Đăng nhập để lưu tiến độ, lịch ôn và phần thưởng của phiên học này.");
       return;
     }
-    const answered = answers.length || attempts;
-    const correctWords = answers.filter((a) => a.correct).length;
-    const wrongWords = answers.filter((a) => !a.correct).length;
+    setSaving(true);
+    setSaveError("");
+    const outcomes = consolidateVocabGameAnswers(answers);
+    if (!reviewsSavedRef.current) {
+      const statuses = await Promise.all(
+        outcomes.map(({ answer, needsReview }) =>
+          submitReview(answer.id, needsReview ? 2 : 5)),
+      );
+      const failures = statuses.filter((status) => status !== 200 && status !== 204);
+      if (failures.length) {
+        setSaving(false);
+        setSaveError(
+          failures.includes(401)
+            ? "Bạn cần đăng nhập để lưu tiến độ học."
+            : "Chưa lưu được tiến độ. Kiểm tra kết nối rồi thử lại.",
+        );
+        return;
+      }
+      reviewsSavedRef.current = true;
+    }
+    const answered = outcomes.length || attempts;
+    const correctWords = resultAnswers.filter((answer) => answer.correct).length;
+    const wrongWords = resultAnswers.length - correctWords;
     const accuracy = answered
       ? Math.round((correctWords / answered) * 100)
       : 0;
@@ -1320,9 +1372,13 @@ function PlaySurface({
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(historyPayload),
     });
-    if (!historyRes.ok && historyRes.status !== 401) {
+    if (!historyRes.ok) {
       setSaving(false);
-      setSaveError("Đã lưu tiến độ từ, nhưng chưa lưu được lịch sử học. Vui lòng thử lại.");
+      setSaveError(
+        historyRes.status === 401
+          ? "Phiên đăng nhập đã hết hạn. Hãy đăng nhập lại để lưu lịch sử học."
+          : "Đã lưu tiến độ từ, nhưng chưa lưu được lịch sử học. Vui lòng thử lại.",
+      );
       return;
     }
     window.localStorage.removeItem(draftStorageKey);
@@ -1397,16 +1453,17 @@ function PlaySurface({
   if (showResult) {
     return (
       <ResultScreen
-        answers={answers}
+        answers={resultAnswers}
         attempts={attempts}
         score={score}
         saving={saving}
         saveError={saveError}
         muted={muted}
+        isAuthenticated={isAuthenticated}
+        loginHref={loginHref}
         onSave={saveAndComplete}
         onSpeak={(id) => {
-          const item =
-            answers.find((a) => a.id === id) || words.find((w) => w.id === id);
+          const item = resultAnswers.find((answer) => answer.id === id) || words.find((w) => w.id === id);
           if (item) speakItem(item as VocabWordCard);
         }}
       />
@@ -1740,6 +1797,8 @@ function ResultScreen({
   saving,
   saveError,
   muted,
+  isAuthenticated,
+  loginHref,
   onSave,
   onSpeak,
 }: {
@@ -1749,6 +1808,8 @@ function ResultScreen({
   saving: boolean;
   saveError: string;
   muted: boolean;
+  isAuthenticated: boolean;
+  loginHref: string;
   onSave: () => void;
   onSpeak: (id: number) => void;
 }) {
@@ -1806,14 +1867,23 @@ function ResultScreen({
         />
       </div>
 
-      <button
-        type="button"
-        onClick={onSave}
-        disabled={saving}
-        className="w-full rounded-xl bg-emerald-600 py-3 text-sm font-extrabold text-white hover:bg-emerald-700 disabled:opacity-60"
-      >
-        {saving ? "Đang lưu..." : "✓ 💾 Lưu & Hoàn thành"}
-      </button>
+      {isAuthenticated ? (
+        <button
+          type="button"
+          onClick={onSave}
+          disabled={saving}
+          className="w-full rounded-xl bg-emerald-600 py-3 text-sm font-extrabold text-white hover:bg-emerald-700 disabled:opacity-60"
+        >
+          {saving ? "Đang lưu..." : "✓ 💾 Lưu & Hoàn thành"}
+        </button>
+      ) : (
+        <Link
+          href={loginHref}
+          className="block w-full rounded-xl bg-primary py-3 text-center text-sm font-extrabold text-gold-ink hover:opacity-90"
+        >
+          Đăng nhập để lưu kết quả
+        </Link>
+      )}
       {saveError && <p className="text-center text-sm text-red-500">{saveError}</p>}
     </section>
   );
