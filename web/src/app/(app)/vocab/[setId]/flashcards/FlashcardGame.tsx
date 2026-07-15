@@ -272,6 +272,12 @@ export default function FlashcardGame({
   const [muted, setMuted] = useState(false);
   const [history, setHistory] = useState<HistoryEntry[]>(() => session.history ?? []);
   const [filterPending, setFilterPending] = useState(false);
+  const [completionNotice, setCompletionNotice] = useState<string | null>(null);
+  const completionTimerRef = useRef<number | null>(null);
+
+  useEffect(() => () => {
+    if (completionTimerRef.current) window.clearTimeout(completionTimerRef.current);
+  }, []);
 
   // Load history from localStorage after mount (avoids hydration mismatch).
   useEffect(() => {
@@ -422,7 +428,17 @@ export default function FlashcardGame({
           onExit={goHub}
           onFinish={(record) => {
             recordHistory(record);
-            setScreen("hub");
+            const destination = session.set.sourceType === "DAUTOEIC" && session.set.externalTestId
+              ? `/vocab/dautoeic/${encodeURIComponent(session.set.externalTestId)}`
+              : `/vocab/${setId}`;
+            setCompletionNotice(
+              session.set.sourceType === "DAUTOEIC"
+                ? "Đã lưu kết quả. Đang quay lại chọn Part…"
+                : "Đã lưu kết quả. Đang quay lại chủ đề…",
+            );
+            completionTimerRef.current = window.setTimeout(() => {
+              router.push(destination);
+            }, 850);
           }}
         />
       )}
@@ -436,6 +452,17 @@ export default function FlashcardGame({
           </p>
         </section>
       )}
+
+      {completionNotice ? (
+        <div
+          role="status"
+          aria-live="polite"
+          className="study-completion-toast fixed inset-x-4 top-20 z-[70] mx-auto flex w-fit max-w-[calc(100vw-2rem)] items-center gap-2 rounded-2xl border border-emerald-200 bg-white px-4 py-3 text-sm font-extrabold text-emerald-800 shadow-xl"
+        >
+          <span aria-hidden="true">✓</span>
+          <span>{completionNotice}</span>
+        </div>
+      ) : null}
     </main>
   );
 }

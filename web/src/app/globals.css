@@ -2328,6 +2328,30 @@ h1, h2, h3, h4, h5 {
 .pet-preference > input:checked ~ .pet-preference-switch > span { transform: translateX(1.15rem); }
 .pet-preference > input:focus-visible ~ .pet-preference-switch { outline: 3px solid color-mix(in srgb, var(--primary) 36%, transparent); outline-offset: 3px; }
 
+.study-completion-toast {
+  opacity: 1;
+  transform: translateY(0) scale(1);
+  transition: opacity 180ms var(--ease-out), transform 180ms var(--ease-out);
+}
+
+@starting-style {
+  .study-completion-toast {
+    opacity: 0;
+    transform: translateY(-0.5rem) scale(0.98);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .study-completion-toast {
+    transform: none;
+    transition: opacity 120ms ease;
+  }
+
+  @starting-style {
+    .study-completion-toast { transform: none; }
+  }
+}
+
 @media (hover: hover) and (pointer: fine) {
   .pet-preference:hover { border-color: color-mix(in srgb, var(--primary) 42%, var(--line)); box-shadow: var(--elevation-1); transform: translateY(-1px); }
 }
