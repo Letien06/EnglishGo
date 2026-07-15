@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { ApiEnvelope, ApiError, fail } from "./response";
 import { logServerError } from "@/lib/logging";
+import { withFirebaseRequestConcurrency } from "@/lib/services/distributed-concurrency";
 
 type RouteHandler<T> = (
   req: NextRequest,
@@ -15,10 +16,16 @@ type RouteHandler<T> = (
 export function withErrorHandling<T>(handler: RouteHandler<T>): RouteHandler<T> {
   return async (req, ctx) => {
     try {
-      return await handler(req, ctx);
+      // Most API handlers authenticate or read/write Firestore. A single
+      // serverless-wide gate keeps Firebase from being saturated during a
+      // burst; /health is intentionally dependency-free and bypasses it.
+      const execute = () => handler(req, ctx);
+      return req.nextUrl.pathname === "/api/health"
+        ? await execute()
+        : await withFirebaseRequestConcurrency(execute);
     } catch (err) {
       if (err instanceof ApiError) {
-        return fail(err.message, err.status) as NextResponse<ApiEnvelope<T>>;
+        return fail(err.message, err.status, { headers: err.headers }) as NextResponse<ApiEnvelope<T>>;
       }
       logServerError("unhandled-route-error", err, {
         method: req.method,

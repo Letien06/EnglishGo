@@ -6,6 +6,7 @@
  * prompts as the Java version.
  */
 import { serverEnv } from "@/lib/env";
+import { withGeminiConcurrency } from "@/lib/services/distributed-concurrency";
 import type { GeneratedVocabWord } from "@/types/vocab";
 
 /* ------------------------------------------------------------------ */
@@ -172,6 +173,13 @@ async function generateResponse(
   prompt: string,
   imagePart?: ImagePart,
 ): Promise<unknown> {
+  return withGeminiConcurrency(() => requestGemini(prompt, imagePart));
+}
+
+async function requestGemini(
+  prompt: string,
+  imagePart?: ImagePart,
+): Promise<unknown> {
   const apiKey = serverEnv.geminiApiKey;
   const model = serverEnv.geminiModel;
   const baseUrl =
@@ -198,7 +206,7 @@ async function generateResponse(
 
   const url = `${baseUrl}/models/${model}:generateContent?key=${apiKey}`;
 
-  const res = await fetch(url, {
+  const res = await fetchWithTimeout(url, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(body),
@@ -220,6 +228,29 @@ async function generateResponse(
 
   const jsonStr = extractJson(text);
   return JSON.parse(jsonStr);
+}
+
+async function fetchWithTimeout(url: string, init: RequestInit): Promise<Response> {
+  const controller = new AbortController();
+  const timeoutMs = timeoutFromEnv("GEMINI_TIMEOUT_MS", 20_000);
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
+  try {
+    return await fetch(url, { ...init, signal: controller.signal });
+  } catch (error) {
+    if (error instanceof Error && error.name === "AbortError") {
+      throw new Error("Gemini request timed out");
+    }
+    throw error;
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+function timeoutFromEnv(name: string, fallback: number): number {
+  const value = Number(process.env[name]);
+  return Number.isInteger(value) && value >= 1_000 && value <= 60_000
+    ? value
+    : fallback;
 }
 
 function geminiErrorMessage(

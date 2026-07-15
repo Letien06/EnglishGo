@@ -23,6 +23,7 @@ serviceAccountKey.json
 
 # Node (Tailwind build)
 node_modules/
+web/.seed-tmp/
 
 # OS
 .DS_Store

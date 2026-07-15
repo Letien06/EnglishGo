@@ -34,6 +34,14 @@ DAUTOEIC_SUPABASE_URL=https://qfhmnlvgweznzcsoijyr.supabase.co
 DAUTOEIC_ANON_KEY=<dautoeic-anon-key>
 DAUTOEIC_MEDIA_BASE_URL=https://qfhmnlvgweznzcsoijyr.supabase.co/storage/v1/object/public/mock-test-media
 MEDIA_BASE_URL=<optional-firebase-storage-base-url>
+
+UPSTASH_REDIS_REST_URL=<https://...upstash.io>
+UPSTASH_REDIS_REST_TOKEN=<upstash-rest-token>
+RATE_LIMIT_FAIL_CLOSED=true
+CONCURRENCY_LIMIT_FAIL_CLOSED=true
+FIREBASE_MAX_CONCURRENCY=160
+GEMINI_MAX_CONCURRENCY=12
+GEMINI_TIMEOUT_MS=20000
 ```
 
 `FIREBASE_STORAGE_BUCKET` is optional only when the default bucket name is correct for the Firebase project. If uploads fail with a bucket error, set it explicitly from Firebase Console.
@@ -96,6 +104,9 @@ Relevant files:
 - Region: `sin1` in `web/vercel.json`
 - Serverless function limits are declared in `web/vercel.json`; Gemini and upload endpoints are allowed longer timeouts.
 - Vercel Analytics and Speed Insights are loaded from `web/src/app/layout.tsx`.
+- Redis protection uses the Upstash REST endpoint so the same rate limit and
+  dependency semaphore are shared by every Vercel instance. `*_FAIL_CLOSED`
+  should only be enabled after validating the Upstash credentials in Preview.
 
 After production deploy, inspect Vercel:
 

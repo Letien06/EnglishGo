@@ -25,6 +25,7 @@ import type {
   VocabWordCard,
 } from "@/types/vocab";
 import useDialogFocus from "@/components/useDialogFocus";
+import { ClientRequestTimeoutError, fetchWithTimeout } from "@/lib/client-request";
 import { consolidateVocabGameAnswers } from "@/lib/vocab-game-results";
 
 interface Props {
@@ -226,16 +227,17 @@ type ReviewMutation = {
 };
 
 async function submitReviewBatch(reviews: ReviewMutation[]): Promise<number> {
-  try {
-    const res = await fetch("/api/vocab/reviews/batch", {
+  const res = await fetchWithTimeout(
+    "/api/vocab/reviews/batch",
+    {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ reviews }),
-    });
-    return res.status;
-  } catch {
-    return 0;
-  }
+    },
+    10_000,
+    { flow: "vocab_review_batch" },
+  );
+  return res.status;
 }
 
 function parseGameDraft(raw: string | null): VocabGameDraftPayload | null {
@@ -1335,75 +1337,93 @@ function PlaySurface({
     }
     setSaving(true);
     setSaveError("");
-    const outcomes = consolidateVocabGameAnswers(answers);
-    if (!reviewsSavedRef.current && outcomes.length > 0) {
-      const status = await submitReviewBatch(
-        outcomes.map(({ answer, needsReview }) => needsReview
-          ? { wordId: answer.id, quality: 2 }
-          : { wordId: answer.id, mastered: true }),
+    try {
+      const outcomes = consolidateVocabGameAnswers(answers);
+      if (!reviewsSavedRef.current && outcomes.length > 0) {
+        const status = await submitReviewBatch(
+          outcomes.map(({ answer, needsReview }) => needsReview
+            ? { wordId: answer.id, quality: 2 }
+            : { wordId: answer.id, mastered: true }),
+        );
+        if (status !== 200 && status !== 204) {
+          setSaving(false);
+          setSaveError(
+            status === 401
+              ? "Bạn cần đăng nhập để lưu tiến độ học."
+              : "Chưa lưu được tiến độ. Kiểm tra kết nối rồi thử lại.",
+          );
+          return;
+        }
+        reviewsSavedRef.current = true;
+      }
+      const answered = outcomes.length || attempts;
+      const correctWords = resultAnswers.filter((answer) => answer.correct).length;
+      const wrongWords = resultAnswers.length - correctWords;
+      const accuracy = answered
+        ? Math.round((correctWords / answered) * 100)
+        : 0;
+      const modeLabel = modeLabelFor(mode, quizMode);
+      const historyPayload = {
+        setId,
+        externalTestId,
+        externalPartId,
+        title,
+        mode: modeLabel,
+        startedAtMillis: startedAtRef.current,
+        totalWords: Math.max(words.length, answered),
+        correctWords,
+        wrongWords,
+        accuracy,
+        score,
+      };
+      const historyRes = await fetchWithTimeout(
+        "/api/vocab/history",
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(historyPayload),
+        },
+        10_000,
+        { flow: "vocab_save_complete" },
       );
-      if (status !== 200 && status !== 204) {
+      if (!historyRes.ok) {
         setSaving(false);
         setSaveError(
-          status === 401
-            ? "Bạn cần đăng nhập để lưu tiến độ học."
-            : "Chưa lưu được tiến độ. Kiểm tra kết nối rồi thử lại.",
+          historyRes.status === 401
+            ? "Phiên đăng nhập đã hết hạn. Hãy đăng nhập lại để lưu lịch sử học."
+            : "Đã lưu tiến độ từ, nhưng chưa lưu được lịch sử học. Vui lòng thử lại.",
         );
         return;
       }
-      reviewsSavedRef.current = true;
-    }
-    const answered = outcomes.length || attempts;
-    const correctWords = resultAnswers.filter((answer) => answer.correct).length;
-    const wrongWords = resultAnswers.length - correctWords;
-    const accuracy = answered
-      ? Math.round((correctWords / answered) * 100)
-      : 0;
-    const modeLabel = modeLabelFor(mode, quizMode);
-    const historyPayload = {
-      setId,
-      externalTestId,
-      externalPartId,
-      title,
-      mode: modeLabel,
-      startedAtMillis: startedAtRef.current,
-      totalWords: Math.max(words.length, answered),
-      correctWords,
-      wrongWords,
-      accuracy,
-      score,
-    };
-    const historyRes = await fetch("/api/vocab/history", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(historyPayload),
-    });
-    if (!historyRes.ok) {
+      window.localStorage.removeItem(draftStorageKey);
+      const draftParams = new URLSearchParams({
+        setId: String(setId),
+        mode,
+        quizMode,
+      });
+      if (externalPartId) draftParams.set("externalPartId", externalPartId);
+      void fetchWithTimeout(
+        `/api/vocab/game-draft?${draftParams.toString()}`,
+        { method: "DELETE" },
+        3_000,
+      ).catch(() => undefined);
+      onFinish({
+        mode: modeLabel,
+        accuracy,
+        score,
+        startedAtMillis: startedAtRef.current,
+        totalWords: historyPayload.totalWords,
+        correctWords,
+        wrongWords,
+      });
+    } catch (reason) {
       setSaving(false);
       setSaveError(
-        historyRes.status === 401
-          ? "Phiên đăng nhập đã hết hạn. Hãy đăng nhập lại để lưu lịch sử học."
-          : "Đã lưu tiến độ từ, nhưng chưa lưu được lịch sử học. Vui lòng thử lại.",
+        reason instanceof ClientRequestTimeoutError
+          ? "Kết nối đang chậm. Chưa xác nhận được kết quả trong 10 giây, hãy thử lưu lại."
+          : "Không thể lưu kết quả ngay lúc này. Kiểm tra kết nối rồi thử lại.",
       );
-      return;
     }
-    window.localStorage.removeItem(draftStorageKey);
-    const draftParams = new URLSearchParams({
-      setId: String(setId),
-      mode,
-      quizMode,
-    });
-    if (externalPartId) draftParams.set("externalPartId", externalPartId);
-    await fetch(`/api/vocab/game-draft?${draftParams.toString()}`, { method: "DELETE" }).catch(() => undefined);
-    onFinish({
-      mode: modeLabel,
-      accuracy,
-      score,
-      startedAtMillis: startedAtRef.current,
-      totalWords: historyPayload.totalWords,
-      correctWords,
-      wrongWords,
-    });
   }
 
   /* ---- Keyboard shortcuts ---- */

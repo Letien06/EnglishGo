@@ -1,6 +1,6 @@
 import { FieldValue } from "firebase-admin/firestore";
 import { adminDb } from "@/lib/firestore/db";
-import { BadRequest } from "@/lib/api/response";
+import { BadRequest, TooManyRequests } from "@/lib/api/response";
 
 export async function enforceDailyActionLimit(
   uid: string,
@@ -20,7 +20,11 @@ export async function enforceDailyActionLimit(
     const snap = await tx.get(ref);
     const current = typeof snap.get("count") === "number" ? snap.get("count") as number : 0;
     if (current >= maxPerDay) {
-      throw BadRequest("Daily request limit reached");
+      throw TooManyRequests(
+        "Daily request limit reached",
+        secondsUntilNextUtcDay(),
+        maxPerDay,
+      );
     }
     tx.set(ref, {
       action: safeAction,
@@ -34,4 +38,14 @@ export async function enforceDailyActionLimit(
 function dateKeyFor(value: number): string {
   const date = new Date(value);
   return `${date.getUTCFullYear()}-${String(date.getUTCMonth() + 1).padStart(2, "0")}-${String(date.getUTCDate()).padStart(2, "0")}`;
+}
+
+function secondsUntilNextUtcDay(now = Date.now()): number {
+  const date = new Date(now);
+  const nextDay = Date.UTC(
+    date.getUTCFullYear(),
+    date.getUTCMonth(),
+    date.getUTCDate() + 1,
+  );
+  return Math.max(1, Math.ceil((nextDay - now) / 1_000));
 }

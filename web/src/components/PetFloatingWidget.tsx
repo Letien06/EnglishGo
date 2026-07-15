@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useEffect, useRef, useState, type CSSProperties, type PointerEvent } from "react";
 import { usePathname } from "next/navigation";
+import { fetchWithTimeout } from "@/lib/client-request";
 import PetCat from "./PetCat";
 import type { PetDashboard } from "@/types/pet";
 
@@ -19,43 +20,108 @@ type DragState = {
 
 const PET_POSITION_KEY = "englishgo:pet-position:v1";
 const SCREEN_EDGE = 12;
+const PET_DASHBOARD_CACHE_TTL_MS = 30_000;
 export const PET_PROFILE_UPDATED_EVENT = "englishgo:pet-profile-updated";
+
+const dashboardCache: {
+  value: PetDashboard | null;
+  loadedAt: number;
+  inFlight: Promise<PetDashboard | null> | null;
+} = {
+  value: null,
+  loadedAt: 0,
+  inFlight: null,
+};
+
+function cacheDashboard(dashboard: PetDashboard) {
+  dashboardCache.value = dashboard;
+  dashboardCache.loadedAt = Date.now();
+}
+
+async function getDashboard(force = false): Promise<PetDashboard | null> {
+  if (!force && dashboardCache.value && Date.now() - dashboardCache.loadedAt < PET_DASHBOARD_CACHE_TTL_MS) {
+    return dashboardCache.value;
+  }
+  if (dashboardCache.inFlight) return dashboardCache.inFlight;
+
+  dashboardCache.inFlight = fetchWithTimeout("/api/pet", { cache: "no-store" }, 8_000)
+    .then(async (response) => ({ response, body: await response.json() as ApiEnvelope<PetDashboard> }))
+    .then(({ response, body }) => {
+      if (!response.ok || !body.success || !body.data) return null;
+      cacheDashboard(body.data);
+      return body.data;
+    })
+    .catch(() => null)
+    .finally(() => {
+      dashboardCache.inFlight = null;
+    });
+
+  return dashboardCache.inFlight;
+}
 
 export default function PetFloatingWidget() {
   const pathname = usePathname();
-  const [dashboard, setDashboard] = useState<PetDashboard | null>(null);
+  const [dashboard, setDashboard] = useState<PetDashboard | null>(dashboardCache.value);
   const [open, setOpen] = useState(false);
   const [position, setPosition] = useState<FloatingPosition | null>(null);
   const [isDragging, setIsDragging] = useState(false);
+  const [isDocumentVisible, setIsDocumentVisible] = useState(true);
   const widgetRef = useRef<HTMLElement>(null);
   const dragRef = useRef<DragState | null>(null);
+  const dragFrameRef = useRef<number | null>(null);
+  const pendingPositionRef = useRef<FloatingPosition | null>(null);
   const suppressClickRef = useRef(false);
 
   useEffect(() => {
     let active = true;
-    const loadDashboard = () => {
-      void fetch("/api/pet", { cache: "no-store" })
-        .then(async (response) => ({ response, body: await response.json() as ApiEnvelope<PetDashboard> }))
-        .then(({ response, body }) => {
-          if (active && response.ok && body.success && body.data) setDashboard(body.data);
-        })
-        .catch(() => undefined);
-    };
-    const syncDashboard = (event: Event) => {
-      const detail = (event as CustomEvent<PetDashboard | undefined>).detail;
-      if (detail) {
-        setDashboard(detail);
+
+    void getDashboard().then((nextDashboard) => {
+      if (active && nextDashboard) setDashboard(nextDashboard);
+    });
+
+    function syncDashboard(event: Event) {
+      const nextDashboard = (event as CustomEvent<PetDashboard | undefined>).detail;
+      if (nextDashboard) {
+        cacheDashboard(nextDashboard);
+        setDashboard(nextDashboard);
         return;
       }
-      loadDashboard();
-    };
-    loadDashboard();
+      void getDashboard(true).then((freshDashboard) => {
+        if (active && freshDashboard) setDashboard(freshDashboard);
+      });
+    }
+
     window.addEventListener(PET_PROFILE_UPDATED_EVENT, syncDashboard);
     return () => {
       active = false;
       window.removeEventListener(PET_PROFILE_UPDATED_EVENT, syncDashboard);
     };
   }, [pathname]);
+
+  useEffect(() => {
+    const nextStatusChangeAtMillis = dashboard?.profile.nextStatusChangeAtMillis;
+    if (!nextStatusChangeAtMillis) return;
+
+    let active = true;
+    const refreshStatus = () => {
+      if (document.hidden) return;
+      void getDashboard(true).then((nextDashboard) => {
+        if (active && nextDashboard) setDashboard(nextDashboard);
+      });
+    };
+    const delay = Math.max(0, nextStatusChangeAtMillis - Date.now()) + 500;
+    const statusTimer = window.setTimeout(refreshStatus, delay);
+    const refreshAfterReturn = () => {
+      if (!document.hidden && Date.now() >= nextStatusChangeAtMillis) refreshStatus();
+    };
+    document.addEventListener("visibilitychange", refreshAfterReturn);
+
+    return () => {
+      active = false;
+      window.clearTimeout(statusTimer);
+      document.removeEventListener("visibilitychange", refreshAfterReturn);
+    };
+  }, [dashboard?.profile.nextStatusChangeAtMillis]);
 
   useEffect(() => {
     const saved = readSavedPosition();
@@ -76,29 +142,53 @@ export default function PetFloatingWidget() {
         savePosition(next);
       }
     }
+
     window.addEventListener("resize", keepWidgetVisible);
     return () => window.removeEventListener("resize", keepWidgetVisible);
   }, [position]);
 
   useEffect(() => {
-    if (!open || !position || !widgetRef.current) return;
-    const frame = window.requestAnimationFrame(() => {
-      if (!widgetRef.current) return;
-      const next = constrainPosition(position, widgetRef.current.getBoundingClientRect());
-      if (next.x !== position.x || next.y !== position.y) {
-        applyPosition(widgetRef.current, next);
-        setPosition(next);
-        savePosition(next);
-      }
-    });
-    return () => window.cancelAnimationFrame(frame);
-  }, [open, position]);
+    function syncVisibility() {
+      setIsDocumentVisible(!document.hidden);
+    }
+
+    syncVisibility();
+    document.addEventListener("visibilitychange", syncVisibility);
+    return () => document.removeEventListener("visibilitychange", syncVisibility);
+  }, []);
+
+  useEffect(() => () => {
+    if (dragFrameRef.current != null) window.cancelAnimationFrame(dragFrameRef.current);
+  }, []);
 
   if (!dashboard || !dashboard.profile.floatingEnabled) return null;
   const { profile, wallet } = dashboard;
   const nextProgress = profile.nextEvolutionCareXp
     ? Math.min(100, Math.round((profile.careXpTotal / profile.nextEvolutionCareXp) * 100))
     : 100;
+
+  function queuePosition(nextPosition: FloatingPosition) {
+    pendingPositionRef.current = nextPosition;
+    if (dragFrameRef.current != null) return;
+
+    dragFrameRef.current = window.requestAnimationFrame(() => {
+      dragFrameRef.current = null;
+      const pendingPosition = pendingPositionRef.current;
+      pendingPositionRef.current = null;
+      if (pendingPosition && widgetRef.current) applyPosition(widgetRef.current, pendingPosition);
+    });
+  }
+
+  function flushPosition(): FloatingPosition | null {
+    if (dragFrameRef.current != null) {
+      window.cancelAnimationFrame(dragFrameRef.current);
+      dragFrameRef.current = null;
+    }
+    const pendingPosition = pendingPositionRef.current;
+    pendingPositionRef.current = null;
+    if (pendingPosition && widgetRef.current) applyPosition(widgetRef.current, pendingPosition);
+    return pendingPosition;
+  }
 
   function beginDrag(event: PointerEvent<HTMLButtonElement>) {
     if (event.button !== 0 || !event.isPrimary || !widgetRef.current) return;
@@ -112,36 +202,49 @@ export default function PetFloatingWidget() {
       position: origin,
       moved: false,
     };
+    applyPosition(widgetRef.current, origin);
+    setPosition(origin);
     event.currentTarget.setPointerCapture(event.pointerId);
   }
 
   function drag(event: PointerEvent<HTMLButtonElement>) {
     const activeDrag = dragRef.current;
     if (!activeDrag || activeDrag.pointerId !== event.pointerId || !widgetRef.current) return;
+
     const deltaX = event.clientX - activeDrag.startClientX;
     const deltaY = event.clientY - activeDrag.startClientY;
     if (!activeDrag.moved && Math.hypot(deltaX, deltaY) < 5) return;
-    activeDrag.moved = true;
-    const next = constrainPosition(
+
+    if (!activeDrag.moved) {
+      activeDrag.moved = true;
+      setIsDragging(true);
+      setOpen(false);
+    }
+
+    const nextPosition = constrainPosition(
       { x: activeDrag.origin.x + deltaX, y: activeDrag.origin.y + deltaY },
       widgetRef.current.getBoundingClientRect(),
     );
-    activeDrag.position = next;
-    applyPosition(widgetRef.current, next);
-    setIsDragging(true);
-    setOpen(false);
+    activeDrag.position = nextPosition;
+    queuePosition(nextPosition);
   }
 
   function endDrag(event: PointerEvent<HTMLButtonElement>) {
     const activeDrag = dragRef.current;
     if (!activeDrag || activeDrag.pointerId !== event.pointerId) return;
-    if (event.currentTarget.hasPointerCapture(event.pointerId)) event.currentTarget.releasePointerCapture(event.pointerId);
+
+    if (event.currentTarget.hasPointerCapture(event.pointerId)) {
+      event.currentTarget.releasePointerCapture(event.pointerId);
+    }
+
+    const finalPosition = flushPosition() ?? activeDrag.position;
     dragRef.current = null;
     setIsDragging(false);
     if (!activeDrag.moved) return;
+
     suppressClickRef.current = true;
-    setPosition(activeDrag.position);
-    savePosition(activeDrag.position);
+    setPosition(finalPosition);
+    savePosition(finalPosition);
   }
 
   function toggleOpen() {
@@ -153,14 +256,20 @@ export default function PetFloatingWidget() {
   }
 
   const widgetStyle: CSSProperties | undefined = position
-    ? { left: `${position.x}px`, top: `${position.y}px`, right: "auto", bottom: "auto" }
+    ? {
+        left: "0px",
+        top: "0px",
+        right: "auto",
+        bottom: "auto",
+        transform: positionTransform(position),
+      }
     : undefined;
 
   return (
     <aside
       ref={widgetRef}
       style={widgetStyle}
-      className={`pet-floating-widget ${open ? "is-open" : ""} ${isDragging ? "is-dragging" : ""}`}
+      className={`pet-floating-widget ${open ? "is-open" : ""} ${isDragging ? "is-dragging" : ""} ${isDocumentVisible ? "" : "is-paused"}`}
       aria-label="Thú cưng đồng hành"
     >
       {open ? (
@@ -208,6 +317,10 @@ export default function PetFloatingWidget() {
   );
 }
 
+function positionTransform(position: FloatingPosition) {
+  return `translate3d(${position.x}px, ${position.y}px, 0)`;
+}
+
 function constrainPosition(position: FloatingPosition, rect: Pick<DOMRect, "width" | "height">): FloatingPosition {
   const maxX = Math.max(SCREEN_EDGE, window.innerWidth - rect.width - SCREEN_EDGE);
   const maxY = Math.max(SCREEN_EDGE, window.innerHeight - rect.height - SCREEN_EDGE);
@@ -218,10 +331,11 @@ function constrainPosition(position: FloatingPosition, rect: Pick<DOMRect, "widt
 }
 
 function applyPosition(element: HTMLElement, position: FloatingPosition) {
-  element.style.left = `${position.x}px`;
-  element.style.top = `${position.y}px`;
+  element.style.left = "0px";
+  element.style.top = "0px";
   element.style.right = "auto";
   element.style.bottom = "auto";
+  element.style.transform = positionTransform(position);
 }
 
 function readSavedPosition(): FloatingPosition | null {
@@ -241,6 +355,6 @@ function savePosition(position: FloatingPosition) {
   try {
     window.localStorage.setItem(PET_POSITION_KEY, JSON.stringify(position));
   } catch {
-    // Storage can be blocked without making the cat impossible to move.
+    // Storage can be blocked without making the pet impossible to move.
   }
 }

@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import type { DauToeicVocabCatalogView } from "@/types/dautoeic";
 import type { VocabSetCard } from "@/types/vocab";
+import { recordNextPaint } from "@/lib/client-request";
 
 type ApiEnvelope<T> = {
   success: boolean;
@@ -20,6 +21,7 @@ const catalogCache: { value: DauToeicVocabCatalogView | null } = { value: null }
 const fallbackSetCache: { value: VocabSetCard[] | null } = { value: null };
 
 export default function VocabLearnTabClient({ groupId }: { groupId?: string }) {
+  const [selectedGroupOverride, setSelectedGroupOverride] = useState<string | undefined>(groupId);
   const [state, setState] = useState<LearnState>(() => {
     if (catalogCache.value) {
       return { status: "ready", catalog: catalogCache.value, fallbackSets: fallbackSetCache.value ?? [] };
@@ -72,13 +74,31 @@ export default function VocabLearnTabClient({ groupId }: { groupId?: string }) {
     };
   }, []);
 
+  useEffect(() => {
+    function syncFromHistory() {
+      setSelectedGroupOverride(new URLSearchParams(window.location.search).get("group") ?? undefined);
+    }
+
+    window.addEventListener("popstate", syncFromHistory);
+    return () => window.removeEventListener("popstate", syncFromHistory);
+  }, []);
+
   const selectedGroupId = useMemo(() => {
     const catalog = state.catalog;
     if (!catalog?.groups.length) return undefined;
-    return groupId && catalog.groups.some((group) => group.id === groupId)
-      ? groupId
+    return selectedGroupOverride && catalog.groups.some((group) => group.id === selectedGroupOverride)
+      ? selectedGroupOverride
       : catalog.groups[0]?.id;
-  }, [groupId, state.catalog]);
+  }, [selectedGroupOverride, state.catalog]);
+
+  function selectGroup(nextGroupId: string) {
+    setSelectedGroupOverride(nextGroupId);
+    const nextUrl = new URL(window.location.href);
+    nextUrl.searchParams.set("tab", "learn");
+    nextUrl.searchParams.set("group", nextGroupId);
+    window.history.pushState({}, "", `${nextUrl.pathname}${nextUrl.search}`);
+    recordNextPaint("vocab_group_select");
+  }
 
   if (state.status === "loading" && !state.catalog && state.fallbackSets.length === 0) {
     return <LearnSkeleton />;
@@ -95,10 +115,11 @@ export default function VocabLearnTabClient({ groupId }: { groupId?: string }) {
           {state.catalog.groups.map((group) => {
             const selected = group.id === selectedGroupId;
             return (
-              <Link
+              <button
                 key={group.id}
-                href={`/vocab?tab=learn&group=${encodeURIComponent(group.id)}`}
-                data-overdelay="Đang đổi nhóm từ vựng..."
+                type="button"
+                onClick={() => selectGroup(group.id)}
+                aria-pressed={selected}
                 className={`whitespace-nowrap rounded-full border px-4 py-2 text-xs font-extrabold transition-colors ${
                   selected
                     ? "border-primary bg-primary text-gold-ink"
@@ -106,7 +127,7 @@ export default function VocabLearnTabClient({ groupId }: { groupId?: string }) {
                 }`}
               >
                 {group.name} ({group.count})
-              </Link>
+              </button>
             );
           })}
         </nav>

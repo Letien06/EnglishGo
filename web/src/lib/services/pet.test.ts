@@ -9,6 +9,7 @@ import {
   currentPetWeekKey,
   derivePetStatus,
   evolutionForCareXp,
+  nextPetStatusChangeAtMillis,
   nextEvolutionForCareXp,
   PET_COMPANION_CATALOG,
   PET_FOOD_CATALOG,
@@ -49,6 +50,17 @@ describe("pet status", () => {
     expect(derivePetStatus({ fullness: 70, happiness: 70, lastStatusAtMillis: now }, now).mood).toBe("happy");
     expect(derivePetStatus({ fullness: 55, happiness: 55, lastStatusAtMillis: now }, now).mood).toBe("content");
     expect(derivePetStatus({ fullness: 55, happiness: 20, lastStatusAtMillis: now }, now).mood).toBe("sleepy");
+  });
+
+  it("reports the next time a non-empty status bar will decay", () => {
+    const start = Date.UTC(2026, 6, 15, 12, 0, 0);
+    const fourHours = 4 * 60 * 60 * 1000;
+    const eightHours = 8 * 60 * 60 * 1000;
+
+    expect(nextPetStatusChangeAtMillis({ fullness: 72, happiness: 72, lastStatusAtMillis: start }, start)).toBe(start + fourHours);
+    expect(nextPetStatusChangeAtMillis({ fullness: 0, happiness: 72, lastStatusAtMillis: start }, start + fourHours)).toBe(start + eightHours);
+    expect(nextPetStatusChangeAtMillis({ fullness: 0, happiness: 0, lastStatusAtMillis: start }, start)).toBeNull();
+    expect(nextPetStatusChangeAtMillis({ fullness: 1, happiness: 1, lastStatusAtMillis: start }, start + eightHours)).toBeNull();
   });
 });
 

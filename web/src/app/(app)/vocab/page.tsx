@@ -73,7 +73,7 @@ export default async function VocabPage({
         </nav>
 
         {active === "learn" ? (
-          <VocabLearnTabClient groupId={groupId} />
+          <VocabLearnTabClient key={groupId ?? "default"} groupId={groupId} />
         ) : active === "progress" ? (
           <VocabProgressTabClient />
         ) : active === "my" ? (

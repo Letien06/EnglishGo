@@ -4,8 +4,8 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { usePathname, useSearchParams } from "next/navigation";
 
 const SHOW_DELAY_MS = 180;
-const MIN_VISIBLE_MS = 420;
-const MAX_VISIBLE_MS = 9000;
+const MIN_VISIBLE_MS = 180;
+const MAX_VISIBLE_MS = 5000;
 const READY_EVENT = "englishgo:overdelay-ready";
 const BEGIN_EVENT = "englishgo:overdelay-begin";
 const ACTIVE_ATTR = "data-overdelay-active";

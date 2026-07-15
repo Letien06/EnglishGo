@@ -21,6 +21,8 @@ const PET_TIME_ZONE = "Asia/Ho_Chi_Minh";
 const DAILY_REWARD_CAP = 60;
 const STARTER_COINS = 12;
 const HISTORY_LIMIT = 12;
+const FULLNESS_DECAY_INTERVAL_MS = 4 * 60 * 60 * 1000;
+const HAPPINESS_DECAY_INTERVAL_MS = 8 * 60 * 60 * 1000;
 
 type PetLedgerType = PetLedgerEntry["type"];
 
@@ -552,8 +554,8 @@ export function derivePetStatus(
   now = Date.now(),
 ): { fullness: number; happiness: number; mood: PetMood } {
   const elapsed = Math.max(0, now - profile.lastStatusAtMillis);
-  const fullness = clamp(profile.fullness - Math.floor(elapsed / (4 * 60 * 60 * 1000)), 0, 100);
-  const happiness = clamp(profile.happiness - Math.floor(elapsed / (8 * 60 * 60 * 1000)), 0, 100);
+  const fullness = clamp(profile.fullness - Math.floor(elapsed / FULLNESS_DECAY_INTERVAL_MS), 0, 100);
+  const happiness = clamp(profile.happiness - Math.floor(elapsed / HAPPINESS_DECAY_INTERVAL_MS), 0, 100);
   const mood: PetMood = fullness < 35
     ? "hungry"
     : happiness < 35
@@ -562,6 +564,24 @@ export function derivePetStatus(
         ? "happy"
         : "content";
   return { fullness, happiness, mood };
+}
+
+export function nextPetStatusChangeAtMillis(
+  profile: Pick<StoredPetProfile, "fullness" | "happiness" | "lastStatusAtMillis">,
+  now = Date.now(),
+): number | null {
+  const elapsed = Math.max(0, now - profile.lastStatusAtMillis);
+  const status = derivePetStatus(profile, now);
+  const nextChanges = [
+    status.fullness > 0
+      ? nextDecayAtMillis(profile.lastStatusAtMillis, elapsed, FULLNESS_DECAY_INTERVAL_MS)
+      : null,
+    status.happiness > 0
+      ? nextDecayAtMillis(profile.lastStatusAtMillis, elapsed, HAPPINESS_DECAY_INTERVAL_MS)
+      : null,
+  ].filter((value): value is number => value != null);
+
+  return nextChanges.length ? Math.min(...nextChanges) : null;
 }
 
 export function currentPetWeekKey(now = new Date()): string {
@@ -719,6 +739,7 @@ function toProfileView(
     nextEvolutionCareXp: nextEvolutionForCareXp(profile.careXpTotal),
     fullness: status.fullness,
     happiness: status.happiness,
+    nextStatusChangeAtMillis: nextPetStatusChangeAtMillis(profile),
     mood: status.mood,
     totalFeedings: profile.totalFeedings,
     rankOptIn: profile.rankOptIn,
@@ -770,6 +791,10 @@ function requireFood(foodId: PetFoodId): PetFoodDefinition {
   const food = PET_FOOD_CATALOG[foodId];
   if (!food) throw BadRequest("Món ăn không hợp lệ");
   return food;
+}
+
+function nextDecayAtMillis(lastStatusAtMillis: number, elapsed: number, intervalMs: number): number {
+  return lastStatusAtMillis + (Math.floor(elapsed / intervalMs) + 1) * intervalMs;
 }
 
 function requireCompanion(companionId: PetCompanionId): PetCompanionDefinition {

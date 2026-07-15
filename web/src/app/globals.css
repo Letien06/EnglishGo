@@ -2128,10 +2128,14 @@ h1, h2, h3, h4, h5 {
   flex-direction: column;
   align-items: flex-end;
   gap: 0.6rem;
-  will-change: left, top;
 }
 
-.pet-floating-widget.is-dragging { user-select: none; }
+.pet-floating-widget.is-dragging { user-select: none; will-change: transform; }
+.pet-floating-widget.is-paused .pet-cat-image,
+.pet-floating-widget.is-paused .pet-cat-model,
+.pet-floating-widget.is-paused .pet-cat-aura,
+.pet-floating-widget.is-paused .pet-cat-star,
+.pet-floating-widget.is-paused .pet-cat-z { animation-play-state: paused; }
 
 .pet-floating-trigger {
   position: relative;

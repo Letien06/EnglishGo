@@ -36,6 +36,7 @@ export interface PetProfileView {
   nextEvolutionCareXp: number | null;
   fullness: number;
   happiness: number;
+  nextStatusChangeAtMillis: number | null;
   mood: PetMood;
   totalFeedings: number;
   rankOptIn: boolean;

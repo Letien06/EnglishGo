@@ -50,7 +50,14 @@ describe("enforceDailyActionLimit", () => {
 
     await expect(enforceDailyActionLimit("user-1", "ai-writing", 20))
       .rejects
-      .toThrow("Daily request limit reached");
+      .toMatchObject({
+        message: "Daily request limit reached",
+        status: 429,
+        headers: expect.objectContaining({
+          "Retry-After": "50400",
+          "RateLimit-Limit": "20",
+        }),
+      });
     expect(txSet).not.toHaveBeenCalled();
   });
 });

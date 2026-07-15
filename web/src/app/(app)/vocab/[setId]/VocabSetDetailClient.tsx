@@ -1,9 +1,14 @@
 "use client";
 
 import { useMemo, useRef, useState } from "react";
+import dynamic from "next/dynamic";
 import type { AiVocabCandidate, VocabWordCard } from "@/types/vocab";
 import useDialogFocus from "@/components/useDialogFocus";
-import DictionaryAddModal from "./DictionaryAddModal";
+
+const DictionaryAddModal = dynamic(() => import("./DictionaryAddModal"), {
+  ssr: false,
+  loading: () => null,
+});
 
 type Filter = "all" | "mastered" | "learning";
 type AddMode = "form" | "paste";
