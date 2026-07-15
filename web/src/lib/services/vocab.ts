@@ -242,21 +242,7 @@ async function findProgress(
 }
 
 async function saveProgress(progress: VocabProgressDoc): Promise<void> {
-  const data: Record<string, unknown> = {
-    uid: progress.uid,
-    wordId: progress.wordId,
-    setId: progress.setId,
-    status: progress.status,
-    interval: progress.interval,
-    easeFactor: progress.easeFactor,
-    repetitions: progress.repetitions,
-  };
-  if (progress.nextReviewAtMillis != null) {
-    data.nextReviewAtMillis = progress.nextReviewAtMillis;
-  }
-  if (progress.lastReviewedAtMillis != null) {
-    data.lastReviewedAtMillis = progress.lastReviewedAtMillis;
-  }
+  const data = progressPayload(progress);
   const userRef = adminDb.collection("users").doc(progress.uid);
   const progressRef = userRef.collection(PROGRESS).doc(String(progress.wordId));
   const now = Date.now();
@@ -273,33 +259,78 @@ async function saveProgress(progress: VocabProgressDoc): Promise<void> {
     const nextDue = isDueProgress(progress, now);
     const masteredDelta = Number(nextMastered) - Number(previousMastered);
     const dueDelta = Number(nextDue) - Number(previousDue);
-    const currentNextDue = numVal(userData, "vocabNextDueAtMillis");
-    const candidateNextDue = progress.nextReviewAtMillis ?? null;
-    const nextDueAtMillis = currentNextDue == null
-      ? candidateNextDue
-      : candidateNextDue == null
-        ? currentNextDue
-        : Math.min(currentNextDue, candidateNextDue);
+    const nextDueAtMillis = nextSummaryDueAtMillis(userData, [progress]);
 
     tx.set(progressRef, data, { merge: true });
-
-    // New/provisioned users have these aggregates. Legacy users are left
-    // untouched here so the hub can detect the missing values and reconcile
-    // the complete progress collection once, avoiding incorrect partial sums.
-    const hasSummary =
-      typeof userData.vocabMasteredWords === "number" &&
-      typeof userData.vocabDueWords === "number";
-    if (hasSummary) {
-      tx.set(userRef, {
-        ...(masteredDelta
-          ? { vocabMasteredWords: FieldValue.increment(masteredDelta) }
-          : {}),
-        ...(dueDelta ? { vocabDueWords: FieldValue.increment(dueDelta) } : {}),
-        vocabNextDueAtMillis: nextDueAtMillis,
-        vocabSummaryUpdatedAtMillis: now,
-      }, { merge: true });
-    }
+    writeProgressSummary(tx, userRef, userData, {
+      masteredDelta,
+      dueDelta,
+      nextDueAtMillis,
+      now,
+    });
   });
+}
+
+function progressPayload(progress: VocabProgressDoc): Record<string, unknown> {
+  const data: Record<string, unknown> = {
+    uid: progress.uid,
+    wordId: progress.wordId,
+    setId: progress.setId,
+    status: progress.status,
+    interval: progress.interval,
+    easeFactor: progress.easeFactor,
+    repetitions: progress.repetitions,
+  };
+  if (progress.nextReviewAtMillis != null) {
+    data.nextReviewAtMillis = progress.nextReviewAtMillis;
+  }
+  if (progress.lastReviewedAtMillis != null) {
+    data.lastReviewedAtMillis = progress.lastReviewedAtMillis;
+  }
+  return data;
+}
+
+function nextSummaryDueAtMillis(
+  userData: Record<string, unknown>,
+  progressItems: VocabProgressDoc[],
+): number | null {
+  const currentNextDue = numVal(userData, "vocabNextDueAtMillis");
+  const candidateNextDue = progressItems
+    .map((item) => item.nextReviewAtMillis)
+    .filter((value): value is number => typeof value === "number")
+    .reduce<number | null>((min, value) => min == null ? value : Math.min(min, value), null);
+  return currentNextDue == null
+    ? candidateNextDue
+    : candidateNextDue == null
+      ? currentNextDue
+      : Math.min(currentNextDue, candidateNextDue);
+}
+
+function writeProgressSummary(
+  tx: FirebaseFirestore.Transaction,
+  userRef: FirebaseFirestore.DocumentReference,
+  userData: Record<string, unknown>,
+  input: {
+    masteredDelta: number;
+    dueDelta: number;
+    nextDueAtMillis: number | null;
+    now: number;
+  },
+): void {
+  // New/provisioned users have these aggregates. Legacy users are left
+  // untouched here so the hub can reconcile the complete collection once.
+  const hasSummary =
+    typeof userData.vocabMasteredWords === "number" &&
+    typeof userData.vocabDueWords === "number";
+  if (!hasSummary) return;
+  tx.set(userRef, {
+    ...(input.masteredDelta
+      ? { vocabMasteredWords: FieldValue.increment(input.masteredDelta) }
+      : {}),
+    ...(input.dueDelta ? { vocabDueWords: FieldValue.increment(input.dueDelta) } : {}),
+    vocabNextDueAtMillis: input.nextDueAtMillis,
+    vocabSummaryUpdatedAtMillis: input.now,
+  }, { merge: true });
 }
 
 function historyCollection(uid: string) {
@@ -1347,6 +1378,104 @@ export async function review(
   };
 }
 
+export type VocabBatchReviewInput = {
+  wordId: number;
+  quality?: number;
+  mastered?: boolean;
+};
+
+/**
+ * Saves a completed vocabulary game in one Firestore transaction. Individual
+ * review requests all update the same user summary document, so sending them
+ * in parallel causes transaction contention and long retry delays.
+ */
+export async function reviewBatch(
+  uid: string,
+  reviews: VocabBatchReviewInput[],
+): Promise<VocabReviewResponse[]> {
+  requireUid(uid);
+  const uniqueReviews = new Map<number, VocabBatchReviewInput>();
+  for (const reviewInput of reviews) {
+    const wordId = Math.trunc(reviewInput.wordId);
+    if (!Number.isInteger(wordId) || wordId <= 0) {
+      throw BadRequest("Word ID is invalid");
+    }
+    const mastered = reviewInput.mastered === true;
+    const quality = reviewInput.quality;
+    if (!mastered && (typeof quality !== "number" || quality < 0 || quality > 5)) {
+      throw BadRequest("Quality must be 0-5");
+    }
+    uniqueReviews.set(wordId, { wordId, mastered, quality });
+  }
+  const requested = [...uniqueReviews.values()];
+  if (!requested.length) return [];
+  if (requested.length > 100) throw BadRequest("Too many words in one review session");
+
+  const wordRefs = requested.map((reviewInput) => adminDb.collection(WORDS).doc(String(reviewInput.wordId)));
+  const wordSnaps = await adminDb.getAll(...wordRefs);
+  const wordsById = new Map<number, VocabWordDoc>();
+  for (const [index, wordSnap] of wordSnaps.entries()) {
+    const word = wordSnap.exists ? toWordDoc(wordSnap) : null;
+    if (!word || word.status !== "PUBLISHED" || word.deletedAtMillis) {
+      throw NotFound("Word not found");
+    }
+    wordsById.set(requested[index].wordId, word);
+  }
+
+  const now = Date.now();
+  const userRef = adminDb.collection("users").doc(uid);
+  const progressRefs = requested.map((reviewInput) =>
+    userRef.collection(PROGRESS).doc(String(reviewInput.wordId)));
+
+  return adminDb.runTransaction(async (tx) => {
+    const [userSnap, ...progressSnaps] = await Promise.all([
+      tx.get(userRef),
+      ...progressRefs.map((ref) => tx.get(ref)),
+    ]);
+    const userData = userSnap.data() ?? {};
+    const nextProgressItems: VocabProgressDoc[] = [];
+    let masteredDelta = 0;
+    let dueDelta = 0;
+
+    const responses = requested.map((reviewInput, index) => {
+      const word = wordsById.get(reviewInput.wordId);
+      if (!word) throw NotFound("Word not found");
+      const previousSnap = progressSnaps[index];
+      const previous = previousSnap.exists ? toProgressDoc(previousSnap) : null;
+      const baseProgress = previous ?? {
+        uid,
+        wordId: word.id,
+        setId: word.setId,
+        status: "NEW" as const,
+        interval: 0,
+        easeFactor: 2.5,
+        repetitions: 0,
+      };
+      const updated = reviewInput.mastered
+        ? masteredProgress(baseProgress, now)
+        : applySm2(baseProgress, reviewInput.quality ?? 0, now);
+
+      masteredDelta += Number(updated.status === "MASTERED") - Number(previous?.status === "MASTERED");
+      dueDelta += Number(isDueProgress(updated, now)) - Number(previous ? isDueProgress(previous, now) : false);
+      nextProgressItems.push(updated);
+      tx.set(progressRefs[index], progressPayload(updated), { merge: true });
+      return {
+        wordId: updated.wordId,
+        newStatus: updated.status,
+        nextReviewAtMillis: updated.nextReviewAtMillis,
+      } satisfies VocabReviewResponse;
+    });
+
+    writeProgressSummary(tx, userRef, userData, {
+      masteredDelta,
+      dueDelta,
+      nextDueAtMillis: nextSummaryDueAtMillis(userData, nextProgressItems),
+      now,
+    });
+    return responses;
+  });
+}
+
 /* ------------------------------------------------------------------ */
 /*  SM-2 Algorithm                                                     */
 /* ------------------------------------------------------------------ */
@@ -1354,8 +1483,8 @@ export async function review(
 function applySm2(
   progress: VocabProgressDoc,
   quality: number,
+  now = Date.now(),
 ): VocabProgressDoc {
-  const now = Date.now();
   let { easeFactor, interval, repetitions } = progress;
   let status: VocabProgressStatus;
 
@@ -1392,6 +1521,22 @@ function applySm2(
     easeFactor: Math.round(easeFactor * 100) / 100,
     repetitions,
     nextReviewAtMillis,
+    lastReviewedAtMillis: now,
+  };
+}
+
+function masteredProgress(
+  progress: VocabProgressDoc,
+  now: number,
+): VocabProgressDoc {
+  const interval = Math.max(30, progress.interval || 0);
+  return {
+    ...progress,
+    status: "MASTERED",
+    interval,
+    easeFactor: progress.easeFactor || 2.5,
+    repetitions: Math.max(3, progress.repetitions || 0),
+    nextReviewAtMillis: now + interval * 24 * 60 * 60 * 1000,
     lastReviewedAtMillis: now,
   };
 }

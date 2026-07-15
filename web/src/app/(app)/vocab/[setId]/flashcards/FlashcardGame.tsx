@@ -219,12 +219,18 @@ function modeLabelFor(mode: PlayMode, quizMode: QuizMode): string {
   );
 }
 
-async function submitReview(wordId: number, quality: number): Promise<number> {
+type ReviewMutation = {
+  wordId: number;
+  quality?: number;
+  mastered?: true;
+};
+
+async function submitReviewBatch(reviews: ReviewMutation[]): Promise<number> {
   try {
-    const res = await fetch(`/api/vocab/words/${wordId}/review`, {
+    const res = await fetch("/api/vocab/reviews/batch", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ quality }),
+      body: JSON.stringify({ reviews }),
     });
     return res.status;
   } catch {
@@ -1330,16 +1336,16 @@ function PlaySurface({
     setSaving(true);
     setSaveError("");
     const outcomes = consolidateVocabGameAnswers(answers);
-    if (!reviewsSavedRef.current) {
-      const statuses = await Promise.all(
-        outcomes.map(({ answer, needsReview }) =>
-          submitReview(answer.id, needsReview ? 2 : 5)),
+    if (!reviewsSavedRef.current && outcomes.length > 0) {
+      const status = await submitReviewBatch(
+        outcomes.map(({ answer, needsReview }) => needsReview
+          ? { wordId: answer.id, quality: 2 }
+          : { wordId: answer.id, mastered: true }),
       );
-      const failures = statuses.filter((status) => status !== 200 && status !== 204);
-      if (failures.length) {
+      if (status !== 200 && status !== 204) {
         setSaving(false);
         setSaveError(
-          failures.includes(401)
+          status === 401
             ? "Bạn cần đăng nhập để lưu tiến độ học."
             : "Chưa lưu được tiến độ. Kiểm tra kết nối rồi thử lại.",
         );
