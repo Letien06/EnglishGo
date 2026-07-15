@@ -1936,7 +1936,7 @@ h1, h2, h3, h4, h5 {
 .pet-cat-scene--compact {
   width: 5rem;
   height: 4.5rem;
-  transform: scale(0.9);
+  transform: scale(0.42);
   transform-origin: center;
 }
 
@@ -2128,7 +2128,10 @@ h1, h2, h3, h4, h5 {
   flex-direction: column;
   align-items: flex-end;
   gap: 0.6rem;
+  will-change: left, top;
 }
+
+.pet-floating-widget.is-dragging { user-select: none; }
 
 .pet-floating-trigger {
   position: relative;
@@ -2142,10 +2145,13 @@ h1, h2, h3, h4, h5 {
   background: color-mix(in srgb, var(--surface) 88%, white);
   box-shadow: 0 0.8rem 2rem color-mix(in srgb, #312e81 26%, transparent), inset 0 1px #fff;
   transition: transform 160ms cubic-bezier(0.23, 1, 0.32, 1), box-shadow 160ms ease;
+  touch-action: none;
+  cursor: grab;
 }
 
 .pet-floating-trigger:active { transform: scale(0.97); }
-.pet-floating-trigger .pet-cat-scene { transform: scale(0.94); }
+.pet-floating-widget.is-dragging .pet-floating-trigger { cursor: grabbing; transition-duration: 0ms; }
+.pet-floating-trigger .pet-cat-scene--compact { transform: scale(0.42); }
 .pet-floating-coin { position: absolute; right: -0.38rem; bottom: -0.38rem; min-width: 1.55rem; padding: 0.15rem 0.35rem; border: 2px solid var(--surface); border-radius: 999px; background: #f59e0b; color: #512600; font-size: 0.68rem; font-weight: 900; }
 
 .pet-floating-panel {
