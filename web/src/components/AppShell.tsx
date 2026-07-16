@@ -15,6 +15,7 @@ const navItems = [
   { href: "/hub", icon: "home", label: "Trang chủ", color: "text-primary" },
   { href: "/listen", icon: "listen", label: "Nghe", color: "text-plum" },
   { href: "/read", icon: "read", label: "Đọc", color: "text-azure" },
+  { href: "/writing", icon: "writing", label: "Viết", color: "text-terracotta" },
   { href: "/vocab", icon: "vocab", label: "Từ vựng", color: "text-jade" },
   { href: "/practice", icon: "practice", label: "Đề thi", color: "text-terracotta" },
   { href: "/pet", icon: "pet", label: "Thú cưng", color: "text-primary" },
@@ -31,7 +32,8 @@ export default function AppShell({ children }: { children: ReactNode }) {
   const isPracticeWorkspace =
     pathname.startsWith("/listen/practice") ||
     pathname.startsWith("/read/practice") ||
-    pathname.startsWith("/practice/session");
+    pathname.startsWith("/practice/session") ||
+    pathname.startsWith("/writing/practice");
 
   if (isPracticeWorkspace) {
     return <>{children}</>;

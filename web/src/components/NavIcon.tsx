@@ -4,6 +4,7 @@ export type NavIconName =
   | "home"
   | "listen"
   | "read"
+  | "writing"
   | "vocab"
   | "practice"
   | "progress"
@@ -37,6 +38,8 @@ export default function NavIcon({
       return <svg {...props}><path d="M4 14v-2a8 8 0 0 1 16 0v2" /><path d="M18 19h-2a2 2 0 0 1-2-2v-3a2 2 0 0 1 2-2h4v5a2 2 0 0 1-2 2Z" /><path d="M6 19h2a2 2 0 0 0 2-2v-3a2 2 0 0 0-2-2H4v5a2 2 0 0 0 2 2Z" /></svg>;
     case "read":
       return <svg {...props}><path d="M4 4.5A2.5 2.5 0 0 1 6.5 2H12v18H6.5A2.5 2.5 0 0 0 4 22Z" /><path d="M20 4.5A2.5 2.5 0 0 0 17.5 2H12v18h5.5A2.5 2.5 0 0 1 20 22Z" /></svg>;
+    case "writing":
+      return <svg {...props}><path d="M12 20h9" /><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L8 18l-4 1 1-4Z" /><path d="m14 6 3 3" /></svg>;
     case "vocab":
       return <svg {...props}><path d="M4 5.5A2.5 2.5 0 0 1 6.5 3H12v17H6.5A2.5 2.5 0 0 0 4 22Z" /><path d="M12 6h5.5A2.5 2.5 0 0 1 20 8.5V22a2.5 2.5 0 0 0-2.5-2H12" /><path d="M7.5 8h2" /><path d="M15 11h2.5" /></svg>;
     case "practice":

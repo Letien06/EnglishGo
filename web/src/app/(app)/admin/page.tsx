@@ -12,6 +12,7 @@ const modules = [
   { label: "Vocabulary", href: "/admin/vocabulary" },
   { label: "Mock test", href: "/admin/mock-test" },
   { label: "AI generator", href: "/admin/generate" },
+  { label: "Writing studio", href: "/admin/writing" },
   { label: "Review queue", href: "/admin/content-review" },
   { label: "Media", href: "/admin/media" },
   { label: "Nghe-chép", href: "/admin/dictation" },
