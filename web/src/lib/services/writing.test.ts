@@ -10,8 +10,8 @@ import {
 
 describe("original Writing seed library", () => {
   it("covers all three TOEIC Writing practice parts with original content", () => {
-    expect(SEED_WRITING_PROMPTS.filter((item) => item.part === 1)).toHaveLength(24);
-    expect(SEED_WRITING_PROMPTS.filter((item) => item.part === 2)).toHaveLength(4);
+    expect(SEED_WRITING_PROMPTS.filter((item) => item.part === 1)).toHaveLength(74);
+    expect(SEED_WRITING_PROMPTS.filter((item) => item.part === 2)).toHaveLength(24);
     expect(SEED_WRITING_PROMPTS.filter((item) => item.part === 3)).toHaveLength(4);
 
     for (const prompt of SEED_WRITING_PROMPTS) {
@@ -22,7 +22,7 @@ describe("original Writing seed library", () => {
     }
   });
 
-  it("gives every Part 1 grammar category several picture drills", () => {
+  it("keeps the expanded Part 1 picture library balanced across grammar categories", () => {
     const partOne = SEED_WRITING_PROMPTS.filter((item) => item.part === 1);
     const categoryCounts = partOne.reduce<Record<WritingPartOneGrammarCategory, number>>(
       (counts, prompt) => {
@@ -35,11 +35,39 @@ describe("original Writing seed library", () => {
     );
 
     for (const category of WRITING_PART_ONE_GRAMMAR_CATEGORIES) {
-      expect(categoryCounts[category]).toBeGreaterThanOrEqual(6);
+      expect(categoryCounts[category]).toBeGreaterThanOrEqual(18);
     }
+
+    const counts = Object.values(categoryCounts);
+    expect(Math.max(...counts) - Math.min(...counts)).toBeLessThanOrEqual(1);
 
     expect(SEED_WRITING_PROMPTS.filter((item) => item.part !== 1)
       .every((prompt) => prompt.part1Category === null)).toBe(true);
+  });
+
+  it("gives every Part 2 email drill a complete brief, checklist, and four-point rubric", () => {
+    const partTwo = SEED_WRITING_PROMPTS.filter((item) => item.part === 2);
+
+    expect(partTwo).toHaveLength(24);
+
+    for (const prompt of partTwo) {
+      expect(prompt.part1Category).toBeNull();
+      expect(prompt.email).not.toBeNull();
+      expect(prompt.email).toMatchObject({
+        fromName: expect.any(String),
+        toName: expect.any(String),
+        subject: expect.any(String),
+        body: expect.any(String),
+      });
+      expect(prompt.taskChecklist.length).toBeGreaterThanOrEqual(3);
+      expect(prompt.taskChecklist.every((item) => item.trim().length > 0)).toBe(true);
+      expect(prompt.rubric.length).toBeGreaterThanOrEqual(3);
+      expect(prompt.rubric.reduce((sum, item) => sum + item.maxScore, 0)).toBe(4);
+      expect(prompt.rubric.every((item) => item.id && item.label && item.description)).toBe(true);
+      expect(prompt.responseRules.minWords).toBeGreaterThanOrEqual(60);
+      expect(prompt.responseRules.recommendedWords).toBeGreaterThanOrEqual(100);
+      expect(prompt.responseRules.maxWords).toBeGreaterThanOrEqual(300);
+    }
   });
 
   it("accepts an inflected required term and enforces one sentence for Part 1", () => {
