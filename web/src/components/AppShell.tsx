@@ -8,8 +8,10 @@ import StudyStreakBadge from "./StudyStreakBadge";
 import NavIcon, { type NavIconName } from "./NavIcon";
 import MobileNavigationMenu from "./MobileNavigationMenu";
 import PetFloatingWidget from "./PetFloatingWidget";
+import PwaInstallPrompt from "./PwaInstallPrompt";
 
 const navItems = [
+  { href: "/progress", icon: "progress", label: "Tiến bộ", color: "text-primary" },
   { href: "/hub", icon: "home", label: "Trang chủ", color: "text-primary" },
   { href: "/listen", icon: "listen", label: "Nghe", color: "text-plum" },
   { href: "/read", icon: "read", label: "Đọc", color: "text-azure" },
@@ -72,6 +74,7 @@ export default function AppShell({ children }: { children: ReactNode }) {
 
           <div className="ml-auto flex items-center gap-3">
             <MobileNavigationMenu />
+            <PwaInstallPrompt />
             <StudyStreakBadge className="hidden sm:inline-flex" />
             <ThemeToggle className="!hidden border border-line bg-surface-soft text-ink xl:!inline-flex" />
             <Link

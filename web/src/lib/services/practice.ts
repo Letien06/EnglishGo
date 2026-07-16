@@ -19,6 +19,7 @@ import {
   writeTestIndex,
 } from "./dautoeic-test-index";
 import { enforceDailyActionLimit } from "./rate-limit";
+import { recordContentQualityAttempt } from "./content-quality";
 
 export interface PracticeTestCard {
   id: number;
@@ -544,6 +545,17 @@ export async function submit(
       .catch(() => undefined),
     updatePracticeWeakAreas(user.uid, attempt).catch(() => undefined),
     updatePracticeSummary(user.uid, score, submittedAtMillis).catch(() => undefined),
+    recordContentQualityAttempt({
+      testId,
+      submittedAtMillis,
+      elapsedMillis,
+      answers: answerDocs.map((answer) => ({
+        questionId: answer.questionId,
+        part: answer.part,
+        weakTag: answer.weakTag,
+        correct: answer.correct,
+      })),
+    }).catch(() => undefined),
     recordPracticeLeaderboardAttempt({
       uid: user.uid,
       email: user.email,

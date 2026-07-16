@@ -6,6 +6,7 @@ export type NavIconName =
   | "read"
   | "vocab"
   | "practice"
+  | "progress"
   | "pet"
   | "leaderboard"
   | "arrow-right"
@@ -40,6 +41,8 @@ export default function NavIcon({
       return <svg {...props}><path d="M4 5.5A2.5 2.5 0 0 1 6.5 3H12v17H6.5A2.5 2.5 0 0 0 4 22Z" /><path d="M12 6h5.5A2.5 2.5 0 0 1 20 8.5V22a2.5 2.5 0 0 0-2.5-2H12" /><path d="M7.5 8h2" /><path d="M15 11h2.5" /></svg>;
     case "practice":
       return <svg {...props}><path d="M9 4h6" /><path d="M9 2h6v4H9z" /><path d="M7 4H5a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6a2 2 0 0 0-2-2h-2" /><path d="m8 14 2.5 2.5L16 11" /></svg>;
+    case "progress":
+      return <svg {...props}><path d="M4 19V5" /><path d="M4 19h16" /><path d="m7 15 4-4 3 2 5-6" /><path d="M16 7h3v3" /></svg>;
     case "pet":
       return <svg {...props}><path d="M5.5 10.5 4 4l4.5 2.5A9 9 0 0 1 15.5 6L20 4l-1.5 6.5a7 7 0 0 1-13 0Z" /><path d="M8.5 14h.01M15.5 14h.01" /><path d="m10.5 17 1.5 1 1.5-1" /><path d="M12 15h.01" /></svg>;
     case "leaderboard":

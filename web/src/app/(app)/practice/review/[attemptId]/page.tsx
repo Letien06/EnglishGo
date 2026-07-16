@@ -4,6 +4,7 @@ import { requireUser } from "@/lib/auth/session";
 import { getAttemptReview } from "@/lib/services/practice";
 import type { PracticeSkillBreakdown } from "@/lib/services/practice";
 import ReviewBackGuard from "../ReviewBackGuard";
+import ReportQuestionButton from "./ReportQuestionButton";
 
 export const dynamic = "force-dynamic";
 
@@ -123,6 +124,7 @@ export default async function PracticeReviewPage({ params }: Props) {
                 </div>
                 <p className="mt-2 text-xs font-semibold text-muted">Dạng lỗi: {answer.weakTag}</p>
                 <p className="mt-3 whitespace-pre-wrap text-sm text-ink">{answer.questionText}</p>
+                <ReportQuestionButton attemptId={attempt.attemptId} questionId={answer.questionId} />
                 <div className="mt-4 space-y-2">
                   {answer.options.map((option) => (
                     <div key={option.id} className={`rounded-lg p-3 text-sm ${answer.selectedOptionId === option.id ? "bg-accent/10 ring-1 ring-accent" : "bg-surface-soft"}`}>

@@ -6,6 +6,7 @@ import { dashboardMetrics } from "@/lib/services/admin";
 export const dynamic = "force-dynamic";
 
 const modules = [
+  { label: "Content quality", href: "/admin/content-quality" },
   { label: "Listening", href: "/admin/listening" },
   { label: "Reading", href: "/admin/reading" },
   { label: "Vocabulary", href: "/admin/vocabulary" },
