@@ -24,6 +24,29 @@ export const WRITING_DIFFICULTIES = [
 ] as const;
 export type WritingDifficulty = (typeof WRITING_DIFFICULTIES)[number];
 
+/**
+ * Part 1 practices a specific pairing of word types. Values stay language-
+ * neutral for storage and APIs; the UI can use the exported label map.
+ */
+export const WRITING_PART_ONE_GRAMMAR_CATEGORIES = [
+  "N_N",
+  "V_N",
+  "N_PREP",
+  "V_PREP",
+] as const;
+export type WritingPartOneGrammarCategory =
+  (typeof WRITING_PART_ONE_GRAMMAR_CATEGORIES)[number];
+
+export const WRITING_PART_ONE_GRAMMAR_CATEGORY_LABELS: Record<
+  WritingPartOneGrammarCategory,
+  string
+> = {
+  N_N: "N + N",
+  V_N: "V + N",
+  N_PREP: "N + Prep",
+  V_PREP: "V + Prep",
+};
+
 export type WritingFeedbackProvider = "GEMINI" | "FALLBACK";
 
 export interface WritingResponseRules {
@@ -75,6 +98,8 @@ export interface WritingPrompt {
   instructions: string;
   promptText: string;
   tags: string[];
+  /** Present for Part 1; null for Parts 2/3 and legacy custom prompts. */
+  part1Category: WritingPartOneGrammarCategory | null;
   difficulty: WritingDifficulty;
   timeLimitMinutes: number;
   imageUrl: string | null;
@@ -115,6 +140,7 @@ export interface WritingPromptInput {
   instructions?: string | null;
   promptText?: string | null;
   tags?: string[];
+  part1Category?: WritingPartOneGrammarCategory | null;
   difficulty?: WritingDifficulty;
   timeLimitMinutes?: number;
   imageUrl?: string | null;
@@ -212,4 +238,3 @@ export interface WritingAdminOverview {
   byPart: Record<WritingPart, number>;
   lastUpdatedAtMillis: number | null;
 }
-

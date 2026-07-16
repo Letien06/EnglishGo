@@ -1,8 +1,16 @@
 "use client";
 
 import Link from "next/link";
+import { useSearchParams } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
-import type { WritingPart, WritingPrompt } from "@/types/writing";
+import {
+  WRITING_PART_ONE_GRAMMAR_CATEGORIES,
+  WRITING_PART_ONE_GRAMMAR_CATEGORY_LABELS,
+  type WritingAttempt,
+  type WritingPart,
+  type WritingPartOneGrammarCategory,
+  type WritingPrompt,
+} from "@/types/writing";
 
 const PARTS: Array<{
   id: WritingPart;
@@ -39,6 +47,21 @@ const PARTS: Array<{
 ];
 
 type ApiEnvelope<T> = { success?: boolean; data?: T; error?: string };
+type ActivePartOneCategory = WritingPartOneGrammarCategory | "all";
+
+type PromptScore = {
+  score: number;
+  maxScore: number;
+  submittedAtMillis: number;
+};
+
+const LEGACY_PART_ONE_CATEGORIES: Record<string, WritingPartOneGrammarCategory> = {
+  "p1-meeting-preparation": "V_N",
+  "p1-restaurant-service": "V_N",
+  "p1-delivery-packages": "V_N",
+  "p1-airport-flight": "V_N",
+  "p1-office-report": "V_N",
+};
 
 function unwrap<T>(body: ApiEnvelope<T> | T): T {
   if (body && typeof body === "object" && "data" in body) {
@@ -61,12 +84,89 @@ function normalizePrompts(data: unknown): WritingPrompt[] {
   return [];
 }
 
+function normalizeAttempts(data: unknown): WritingAttempt[] {
+  const record = data && typeof data === "object" && !Array.isArray(data)
+    ? data as { attempts?: unknown; items?: unknown }
+    : null;
+  const items = Array.isArray(data) ? data : record?.attempts ?? record?.items;
+  if (!Array.isArray(items)) return [];
+
+  return items.filter((item): item is WritingAttempt => {
+    if (!item || typeof item !== "object") return false;
+    const attempt = item as Partial<WritingAttempt>;
+    return typeof attempt.promptId === "string"
+      && attempt.promptPart === 1
+      && typeof attempt.submittedAtMillis === "number"
+      && typeof attempt.feedback?.score === "number"
+      && typeof attempt.feedback.maxScore === "number";
+  });
+}
+
+function parsePart(value: string | null): WritingPart | null {
+  return value === "1" || value === "2" || value === "3" ? Number(value) as WritingPart : null;
+}
+
+function parsePartOneCategory(value: string | null): WritingPartOneGrammarCategory | null {
+  return value && (WRITING_PART_ONE_GRAMMAR_CATEGORIES as readonly string[]).includes(value)
+    ? value as WritingPartOneGrammarCategory
+    : null;
+}
+
+function categoryFromText(value: string): WritingPartOneGrammarCategory | null {
+  const normalized = value.toLowerCase().replace(/[^a-z]/g, "");
+  if (normalized === "nn" || normalized === "nounnoun") return "N_N";
+  if (normalized === "vn" || normalized === "verbnoun") return "V_N";
+  if (normalized === "nprep" || normalized === "nounprep" || normalized === "nounpreposition") return "N_PREP";
+  if (normalized === "vprep" || normalized === "verbprep" || normalized === "verbpreposition") return "V_PREP";
+  return null;
+}
+
+function grammarCategoryForPrompt(prompt: WritingPrompt): WritingPartOneGrammarCategory | null {
+  if (prompt.part !== 1) return null;
+
+  // `part1Category` is the canonical API field. The alternate property and
+  // tag matching keep historical/custom content discoverable.
+  const compatibilityPrompt = prompt as WritingPrompt & { grammarCategory?: unknown; part1Category?: unknown };
+  const explicitCategory = typeof compatibilityPrompt.part1Category === "string"
+    ? compatibilityPrompt.part1Category
+    : typeof compatibilityPrompt.grammarCategory === "string"
+      ? compatibilityPrompt.grammarCategory
+      : null;
+  const fromExplicit = explicitCategory ? parsePartOneCategory(explicitCategory) ?? categoryFromText(explicitCategory) : null;
+  if (fromExplicit) return fromExplicit;
+
+  for (const tag of prompt.tags ?? []) {
+    const fromTag = categoryFromText(tag);
+    if (fromTag) return fromTag;
+  }
+
+  return LEGACY_PART_ONE_CATEGORIES[prompt.id] ?? null;
+}
+
+function scoreByPromptId(attempts: WritingAttempt[]): Record<string, PromptScore> {
+  return attempts.reduce<Record<string, PromptScore>>((scores, attempt) => {
+    const candidate: PromptScore = {
+      score: attempt.feedback.score,
+      maxScore: attempt.feedback.maxScore,
+      submittedAtMillis: attempt.submittedAtMillis,
+    };
+    const existing = scores[attempt.promptId];
+    if (!existing || candidate.submittedAtMillis > existing.submittedAtMillis) scores[attempt.promptId] = candidate;
+    return scores;
+  }, {});
+}
+
 export default function WritingLibraryClient() {
-  const [part, setPart] = useState<WritingPart>(1);
+  const searchParams = useSearchParams();
+  const requestedPart = parsePart(searchParams.get("part"));
+  const requestedCategory = parsePartOneCategory(searchParams.get("category"));
+  const [part, setPart] = useState<WritingPart>(() => requestedPart ?? 1);
   const [query, setQuery] = useState("");
   const [tag, setTag] = useState("all");
+  const [partOneCategory, setPartOneCategory] = useState<ActivePartOneCategory>(() => requestedPart === 1 ? requestedCategory ?? "all" : "all");
   const [reloadKey, setReloadKey] = useState(0);
   const [prompts, setPrompts] = useState<WritingPrompt[]>([]);
+  const [latestScores, setLatestScores] = useState<Record<string, PromptScore>>({});
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -98,11 +198,34 @@ export default function WritingLibraryClient() {
     return () => { cancelled = true; };
   }, [part, reloadKey]);
 
+  useEffect(() => {
+    let cancelled = false;
+
+    // The history endpoint is private. A signed-out learner can still browse
+    // the library; in that case we simply leave score badges absent.
+    fetch("/api/writing/attempts/history?part=1&limit=30", { cache: "no-store" })
+      .then(async (response) => {
+        if (!response.ok) return [] as WritingAttempt[];
+        const body = await response.json() as ApiEnvelope<unknown>;
+        if (body.success === false) return [] as WritingAttempt[];
+        return normalizeAttempts(unwrap(body));
+      })
+      .then((attempts) => {
+        if (!cancelled) setLatestScores(scoreByPromptId(attempts));
+      })
+      .catch(() => {
+        if (!cancelled) setLatestScores({});
+      });
+
+    return () => { cancelled = true; };
+  }, [reloadKey]);
+
   function choosePart(nextPart: WritingPart) {
     if (nextPart === part) return;
     setLoading(true);
     setError(null);
     setTag("all");
+    setPartOneCategory("all");
     setPart(nextPart);
   }
 
@@ -113,13 +236,23 @@ export default function WritingLibraryClient() {
   }
 
   const tags = useMemo(() => [...new Set(prompts.flatMap((prompt) => prompt.tags ?? []))].sort((left, right) => left.localeCompare(right)), [prompts]);
+  const partOneCounts = useMemo(() => {
+    const counts = Object.fromEntries(WRITING_PART_ONE_GRAMMAR_CATEGORIES.map((category) => [category, 0])) as Record<WritingPartOneGrammarCategory, number>;
+    prompts.forEach((prompt) => {
+      const category = grammarCategoryForPrompt(prompt);
+      if (category) counts[category] += 1;
+    });
+    return counts;
+  }, [prompts]);
   const filteredPrompts = useMemo(() => {
     const normalizedQuery = query.trim().toLocaleLowerCase("vi-VN");
     return prompts.filter((prompt) => {
       const haystack = [prompt.title, prompt.titleVi, prompt.summary, ...(prompt.tags ?? [])].filter(Boolean).join(" ").toLocaleLowerCase("vi-VN");
-      return (!normalizedQuery || haystack.includes(normalizedQuery)) && (tag === "all" || prompt.tags?.includes(tag));
+      const matchesPartOneCategory = part !== 1 || partOneCategory === "all" || grammarCategoryForPrompt(prompt) === partOneCategory;
+      const matchesTag = part === 1 || tag === "all" || prompt.tags?.includes(tag);
+      return (!normalizedQuery || haystack.includes(normalizedQuery)) && matchesPartOneCategory && matchesTag;
     });
-  }, [prompts, query, tag]);
+  }, [part, partOneCategory, prompts, query, tag]);
   return (
     <main className="app-canvas min-h-[calc(100dvh-4rem)] px-4 py-5 sm:px-6 lg:px-8">
       <div className="mx-auto max-w-7xl space-y-7 pb-10">
@@ -178,7 +311,25 @@ export default function WritingLibraryClient() {
               <input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Tìm chủ đề, tình huống, từ khóa..." className="w-full pl-10 pr-4 text-sm" />
             </label>
           </div>
-          {tags.length > 0 && (
+          {part === 1 ? (
+            <div className="mt-5">
+              <div className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1">
+                <div>
+                  <p className="text-sm font-extrabold text-ink">Luyện theo cặp từ</p>
+                  <p className="mt-1 text-xs leading-5 text-muted">Chọn một dạng để luyện nhiều câu cùng cấu trúc.</p>
+                </div>
+                <span className="text-xs font-extrabold text-primary">{prompts.length} câu trong thư viện</span>
+              </div>
+              <div className="mt-3 flex flex-wrap gap-2" aria-label="Lọc câu theo dạng từ">
+                <GrammarCategoryChip active={partOneCategory === "all"} count={prompts.length} onClick={() => setPartOneCategory("all")}>Tất cả</GrammarCategoryChip>
+                {WRITING_PART_ONE_GRAMMAR_CATEGORIES.map((category) => (
+                  <GrammarCategoryChip key={category} active={partOneCategory === category} count={partOneCounts[category]} onClick={() => setPartOneCategory(category)}>
+                    {WRITING_PART_ONE_GRAMMAR_CATEGORY_LABELS[category]}
+                  </GrammarCategoryChip>
+                ))}
+              </div>
+            </div>
+          ) : tags.length > 0 && (
             <div className="mt-4 flex flex-wrap gap-2" aria-label="Lọc theo chủ đề">
               <FilterChip active={tag === "all"} onClick={() => setTag("all")}>Tất cả</FilterChip>
               {tags.map((item) => <FilterChip key={item} active={tag === item} onClick={() => setTag(item)}>{item}</FilterChip>)}
@@ -203,7 +354,7 @@ export default function WritingLibraryClient() {
           </section>
         ) : (
           <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3" aria-label={`Danh sách ${labelForPart(part)}`}>
-            {filteredPrompts.map((prompt) => <WritingPromptCard key={prompt.id} prompt={prompt} />)}
+            {filteredPrompts.map((prompt) => <WritingPromptCard key={prompt.id} prompt={prompt} latestScore={latestScores[prompt.id]} />)}
           </section>
         )}
 
@@ -219,9 +370,14 @@ function FilterChip({ active, onClick, children }: { active: boolean; onClick: (
   return <button type="button" onClick={onClick} className={`rounded-full border px-3 py-1.5 text-xs font-extrabold transition-colors ${active ? "border-primary bg-primary text-gold-ink" : "border-line bg-surface-soft text-ink2 hover:border-primary/35"}`}>{children}</button>;
 }
 
-function WritingPromptCard({ prompt }: { prompt: WritingPrompt }) {
+function GrammarCategoryChip({ active, count, onClick, children }: { active: boolean; count: number; onClick: () => void; children: React.ReactNode }) {
+  return <button type="button" onClick={onClick} aria-pressed={active} className={`inline-flex items-center gap-2 rounded-xl border px-3 py-2 text-xs font-extrabold transition-[border-color,background-color,transform] duration-150 ease-out active:scale-[0.97] ${active ? "border-primary bg-primary text-gold-ink shadow-sm" : "border-line bg-surface-soft text-ink2 hover:border-primary/35 hover:bg-surface"}`}><span>{children}</span><span className={`rounded-md px-1.5 py-0.5 text-[10px] ${active ? "bg-white/20 text-inherit" : "bg-primary/10 text-primary"}`}>{count} câu</span></button>;
+}
+
+function WritingPromptCard({ prompt, latestScore }: { prompt: WritingPrompt; latestScore?: PromptScore }) {
   const partMeta = PARTS.find((item) => item.id === prompt.part) ?? PARTS[0];
   const hasImage = prompt.part === 1 && Boolean(prompt.imageUrl);
+  const grammarCategory = grammarCategoryForPrompt(prompt);
   return (
     <article className="premium-card premium-card--interactive group overflow-hidden">
       <div
@@ -231,8 +387,9 @@ function WritingPromptCard({ prompt }: { prompt: WritingPrompt }) {
         style={hasImage ? { backgroundImage: `linear-gradient(180deg, transparent 22%, color-mix(in srgb, var(--s0) 78%, transparent)), url("${prompt.imageUrl}")` } : undefined}
       >
         <span className="absolute left-4 top-4 rounded-full border border-white/20 bg-black/35 px-2.5 py-1 text-[11px] font-extrabold text-white backdrop-blur-sm">Part {prompt.part}</span>
+        {latestScore && <span title="Điểm ước tính từ lần làm gần nhất" className="absolute right-4 top-4 inline-flex items-center gap-1 rounded-full border border-jade/35 bg-jade/90 px-2.5 py-1 text-[11px] font-extrabold text-white shadow-sm"><span aria-hidden="true">✓</span> Điểm {latestScore.score}/{latestScore.maxScore}</span>}
         {!hasImage && <span className="text-4xl text-white" aria-hidden="true">{partMeta.icon}</span>}
-        {hasImage && <span className="text-xs font-bold text-white/90">Ảnh luyện viết gốc</span>}
+        {hasImage && <span className="text-xs font-bold text-white/90">{grammarCategory ? WRITING_PART_ONE_GRAMMAR_CATEGORY_LABELS[grammarCategory] : "Ảnh luyện viết gốc"}</span>}
       </div>
       <div className="p-5">
         <div className="flex items-start justify-between gap-3">

@@ -1,6 +1,10 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import {
+  WRITING_PART_ONE_GRAMMAR_CATEGORY_LABELS,
+  type WritingPartOneGrammarCategory,
+} from "@/types/writing";
 
 type WritingPart = 1 | 2 | 3;
 type WritingPromptStatus = "DRAFT" | "REVIEW" | "PUBLISHED" | "ARCHIVED";
@@ -16,6 +20,7 @@ type WritingPrompt = {
   instructions?: string | null;
   promptText?: string | null;
   tags?: string[];
+  part1Category?: WritingPartOneGrammarCategory | null;
   difficulty?: Difficulty;
   timeLimitMinutes?: number | null;
   imageUrl?: string | null;
@@ -61,6 +66,7 @@ type EditorDraft = {
   instructions: string;
   promptText: string;
   tags: string;
+  part1Category: WritingPartOneGrammarCategory;
   difficulty: Difficulty;
   timeLimitMinutes: string;
   imageUrl: string;
@@ -103,6 +109,7 @@ const emptyDraft = (): EditorDraft => ({
   instructions: "",
   promptText: "",
   tags: "",
+  part1Category: "N_N",
   difficulty: "INTERMEDIATE",
   timeLimitMinutes: "",
   imageUrl: "",
@@ -203,6 +210,7 @@ export default function WritingAdminClient() {
       instructions: prompt.instructions ?? "",
       promptText: prompt.promptText ?? "",
       tags: (prompt.tags ?? []).join(", "),
+      part1Category: prompt.part1Category ?? "N_N",
       difficulty: prompt.difficulty ?? "INTERMEDIATE",
       timeLimitMinutes: prompt.timeLimitMinutes == null ? "" : String(prompt.timeLimitMinutes),
       imageUrl: prompt.imageUrl ?? "",
@@ -350,7 +358,7 @@ function PromptRow({ item, active, onClick }: { item: WritingPrompt; active: boo
       <span className="min-w-0 flex-1">
         <span className="flex flex-wrap items-center gap-2"><span className="truncate text-sm font-extrabold text-ink">{item.title}</span><StatusBadge status={item.status} /></span>
         {(item.titleVi || item.summary || item.promptText) && <span className="mt-1 line-clamp-2 block text-sm leading-5 text-muted">{item.titleVi || item.summary || item.promptText}</span>}
-        <span className="mt-2 flex flex-wrap gap-2 text-xs font-semibold text-muted"><span>{partLabels[item.part]}</span><span>·</span><span>{item.difficulty ?? "INTERMEDIATE"}</span>{item.timeLimitMinutes ? <><span>·</span><span>{item.timeLimitMinutes} phút</span></> : null}</span>
+        <span className="mt-2 flex flex-wrap gap-2 text-xs font-semibold text-muted"><span>{partLabels[item.part]}</span>{item.part === 1 && item.part1Category ? <><span>·</span><span>{WRITING_PART_ONE_GRAMMAR_CATEGORY_LABELS[item.part1Category]}</span></> : null}<span>·</span><span>{item.difficulty ?? "INTERMEDIATE"}</span>{item.timeLimitMinutes ? <><span>·</span><span>{item.timeLimitMinutes} phút</span></> : null}</span>
       </span>
     </div>
   </button>;
@@ -369,6 +377,7 @@ function PromptEditor({ draft, onChange, onSave, onCancel, isSaving }: { draft: 
     <div className="mt-5 grid gap-3 sm:grid-cols-2">
       <Select label="Phần" value={String(draft.part)} onChange={(value) => set("part", Number(value) as WritingPart)} values={[["1", partLabels[1]], ["2", partLabels[2]], ["3", partLabels[3]]]} />
       <Select label="Trạng thái" value={draft.status} onChange={(value) => set("status", value as WritingPromptStatus)} values={(Object.keys(statusLabels) as WritingPromptStatus[]).map((value) => [value, statusLabels[value]])} />
+      {draft.part === 1 && <Select label="Dạng từ khóa Part 1" value={draft.part1Category} onChange={(value) => set("part1Category", value as WritingPartOneGrammarCategory)} values={Object.entries(WRITING_PART_ONE_GRAMMAR_CATEGORY_LABELS)} />}
       <Select label="Độ khó" value={draft.difficulty} onChange={(value) => set("difficulty", value as Difficulty)} values={[["BEGINNER", "Cơ bản"], ["INTERMEDIATE", "Trung bình"], ["ADVANCED", "Nâng cao"]]} />
       <Field label="Thời gian (phút)" value={draft.timeLimitMinutes} onChange={(value) => set("timeLimitMinutes", value)} inputMode="numeric" />
     </div>
@@ -434,6 +443,7 @@ function toPayload(draft: EditorDraft) {
     instructions: optionalText(draft.instructions),
     promptText: optionalText(draft.promptText),
     tags: splitComma(draft.tags),
+    part1Category: draft.part === 1 ? draft.part1Category : undefined,
     difficulty: draft.difficulty,
     timeLimitMinutes: numberOrUndefined(draft.timeLimitMinutes),
     imageUrl: optionalText(draft.imageUrl) ?? null,

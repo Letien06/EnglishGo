@@ -2,7 +2,11 @@
 
 import Link from "next/link";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import type { WritingPrompt } from "@/types/writing";
+import {
+  WRITING_PART_ONE_GRAMMAR_CATEGORY_LABELS,
+  type WritingPartOneGrammarCategory,
+  type WritingPrompt,
+} from "@/types/writing";
 
 type ApiEnvelope<T> = { success?: boolean; data?: T; error?: string };
 type RecordValue = Record<string, unknown>;
@@ -155,6 +159,44 @@ function partTitle(part: number) {
   return part === 1 ? "Part 1 · Picture" : part === 2 ? "Part 2 · Email" : "Part 3 · Opinion essay";
 }
 
+type PartOneStructureGuide = {
+  title: string;
+  formula: string;
+  description: string;
+  tip: string;
+};
+
+const PART_ONE_STRUCTURE_GUIDES: Record<WritingPartOneGrammarCategory, PartOneStructureGuide> = {
+  N_N: {
+    title: "Nối hai danh từ vào cùng một bối cảnh",
+    formula: "The [noun 1] is [verb-ing] the [noun 2].",
+    description: "Đặt cả hai danh từ vào một câu mô tả rõ người/vật và bối cảnh trong ảnh.",
+    tip: "Thêm động từ hoặc cụm vị trí để câu hoàn chỉnh, không chỉ liệt kê hai danh từ.",
+  },
+  V_N: {
+    title: "Diễn tả hành động và đối tượng",
+    formula: "The [subject] is [verb-ing] the [noun].",
+    description: "Đổi động từ sang dạng V-ing, rồi dùng danh từ làm đối tượng hoặc chi tiết chính của ảnh.",
+    tip: "Ưu tiên hiện tại tiếp diễn khi nhân vật đang thực hiện hành động trong ảnh.",
+  },
+  N_PREP: {
+    title: "Dùng danh từ để chỉ vị trí",
+    formula: "The [noun] is [preposition] the [place/object].",
+    description: "Kết hợp danh từ với giới từ để nêu vị trí, hướng hoặc mối quan hệ giữa các vật trong ảnh.",
+    tip: "Kiểm tra sau giới từ có đủ một cụm danh từ, ví dụ: on the desk / near the door.",
+  },
+  V_PREP: {
+    title: "Diễn tả hành động kèm giới từ",
+    formula: "The [subject] is [verb-ing] [preposition] …",
+    description: "Dùng động từ theo đúng cụm đi với giới từ để mô tả hành động tự nhiên trong ảnh.",
+    tip: "Đổi động từ sang V-ing và giữ đúng giới từ trong cụm, ví dụ: looking at / waiting for.",
+  },
+};
+
+function grammarCategoryLabel(category: WritingPrompt["part1Category"]) {
+  return category ? WRITING_PART_ONE_GRAMMAR_CATEGORY_LABELS[category] : "Cấu trúc linh hoạt";
+}
+
 function planItems(value: unknown): string[] {
   if (Array.isArray(value)) return value.filter((item): item is string => typeof item === "string" && Boolean(item.trim()));
   if (typeof value === "string") return value.split(/\n|•/).map((item) => item.trim()).filter(Boolean);
@@ -295,6 +337,11 @@ export default function WritingPracticeClient({ promptId }: { promptId: string }
         <header className="mb-4 flex flex-wrap items-center gap-3">
           <Link href="/writing" className="premium-secondary inline-flex items-center rounded-xl px-3.5 py-2 text-sm font-extrabold no-underline">← Thư viện Writing</Link>
           <span className="rounded-full bg-primary/10 px-3 py-1.5 text-xs font-extrabold text-primary">{partTitle(prompt.part)}</span>
+          {prompt.part === 1 && prompt.part1Category && (
+            <span className="rounded-full border border-azure/25 bg-azure/10 px-3 py-1.5 text-xs font-extrabold text-azure2">
+              Nhóm {grammarCategoryLabel(prompt.part1Category)}
+            </span>
+          )}
           <span className="rounded-full border border-line bg-surface/70 px-3 py-1.5 text-xs font-bold text-muted">{prompt.difficulty}</span>
           <div className="ml-auto flex items-center gap-2 rounded-xl border border-line bg-surface/80 px-3 py-2 shadow-sm">
             <span className="text-xs font-bold text-muted">Thời gian</span>
@@ -357,7 +404,12 @@ export default function WritingPracticeClient({ promptId }: { promptId: string }
             </article>
 
             {!attempt && <StudySupport prompt={prompt} visibleHints={visibleHints} revealedHintCount={revealedHintCount} showSample={showSample} onRevealHint={() => setRevealedHintCount((count) => Math.min(count + 1, prompt.hints.length))} onToggleSample={() => setShowSample((value) => !value)} />}
-            {attempt && <FeedbackPanel attempt={attempt} fallbackCriteria={feedbackCriteria} />}
+            {attempt && (
+              <>
+                <FeedbackPanel attempt={attempt} fallbackCriteria={feedbackCriteria} />
+                {prompt.part === 1 && <PartOneCompletionNav prompt={prompt} attempt={attempt} />}
+              </>
+            )}
           </section>
         </div>
       </div>
@@ -366,7 +418,57 @@ export default function WritingPracticeClient({ promptId }: { promptId: string }
 }
 
 function PictureTask({ prompt }: { prompt: WritingPrompt }) {
-  return <div className="p-5 sm:p-6"><div className="overflow-hidden rounded-2xl border border-line bg-surface-soft"><div className="relative aspect-[4/3] bg-surface-soft bg-cover bg-center" role="img" aria-label={prompt.imageAlt || prompt.title} style={prompt.imageUrl ? { backgroundImage: `url("${prompt.imageUrl}")` } : undefined}>{!prompt.imageUrl && <div className="flex h-full items-center justify-center text-7xl text-primary" aria-hidden="true">▧</div>}<span className="absolute left-3 top-3 rounded-lg bg-black/55 px-2.5 py-1.5 text-xs font-bold text-white backdrop-blur-sm">Quan sát kỹ người, hành động và bối cảnh</span></div></div><div className="mt-5"><p className="text-sm font-extrabold text-ink">Dùng cả hai từ / cụm từ sau trong một câu:</p><div className="mt-3 flex flex-wrap gap-2">{prompt.requiredTerms.map((term) => <span key={term} className="rounded-full border border-azure/25 bg-azure/10 px-3 py-1.5 text-sm font-extrabold text-azure2">{term}</span>)}</div></div></div>;
+  const guide = prompt.part1Category ? PART_ONE_STRUCTURE_GUIDES[prompt.part1Category] : null;
+
+  return (
+    <div className="p-5 sm:p-6">
+      <div className="overflow-hidden rounded-2xl border border-line bg-surface-soft">
+        <div
+          className="relative aspect-[4/3] bg-surface-soft bg-cover bg-center"
+          role="img"
+          aria-label={prompt.imageAlt || prompt.title}
+          style={prompt.imageUrl ? { backgroundImage: `url("${prompt.imageUrl}")` } : undefined}
+        >
+          {!prompt.imageUrl && <div className="flex h-full items-center justify-center text-7xl text-primary" aria-hidden="true">▧</div>}
+          <span className="absolute left-3 top-3 rounded-lg bg-black/55 px-2.5 py-1.5 text-xs font-bold text-white backdrop-blur-sm">
+            Quan sát kỹ người, hành động và bối cảnh
+          </span>
+        </div>
+      </div>
+
+      <div className="mt-5">
+        <p className="text-sm font-extrabold text-ink">Dùng cả hai từ / cụm từ sau trong một câu:</p>
+        <div className="mt-3 flex flex-wrap gap-2">
+          {prompt.requiredTerms.map((term) => (
+            <span key={term} className="rounded-full border border-azure/25 bg-azure/10 px-3 py-1.5 text-sm font-extrabold text-azure2">
+              {term}
+            </span>
+          ))}
+        </div>
+      </div>
+
+      {guide && (
+        <section className="mt-5 rounded-2xl border border-primary/20 bg-primary/10 p-4" aria-label={`Hướng dẫn nhóm ${grammarCategoryLabel(prompt.part1Category)}`}>
+          <div className="flex flex-wrap items-start justify-between gap-3">
+            <div>
+              <p className="text-xs font-extrabold uppercase tracking-[0.14em] text-primary">Nhóm cấu trúc đang luyện</p>
+              <h2 className="mt-1 text-base font-extrabold text-ink">{guide.title}</h2>
+            </div>
+            <span className="rounded-full border border-primary/20 bg-surface px-2.5 py-1 text-xs font-extrabold text-primary">
+              {grammarCategoryLabel(prompt.part1Category)}
+            </span>
+          </div>
+          <code className="mt-4 block rounded-xl border border-primary/15 bg-surface/90 px-3 py-2.5 font-mono text-xs font-bold leading-6 text-ink2 sm:text-sm">
+            {guide.formula}
+          </code>
+          <p className="mt-3 text-sm leading-6 text-ink2">{guide.description}</p>
+          <p className="mt-2 rounded-lg bg-surface/70 px-3 py-2 text-xs leading-5 text-muted">
+            <strong className="text-ink2">Mẹo:</strong> {guide.tip}
+          </p>
+        </section>
+      )}
+    </div>
+  );
 }
 
 function EmailTask({ prompt }: { prompt: WritingPrompt }) {
@@ -402,6 +504,43 @@ function FeedbackPanel({ attempt, fallbackCriteria }: { attempt: AttemptView; fa
   const feedback = attempt.feedback;
   const criteria = feedback.criteria.length ? feedback.criteria : fallbackCriteria;
   return <article className="premium-card overflow-hidden"><div className="border-b border-line bg-jade/10 px-5 py-5 sm:px-6"><div className="flex flex-wrap items-center justify-between gap-4"><div><p className="text-xs font-extrabold uppercase tracking-[0.14em] text-jade2">AI feedback</p><h2 className="mt-1 text-xl font-extrabold text-ink">Phản hồi cho bài viết của bạn</h2></div>{feedback.score != null && <div className="rounded-2xl border border-jade/25 bg-surface px-4 py-3 text-center"><strong className="block text-3xl font-extrabold text-jade">{feedback.score}</strong><span className="text-xs font-bold text-muted">/{feedback.maxScore ?? "?"} điểm</span></div>}</div>{feedback.label && <p className="mt-3 text-sm font-bold text-jade2">{feedback.label}</p>}{feedback.summary && <p className="mt-2 text-sm leading-6 text-ink2">{feedback.summary}</p>}<p className="mt-3 text-xs leading-5 text-muted">Ước tính học tập dựa trên bài bạn đã làm; không phải điểm ETS chính thức.</p></div><div className="space-y-5 p-5 sm:p-6">{feedback.checks.length > 0 && <section><h3 className="text-sm font-extrabold text-ink">Kiểm tra nhanh</h3><div className="mt-3 space-y-2">{feedback.checks.map((check) => <div key={check.id} className={`rounded-xl border p-3 ${check.passed ? "border-jade/20 bg-jade/10" : "border-terracotta/20 bg-terracotta/10"}`}><div className="flex gap-2"><span className={`font-extrabold ${check.passed ? "text-jade2" : "text-terracotta2"}`} aria-hidden="true">{check.passed ? "✓" : "!"}</span><div><p className="text-sm font-extrabold text-ink">{check.label}</p>{check.detail && <p className="mt-1 text-xs leading-5 text-ink2">{check.detail}</p>}</div></div></div>)}</div></section>}{criteria.length > 0 && <section><h3 className="text-sm font-extrabold text-ink">Theo tiêu chí</h3><div className="mt-3 space-y-2">{criteria.map((criterion) => <div key={criterion.id} className="rounded-xl border border-line bg-surface-soft/55 p-3"><div className="flex items-start justify-between gap-3"><p className="text-sm font-extrabold text-ink">{criterion.label}</p>{criterion.score != null && <span className="rounded-md bg-primary/10 px-2 py-1 text-xs font-extrabold text-primary">{criterion.score}/{criterion.maxScore ?? "?"}</span>}</div>{criterion.note && <p className="mt-1 text-xs leading-5 text-muted">{criterion.note}</p>}</div>)}</div></section>}{feedback.strengths.length > 0 && <FeedbackList title="Bạn đang làm tốt" icon="✓" tone="jade" items={feedback.strengths} />}{feedback.improvements.length > 0 && <FeedbackList title="Điều cần cải thiện" icon="→" tone="terracotta" items={feedback.improvements} />}{feedback.revisedAnswer && <section className="rounded-xl border border-azure/20 bg-azure/10 p-4"><p className="text-sm font-extrabold text-azure2">Phiên bản tham khảo</p><p className="mt-2 whitespace-pre-wrap text-sm leading-7 text-ink">{feedback.revisedAnswer}</p></section>}{feedback.nextAction && <section className="rounded-xl border border-primary/20 bg-primary/10 p-4"><p className="text-sm font-extrabold text-primary">Bước tiếp theo</p><p className="mt-1 text-sm leading-6 text-ink2">{feedback.nextAction}</p></section>}<Link href="/writing/history" className="inline-flex text-sm font-extrabold text-primary hover:underline">Xem tất cả lịch sử bài viết →</Link></div></article>;
+}
+
+function PartOneCompletionNav({ prompt, attempt }: { prompt: WritingPrompt; attempt: AttemptView }) {
+  const category = prompt.part1Category;
+  const categoryLabel = grammarCategoryLabel(category);
+  const sameCategoryHref = category
+    ? `/writing?part=1&category=${encodeURIComponent(category)}`
+    : "/writing?part=1";
+  const scoreText = attempt.feedback.score != null
+    ? `${attempt.feedback.score}/${attempt.feedback.maxScore ?? "?"} điểm`
+    : "đã được chấm";
+
+  return (
+    <article className="premium-card border border-primary/20 bg-primary/10 p-5 sm:p-6" aria-live="polite">
+      <div className="flex items-start gap-3">
+        <span className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-primary text-lg font-extrabold text-gold-ink" aria-hidden="true">✓</span>
+        <div className="min-w-0">
+          <p className="text-xs font-extrabold uppercase tracking-[0.14em] text-primary">Hoàn thành một câu</p>
+          <h2 className="mt-1 text-lg font-extrabold text-ink">Bạn vừa luyện xong nhóm {categoryLabel}</h2>
+          <p className="mt-2 text-sm leading-6 text-ink2">
+            Kết quả <strong className="text-ink">{scoreText}</strong> của câu này đã được lưu. Tiếp tục với một câu cùng nhóm để củng cố đúng cấu trúc, hoặc đổi nhóm khi bạn đã sẵn sàng.
+          </p>
+        </div>
+      </div>
+      <div className="mt-5 flex flex-wrap gap-2.5">
+        <Link href={sameCategoryHref} className="premium-primary inline-flex items-center rounded-xl px-4 py-2.5 text-sm font-extrabold no-underline">
+          Luyện câu tiếp theo {category ? `· ${categoryLabel}` : ""} <span className="ml-1" aria-hidden="true">→</span>
+        </Link>
+        <Link href="/writing?part=1" className="premium-secondary inline-flex items-center rounded-xl px-4 py-2.5 text-sm font-extrabold no-underline">
+          Chọn nhóm khác
+        </Link>
+        <Link href="/writing/history" className="inline-flex items-center px-2 text-sm font-extrabold text-primary hover:underline">
+          Xem tiến trình đã lưu
+        </Link>
+      </div>
+    </article>
+  );
 }
 
 function FeedbackList({ title, icon, tone, items }: { title: string; icon: string; tone: "jade" | "terracotta"; items: string[] }) {

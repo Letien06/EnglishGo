@@ -1,12 +1,16 @@
 import { describe, expect, it } from "vitest";
 import {
+  WRITING_PART_ONE_GRAMMAR_CATEGORIES,
+  type WritingPartOneGrammarCategory,
+} from "@/types/writing";
+import {
   SEED_WRITING_PROMPTS,
   evaluateWritingDeterministically,
 } from "./writing";
 
 describe("original Writing seed library", () => {
   it("covers all three TOEIC Writing practice parts with original content", () => {
-    expect(SEED_WRITING_PROMPTS.filter((item) => item.part === 1)).toHaveLength(5);
+    expect(SEED_WRITING_PROMPTS.filter((item) => item.part === 1)).toHaveLength(24);
     expect(SEED_WRITING_PROMPTS.filter((item) => item.part === 2)).toHaveLength(4);
     expect(SEED_WRITING_PROMPTS.filter((item) => item.part === 3)).toHaveLength(4);
 
@@ -16,6 +20,26 @@ describe("original Writing seed library", () => {
       expect(prompt.rubric.length).toBeGreaterThan(0);
       expect(prompt.sampleAnswers.length).toBeGreaterThan(0);
     }
+  });
+
+  it("gives every Part 1 grammar category several picture drills", () => {
+    const partOne = SEED_WRITING_PROMPTS.filter((item) => item.part === 1);
+    const categoryCounts = partOne.reduce<Record<WritingPartOneGrammarCategory, number>>(
+      (counts, prompt) => {
+        expect(prompt.part1Category).not.toBeNull();
+        const category = prompt.part1Category!;
+        counts[category] += 1;
+        return counts;
+      },
+      { N_N: 0, V_N: 0, N_PREP: 0, V_PREP: 0 },
+    );
+
+    for (const category of WRITING_PART_ONE_GRAMMAR_CATEGORIES) {
+      expect(categoryCounts[category]).toBeGreaterThanOrEqual(6);
+    }
+
+    expect(SEED_WRITING_PROMPTS.filter((item) => item.part !== 1)
+      .every((prompt) => prompt.part1Category === null)).toBe(true);
   });
 
   it("accepts an inflected required term and enforces one sentence for Part 1", () => {
@@ -52,4 +76,3 @@ describe("original Writing seed library", () => {
     expect(partThree.rubric.reduce((sum, item) => sum + item.maxScore, 0)).toBe(5);
   });
 });
-

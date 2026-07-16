@@ -12,6 +12,7 @@ export const writingPromptSchema = z.object({
   instructions: optionalText(4_000),
   promptText: optionalText(8_000),
   tags: optionalList(12, 50),
+  part1Category: z.enum(["N_N", "V_N", "N_PREP", "V_PREP"]).nullable().optional(),
   difficulty: z.enum(["BEGINNER", "INTERMEDIATE", "ADVANCED"]).optional(),
   timeLimitMinutes: z.coerce.number().int().min(1).max(60).optional(),
   // Both a bundled /public path and a vetted remote URL are accepted here.

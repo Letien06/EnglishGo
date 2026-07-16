@@ -7,6 +7,8 @@ import type { AppUser } from "@/types";
 import {
   WRITING_DIFFICULTIES,
   WRITING_PARTS,
+  WRITING_PART_ONE_GRAMMAR_CATEGORY_LABELS,
+  WRITING_PART_ONE_GRAMMAR_CATEGORIES,
   WRITING_PROMPT_STATUSES,
   type WritingAdminOverview,
   type WritingAttempt,
@@ -21,6 +23,7 @@ import {
   type WritingGradingTargets,
   type WritingHint,
   type WritingPart,
+  type WritingPartOneGrammarCategory,
   type WritingPrompt,
   type WritingPromptCatalog,
   type WritingPromptInput,
@@ -128,6 +131,7 @@ export const SEED_WRITING_PROMPTS: WritingPromptRecord[] = [
     id: "p1-meeting-preparation",
     orderIndex: 10,
     part: 1,
+    part1Category: "V_N",
     title: "Preparing a meeting room",
     titleVi: "Chuẩn bị phòng họp",
     summary: "Viết một câu mô tả hoạt động chuẩn bị trước buổi thuyết trình.",
@@ -153,6 +157,7 @@ export const SEED_WRITING_PROMPTS: WritingPromptRecord[] = [
     id: "p1-restaurant-service",
     orderIndex: 20,
     part: 1,
+    part1Category: "V_N",
     title: "Serving a customer",
     titleVi: "Phục vụ khách hàng",
     summary: "Viết một câu về nhân viên nhà hàng và thực đơn.",
@@ -178,6 +183,7 @@ export const SEED_WRITING_PROMPTS: WritingPromptRecord[] = [
     id: "p1-delivery-packages",
     orderIndex: 30,
     part: 1,
+    part1Category: "V_N",
     title: "Loading delivery packages",
     titleVi: "Chất kiện hàng giao nhận",
     summary: "Viết một câu mô tả nhân viên giao nhận và các kiện hàng.",
@@ -203,6 +209,7 @@ export const SEED_WRITING_PROMPTS: WritingPromptRecord[] = [
     id: "p1-airport-flight",
     orderIndex: 40,
     part: 1,
+    part1Category: "V_N",
     title: "Checking a flight board",
     titleVi: "Kiểm tra bảng chuyến bay",
     summary: "Viết một câu về hành khách và thông tin chuyến bay.",
@@ -228,6 +235,7 @@ export const SEED_WRITING_PROMPTS: WritingPromptRecord[] = [
     id: "p1-office-report",
     orderIndex: 50,
     part: 1,
+    part1Category: "V_N",
     title: "Reviewing a report",
     titleVi: "Rà soát báo cáo",
     summary: "Viết một câu về việc kiểm tra báo cáo trong văn phòng.",
@@ -249,6 +257,7 @@ export const SEED_WRITING_PROMPTS: WritingPromptRecord[] = [
     planTemplate: ["Identify the employee.", "Use review + report.", "Add the desk, laptop, or meeting context."],
     gradingTargets: { topicKeywords: ["desk", "laptop", "document", "office", "reading"], requiredIdeas: ["review", "report"] },
   }),
+  ...createExpandedPartOneSeeds(),
   createSeed({
     id: "p2-delayed-delivery",
     orderIndex: 110,
@@ -888,7 +897,451 @@ function nextStepForCheck(prompt: WritingPromptRecord, check: WritingDeterminist
   return "Đọc lại yêu cầu trước khi viết lại.";
 }
 
-function createSeed(input: Omit<WritingPromptRecord, "version" | "status" | "instructions" | "timeLimitMinutes" | "responseRules" | "rubric" | "sourceLabel" | "createdAtMillis" | "updatedAtMillis" | "email" | "imageUrl" | "imageAlt" | "requiredTerms"> & Partial<Pick<WritingPromptRecord, "instructions" | "timeLimitMinutes" | "responseRules" | "email" | "imageUrl" | "imageAlt" | "requiredTerms">>): WritingPromptRecord {
+interface PartOneSeedVariant {
+  id: string;
+  orderIndex: number;
+  part1Category: WritingPartOneGrammarCategory;
+  title: string;
+  titleVi: string;
+  summary: string;
+  imageUrl: string;
+  imageAlt: string;
+  requiredTerms: [string, string];
+  tags: string[];
+  observation: string;
+  frame: string;
+  sampleAnswers: WritingSampleAnswer[];
+  planTemplate: string[];
+  topicKeywords: string[];
+}
+
+/**
+ * Additional original Part 1 drills. Every grammar category has six prompts
+ * in total (including the first five curated prompts above), so learners can
+ * practise a pattern repeatedly without changing to a different Writing part.
+ */
+function createExpandedPartOneSeeds(): WritingPromptRecord[] {
+  const variants: PartOneSeedVariant[] = [
+    {
+      id: "p1-organizing-materials",
+      orderIndex: 60,
+      part1Category: "V_N",
+      title: "Organizing meeting materials",
+      titleVi: "Sắp xếp tài liệu cuộc họp",
+      summary: "Luyện dạng V + N với hoạt động sắp xếp tài liệu trước cuộc họp.",
+      imageUrl: "/writing/meeting-preparation.png",
+      imageAlt: "A colleague arranging materials in a meeting room before a presentation.",
+      requiredTerms: ["organize", "materials"],
+      tags: ["office", "meeting", "present continuous"],
+      observation: "Một nhân viên đang sắp xếp tài liệu trên bàn trong phòng họp.",
+      frame: "The employee is organizing the materials for the meeting.",
+      sampleAnswers: [
+        { answer: "The employee is organizing the materials for the meeting.", translationVi: "Nhân viên đang sắp xếp tài liệu cho cuộc họp.", notes: "Dạng V + N: organizing + the materials." },
+        { answer: "A woman is organizing materials on the conference table.", translationVi: "Một phụ nữ đang sắp xếp tài liệu trên bàn họp.", notes: "Dùng hiện tại tiếp diễn để mô tả hành động trong tranh." },
+      ],
+      planTemplate: ["Name the employee.", "Use organize as the action.", "Add materials and the meeting context."],
+      topicKeywords: ["employee", "materials", "meeting", "table", "room"],
+    },
+    {
+      id: "p1-employee-desk",
+      orderIndex: 70,
+      part1Category: "N_N",
+      title: "Employee at a desk",
+      titleVi: "Nhân viên tại bàn làm việc",
+      summary: "Luyện dạng N + N với người và đồ vật trong văn phòng.",
+      imageUrl: "/writing/office-report.png",
+      imageAlt: "An office employee reading a printed report at a desk with a laptop.",
+      requiredTerms: ["employee", "desk"],
+      tags: ["office", "workplace", "present continuous"],
+      observation: "Một nhân viên đang đọc tài liệu tại bàn làm việc cạnh máy tính xách tay.",
+      frame: "The employee at the desk is checking a document.",
+      sampleAnswers: [
+        { answer: "The employee at the desk is checking a document.", translationVi: "Nhân viên tại bàn làm việc đang kiểm tra một tài liệu.", notes: "Dạng N + N: employee và desk cùng xuất hiện tự nhiên." },
+        { answer: "An employee is sitting at a desk beside a laptop.", translationVi: "Một nhân viên đang ngồi tại bàn làm việc cạnh máy tính xách tay.", notes: "Giữ đúng một câu hoàn chỉnh." },
+      ],
+      planTemplate: ["Identify the employee.", "Include desk as the place or object.", "Describe the visible action."],
+      topicKeywords: ["employee", "desk", "laptop", "report", "office"],
+    },
+    {
+      id: "p1-server-customer",
+      orderIndex: 80,
+      part1Category: "N_N",
+      title: "Server and customer",
+      titleVi: "Nhân viên phục vụ và khách hàng",
+      summary: "Luyện dạng N + N trong bối cảnh phục vụ nhà hàng.",
+      imageUrl: "/writing/restaurant-service.png",
+      imageAlt: "A restaurant server speaking with a customer while holding a menu.",
+      requiredTerms: ["server", "customer"],
+      tags: ["restaurant", "customer service", "present continuous"],
+      observation: "Một nhân viên phục vụ đang trò chuyện với khách hàng bên bàn ăn.",
+      frame: "The server is speaking to a customer at the table.",
+      sampleAnswers: [
+        { answer: "The server is speaking to a customer at the table.", translationVi: "Nhân viên phục vụ đang nói chuyện với một khách hàng tại bàn.", notes: "Dạng N + N: server và customer." },
+        { answer: "A server is showing the menu to a customer in the restaurant.", translationVi: "Một nhân viên đang cho khách hàng xem thực đơn trong nhà hàng.", notes: "Thêm ngữ cảnh để câu sát với tranh." },
+      ],
+      planTemplate: ["Name the server.", "Add the customer.", "Describe their interaction."],
+      topicKeywords: ["server", "customer", "restaurant", "menu", "table"],
+    },
+    {
+      id: "p1-worker-packages",
+      orderIndex: 90,
+      part1Category: "N_N",
+      title: "Worker and packages",
+      titleVi: "Nhân viên và các kiện hàng",
+      summary: "Luyện dạng N + N với người giao hàng và kiện hàng.",
+      imageUrl: "/writing/delivery-packages.png",
+      imageAlt: "A delivery worker loading packages into a van outside an office building.",
+      requiredTerms: ["worker", "packages"],
+      tags: ["logistics", "delivery", "present continuous"],
+      observation: "Một nhân viên giao hàng đang mang các kiện hàng tới xe tải nhỏ.",
+      frame: "The worker is carrying packages to the van.",
+      sampleAnswers: [
+        { answer: "The worker is carrying packages to the van.", translationVi: "Nhân viên đang mang các kiện hàng tới xe tải nhỏ.", notes: "Dạng N + N: worker và packages." },
+        { answer: "A delivery worker is loading packages outside the building.", translationVi: "Một nhân viên giao hàng đang chất các kiện hàng bên ngoài tòa nhà.", notes: "delivery chỉ vai trò của worker." },
+      ],
+      planTemplate: ["Identify the worker.", "Include packages.", "Add the van or building."],
+      topicKeywords: ["worker", "packages", "van", "delivery", "building"],
+    },
+    {
+      id: "p1-traveler-luggage",
+      orderIndex: 100,
+      part1Category: "N_N",
+      title: "Traveler and luggage",
+      titleVi: "Hành khách và hành lý",
+      summary: "Luyện dạng N + N tại khu vực chờ của sân bay.",
+      imageUrl: "/writing/airport-flight.png",
+      imageAlt: "A traveler with luggage looking up at an airport flight information board.",
+      requiredTerms: ["traveler", "luggage"],
+      tags: ["travel", "airport", "present continuous"],
+      observation: "Một hành khách đứng cạnh hành lý và nhìn lên bảng thông tin chuyến bay.",
+      frame: "The traveler is standing beside his luggage at the airport.",
+      sampleAnswers: [
+        { answer: "The traveler is standing beside his luggage at the airport.", translationVi: "Hành khách đang đứng cạnh hành lý của mình tại sân bay.", notes: "Dạng N + N: traveler và luggage." },
+        { answer: "A traveler with luggage is checking the flight board.", translationVi: "Một hành khách có hành lý đang kiểm tra bảng chuyến bay.", notes: "with nối danh từ và đồ vật trong tranh." },
+      ],
+      planTemplate: ["Name the traveler.", "Include luggage.", "Describe the flight board or airport."],
+      topicKeywords: ["traveler", "luggage", "airport", "board", "flight"],
+    },
+    {
+      id: "p1-report-laptop",
+      orderIndex: 110,
+      part1Category: "N_N",
+      title: "Report and laptop",
+      titleVi: "Báo cáo và máy tính xách tay",
+      summary: "Luyện dạng N + N với đồ vật quen thuộc trong văn phòng.",
+      imageUrl: "/writing/office-report.png",
+      imageAlt: "An office employee reading a printed report at a desk with a laptop.",
+      requiredTerms: ["report", "laptop"],
+      tags: ["office", "documents", "workplace"],
+      observation: "Một báo cáo giấy đặt cạnh máy tính xách tay trên bàn làm việc.",
+      frame: "The report is lying next to the laptop on the desk.",
+      sampleAnswers: [
+        { answer: "The report is lying next to the laptop on the desk.", translationVi: "Bản báo cáo đang nằm cạnh máy tính xách tay trên bàn.", notes: "Dạng N + N: report và laptop." },
+        { answer: "A report and a laptop are on the employee's desk.", translationVi: "Một bản báo cáo và máy tính xách tay ở trên bàn của nhân viên.", notes: "Dùng and để nối hai danh từ." },
+      ],
+      planTemplate: ["Include report.", "Include laptop.", "Add the desk as the location."],
+      topicKeywords: ["report", "laptop", "desk", "document", "office"],
+    },
+    {
+      id: "p1-screen-meeting",
+      orderIndex: 120,
+      part1Category: "N_N",
+      title: "Screen for a meeting",
+      titleVi: "Màn hình cho cuộc họp",
+      summary: "Luyện dạng N + N với thiết bị và hoạt động trong phòng họp.",
+      imageUrl: "/writing/meeting-preparation.png",
+      imageAlt: "A colleague arranging materials in a meeting room before a presentation.",
+      requiredTerms: ["screen", "meeting"],
+      tags: ["office", "meeting", "presentation"],
+      observation: "Màn hình và tài liệu đã được chuẩn bị trong phòng họp.",
+      frame: "The screen is ready for the meeting in the conference room.",
+      sampleAnswers: [
+        { answer: "The screen is ready for the meeting in the conference room.", translationVi: "Màn hình đã sẵn sàng cho cuộc họp trong phòng họp.", notes: "Dạng N + N: screen và meeting." },
+        { answer: "The meeting screen is set up beside the materials.", translationVi: "Màn hình cho cuộc họp được lắp đặt cạnh các tài liệu.", notes: "meeting có thể bổ nghĩa cho screen." },
+      ],
+      planTemplate: ["Name the screen.", "Include meeting.", "Add the conference room or materials."],
+      topicKeywords: ["screen", "meeting", "room", "materials", "presentation"],
+    },
+    {
+      id: "p1-employee-at-desk",
+      orderIndex: 130,
+      part1Category: "N_PREP",
+      title: "Employee at a desk",
+      titleVi: "Nhân viên ở bàn làm việc",
+      summary: "Luyện dạng N + Prep với giới từ chỉ vị trí trong văn phòng.",
+      imageUrl: "/writing/office-report.png",
+      imageAlt: "An office employee reading a printed report at a desk with a laptop.",
+      requiredTerms: ["employee", "at"],
+      tags: ["office", "position", "present continuous"],
+      observation: "Một nhân viên đang làm việc tại bàn với báo cáo và máy tính.",
+      frame: "The employee is working at a desk beside a laptop.",
+      sampleAnswers: [
+        { answer: "The employee is working at a desk beside a laptop.", translationVi: "Nhân viên đang làm việc tại một chiếc bàn cạnh máy tính xách tay.", notes: "Dạng N + Prep: employee + at." },
+        { answer: "An employee at the desk is reviewing a report.", translationVi: "Một nhân viên tại bàn làm việc đang xem lại báo cáo.", notes: "at the desk bổ nghĩa cho employee." },
+      ],
+      planTemplate: ["Use employee.", "Place the employee at a desk.", "Describe the report or laptop."],
+      topicKeywords: ["employee", "desk", "report", "laptop", "office"],
+    },
+    {
+      id: "p1-server-at-table",
+      orderIndex: 140,
+      part1Category: "N_PREP",
+      title: "Server at a table",
+      titleVi: "Nhân viên phục vụ ở bàn ăn",
+      summary: "Luyện dạng N + Prep với bối cảnh phục vụ nhà hàng.",
+      imageUrl: "/writing/restaurant-service.png",
+      imageAlt: "A restaurant server speaking with a customer while holding a menu.",
+      requiredTerms: ["server", "at"],
+      tags: ["restaurant", "position", "customer service"],
+      observation: "Một nhân viên phục vụ đang đứng tại bàn của khách hàng.",
+      frame: "The server is standing at a restaurant table.",
+      sampleAnswers: [
+        { answer: "The server is standing at a restaurant table.", translationVi: "Nhân viên phục vụ đang đứng tại một bàn trong nhà hàng.", notes: "Dạng N + Prep: server + at." },
+        { answer: "A server at the table is holding a menu.", translationVi: "Một nhân viên ở bàn ăn đang cầm thực đơn.", notes: "at the table mô tả vị trí của server." },
+      ],
+      planTemplate: ["Use server.", "Add at the table.", "Mention the menu or customer."],
+      topicKeywords: ["server", "table", "menu", "customer", "restaurant"],
+    },
+    {
+      id: "p1-worker-near-van",
+      orderIndex: 150,
+      part1Category: "N_PREP",
+      title: "Worker near a van",
+      titleVi: "Nhân viên gần xe giao hàng",
+      summary: "Luyện dạng N + Prep với vị trí bên cạnh xe giao hàng.",
+      imageUrl: "/writing/delivery-packages.png",
+      imageAlt: "A delivery worker loading packages into a van outside an office building.",
+      requiredTerms: ["worker", "near"],
+      tags: ["delivery", "position", "logistics"],
+      observation: "Một nhân viên giao hàng đứng gần xe tải nhỏ và các kiện hàng.",
+      frame: "The worker is standing near the delivery van.",
+      sampleAnswers: [
+        { answer: "The worker is standing near the delivery van.", translationVi: "Nhân viên đang đứng gần xe giao hàng.", notes: "Dạng N + Prep: worker + near." },
+        { answer: "A worker near the van is moving packages.", translationVi: "Một nhân viên gần xe tải nhỏ đang di chuyển các kiện hàng.", notes: "near the van bổ nghĩa cho worker." },
+      ],
+      planTemplate: ["Use worker.", "Place the worker near the van.", "Add the packages if useful."],
+      topicKeywords: ["worker", "van", "packages", "delivery", "building"],
+    },
+    {
+      id: "p1-traveler-at-airport",
+      orderIndex: 160,
+      part1Category: "N_PREP",
+      title: "Traveler at an airport",
+      titleVi: "Hành khách ở sân bay",
+      summary: "Luyện dạng N + Prep trong bối cảnh chờ chuyến bay.",
+      imageUrl: "/writing/airport-flight.png",
+      imageAlt: "A traveler with luggage looking up at an airport flight information board.",
+      requiredTerms: ["traveler", "at"],
+      tags: ["airport", "travel", "position"],
+      observation: "Một hành khách đang ở sân bay và nhìn bảng thông tin chuyến bay.",
+      frame: "The traveler is waiting at the airport near the flight board.",
+      sampleAnswers: [
+        { answer: "The traveler is waiting at the airport near the flight board.", translationVi: "Hành khách đang chờ ở sân bay gần bảng chuyến bay.", notes: "Dạng N + Prep: traveler + at." },
+        { answer: "A traveler at the airport is checking the departure board.", translationVi: "Một hành khách ở sân bay đang kiểm tra bảng khởi hành.", notes: "at the airport cho biết địa điểm." },
+      ],
+      planTemplate: ["Use traveler.", "Add at the airport.", "Mention the board or luggage."],
+      topicKeywords: ["traveler", "airport", "board", "luggage", "flight"],
+    },
+    {
+      id: "p1-documents-on-desk",
+      orderIndex: 170,
+      part1Category: "N_PREP",
+      title: "Documents on a desk",
+      titleVi: "Tài liệu trên bàn làm việc",
+      summary: "Luyện dạng N + Prep với giới từ chỉ vị trí của đồ vật.",
+      imageUrl: "/writing/office-report.png",
+      imageAlt: "An office employee reading a printed report at a desk with a laptop.",
+      requiredTerms: ["documents", "on"],
+      tags: ["office", "documents", "position"],
+      observation: "Các tài liệu giấy đặt trên bàn cạnh máy tính xách tay.",
+      frame: "The documents are on the desk next to a laptop.",
+      sampleAnswers: [
+        { answer: "The documents are on the desk next to a laptop.", translationVi: "Các tài liệu ở trên bàn cạnh một máy tính xách tay.", notes: "Dạng N + Prep: documents + on." },
+        { answer: "Several documents on the desk are being reviewed by an employee.", translationVi: "Một vài tài liệu trên bàn đang được nhân viên xem lại.", notes: "on the desk có thể bổ nghĩa cho documents." },
+      ],
+      planTemplate: ["Use documents.", "Place them on the desk.", "Add the laptop or employee."],
+      topicKeywords: ["documents", "desk", "laptop", "report", "office"],
+    },
+    {
+      id: "p1-screen-in-room",
+      orderIndex: 180,
+      part1Category: "N_PREP",
+      title: "Screen in a meeting room",
+      titleVi: "Màn hình trong phòng họp",
+      summary: "Luyện dạng N + Prep với thiết bị trong phòng họp.",
+      imageUrl: "/writing/meeting-preparation.png",
+      imageAlt: "A colleague arranging materials in a meeting room before a presentation.",
+      requiredTerms: ["screen", "in"],
+      tags: ["meeting", "office", "position"],
+      observation: "Một màn hình được đặt trong phòng họp cùng tài liệu trình bày.",
+      frame: "The screen is in the meeting room beside the materials.",
+      sampleAnswers: [
+        { answer: "The screen is in the meeting room beside the materials.", translationVi: "Màn hình ở trong phòng họp cạnh các tài liệu.", notes: "Dạng N + Prep: screen + in." },
+        { answer: "A screen in the room is ready for the presentation.", translationVi: "Một màn hình trong phòng đã sẵn sàng cho bài thuyết trình.", notes: "in the room bổ nghĩa cho screen." },
+      ],
+      planTemplate: ["Use screen.", "Place it in the meeting room.", "Add the materials or presentation."],
+      topicKeywords: ["screen", "room", "materials", "presentation", "meeting"],
+    },
+    {
+      id: "p1-wait-for-flight",
+      orderIndex: 190,
+      part1Category: "V_PREP",
+      title: "Waiting for a flight",
+      titleVi: "Chờ chuyến bay",
+      summary: "Luyện dạng V + Prep với cụm wait for trong sân bay.",
+      imageUrl: "/writing/airport-flight.png",
+      imageAlt: "A traveler with luggage looking up at an airport flight information board.",
+      requiredTerms: ["wait", "for"],
+      tags: ["airport", "travel", "present continuous"],
+      observation: "Một hành khách đang chờ chuyến bay và kiểm tra bảng thông tin.",
+      frame: "The passenger is waiting for a flight near the departure board.",
+      sampleAnswers: [
+        { answer: "The passenger is waiting for a flight near the departure board.", translationVi: "Hành khách đang chờ một chuyến bay gần bảng khởi hành.", notes: "Dạng V + Prep: wait + for." },
+        { answer: "A traveler is waiting for his flight with his luggage.", translationVi: "Một hành khách đang chờ chuyến bay cùng hành lý.", notes: "Dùng hiện tại tiếp diễn để mô tả tranh." },
+      ],
+      planTemplate: ["Use wait.", "Add for before the flight.", "Mention the board or luggage."],
+      topicKeywords: ["passenger", "flight", "airport", "board", "luggage"],
+    },
+    {
+      id: "p1-talk-to-customer",
+      orderIndex: 200,
+      part1Category: "V_PREP",
+      title: "Talking to a customer",
+      titleVi: "Nói chuyện với khách hàng",
+      summary: "Luyện dạng V + Prep với cụm talk to trong nhà hàng.",
+      imageUrl: "/writing/restaurant-service.png",
+      imageAlt: "A restaurant server speaking with a customer while holding a menu.",
+      requiredTerms: ["talk", "to"],
+      tags: ["restaurant", "customer service", "present continuous"],
+      observation: "Một nhân viên phục vụ đang nói chuyện với khách hàng và cầm thực đơn.",
+      frame: "The server is talking to a customer while holding a menu.",
+      sampleAnswers: [
+        { answer: "The server is talking to a customer while holding a menu.", translationVi: "Nhân viên phục vụ đang nói chuyện với khách hàng trong khi cầm thực đơn.", notes: "Dạng V + Prep: talk + to." },
+        { answer: "A waiter is talking to a customer at the restaurant table.", translationVi: "Một bồi bàn đang nói chuyện với khách hàng tại bàn trong nhà hàng.", notes: "at the table bổ sung địa điểm." },
+      ],
+      planTemplate: ["Use talk.", "Add to before customer.", "Mention the menu or table."],
+      topicKeywords: ["server", "customer", "menu", "restaurant", "table"],
+    },
+    {
+      id: "p1-load-into-van",
+      orderIndex: 210,
+      part1Category: "V_PREP",
+      title: "Loading into a van",
+      titleVi: "Chất hàng vào xe giao hàng",
+      summary: "Luyện dạng V + Prep với cụm load into trong giao nhận.",
+      imageUrl: "/writing/delivery-packages.png",
+      imageAlt: "A delivery worker loading packages into a van outside an office building.",
+      requiredTerms: ["load", "into"],
+      tags: ["delivery", "logistics", "present continuous"],
+      observation: "Một nhân viên giao hàng đang chất các kiện hàng vào xe tải nhỏ.",
+      frame: "The worker is loading packages into the delivery van.",
+      sampleAnswers: [
+        { answer: "The worker is loading packages into the delivery van.", translationVi: "Nhân viên đang chất các kiện hàng vào xe giao hàng.", notes: "Dạng V + Prep: load + into." },
+        { answer: "A delivery worker is loading boxes into a van outside the building.", translationVi: "Một nhân viên giao hàng đang chất hộp vào xe tải nhỏ bên ngoài tòa nhà.", notes: "into chỉ hướng di chuyển vào trong." },
+      ],
+      planTemplate: ["Use load.", "Add into before the van.", "Mention the packages or boxes."],
+      topicKeywords: ["worker", "packages", "van", "loading", "building"],
+    },
+    {
+      id: "p1-work-on-report",
+      orderIndex: 220,
+      part1Category: "V_PREP",
+      title: "Working on a report",
+      titleVi: "Làm việc với báo cáo",
+      summary: "Luyện dạng V + Prep với cụm work on trong văn phòng.",
+      imageUrl: "/writing/office-report.png",
+      imageAlt: "An office employee reading a printed report at a desk with a laptop.",
+      requiredTerms: ["work", "on"],
+      tags: ["office", "documents", "present continuous"],
+      observation: "Một nhân viên đang đọc và xử lý báo cáo tại bàn làm việc.",
+      frame: "The employee is working on a report at her desk.",
+      sampleAnswers: [
+        { answer: "The employee is working on a report at her desk.", translationVi: "Nhân viên đang làm việc với một báo cáo tại bàn của cô ấy.", notes: "Dạng V + Prep: work + on." },
+        { answer: "A woman is working on a report beside her laptop.", translationVi: "Một phụ nữ đang xử lý báo cáo cạnh máy tính xách tay.", notes: "beside her laptop bổ sung bối cảnh." },
+      ],
+      planTemplate: ["Use work.", "Add on before report.", "Mention the desk or laptop."],
+      topicKeywords: ["employee", "report", "desk", "laptop", "office"],
+    },
+    {
+      id: "p1-stand-near-table",
+      orderIndex: 230,
+      part1Category: "V_PREP",
+      title: "Standing near a table",
+      titleVi: "Đứng gần bàn họp",
+      summary: "Luyện dạng V + Prep với cụm stand near trong phòng họp.",
+      imageUrl: "/writing/meeting-preparation.png",
+      imageAlt: "A colleague arranging materials in a meeting room before a presentation.",
+      requiredTerms: ["stand", "near"],
+      tags: ["meeting", "office", "position"],
+      observation: "Một người đang đứng gần bàn họp và chuẩn bị tài liệu.",
+      frame: "The woman is standing near the conference table.",
+      sampleAnswers: [
+        { answer: "The woman is standing near the conference table.", translationVi: "Người phụ nữ đang đứng gần bàn họp.", notes: "Dạng V + Prep: stand + near." },
+        { answer: "A woman is standing near the table while preparing materials.", translationVi: "Một phụ nữ đang đứng gần bàn trong khi chuẩn bị tài liệu.", notes: "while nối hai hành động liên quan." },
+      ],
+      planTemplate: ["Use stand.", "Add near before the table.", "Mention the materials if useful."],
+      topicKeywords: ["woman", "table", "materials", "meeting", "room"],
+    },
+    {
+      id: "p1-prepare-for-meeting",
+      orderIndex: 240,
+      part1Category: "V_PREP",
+      title: "Preparing for a meeting",
+      titleVi: "Chuẩn bị cho cuộc họp",
+      summary: "Luyện dạng V + Prep với cụm prepare for trước buổi họp.",
+      imageUrl: "/writing/meeting-preparation.png",
+      imageAlt: "A colleague arranging materials in a meeting room before a presentation.",
+      requiredTerms: ["prepare", "for"],
+      tags: ["meeting", "office", "present continuous"],
+      observation: "Một nhân viên đang chuẩn bị tài liệu cho cuộc họp sắp diễn ra.",
+      frame: "The employee is preparing materials for the meeting.",
+      sampleAnswers: [
+        { answer: "The employee is preparing materials for the meeting.", translationVi: "Nhân viên đang chuẩn bị tài liệu cho cuộc họp.", notes: "Dạng V + Prep: prepare + for." },
+        { answer: "A woman is preparing for a meeting in the conference room.", translationVi: "Một phụ nữ đang chuẩn bị cho cuộc họp trong phòng họp.", notes: "for a meeting bổ sung mục đích chuẩn bị." },
+      ],
+      planTemplate: ["Use prepare.", "Add for before the meeting.", "Mention the materials or room."],
+      topicKeywords: ["employee", "materials", "meeting", "room", "presentation"],
+    },
+  ];
+
+  return variants.map(createPartOneSeed);
+}
+
+function createPartOneSeed(variant: PartOneSeedVariant): WritingPromptRecord {
+  const categoryLabel = WRITING_PART_ONE_GRAMMAR_CATEGORY_LABELS[variant.part1Category];
+  return createSeed({
+    id: variant.id,
+    orderIndex: variant.orderIndex,
+    part: 1,
+    part1Category: variant.part1Category,
+    title: variant.title,
+    titleVi: variant.titleVi,
+    summary: variant.summary,
+    promptText: `Write ONE sentence based on the picture. Use BOTH words or phrases below. This exercise practises the ${categoryLabel} pattern.`,
+    imageUrl: variant.imageUrl,
+    imageAlt: variant.imageAlt,
+    requiredTerms: variant.requiredTerms,
+    tags: [...new Set([...variant.tags, categoryLabel])],
+    difficulty: "BEGINNER",
+    taskChecklist: [
+      "Viết đúng một câu hoàn chỉnh.",
+      `Dùng cả ${variant.requiredTerms[0]} và ${variant.requiredTerms[1]}.`,
+      `Luyện đúng dạng ${categoryLabel}.`,
+    ],
+    hints: [
+      { level: 1, title: "Quan sát tranh", body: variant.observation },
+      { level: 2, title: `Khung câu ${categoryLabel}`, body: variant.frame },
+    ],
+    sampleAnswers: variant.sampleAnswers,
+    planTemplate: variant.planTemplate,
+    gradingTargets: {
+      topicKeywords: variant.topicKeywords,
+      requiredIdeas: [...variant.requiredTerms],
+    },
+  });
+}
+
+function createSeed(input: Omit<WritingPromptRecord, "version" | "status" | "instructions" | "timeLimitMinutes" | "responseRules" | "rubric" | "sourceLabel" | "createdAtMillis" | "updatedAtMillis" | "email" | "imageUrl" | "imageAlt" | "requiredTerms" | "part1Category"> & Partial<Pick<WritingPromptRecord, "instructions" | "timeLimitMinutes" | "responseRules" | "email" | "imageUrl" | "imageAlt" | "requiredTerms" | "part1Category">>): WritingPromptRecord {
   const part = input.part;
   return {
     ...input,
@@ -905,6 +1358,7 @@ function createSeed(input: Omit<WritingPromptRecord, "version" | "status" | "ins
     imageUrl: input.imageUrl ?? null,
     imageAlt: input.imageAlt ?? null,
     requiredTerms: input.requiredTerms ?? [],
+    part1Category: part === 1 ? input.part1Category ?? null : null,
   };
 }
 
@@ -925,6 +1379,10 @@ function buildPromptRecord(
   const base = existing ?? baseRecordForPart(id, part, title, now);
   const difficulty = validateDifficulty(input.difficulty ?? base.difficulty);
   const responseRules = normalizeRules(input.responseRules ?? base.responseRules, part);
+  const part1Category = validatePart1Category(
+    input.part1Category === undefined ? base.part1Category : input.part1Category,
+    part,
+  );
   return {
     id,
     version: Math.max(1, base.version + (existing ? 1 : 0)),
@@ -937,6 +1395,7 @@ function buildPromptRecord(
     instructions: cleanOptionalText(input.instructions ?? base.instructions, 1_500) ?? defaultInstructions(part),
     promptText: cleanOptionalText(input.promptText ?? base.promptText, 4_000) ?? "Write a clear response to the task.",
     tags: cleanStringList(input.tags ?? base.tags, 12, 48),
+    part1Category,
     difficulty,
     timeLimitMinutes: normalizeTimeLimit(input.timeLimitMinutes ?? base.timeLimitMinutes, part),
     imageUrl: cleanUrlOrPath(input.imageUrl ?? base.imageUrl),
@@ -969,6 +1428,7 @@ function baseRecordForPart(id: string, part: WritingPart, title: string, now: nu
     instructions: defaultInstructions(part),
     promptText: "Write a clear response to the task.",
     tags: [],
+    part1Category: null,
     difficulty: "INTERMEDIATE",
     timeLimitMinutes: DEFAULT_TIMES[part],
     imageUrl: null,
@@ -1011,7 +1471,10 @@ async function findPromptRecord(id: string): Promise<WritingPromptRecord | null>
   const seeded = SEED_WRITING_PROMPTS.find((item) => item.id === cleanPromptId) ?? null;
   try {
     const snapshot = await adminDb.collection(PROMPTS_COLLECTION).doc(cleanPromptId).get();
-    if (snapshot.exists) return toPromptRecord(cleanPromptId, recordValue(snapshot.data())) ?? seeded;
+    if (snapshot.exists) {
+      const stored = toPromptRecord(cleanPromptId, recordValue(snapshot.data()));
+      return stored ? hydrateLegacyPart1Category(stored, seeded) : seeded;
+    }
   } catch {
     // Fall back to the bundled original content only. Non-seed private/admin
     // content cannot be exposed when Firestore is unavailable.
@@ -1021,8 +1484,24 @@ async function findPromptRecord(id: string): Promise<WritingPromptRecord | null>
 
 function mergeSeedAndFirestore(seeds: WritingPromptRecord[], firestore: WritingPromptRecord[]): WritingPromptRecord[] {
   const merged = new Map<string, WritingPromptRecord>(seeds.map((item) => [item.id, item]));
-  firestore.forEach((item) => merged.set(item.id, item));
+  firestore.forEach((item) => {
+    const seed = merged.get(item.id);
+    merged.set(item.id, hydrateLegacyPart1Category(item, seed));
+  });
   return [...merged.values()];
+}
+
+/**
+ * Seeded Firestore documents created before Part 1 categories existed retain
+ * their edited content but inherit the category for their stable seed id.
+ * A custom prompt with no matching seed deliberately remains uncategorized.
+ */
+function hydrateLegacyPart1Category(
+  record: WritingPromptRecord,
+  seed: WritingPromptRecord | null | undefined,
+): WritingPromptRecord {
+  if (record.part !== 1 || record.part1Category || seed?.part !== 1) return record;
+  return { ...record, part1Category: seed.part1Category };
 }
 
 function toPromptRecord(id: string, data: Record<string, unknown>): WritingPromptRecord | null {
@@ -1041,6 +1520,7 @@ function toPromptRecord(id: string, data: Record<string, unknown>): WritingPromp
     instructions: cleanOptionalText(data.instructions, 1_500) ?? base.instructions,
     promptText: cleanOptionalText(data.promptText, 4_000) ?? base.promptText,
     tags: cleanStringList(data.tags, 12, 48),
+    part1Category: part === 1 ? asPart1Category(data.part1Category) : null,
     difficulty: asDifficulty(data.difficulty) ?? base.difficulty,
     timeLimitMinutes: normalizeTimeLimit(numberValue(data.timeLimitMinutes) ?? base.timeLimitMinutes, part),
     imageUrl: cleanUrlOrPath(data.imageUrl),
@@ -1212,6 +1692,19 @@ function validateDifficulty(value: unknown): WritingDifficulty {
 function asDifficulty(value: unknown): WritingDifficulty | null {
   return typeof value === "string" && (WRITING_DIFFICULTIES as readonly string[]).includes(value)
     ? value as WritingDifficulty
+    : null;
+}
+
+function validatePart1Category(value: unknown, part: WritingPart): WritingPartOneGrammarCategory | null {
+  if (part !== 1 || value == null) return null;
+  const category = asPart1Category(value);
+  if (!category) throw BadRequest("Invalid Part 1 grammar category");
+  return category;
+}
+
+function asPart1Category(value: unknown): WritingPartOneGrammarCategory | null {
+  return typeof value === "string" && (WRITING_PART_ONE_GRAMMAR_CATEGORIES as readonly string[]).includes(value)
+    ? value as WritingPartOneGrammarCategory
     : null;
 }
 
