@@ -25,7 +25,11 @@ function FlashcardFace({
   onSpeakWordUk,
   onSpeakExample,
 }: FlashcardFaceProps) {
-  const stopFlip = (event: React.MouseEvent<HTMLButtonElement>) => event.stopPropagation();
+  const stopFlip = (event: React.SyntheticEvent<HTMLButtonElement>) => event.stopPropagation();
+
+  const stopFlipShortcut = (event: React.KeyboardEvent<HTMLButtonElement>) => {
+    if (event.key === " " || event.key === "Enter") event.stopPropagation();
+  };
 
   return (
     <section className={`flashcard-face ${className}`} aria-hidden={!active}>
@@ -47,10 +51,12 @@ function FlashcardFace({
           <p className="flashcard-example">Ví dụ: {word.example}</p>
         )}
 
-        <div className="flashcard-audio-controls">
+        <div className="flashcard-audio-controls" data-flashcard-audio-control>
           <button
             type="button"
             tabIndex={active ? 0 : -1}
+            onPointerDown={stopFlip}
+            onKeyDown={stopFlipShortcut}
             onClick={(event) => {
               stopFlip(event);
               onSpeakWord();
@@ -62,6 +68,8 @@ function FlashcardFace({
           <button
             type="button"
             tabIndex={active ? 0 : -1}
+            onPointerDown={stopFlip}
+            onKeyDown={stopFlipShortcut}
             onClick={(event) => {
               stopFlip(event);
               onSpeakWordUk();
@@ -74,6 +82,8 @@ function FlashcardFace({
             <button
               type="button"
               tabIndex={active ? 0 : -1}
+              onPointerDown={stopFlip}
+              onKeyDown={stopFlipShortcut}
               onClick={(event) => {
                 stopFlip(event);
                 onSpeakExample();
@@ -105,11 +115,21 @@ export default function FlashcardMode({
   const frontIsEnglish = !reverse;
   const backIsEnglish = reverse;
 
+  const handleCardClick = (event: React.MouseEvent<HTMLDivElement>) => {
+    if (
+      event.target instanceof Element &&
+      event.target.closest("[data-flashcard-audio-control]")
+    ) {
+      return;
+    }
+    onFlip();
+  };
+
   return (
     <div className="flashcard-experience mx-auto max-w-2xl">
       <div
         className={`flashcard-scene ${flipped ? "is-flipped" : ""}`}
-        onClick={onFlip}
+        onClick={handleCardClick}
       >
         <div className="flashcard-card">
           <FlashcardFace
