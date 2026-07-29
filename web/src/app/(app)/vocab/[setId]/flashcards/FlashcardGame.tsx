@@ -27,6 +27,7 @@ import type {
 import useDialogFocus from "@/components/useDialogFocus";
 import { ClientRequestTimeoutError, fetchWithTimeout } from "@/lib/client-request";
 import { consolidateVocabGameAnswers } from "@/lib/vocab-game-results";
+import { englishExampleForSpeech } from "@/lib/vocab-speech";
 
 interface Props {
   session: VocabSetSession;
@@ -998,7 +999,7 @@ function PlaySurface({
   const speakWord = useCallback(() => speakItem(word, "us"), [speakItem, word]);
   const speakWordUk = useCallback(() => speakItem(word, "uk"), [speakItem, word]);
   const speakExample = useCallback(() => {
-    if (!muted && word?.example) speak(word.example);
+    if (!muted && word?.example) speak(englishExampleForSpeech(word.example));
   }, [muted, word]);
 
   /* ---- Quiz option generation ---- */
@@ -1720,7 +1721,9 @@ function PlaySurface({
           }
           onSpeak={() => speakItem(feedback.item)}
           onSpeakExample={() => {
-            if (!muted && feedback.item.example) speak(feedback.item.example);
+            if (!muted && feedback.item.example) {
+              speak(englishExampleForSpeech(feedback.item.example));
+            }
           }}
           onContinue={continueAfterFeedback}
         />
