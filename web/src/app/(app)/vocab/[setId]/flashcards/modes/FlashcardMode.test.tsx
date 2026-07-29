@@ -31,6 +31,16 @@ function renderFlashcard(flipped = false) {
 }
 
 describe("FlashcardMode audio controls", () => {
+  it("renders the audio controls below, outside the flippable card", () => {
+    const { container } = renderFlashcard();
+    const scene = container.querySelector(".flashcard-scene");
+
+    expect(scene).not.toBeNull();
+    expect(scene).not.toContainElement(screen.getByRole("button", { name: "US" }));
+    expect(scene).not.toContainElement(screen.getByRole("button", { name: "UK" }));
+    expect(scene).not.toContainElement(screen.getByRole("button", { name: "Nghe ví dụ" }));
+  });
+
   it("plays US and UK audio without flipping the card", () => {
     const { onFlip, onSpeakWord, onSpeakWordUk } = renderFlashcard();
 
@@ -43,21 +53,11 @@ describe("FlashcardMode audio controls", () => {
   });
 
   it("plays the example without flipping the card", () => {
-    const { onFlip, onSpeakExample } = renderFlashcard(true);
+    const { onFlip, onSpeakExample } = renderFlashcard();
 
     fireEvent.click(screen.getByRole("button", { name: "Nghe ví dụ" }));
 
     expect(onSpeakExample).toHaveBeenCalledTimes(1);
-    expect(onFlip).not.toHaveBeenCalled();
-  });
-
-  it("keeps clicks inside the audio controls from reaching the flip handler", () => {
-    const { container, onFlip } = renderFlashcard();
-    const controls = container.querySelector("[data-flashcard-audio-control]");
-
-    expect(controls).not.toBeNull();
-    fireEvent.click(controls!);
-
     expect(onFlip).not.toHaveBeenCalled();
   });
 

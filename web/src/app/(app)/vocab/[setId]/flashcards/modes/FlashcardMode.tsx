@@ -8,6 +8,10 @@ type FlashcardFaceProps = {
   word: VocabWordCard;
   showPhonetic: boolean;
   showExample: boolean;
+};
+
+type FlashcardAudioControlsProps = {
+  word: VocabWordCard;
   onSpeakWord: () => void;
   onSpeakWordUk: () => void;
   onSpeakExample: () => void;
@@ -21,16 +25,7 @@ function FlashcardFace({
   word,
   showPhonetic,
   showExample,
-  onSpeakWord,
-  onSpeakWordUk,
-  onSpeakExample,
 }: FlashcardFaceProps) {
-  const stopFlip = (event: React.SyntheticEvent<HTMLButtonElement>) => event.stopPropagation();
-
-  const stopFlipShortcut = (event: React.KeyboardEvent<HTMLButtonElement>) => {
-    if (event.key === " " || event.key === "Enter") event.stopPropagation();
-  };
-
   return (
     <section className={`flashcard-face ${className}`} aria-hidden={!active}>
       <div className="flashcard-face-glow" aria-hidden="true" />
@@ -50,52 +45,46 @@ function FlashcardFace({
         {showExample && word.example && (
           <p className="flashcard-example">Ví dụ: {word.example}</p>
         )}
-
-        <div className="flashcard-audio-controls" data-flashcard-audio-control>
-          <button
-            type="button"
-            tabIndex={active ? 0 : -1}
-            onPointerDown={stopFlip}
-            onKeyDown={stopFlipShortcut}
-            onClick={(event) => {
-              stopFlip(event);
-              onSpeakWord();
-            }}
-            className="flashcard-audio-button flashcard-audio-button--primary"
-          >
-            US
-          </button>
-          <button
-            type="button"
-            tabIndex={active ? 0 : -1}
-            onPointerDown={stopFlip}
-            onKeyDown={stopFlipShortcut}
-            onClick={(event) => {
-              stopFlip(event);
-              onSpeakWordUk();
-            }}
-            className="flashcard-audio-button"
-          >
-            UK
-          </button>
-          {showExample && word.example && (
-            <button
-              type="button"
-              tabIndex={active ? 0 : -1}
-              onPointerDown={stopFlip}
-              onKeyDown={stopFlipShortcut}
-              onClick={(event) => {
-                stopFlip(event);
-                onSpeakExample();
-              }}
-              className="flashcard-example-audio"
-            >
-              Nghe ví dụ
-            </button>
-          )}
-        </div>
       </div>
     </section>
+  );
+}
+
+function FlashcardAudioControls({
+  word,
+  onSpeakWord,
+  onSpeakWordUk,
+  onSpeakExample,
+}: FlashcardAudioControlsProps) {
+  return (
+    <aside className="flashcard-audio-dock" aria-label="Nghe phát âm">
+      <span className="flashcard-audio-dock-label">Nghe phát âm</span>
+      <div className="flashcard-audio-controls">
+        <button
+          type="button"
+          onClick={onSpeakWord}
+          className="flashcard-audio-button flashcard-audio-button--primary"
+        >
+          US
+        </button>
+        <button
+          type="button"
+          onClick={onSpeakWordUk}
+          className="flashcard-audio-button"
+        >
+          UK
+        </button>
+        {word.example && (
+          <button
+            type="button"
+            onClick={onSpeakExample}
+            className="flashcard-example-audio"
+          >
+            Nghe ví dụ
+          </button>
+        )}
+      </div>
+    </aside>
   );
 }
 
@@ -115,21 +104,11 @@ export default function FlashcardMode({
   const frontIsEnglish = !reverse;
   const backIsEnglish = reverse;
 
-  const handleCardClick = (event: React.MouseEvent<HTMLDivElement>) => {
-    if (
-      event.target instanceof Element &&
-      event.target.closest("[data-flashcard-audio-control]")
-    ) {
-      return;
-    }
-    onFlip();
-  };
-
   return (
     <div className="flashcard-experience mx-auto max-w-2xl">
       <div
         className={`flashcard-scene ${flipped ? "is-flipped" : ""}`}
-        onClick={handleCardClick}
+        onClick={onFlip}
       >
         <div className="flashcard-card">
           <FlashcardFace
@@ -140,9 +119,6 @@ export default function FlashcardMode({
             word={word}
             showPhonetic={frontIsEnglish}
             showExample={false}
-            onSpeakWord={onSpeakWord}
-            onSpeakWordUk={onSpeakWordUk}
-            onSpeakExample={onSpeakExample}
           />
           <FlashcardFace
             active={flipped}
@@ -152,9 +128,6 @@ export default function FlashcardMode({
             word={word}
             showPhonetic={backIsEnglish}
             showExample
-            onSpeakWord={onSpeakWord}
-            onSpeakWordUk={onSpeakWordUk}
-            onSpeakExample={onSpeakExample}
           />
         </div>
       </div>
@@ -171,6 +144,13 @@ export default function FlashcardMode({
         </button>
         <p>Click vào thẻ hoặc nhấn Space để lật</p>
       </div>
+
+      <FlashcardAudioControls
+        word={word}
+        onSpeakWord={onSpeakWord}
+        onSpeakWordUk={onSpeakWordUk}
+        onSpeakExample={onSpeakExample}
+      />
     </div>
   );
 }

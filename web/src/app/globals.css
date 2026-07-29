@@ -1453,6 +1453,30 @@ h1, h2, h3, h4, h5 {
   margin-top: 1.4rem;
 }
 
+.flashcard-audio-dock {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem 0.85rem;
+  margin-top: 0.8rem;
+  border: 1px solid color-mix(in srgb, var(--line) 78%, var(--primary) 12%);
+  border-radius: 1rem;
+  background: color-mix(in srgb, var(--surface) 90%, transparent);
+  box-shadow: var(--elevation-1);
+  padding: 0.65rem 0.9rem;
+}
+
+.flashcard-audio-dock-label {
+  color: var(--muted);
+  font-size: 0.7rem;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.flashcard-audio-dock .flashcard-audio-controls { margin-top: 0; }
+
 .flashcard-audio-button,
 .flashcard-example-audio,
 .flashcard-flip-button,
