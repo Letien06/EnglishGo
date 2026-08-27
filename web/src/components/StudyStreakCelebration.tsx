@@ -8,7 +8,6 @@ type MilestoneResponse = {
   data: number | null;
 };
 
-const CHECK_INTERVAL_MS = 30_000;
 const AUTO_DISMISS_SECONDS = 10;
 
 export default function StudyStreakCelebration() {
@@ -52,11 +51,9 @@ export default function StudyStreakCelebration() {
   }, [pathname, checkForMilestone]);
 
   useEffect(() => {
-    const interval = window.setInterval(() => void checkForMilestone(), CHECK_INTERVAL_MS);
     const onFocus = () => void checkForMilestone();
     window.addEventListener("focus", onFocus);
     return () => {
-      window.clearInterval(interval);
       window.removeEventListener("focus", onFocus);
     };
   }, [checkForMilestone]);

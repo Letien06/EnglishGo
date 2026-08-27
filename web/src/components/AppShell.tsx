@@ -2,9 +2,11 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import type { ReactNode } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 import ThemeToggle from "./ThemeToggle";
+import { AuthenticatedSessionProvider } from "./AuthenticatedSessionContext";
 import StudyStreakBadge from "./StudyStreakBadge";
+import StudyStreakCelebration from "./StudyStreakCelebration";
 import NavIcon, { type NavIconName } from "./NavIcon";
 import MobileNavigationMenu from "./MobileNavigationMenu";
 import PetFloatingWidget from "./PetFloatingWidget";
@@ -27,20 +29,66 @@ const navItems = [
   color: string;
 }>;
 
+type SessionCheckResponse = {
+  success: boolean;
+  data: { uid: string } | null;
+};
+
+let cachedAuthenticated: boolean | null = null;
+let sessionCheckInFlight: Promise<boolean> | null = null;
+
+async function checkAuthenticatedSession(): Promise<boolean> {
+  if (cachedAuthenticated != null) return cachedAuthenticated;
+  if (sessionCheckInFlight) return sessionCheckInFlight;
+
+  sessionCheckInFlight = fetch("/api/auth/session", { cache: "no-store" })
+    .then(async (response) => {
+      const body = await response.json() as SessionCheckResponse;
+      cachedAuthenticated = Boolean(response.ok && body.success && body.data?.uid);
+      return cachedAuthenticated;
+    })
+    .catch(() => false)
+    .finally(() => {
+      sessionCheckInFlight = null;
+    });
+
+  return sessionCheckInFlight;
+}
+
 export default function AppShell({ children }: { children: ReactNode }) {
   const pathname = usePathname();
+  const [authenticated, setAuthenticated] = useState(() => cachedAuthenticated === true);
   const isPracticeWorkspace =
     pathname.startsWith("/listen/practice") ||
     pathname.startsWith("/read/practice") ||
     pathname.startsWith("/practice/session") ||
     pathname.startsWith("/writing/practice");
 
+  useEffect(() => {
+    if (isPracticeWorkspace || cachedAuthenticated === true) return;
+
+    let cancelled = false;
+    // Keep first content paint clear of optional account widgets. One quiet
+    // session check replaces the previous Pet/streak requests for visitors.
+    const timer = window.setTimeout(() => {
+      void checkAuthenticatedSession().then((nextAuthenticated) => {
+        if (!cancelled) setAuthenticated(nextAuthenticated);
+      });
+    }, 1200);
+
+    return () => {
+      cancelled = true;
+      window.clearTimeout(timer);
+    };
+  }, [isPracticeWorkspace]);
+
   if (isPracticeWorkspace) {
     return <>{children}</>;
   }
 
   return (
-    <div className="app-shell design-system min-h-dvh text-ink">
+    <AuthenticatedSessionProvider authenticated={authenticated}>
+      <div className="app-shell design-system min-h-dvh text-ink">
       <header className="app-shell-header app-primary-nav sticky top-0 z-50 border-b bg-glass/90 backdrop-blur-xl">
         <div className="flex h-16 items-center justify-between px-4 sm:px-6">
           <Link href="/" className="app-brand flex items-center gap-3 no-underline">
@@ -77,7 +125,7 @@ export default function AppShell({ children }: { children: ReactNode }) {
           <div className="ml-auto flex items-center gap-3">
             <MobileNavigationMenu />
             <PwaInstallPrompt />
-            <StudyStreakBadge className="hidden sm:inline-flex" />
+            {authenticated && <StudyStreakBadge className="hidden sm:inline-flex" />}
             <ThemeToggle className="!hidden border border-line bg-surface-soft text-ink xl:!inline-flex" />
             <Link
               href="/account"
@@ -94,8 +142,10 @@ export default function AppShell({ children }: { children: ReactNode }) {
         </div>
       </header>
 
-      {children}
-      <PetFloatingWidget />
-    </div>
+        {children}
+        {authenticated && <PetFloatingWidget />}
+        {authenticated && <StudyStreakCelebration />}
+      </div>
+    </AuthenticatedSessionProvider>
   );
 }

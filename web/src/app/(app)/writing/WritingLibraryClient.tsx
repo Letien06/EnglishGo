@@ -1,15 +1,17 @@
 "use client";
 
+import Image from "next/image";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
+import { useAuthenticatedSession } from "@/components/AuthenticatedSessionContext";
 import {
   WRITING_PART_ONE_GRAMMAR_CATEGORIES,
   WRITING_PART_ONE_GRAMMAR_CATEGORY_LABELS,
   type WritingAttempt,
   type WritingPart,
   type WritingPartOneGrammarCategory,
-  type WritingPrompt,
+  type WritingPromptCard as WritingPromptCardSummary,
 } from "@/types/writing";
 
 const PARTS: Array<{
@@ -74,12 +76,12 @@ function labelForPart(part: WritingPart) {
   return PARTS.find((item) => item.id === part)?.title ?? `Part ${part}`;
 }
 
-function normalizePrompts(data: unknown): WritingPrompt[] {
-  if (Array.isArray(data)) return data as WritingPrompt[];
+function normalizePrompts(data: unknown): WritingPromptCardSummary[] {
+  if (Array.isArray(data)) return data as WritingPromptCardSummary[];
   if (data && typeof data === "object") {
     const record = data as { prompts?: unknown; items?: unknown };
-    if (Array.isArray(record.prompts)) return record.prompts as WritingPrompt[];
-    if (Array.isArray(record.items)) return record.items as WritingPrompt[];
+    if (Array.isArray(record.prompts)) return record.prompts as WritingPromptCardSummary[];
+    if (Array.isArray(record.items)) return record.items as WritingPromptCardSummary[];
   }
   return [];
 }
@@ -121,12 +123,14 @@ function categoryFromText(value: string): WritingPartOneGrammarCategory | null {
   return null;
 }
 
-function grammarCategoryForPrompt(prompt: WritingPrompt): WritingPartOneGrammarCategory | null {
+function grammarCategoryForPrompt(
+  prompt: Pick<WritingPromptCardSummary, "id" | "part" | "part1Category" | "tags">,
+): WritingPartOneGrammarCategory | null {
   if (prompt.part !== 1) return null;
 
   // `part1Category` is the canonical API field. The alternate property and
   // tag matching keep historical/custom content discoverable.
-  const compatibilityPrompt = prompt as WritingPrompt & { grammarCategory?: unknown; part1Category?: unknown };
+  const compatibilityPrompt = prompt as typeof prompt & { grammarCategory?: unknown; part1Category?: unknown };
   const explicitCategory = typeof compatibilityPrompt.part1Category === "string"
     ? compatibilityPrompt.part1Category
     : typeof compatibilityPrompt.grammarCategory === "string"
@@ -158,6 +162,7 @@ function scoreByPromptId(attempts: WritingAttempt[]): Record<string, PromptScore
 
 export default function WritingLibraryClient() {
   const searchParams = useSearchParams();
+  const authenticated = useAuthenticatedSession();
   const requestedPart = parsePart(searchParams.get("part"));
   const requestedCategory = parsePartOneCategory(searchParams.get("category"));
   const [part, setPart] = useState<WritingPart>(() => requestedPart ?? 1);
@@ -165,7 +170,7 @@ export default function WritingLibraryClient() {
   const [tag, setTag] = useState("all");
   const [partOneCategory, setPartOneCategory] = useState<ActivePartOneCategory>(() => requestedPart === 1 ? requestedCategory ?? "all" : "all");
   const [reloadKey, setReloadKey] = useState(0);
-  const [prompts, setPrompts] = useState<WritingPrompt[]>([]);
+  const [prompts, setPrompts] = useState<WritingPromptCardSummary[]>([]);
   const [latestScores, setLatestScores] = useState<Record<string, PromptScore>>({});
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -199,10 +204,12 @@ export default function WritingLibraryClient() {
   }, [part, reloadKey]);
 
   useEffect(() => {
+    if (!authenticated) return;
+
     let cancelled = false;
 
-    // The history endpoint is private. A signed-out learner can still browse
-    // the library; in that case we simply leave score badges absent.
+    // Score badges are private, so fetch them only after the shell has
+    // confirmed an authenticated session.
     fetch("/api/writing/attempts/history?part=1&limit=30", { cache: "no-store" })
       .then(async (response) => {
         if (!response.ok) return [] as WritingAttempt[];
@@ -218,7 +225,7 @@ export default function WritingLibraryClient() {
       });
 
     return () => { cancelled = true; };
-  }, [reloadKey]);
+  }, [authenticated, reloadKey]);
 
   function choosePart(nextPart: WritingPart) {
     if (nextPart === part) return;
@@ -374,22 +381,33 @@ function GrammarCategoryChip({ active, count, onClick, children }: { active: boo
   return <button type="button" onClick={onClick} aria-pressed={active} className={`inline-flex items-center gap-2 rounded-xl border px-3 py-2 text-xs font-extrabold transition-[border-color,background-color,transform] duration-150 ease-out active:scale-[0.97] ${active ? "border-primary bg-primary text-gold-ink shadow-sm" : "border-line bg-surface-soft text-ink2 hover:border-primary/35 hover:bg-surface"}`}><span>{children}</span><span className={`rounded-md px-1.5 py-0.5 text-[10px] ${active ? "bg-white/20 text-inherit" : "bg-primary/10 text-primary"}`}>{count} câu</span></button>;
 }
 
-function WritingPromptCard({ prompt, latestScore }: { prompt: WritingPrompt; latestScore?: PromptScore }) {
+function WritingPromptCard({ prompt, latestScore }: { prompt: WritingPromptCardSummary; latestScore?: PromptScore }) {
   const partMeta = PARTS.find((item) => item.id === prompt.part) ?? PARTS[0];
-  const hasImage = prompt.part === 1 && Boolean(prompt.imageUrl);
+  const hasImage = prompt.part === 1 && Boolean(prompt.thumbnailUrl);
   const grammarCategory = grammarCategoryForPrompt(prompt);
   return (
     <article className="premium-card premium-card--interactive group overflow-hidden">
       <div
-        role={hasImage ? "img" : undefined}
-        aria-label={hasImage ? prompt.imageAlt || prompt.title : undefined}
         className={`relative flex min-h-32 items-end overflow-hidden p-4 ${hasImage ? "bg-surface-soft bg-cover bg-center" : `bg-gradient-to-br ${partMeta.gradient}`}`}
-        style={hasImage ? { backgroundImage: `linear-gradient(180deg, transparent 22%, color-mix(in srgb, var(--s0) 78%, transparent)), url("${prompt.imageUrl}")` } : undefined}
       >
-        <span className="absolute left-4 top-4 rounded-full border border-white/20 bg-black/35 px-2.5 py-1 text-[11px] font-extrabold text-white backdrop-blur-sm">Part {prompt.part}</span>
-        {latestScore && <span title="Điểm ước tính từ lần làm gần nhất" className="absolute right-4 top-4 inline-flex items-center gap-1 rounded-full border border-jade/35 bg-jade/90 px-2.5 py-1 text-[11px] font-extrabold text-white shadow-sm"><span aria-hidden="true">✓</span> Điểm {latestScore.score}/{latestScore.maxScore}</span>}
+        {hasImage && (
+          <>
+            <Image
+              src={prompt.thumbnailUrl!}
+              alt={prompt.imageAlt || prompt.title}
+              fill
+              sizes="(max-width: 639px) 100vw, (max-width: 1279px) 50vw, 33vw"
+              className="object-cover"
+              loading="lazy"
+              decoding="async"
+            />
+            <div aria-hidden="true" className="absolute inset-0" style={{ backgroundImage: "linear-gradient(180deg, transparent 22%, color-mix(in srgb, var(--s0) 78%, transparent))" }} />
+          </>
+        )}
+        <span className="absolute left-4 top-4 z-10 rounded-full border border-white/20 bg-black/35 px-2.5 py-1 text-[11px] font-extrabold text-white backdrop-blur-sm">Part {prompt.part}</span>
+        {latestScore && <span title="Điểm ước tính từ lần làm gần nhất" className="absolute right-4 top-4 z-10 inline-flex items-center gap-1 rounded-full border border-jade/35 bg-jade/90 px-2.5 py-1 text-[11px] font-extrabold text-white shadow-sm"><span aria-hidden="true">✓</span> Điểm {latestScore.score}/{latestScore.maxScore}</span>}
         {!hasImage && <span className="text-4xl text-white" aria-hidden="true">{partMeta.icon}</span>}
-        {hasImage && <span className="text-xs font-bold text-white/90">{grammarCategory ? WRITING_PART_ONE_GRAMMAR_CATEGORY_LABELS[grammarCategory] : "Ảnh luyện viết gốc"}</span>}
+        {hasImage && <span className="relative z-10 text-xs font-bold text-white/90">{grammarCategory ? WRITING_PART_ONE_GRAMMAR_CATEGORY_LABELS[grammarCategory] : "Ảnh luyện viết gốc"}</span>}
       </div>
       <div className="p-5">
         <div className="flex items-start justify-between gap-3">

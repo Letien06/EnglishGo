@@ -1,4 +1,5 @@
 import { FieldValue } from "firebase-admin/firestore";
+import { revalidateTag, unstable_cache } from "next/cache";
 import { BadRequest, NotFound } from "@/lib/api/response";
 import { adminDb } from "@/lib/firestore/db";
 import { generateJson } from "@/lib/services/gemini";
@@ -25,6 +26,7 @@ import {
   type WritingPart,
   type WritingPartOneGrammarCategory,
   type WritingPrompt,
+  type WritingPromptCard,
   type WritingPromptCatalog,
   type WritingPromptInput,
   type WritingPromptRecord,
@@ -41,6 +43,8 @@ const CONTENT_AUDIT_COLLECTION = "contentAuditLogs";
 const MAX_RESPONSE_CHARACTERS = 8_000;
 const MAX_HISTORY_ITEMS = 30;
 const ATTEMPTS_PER_DAY = 25;
+const WRITING_PROMPT_CACHE_TAG = "writing-prompts";
+const WRITING_MEDIA_VERSION = "v1";
 const ESTIMATE_DISCLAIMER =
   "Điểm này là ước tính phục vụ luyện tập, dựa trên bài viết hiện tại và không phải điểm TOEIC chính thức của ETS.";
 
@@ -459,18 +463,18 @@ export const SEED_WRITING_PROMPTS: WritingPromptRecord[] = [
 
 /** List learner-visible prompts, using Firestore overrides when they exist. */
 export async function listWritingPrompts(part?: WritingPart): Promise<WritingPromptCatalog> {
-  const { records, source } = await readMergedPromptRecords();
+  const { records, source } = await cachedReadMergedPromptRecords();
   const items = records
     .filter((item) => item.status === "PUBLISHED")
     .filter((item) => part == null || item.part === part)
     .sort(sortPrompts)
-    .map(toPublicPrompt);
+    .map(toWritingPromptCard);
   return { items, total: items.length, source };
 }
 
 /** Retrieve a public prompt. Archived, draft and review prompts are hidden. */
 export async function getWritingPrompt(id: string): Promise<WritingPrompt> {
-  const record = await findPromptRecord(id);
+  const record = await cachedFindPromptRecord(cleanId(id));
   if (!record || record.status !== "PUBLISHED") throw NotFound("Writing prompt not found");
   return toPublicPrompt(record);
 }
@@ -520,6 +524,7 @@ export async function seedDefaultWritingPrompts(uid: string): Promise<{ created:
       }));
     });
     await batch.commit();
+    invalidateWritingPromptCache();
   }
   await recordWritingAudit("SEED_DEFAULT_PROMPTS", "seed-library", uid, { created: missing.length });
   return { created: missing.length, existing: SEED_WRITING_PROMPTS.length - missing.length, total: SEED_WRITING_PROMPTS.length };
@@ -536,6 +541,7 @@ export async function createWritingPrompt(input: WritingPromptInput, uid: string
     updatedByUid: uid,
   }));
   await recordWritingAudit("CREATE_PROMPT", record.id, uid, { part: record.part });
+  invalidateWritingPromptCache();
   return toPublicPrompt(record);
 }
 
@@ -555,6 +561,7 @@ export async function updateWritingPrompt(
     updatedByUid: uid,
   }, false), { merge: true });
   await recordWritingAudit("UPDATE_PROMPT", cleanPromptId, uid, { part: record.part, status: record.status });
+  invalidateWritingPromptCache();
   return toPublicPrompt(record);
 }
 
@@ -2976,8 +2983,58 @@ function toPromptRecord(id: string, data: Record<string, unknown>): WritingPromp
 function toPublicPrompt(record: WritingPromptRecord): WritingPrompt {
   const prompt = { ...record } as Partial<WritingPromptRecord>;
   delete prompt.gradingTargets;
+  prompt.imageUrl = toPracticeImageUrl(prompt.imageUrl ?? null);
   return prompt as WritingPrompt;
 }
+
+function toWritingPromptCard(record: WritingPromptRecord): WritingPromptCard {
+  return {
+    id: record.id,
+    part: record.part,
+    title: record.title,
+    titleVi: record.titleVi,
+    summary: record.summary,
+    tags: record.tags,
+    part1Category: record.part1Category,
+    difficulty: record.difficulty,
+    timeLimitMinutes: record.timeLimitMinutes,
+    thumbnailUrl: toCardImageUrl(record.imageUrl),
+    imageAlt: record.imageAlt,
+    requiredTerms: record.requiredTerms,
+  };
+}
+
+function toPracticeImageUrl(imageUrl: string | null): string | null {
+  return toOptimizedWritingImageUrl(imageUrl, "practice");
+}
+
+function toCardImageUrl(imageUrl: string | null): string | null {
+  return toOptimizedWritingImageUrl(imageUrl, "card");
+}
+
+function toOptimizedWritingImageUrl(
+  imageUrl: string | null,
+  variant: "card" | "practice",
+): string | null {
+  if (!imageUrl?.startsWith("/writing/") || !imageUrl.endsWith(".png")) return imageUrl;
+  return imageUrl.replace(/\.png$/, `-${variant}-${WRITING_MEDIA_VERSION}.webp`);
+}
+
+function invalidateWritingPromptCache() {
+  revalidateTag(WRITING_PROMPT_CACHE_TAG, { expire: 0 });
+}
+
+const cachedReadMergedPromptRecords = unstable_cache(
+  readMergedPromptRecords,
+  ["writing-prompt-records"],
+  { revalidate: 300, tags: [WRITING_PROMPT_CACHE_TAG] },
+);
+
+const cachedFindPromptRecord = unstable_cache(
+  async (id: string) => findPromptRecord(id),
+  ["writing-prompt-record"],
+  { revalidate: 300, tags: [WRITING_PROMPT_CACHE_TAG] },
+);
 
 function serializePrompt(
   prompt: WritingPromptRecord,

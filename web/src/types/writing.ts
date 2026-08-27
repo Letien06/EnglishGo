@@ -117,6 +117,23 @@ export interface WritingPrompt {
   updatedAtMillis: number | null;
 }
 
+/** Lightweight, public payload used by the Writing library grid. */
+export interface WritingPromptCard {
+  id: string;
+  part: WritingPart;
+  title: string;
+  titleVi: string;
+  summary: string;
+  tags: string[];
+  part1Category: WritingPartOneGrammarCategory | null;
+  difficulty: WritingDifficulty;
+  timeLimitMinutes: number;
+  /** Small self-authored WebP used only in the scrolling card grid. */
+  thumbnailUrl: string | null;
+  imageAlt: string | null;
+  requiredTerms: string[];
+}
+
 /**
  * Internal authoring fields. `gradingTargets` are intentionally not included
  * in the public `WritingPrompt` response, so they can guide scoring without
@@ -224,7 +241,7 @@ export interface WritingAttemptInput {
 }
 
 export interface WritingPromptCatalog {
-  items: WritingPrompt[];
+  items: WritingPromptCard[];
   total: number;
   source: "FIRESTORE" | "SEED" | "MIXED";
 }

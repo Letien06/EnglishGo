@@ -8,15 +8,14 @@
  * flashing the loading overlay each time. This component keeps an SWR-style
  * cache keyed by `skill:partId` that lives for the browser session:
  *
- *   - First visit for a part: use the SSR `initialLevels`, then revalidate
- *     silently in the background and store the result in the cache.
+ *   - First visit for a part: use the SSR `initialLevels` and store the
+ *     result in the cache without immediately requesting the same data again.
  *   - Returning to the same part later: render the cached levels INSTANTLY
  *     (no overlay, no reload), then revalidate silently.
  *   - After a part loads: prefetch sibling parts in the background so switching
  *     Part 1 -> Part 2 or Part 5 -> Part 6 usually reuses hot client cache.
  *
- * Progress is still kept fresh because we always revalidate in the background
- * and, critically, we refresh when the tab/window regains focus (e.g. after
+ * Progress is still kept fresh when the tab/window regains focus (e.g. after
  * finishing a practice session and navigating back).
  */
 import Link from "next/link";
@@ -124,18 +123,19 @@ export default function LevelDashboardClient({
     // in this session. Path mirrors the dashboard pages: /listen or /read.
     const dashboardPath = skill === "listening" ? "/listen" : "/read";
     markVisited(routeKey(dashboardPath, { part: partId }));
-    // Always revalidate silently in the background on mount (or with an overlay
-    // when we truly have nothing to display).
-    const revalidateTimer = window.setTimeout(() => {
-      void fetchLevels(levels.length === 0 && !error);
-    }, 0);
+    // Server-rendered data is already fresh. Only show the loading state when
+    // the server could not provide a first result; otherwise wait for focus or
+    // an explicit reset before refreshing progress.
+    const revalidateTimer = levels.length === 0
+      ? window.setTimeout(() => void fetchLevels(!error), 0)
+      : null;
     // Refresh when the user comes back to the tab (e.g. returning from a
     // practice session) so progress numbers stay current.
     const onFocus = () => void fetchLevels(false);
     window.addEventListener("focus", onFocus);
     return () => {
       mounted.current = false;
-      window.clearTimeout(revalidateTimer);
+      if (revalidateTimer != null) window.clearTimeout(revalidateTimer);
       window.removeEventListener("focus", onFocus);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps

@@ -1,5 +1,8 @@
 import Link from "next/link";
 import LevelDashboardClient from "../_components/LevelDashboardClient";
+import { getCurrentUser } from "@/lib/auth/session";
+import * as dautoeic from "@/lib/services/dautoeic";
+import * as listening from "@/lib/services/listening";
 
 const parts = [
   { id: "part1", num: 1, label: "Part 1: Hình ảnh", title: "Luyện Part 1 theo 5 cấp độ", desc: "Câu hỏi lấy từ ngân hàng luyện nghe TOEIC và được phân loại theo tỉ lệ sai thực tế.", badge: "P1" },
@@ -15,6 +18,7 @@ export default async function ListenPage({
 }) {
   const { part: partParam } = await searchParams;
   const activePart = parts.find((part) => part.id === partParam) ?? parts[0];
+  const initial = await loadInitialLevels(activePart.num);
 
   return (
     <main className="app-canvas skill-index-page skill-index-page--listen min-h-[calc(100dvh-4rem)] px-4 py-5 lg:px-8">
@@ -44,8 +48,8 @@ export default async function ListenPage({
               skill="listening"
               partId={activePart.id}
               partNum={activePart.num}
-              initialLevels={[]}
-              initialError={false}
+              initialLevels={initial.levels}
+              initialError={initial.error}
               levelsEndpoint="/api/listening/levels"
               resetEndpoint="/api/listening/reset"
               practiceHrefBase="/listen/practice"
@@ -55,6 +59,21 @@ export default async function ListenPage({
       </div>
     </main>
   );
+}
+
+async function loadInitialLevels(part: number) {
+  try {
+    const [user, baseLevels] = await Promise.all([
+      getCurrentUser(),
+      dautoeic.listDifficultyLevels(part),
+    ]);
+    return {
+      levels: await listening.applyProgress(user?.uid ?? null, baseLevels),
+      error: false,
+    };
+  } catch {
+    return { levels: [], error: true };
+  }
 }
 
 function ModuleSidebar({ activeId }: { activeId: string }) {

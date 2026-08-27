@@ -13,6 +13,9 @@ const querySchema = z.object({
 export const GET = withErrorHandling(async (req) => {
   const query = parseQuery(req.nextUrl, querySchema);
   const part = query.part ? Number(query.part) as WritingPart : undefined;
-  return ok(await listWritingPrompts(part));
+  return ok(await listWritingPrompts(part), {
+    headers: {
+      "Cache-Control": "public, s-maxage=300, stale-while-revalidate=86400",
+    },
+  });
 });
-

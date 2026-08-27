@@ -1,5 +1,8 @@
 import Link from "next/link";
 import LevelDashboardClient from "../_components/LevelDashboardClient";
+import { getCurrentUser } from "@/lib/auth/session";
+import * as dautoeic from "@/lib/services/dautoeic";
+import * as reading from "@/lib/services/reading";
 
 const parts = [
   { id: "part5", num: 5, label: "Part 5: Hoàn thành câu", title: "Part 5: Hoàn thành câu", desc: "Luyện câu hỏi ngữ pháp và từ vựng trong từng câu đơn TOEIC.", badge: "▤" },
@@ -14,6 +17,7 @@ export default async function ReadPage({
 }) {
   const { part: partParam } = await searchParams;
   const activePart = parts.find((part) => part.id === partParam) ?? parts[0];
+  const initial = await loadInitialLevels(activePart.num);
 
   return (
     <main className="app-canvas skill-index-page skill-index-page--read min-h-[calc(100dvh-4rem)] px-4 py-5 lg:px-8">
@@ -41,8 +45,8 @@ export default async function ReadPage({
               skill="reading"
               partId={activePart.id}
               partNum={activePart.num}
-              initialLevels={[]}
-              initialError={false}
+              initialLevels={initial.levels}
+              initialError={initial.error}
               levelsEndpoint="/api/reading/levels"
               resetEndpoint="/api/reading/reset"
               practiceHrefBase="/read/practice"
@@ -52,6 +56,21 @@ export default async function ReadPage({
       </div>
     </main>
   );
+}
+
+async function loadInitialLevels(part: number) {
+  try {
+    const [user, baseLevels] = await Promise.all([
+      getCurrentUser(),
+      dautoeic.listReadingDifficultyLevels(part),
+    ]);
+    return {
+      levels: await reading.applyProgress(user?.uid ?? null, baseLevels),
+      error: false,
+    };
+  } catch {
+    return { levels: [], error: true };
+  }
 }
 
 function ModuleSidebar({ activeId }: { activeId: string }) {

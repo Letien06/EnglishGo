@@ -2,7 +2,6 @@
 
 import Link from "next/link";
 import { useEffect, useRef, useState, type CSSProperties, type PointerEvent } from "react";
-import { usePathname } from "next/navigation";
 import { fetchWithTimeout } from "@/lib/client-request";
 import PetCat from "./PetCat";
 import type { PetDashboard } from "@/types/pet";
@@ -60,7 +59,6 @@ async function getDashboard(force = false): Promise<PetDashboard | null> {
 }
 
 export default function PetFloatingWidget() {
-  const pathname = usePathname();
   const [dashboard, setDashboard] = useState<PetDashboard | null>(dashboardCache.value);
   const [open, setOpen] = useState(false);
   const [position, setPosition] = useState<FloatingPosition | null>(null);
@@ -96,7 +94,7 @@ export default function PetFloatingWidget() {
       active = false;
       window.removeEventListener(PET_PROFILE_UPDATED_EVENT, syncDashboard);
     };
-  }, [pathname]);
+  }, []);
 
   useEffect(() => {
     const nextStatusChangeAtMillis = dashboard?.profile.nextStatusChangeAtMillis;

@@ -42,6 +42,18 @@ const nextConfig: NextConfig = {
           },
         ],
       },
+      // The Writing catalog is public, self-authored metadata. It deliberately
+      // excludes learner data, audio, and test questions, so it can use a
+      // short CDN cache while all other API routes stay private/no-store.
+      {
+        source: "/api/writing/prompts",
+        headers: [
+          {
+            key: "Cache-Control",
+            value: "public, s-maxage=300, stale-while-revalidate=86400",
+          },
+        ],
+      },
       {
         source: "/:all*(svg|png|jpg|jpeg|webp|ico|woff2)",
         headers: [
