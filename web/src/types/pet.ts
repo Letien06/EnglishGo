@@ -76,6 +76,12 @@ export interface PetDashboard {
   history: PetLedgerEntry[];
 }
 
+/** The small, live slice used by the floating companion outside /pet. */
+export interface PetWidgetSummary {
+  profile: PetProfileView;
+  wallet: Pick<PetWalletView, "balance">;
+}
+
 export interface PetLeaderboardEntry {
   rank: number;
   uid: string;

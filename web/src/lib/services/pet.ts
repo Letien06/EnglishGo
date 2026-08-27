@@ -1,4 +1,5 @@
 import { FieldValue } from "firebase-admin/firestore";
+import { unstable_cache } from "next/cache";
 import { BadRequest } from "@/lib/api/response";
 import { adminDb } from "@/lib/firestore/db";
 import type {
@@ -13,6 +14,7 @@ import type {
   PetMood,
   PetProfileView,
   PetRewardResult,
+  PetWidgetSummary,
   PetWalletView,
 } from "@/types/pet";
 
@@ -245,15 +247,12 @@ export async function grantPetCoins(input: GrantPetCoinsInput): Promise<PetRewar
 }
 
 export async function getPetDashboard(uid: string): Promise<PetDashboard> {
-  await ensurePet(uid);
   const pet = petRefs(uid);
-  const [profileSnap, walletSnap, inventorySnap, companionSnap, historySnap] = await Promise.all([
-    pet.profile.get(),
-    pet.wallet.get(),
-    pet.inventory.get(),
-    pet.companions.get(),
-    pet.ledger.orderBy("occurredAtMillis", "desc").limit(HISTORY_LIMIT).get(),
-  ]);
+  let [profileSnap, walletSnap, inventorySnap, companionSnap, historySnap] = await loadPetDashboardSnapshots(pet);
+  if (!profileSnap.exists) {
+    await ensurePet(uid);
+    [profileSnap, walletSnap, inventorySnap, companionSnap, historySnap] = await loadPetDashboardSnapshots(pet);
+  }
   const storedProfile = toStoredProfile(profileSnap.data());
   const status = derivePetStatus(storedProfile, Date.now());
   const inventoryByFood = new Map<PetFoodId, number>();
@@ -276,6 +275,25 @@ export async function getPetDashboard(uid: string): Promise<PetDashboard> {
     companionCatalog: Object.values(PET_COMPANION_CATALOG),
     ownedCompanionIds: Object.keys(PET_COMPANION_CATALOG).filter((id): id is PetCompanionId => ownedCompanionIds.has(id as PetCompanionId)),
     history: historySnap.docs.map(toLedgerEntry),
+  };
+}
+
+/**
+ * The floating widget does not need inventory, companions, or ledger history.
+ * Keeping this separate avoids a transaction plus five Firestore reads every
+ * time the shared app shell appears.
+ */
+export async function getPetWidgetSummary(uid: string): Promise<PetWidgetSummary> {
+  const pet = petRefs(uid);
+  let [profileSnap, walletSnap] = await Promise.all([pet.profile.get(), pet.wallet.get()]);
+  if (!profileSnap.exists) {
+    await ensurePet(uid);
+    [profileSnap, walletSnap] = await Promise.all([pet.profile.get(), pet.wallet.get()]);
+  }
+  const storedProfile = toStoredProfile(profileSnap.data());
+  return {
+    profile: toProfileView(storedProfile, derivePetStatus(storedProfile, Date.now())),
+    wallet: { balance: toWallet(walletSnap.data()).balance },
   };
 }
 
@@ -516,8 +534,12 @@ export async function getPetLeaderboard(
   scope: PetLeaderboardScope,
   limit = 100,
 ): Promise<PetLeaderboardEntry[]> {
+  return cachedPetLeaderboard(scope, Math.max(1, Math.min(100, Math.trunc(limit))));
+}
+
+const cachedPetLeaderboard = unstable_cache(
+  async (scope: PetLeaderboardScope, safeLimit: number): Promise<PetLeaderboardEntry[]> => {
   const now = Date.now();
-  const safeLimit = Math.max(1, Math.min(100, Math.trunc(limit)));
   const boardId = leaderboardId(scope, now);
   const snap = await adminDb
     .collection("petLeaderboards")
@@ -536,7 +558,10 @@ export async function getPetLeaderboard(
       left.petName.localeCompare(right.petName),
     )
     .map((entry, index) => ({ ...entry, rank: index + 1 }));
-}
+  },
+  ["pet-leaderboard"],
+  { revalidate: 60 },
+);
 
 export function evolutionForCareXp(careXp: number) {
   const normalized = Math.max(0, Math.trunc(careXp));
@@ -791,6 +816,16 @@ function requireFood(foodId: PetFoodId): PetFoodDefinition {
   const food = PET_FOOD_CATALOG[foodId];
   if (!food) throw BadRequest("Món ăn không hợp lệ");
   return food;
+}
+
+function loadPetDashboardSnapshots(pet: ReturnType<typeof petRefs>) {
+  return Promise.all([
+    pet.profile.get(),
+    pet.wallet.get(),
+    pet.inventory.get(),
+    pet.companions.get(),
+    pet.ledger.orderBy("occurredAtMillis", "desc").limit(HISTORY_LIMIT).get(),
+  ]);
 }
 
 function nextDecayAtMillis(lastStatusAtMillis: number, elapsed: number, intervalMs: number): number {

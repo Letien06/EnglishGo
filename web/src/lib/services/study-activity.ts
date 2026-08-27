@@ -1,4 +1,5 @@
 import { FieldValue } from "firebase-admin/firestore";
+import { unstable_cache } from "next/cache";
 import { adminDb } from "@/lib/firestore/db";
 
 const ACTIVITY_COLLECTION = "studyActivity";
@@ -299,7 +300,11 @@ export async function refreshStudyStreakSummary(
 export async function getStudyStreakLeaderboard(
   limit = 100,
 ): Promise<StudyStreakLeaderboardEntry[]> {
-  const safeLimit = Math.max(1, Math.min(100, Math.trunc(limit)));
+  return cachedStudyStreakLeaderboard(Math.max(1, Math.min(100, Math.trunc(limit))));
+}
+
+const cachedStudyStreakLeaderboard = unstable_cache(
+  async (safeLimit: number): Promise<StudyStreakLeaderboardEntry[]> => {
   const todayKey = dateKeyForMillis(Date.now());
   const snap = await adminDb
     .collection("users")
@@ -332,7 +337,10 @@ export async function getStudyStreakLeaderboard(
     )
     .slice(0, safeLimit)
     .map((entry, index) => ({ ...entry, rank: index + 1 }));
-}
+  },
+  ["study-streak-leaderboard"],
+  { revalidate: 60 },
+);
 
 function activityCollection(uid: string) {
   return adminDb.collection("users").doc(uid).collection(ACTIVITY_COLLECTION);

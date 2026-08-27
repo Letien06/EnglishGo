@@ -1,4 +1,5 @@
 import { FieldValue } from "firebase-admin/firestore";
+import { unstable_cache } from "next/cache";
 import { adminDb } from "@/lib/firestore/db";
 import type {
   PracticeScoreBreakdown,
@@ -228,7 +229,15 @@ export async function getPracticeLeaderboard(
   period: PracticeLeaderboardPeriod = "ALL_TIME",
   limit = 100,
 ): Promise<PracticeLeaderboardEntry[]> {
-  const safeLimit = Math.max(1, Math.min(100, Math.trunc(limit)));
+  return cachedPracticeLeaderboard(scope, period, Math.max(1, Math.min(100, Math.trunc(limit))));
+}
+
+const cachedPracticeLeaderboard = unstable_cache(
+  async (
+    scope: PracticeLeaderboardScope,
+    period: PracticeLeaderboardPeriod,
+    safeLimit: number,
+  ): Promise<PracticeLeaderboardEntry[]> => {
   const boardId = boardIdFor(scope, period);
   const snap = await adminDb
     .collection("leaderboards")
@@ -243,7 +252,10 @@ export async function getPracticeLeaderboard(
     .sort(compareEntries)
     .slice(0, safeLimit)
     .map((entry, index) => ({ ...entry, rank: index + 1 }));
-}
+  },
+  ["practice-leaderboard"],
+  { revalidate: 60 },
+);
 
 export function normalizeLeaderboardScope(value?: string | null): PracticeLeaderboardScope {
   const normalized = value?.toLowerCase();

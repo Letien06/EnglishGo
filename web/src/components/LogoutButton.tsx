@@ -1,10 +1,8 @@
 "use client";
 
 import { useCallback, useState } from "react";
-import { useRouter } from "next/navigation";
 
 export default function LogoutButton() {
-  const router = useRouter();
   const [busy, setBusy] = useState(false);
 
   const handleLogout = useCallback(async () => {
@@ -12,9 +10,11 @@ export default function LogoutButton() {
     try {
       await fetch("/api/auth/session", { method: "DELETE" });
     } finally {
-      router.push("/login");
+      // A document navigation clears short-lived client bootstrap data so the
+      // next learner never sees a previous account's optional widgets.
+      window.location.assign("/login");
     }
-  }, [router]);
+  }, []);
 
   return (
     <button

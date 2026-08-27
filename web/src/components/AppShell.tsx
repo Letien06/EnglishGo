@@ -1,16 +1,19 @@
 "use client";
 
 import Link from "next/link";
+import dynamic from "next/dynamic";
 import { usePathname } from "next/navigation";
 import { useEffect, useState, type ReactNode } from "react";
 import ThemeToggle from "./ThemeToggle";
 import { AuthenticatedSessionProvider } from "./AuthenticatedSessionContext";
 import StudyStreakBadge from "./StudyStreakBadge";
-import StudyStreakCelebration from "./StudyStreakCelebration";
 import NavIcon, { type NavIconName } from "./NavIcon";
 import MobileNavigationMenu from "./MobileNavigationMenu";
-import PetFloatingWidget from "./PetFloatingWidget";
 import PwaInstallPrompt from "./PwaInstallPrompt";
+import type { PetWidgetSummary } from "@/types/pet";
+
+const PetFloatingWidget = dynamic(() => import("./PetFloatingWidget"), { ssr: false });
+const StudyStreakCelebration = dynamic(() => import("./StudyStreakCelebration"), { ssr: false });
 
 const navItems = [
   { href: "/progress", icon: "progress", label: "Tiến bộ", color: "text-primary" },
@@ -29,35 +32,51 @@ const navItems = [
   color: string;
 }>;
 
-type SessionCheckResponse = {
-  success: boolean;
-  data: { uid: string } | null;
+type AppBootstrap = {
+  authenticated: boolean;
+  user: { uid: string; email: string; displayName: string; role: string } | null;
+  streak: {
+    streakDays: number;
+    studiedToday: boolean;
+    todayActivityCount: number;
+    todayModules: string[];
+    todayDateKey: string;
+    authenticated: boolean;
+  } | null;
+  pet: PetWidgetSummary | null;
 };
 
-let cachedAuthenticated: boolean | null = null;
-let sessionCheckInFlight: Promise<boolean> | null = null;
+type BootstrapResponse = {
+  success: boolean;
+  data: AppBootstrap | null;
+};
 
-async function checkAuthenticatedSession(): Promise<boolean> {
-  if (cachedAuthenticated != null) return cachedAuthenticated;
-  if (sessionCheckInFlight) return sessionCheckInFlight;
+let cachedBootstrap: AppBootstrap | null = null;
+let bootstrapInFlight: Promise<AppBootstrap | null> | null = null;
 
-  sessionCheckInFlight = fetch("/api/auth/session", { cache: "no-store" })
+async function loadAppBootstrap(): Promise<AppBootstrap | null> {
+  if (cachedBootstrap) return cachedBootstrap;
+  if (bootstrapInFlight) return bootstrapInFlight;
+
+  bootstrapInFlight = fetch("/api/app/bootstrap", { cache: "no-store" })
     .then(async (response) => {
-      const body = await response.json() as SessionCheckResponse;
-      cachedAuthenticated = Boolean(response.ok && body.success && body.data?.uid);
-      return cachedAuthenticated;
+      const body = await response.json() as BootstrapResponse;
+      if (!response.ok || !body.success || !body.data) return null;
+      cachedBootstrap = body.data;
+      return body.data;
     })
-    .catch(() => false)
+    .catch(() => null)
     .finally(() => {
-      sessionCheckInFlight = null;
+      bootstrapInFlight = null;
     });
 
-  return sessionCheckInFlight;
+  return bootstrapInFlight;
 }
 
 export default function AppShell({ children }: { children: ReactNode }) {
   const pathname = usePathname();
-  const [authenticated, setAuthenticated] = useState(() => cachedAuthenticated === true);
+  const [bootstrap, setBootstrap] = useState<AppBootstrap | null>(() => cachedBootstrap);
+  const authenticated = bootstrap?.authenticated === true;
   const isPracticeWorkspace =
     pathname.startsWith("/listen/practice") ||
     pathname.startsWith("/read/practice") ||
@@ -65,14 +84,14 @@ export default function AppShell({ children }: { children: ReactNode }) {
     pathname.startsWith("/writing/practice");
 
   useEffect(() => {
-    if (isPracticeWorkspace || cachedAuthenticated === true) return;
+    if (isPracticeWorkspace || cachedBootstrap) return;
 
     let cancelled = false;
-    // Keep first content paint clear of optional account widgets. One quiet
-    // session check replaces the previous Pet/streak requests for visitors.
+    // Keep first content paint clear of optional account widgets. One compact
+    // request supplies their data after the page is already stable.
     const timer = window.setTimeout(() => {
-      void checkAuthenticatedSession().then((nextAuthenticated) => {
-        if (!cancelled) setAuthenticated(nextAuthenticated);
+      void loadAppBootstrap().then((nextBootstrap) => {
+        if (!cancelled) setBootstrap(nextBootstrap);
       });
     }, 1200);
 
@@ -125,7 +144,7 @@ export default function AppShell({ children }: { children: ReactNode }) {
           <div className="ml-auto flex items-center gap-3">
             <MobileNavigationMenu />
             <PwaInstallPrompt />
-            {authenticated && <StudyStreakBadge className="hidden sm:inline-flex" />}
+            {authenticated && <StudyStreakBadge className="hidden sm:inline-flex" initialStreak={bootstrap?.streak ?? null} />}
             <ThemeToggle className="!hidden border border-line bg-surface-soft text-ink xl:!inline-flex" />
             <Link
               href="/account"
@@ -143,7 +162,7 @@ export default function AppShell({ children }: { children: ReactNode }) {
       </header>
 
         {children}
-        {authenticated && <PetFloatingWidget />}
+        {authenticated && <PetFloatingWidget initialSummary={bootstrap?.pet} />}
         {authenticated && <StudyStreakCelebration />}
       </div>
     </AuthenticatedSessionProvider>

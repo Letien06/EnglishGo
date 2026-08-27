@@ -16,11 +16,16 @@ type RouteHandler<T> = (
 export function withErrorHandling<T>(handler: RouteHandler<T>): RouteHandler<T> {
   return async (req, ctx) => {
     try {
-      // Most API handlers authenticate or read/write Firestore. A single
-      // serverless-wide gate keeps Firebase from being saturated during a
-      // burst; /health is intentionally dependency-free and bypasses it.
+      // Keep the global Firebase gate for mutations, where transactions and
+      // writes can genuinely overload the shared database. Applying it to
+      // every GET added two Redis round trips (acquire + release) before a
+      // learner could read even a small piece of progress data.
+      //
+      // Read endpoints are still protected by the edge rate limiter in
+      // `proxy.ts`; they should not pay the additional semaphore cost.
       const execute = () => handler(req, ctx);
-      return req.nextUrl.pathname === "/api/health"
+      const isReadOnly = ["GET", "HEAD", "OPTIONS"].includes(req.method);
+      return req.nextUrl.pathname === "/api/health" || isReadOnly
         ? await execute()
         : await withFirebaseRequestConcurrency(execute);
     } catch (err) {

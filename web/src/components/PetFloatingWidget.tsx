@@ -4,7 +4,7 @@ import Link from "next/link";
 import { useEffect, useRef, useState, type CSSProperties, type PointerEvent } from "react";
 import { fetchWithTimeout } from "@/lib/client-request";
 import PetCat from "./PetCat";
-import type { PetDashboard } from "@/types/pet";
+import type { PetDashboard, PetWidgetSummary } from "@/types/pet";
 
 type ApiEnvelope<T> = { success: boolean; data: T | null; error: string | null };
 type FloatingPosition = { x: number; y: number };
@@ -19,32 +19,32 @@ type DragState = {
 
 const PET_POSITION_KEY = "englishgo:pet-position:v1";
 const SCREEN_EDGE = 12;
-const PET_DASHBOARD_CACHE_TTL_MS = 30_000;
+const PET_WIDGET_CACHE_TTL_MS = 60_000;
 export const PET_PROFILE_UPDATED_EVENT = "englishgo:pet-profile-updated";
 
 const dashboardCache: {
-  value: PetDashboard | null;
+  value: PetWidgetSummary | null;
   loadedAt: number;
-  inFlight: Promise<PetDashboard | null> | null;
+  inFlight: Promise<PetWidgetSummary | null> | null;
 } = {
   value: null,
   loadedAt: 0,
   inFlight: null,
 };
 
-function cacheDashboard(dashboard: PetDashboard) {
+function cacheDashboard(dashboard: PetWidgetSummary) {
   dashboardCache.value = dashboard;
   dashboardCache.loadedAt = Date.now();
 }
 
-async function getDashboard(force = false): Promise<PetDashboard | null> {
-  if (!force && dashboardCache.value && Date.now() - dashboardCache.loadedAt < PET_DASHBOARD_CACHE_TTL_MS) {
+async function getDashboard(force = false): Promise<PetWidgetSummary | null> {
+  if (!force && dashboardCache.value && Date.now() - dashboardCache.loadedAt < PET_WIDGET_CACHE_TTL_MS) {
     return dashboardCache.value;
   }
   if (dashboardCache.inFlight) return dashboardCache.inFlight;
 
-  dashboardCache.inFlight = fetchWithTimeout("/api/pet", { cache: "no-store" }, 8_000)
-    .then(async (response) => ({ response, body: await response.json() as ApiEnvelope<PetDashboard> }))
+  dashboardCache.inFlight = fetchWithTimeout("/api/pet/summary", { cache: "no-store" }, 8_000)
+    .then(async (response) => ({ response, body: await response.json() as ApiEnvelope<PetWidgetSummary> }))
     .then(({ response, body }) => {
       if (!response.ok || !body.success || !body.data) return null;
       cacheDashboard(body.data);
@@ -58,8 +58,8 @@ async function getDashboard(force = false): Promise<PetDashboard | null> {
   return dashboardCache.inFlight;
 }
 
-export default function PetFloatingWidget() {
-  const [dashboard, setDashboard] = useState<PetDashboard | null>(dashboardCache.value);
+export default function PetFloatingWidget({ initialSummary }: { initialSummary?: PetWidgetSummary | null }) {
+  const [dashboard, setDashboard] = useState<PetWidgetSummary | null>(initialSummary ?? dashboardCache.value);
   const [open, setOpen] = useState(false);
   const [position, setPosition] = useState<FloatingPosition | null>(null);
   const [isDragging, setIsDragging] = useState(false);
@@ -73,6 +73,8 @@ export default function PetFloatingWidget() {
   useEffect(() => {
     let active = true;
 
+    if (initialSummary) cacheDashboard(initialSummary);
+
     void getDashboard().then((nextDashboard) => {
       if (active && nextDashboard) setDashboard(nextDashboard);
     });
@@ -80,8 +82,9 @@ export default function PetFloatingWidget() {
     function syncDashboard(event: Event) {
       const nextDashboard = (event as CustomEvent<PetDashboard | undefined>).detail;
       if (nextDashboard) {
-        cacheDashboard(nextDashboard);
-        setDashboard(nextDashboard);
+        const nextSummary = toWidgetSummary(nextDashboard);
+        cacheDashboard(nextSummary);
+        setDashboard(nextSummary);
         return;
       }
       void getDashboard(true).then((freshDashboard) => {
@@ -94,7 +97,7 @@ export default function PetFloatingWidget() {
       active = false;
       window.removeEventListener(PET_PROFILE_UPDATED_EVENT, syncDashboard);
     };
-  }, []);
+  }, [initialSummary]);
 
   useEffect(() => {
     const nextStatusChangeAtMillis = dashboard?.profile.nextStatusChangeAtMillis;
@@ -313,6 +316,13 @@ export default function PetFloatingWidget() {
       </button>
     </aside>
   );
+}
+
+function toWidgetSummary(dashboard: PetDashboard): PetWidgetSummary {
+  return {
+    profile: dashboard.profile,
+    wallet: { balance: dashboard.wallet.balance },
+  };
 }
 
 function positionTransform(position: FloatingPosition) {

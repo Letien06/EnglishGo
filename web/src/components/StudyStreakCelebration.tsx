@@ -1,7 +1,6 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import { usePathname } from "next/navigation";
 
 type MilestoneResponse = {
   success: boolean;
@@ -9,9 +8,9 @@ type MilestoneResponse = {
 };
 
 const AUTO_DISMISS_SECONDS = 10;
+let checkedThisSession = false;
 
 export default function StudyStreakCelebration() {
-  const pathname = usePathname();
   const [milestone, setMilestone] = useState<number | null>(null);
   const [secondsRemaining, setSecondsRemaining] = useState(AUTO_DISMISS_SECONDS);
   const [reduceMotion, setReduceMotion] = useState(false);
@@ -46,16 +45,10 @@ export default function StudyStreakCelebration() {
   }, [milestone]);
 
   useEffect(() => {
-    const timer = window.setTimeout(() => void checkForMilestone(), 500);
+    if (checkedThisSession) return;
+    checkedThisSession = true;
+    const timer = window.setTimeout(() => void checkForMilestone(), 1_200);
     return () => window.clearTimeout(timer);
-  }, [pathname, checkForMilestone]);
-
-  useEffect(() => {
-    const onFocus = () => void checkForMilestone();
-    window.addEventListener("focus", onFocus);
-    return () => {
-      window.removeEventListener("focus", onFocus);
-    };
   }, [checkForMilestone]);
 
   useEffect(() => {

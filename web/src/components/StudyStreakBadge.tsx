@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { usePathname } from "next/navigation";
 
 const CACHE_TTL_MS = 60 * 1000;
+const FOCUS_REFRESH_MS = 5 * 60 * 1000;
 
 type StreakResponse = {
   success: boolean;
@@ -15,6 +16,8 @@ type StreakResponse = {
   } | null;
   error: string | null;
 };
+
+type InitialStreak = NonNullable<StreakResponse["data"]>;
 
 let cachedStreak: StreakResponse["data"] | null = null;
 let cachedAt = 0;
@@ -45,17 +48,24 @@ async function fetchStreak(): Promise<StreakResponse["data"] | null> {
 export default function StudyStreakBadge({
   className,
   hideWhenLoggedOut = true,
+  initialStreak = null,
 }: {
   className?: string;
   hideWhenLoggedOut?: boolean;
+  initialStreak?: InitialStreak | null;
 }) {
   const pathname = usePathname();
-  const [streakDays, setStreakDays] = useState(0);
-  const [studiedToday, setStudiedToday] = useState(false);
-  const [authenticated, setAuthenticated] = useState(false);
+  const [streakDays, setStreakDays] = useState(initialStreak?.streakDays ?? cachedStreak?.streakDays ?? 0);
+  const [studiedToday, setStudiedToday] = useState(initialStreak?.studiedToday ?? cachedStreak?.studiedToday ?? false);
+  const [authenticated, setAuthenticated] = useState(initialStreak?.authenticated ?? cachedStreak?.authenticated ?? false);
 
   useEffect(() => {
     let cancelled = false;
+
+    if (initialStreak) {
+      cachedStreak = initialStreak;
+      cachedAt = Date.now();
+    }
 
     async function load() {
       const data = await fetchStreak();
@@ -67,15 +77,14 @@ export default function StudyStreakBadge({
 
     void load();
     const onFocus = () => {
-      cachedAt = 0;
-      void load();
+      if (Date.now() - cachedAt >= FOCUS_REFRESH_MS) void load();
     };
     window.addEventListener("focus", onFocus);
     return () => {
       cancelled = true;
       window.removeEventListener("focus", onFocus);
     };
-  }, [pathname]);
+  }, [initialStreak, pathname]);
 
   if (hideWhenLoggedOut && !authenticated) return null;
 

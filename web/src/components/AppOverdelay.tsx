@@ -3,8 +3,10 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { usePathname, useSearchParams } from "next/navigation";
 
-const SHOW_DELAY_MS = 180;
-const MIN_VISIBLE_MS = 180;
+// Fast client transitions should keep their current page visible. Only show a
+// compact progress cue when the server actually takes long enough to need it.
+const SHOW_DELAY_MS = 450;
+const MIN_VISIBLE_MS = 150;
 const MAX_VISIBLE_MS = 5000;
 const READY_EVENT = "englishgo:overdelay-ready";
 const BEGIN_EVENT = "englishgo:overdelay-begin";

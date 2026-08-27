@@ -10,6 +10,7 @@
  * from server components or route handlers — never from middleware (Edge).
  */
 import { cache } from "react";
+import { revalidateTag, unstable_cache } from "next/cache";
 import { cookies, headers } from "next/headers";
 import { FieldValue } from "firebase-admin/firestore";
 import { adminAuth, adminDb } from "../firebase/admin";
@@ -18,6 +19,21 @@ import { Unauthorized, Forbidden } from "../api/response";
 import type { AppUser } from "../../types";
 
 const USERS_COLLECTION = "users";
+const USER_PROFILE_CACHE_TAG = "current-user-profile";
+const USER_PROFILE_CACHE_SECONDS = 60;
+
+const cachedStoredUser = unstable_cache(
+  async (uid: string): Promise<AppUser | null> => {
+    const snap = await adminDb.collection(USERS_COLLECTION).doc(uid).get();
+    if (!snap.exists) return null;
+    return toAppUser(uid, snap.data() ?? {});
+  },
+  ["current-user-profile"],
+  {
+    revalidate: USER_PROFILE_CACHE_SECONDS,
+    tags: [USER_PROFILE_CACHE_TAG],
+  },
+);
 
 /* ------------------------------------------------------------------ */
 /*  Token verification                                                 */
@@ -117,7 +133,7 @@ export async function provisionUser(decoded: {
     };
     await userRef.set(newUser);
 
-    return {
+    const user = {
       uid,
       firebaseUid: uid,
       email,
@@ -129,6 +145,8 @@ export async function provisionUser(decoded: {
       createdAtMillis: now,
       updatedAtMillis: now,
     } as AppUser;
+    invalidateCurrentUserProfileCache();
+    return user;
   }
 
   // Existing user — merge latest profile info
@@ -170,7 +188,7 @@ export async function provisionUser(decoded: {
     });
   }
 
-  return {
+  const user = {
     uid,
     firebaseUid: uid,
     email,
@@ -182,6 +200,8 @@ export async function provisionUser(decoded: {
     createdAtMillis: (data.createdAtMillis as number) ?? null,
     updatedAtMillis: (data.updatedAtMillis as number) ?? null,
   } as AppUser;
+  if (profileChanged) invalidateCurrentUserProfileCache();
+  return user;
 }
 
 /* ------------------------------------------------------------------ */
@@ -203,7 +223,7 @@ export const getCurrentUser = cache(async (): Promise<AppUser | null> => {
   if (sessionCookie?.value) {
     const decoded = await verifySessionCookie(sessionCookie.value);
     if (decoded) {
-      return provisionUser(decoded);
+      return getStoredOrProvisionedUser(decoded);
     }
     // Invalid/expired session cookie → fall through
   }
@@ -215,7 +235,7 @@ export const getCurrentUser = cache(async (): Promise<AppUser | null> => {
     const token = authHeader.slice(7);
     try {
       const decoded = await adminAuth.verifyIdToken(token);
-      return provisionUser(decoded);
+      return getStoredOrProvisionedUser(decoded);
     } catch {
       return null;
     }
@@ -245,11 +265,61 @@ export async function requireUser(): Promise<AppUser> {
 export async function requireRole(
   ...allowed: AppUser["role"][]
 ): Promise<AppUser> {
-  const user = await requireUser();
+  const authenticatedUser = await requireUser();
+  // Profile reads are cached briefly for normal navigation, but authorization
+  // decisions must observe role changes immediately (for example, after an
+  // admin account is revoked).
+  const user = await getFreshStoredUser(authenticatedUser.uid);
+  if (!user) throw Unauthorized();
   if (!allowed.includes(user.role)) {
     throw Forbidden(
       `Role "${user.role}" is not allowed. Required: ${allowed.join(" | ")}`,
     );
   }
   return user;
+}
+
+/**
+ * Cached profile data is sufficient for normal page rendering. New accounts
+ * still take the provisioning path, while existing accounts avoid a Firestore
+ * profile read on each page/API request for a short period.
+ */
+async function getStoredOrProvisionedUser(decoded: {
+  uid: string;
+  email?: string;
+  name?: string;
+  picture?: string;
+}): Promise<AppUser> {
+  return await cachedStoredUser(decoded.uid) ?? provisionUser(decoded);
+}
+
+async function getFreshStoredUser(uid: string): Promise<AppUser | null> {
+  const snap = await adminDb.collection(USERS_COLLECTION).doc(uid).get();
+  if (!snap.exists) return null;
+  return toAppUser(uid, snap.data() ?? {});
+}
+
+export function invalidateCurrentUserProfileCache(): void {
+  revalidateTag(USER_PROFILE_CACHE_TAG, { expire: 0 });
+}
+
+function toAppUser(uid: string, data: Record<string, unknown>): AppUser {
+  return {
+    uid,
+    firebaseUid: typeof data.firebaseUid === "string" ? data.firebaseUid : uid,
+    email: typeof data.email === "string" ? data.email : `${uid}@firebase.local`,
+    displayName: typeof data.displayName === "string"
+      ? data.displayName
+      : typeof data.email === "string"
+        ? data.email
+        : uid,
+    avatarUrl: typeof data.avatarUrl === "string" ? data.avatarUrl : null,
+    role: data.role === "ADMIN" || data.role === "TEACHER" || data.role === "STUDENT"
+      ? data.role
+      : "STUDENT",
+    level: typeof data.level === "string" ? data.level : null,
+    targetScore: typeof data.targetScore === "number" ? data.targetScore : null,
+    createdAtMillis: typeof data.createdAtMillis === "number" ? data.createdAtMillis : null,
+    updatedAtMillis: typeof data.updatedAtMillis === "number" ? data.updatedAtMillis : null,
+  };
 }

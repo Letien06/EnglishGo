@@ -1,6 +1,7 @@
 import { FieldValue } from "firebase-admin/firestore";
 import { adminAuth, adminDb } from "@/lib/firebase/admin";
 import { BadRequest, Unauthorized } from "@/lib/api/response";
+import { invalidateCurrentUserProfileCache } from "@/lib/auth/session";
 import type { AppUser } from "@/types";
 
 const MAX_AVATAR_DATA_URL_LENGTH = 240_000;
@@ -16,8 +17,7 @@ export interface AccountSettingsView {
   };
 }
 
-export async function getSettings(uid: string): Promise<AccountSettingsView> {
-  const user = await findUser(uid);
+export function getSettings(user: AppUser): AccountSettingsView {
   return {
     email: user.email,
     role: user.role,
@@ -47,6 +47,7 @@ export async function updateSettings(
     },
     { merge: true },
   );
+  invalidateCurrentUserProfileCache();
   return { ...user, displayName, avatarUrl, updatedAtMillis: Date.now() };
 }
 

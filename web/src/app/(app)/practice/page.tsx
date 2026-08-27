@@ -12,14 +12,16 @@ interface Props {
 
 export default async function PracticePage({ searchParams }: Props) {
   const sp = await searchParams;
-  const user = await getCurrentUser();
   const cursor = typeof sp.cursor === "string" ? sp.cursor : null;
-  const tests = await findTests(
-    sp.type as string | undefined,
-    sp.difficulty as string | undefined,
-    cursor,
-    10,
-  );
+  const [user, tests] = await Promise.all([
+    getCurrentUser(),
+    findTests(
+      sp.type as string | undefined,
+      sp.difficulty as string | undefined,
+      cursor,
+      10,
+    ),
+  ]);
 
   return (
     <>

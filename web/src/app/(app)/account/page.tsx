@@ -7,7 +7,7 @@ export const dynamic = "force-dynamic";
 
 export default async function AccountPage() {
   const user = await requireUser();
-  const settings = await getSettings(user.uid);
+  const settings = getSettings(user);
 
   return (
     <main className="account-page app-canvas min-h-[calc(100dvh-4rem)] px-5 py-8 sm:py-12">
