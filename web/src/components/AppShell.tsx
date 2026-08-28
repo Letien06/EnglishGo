@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import dynamic from "next/dynamic";
-import { usePathname } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useState, type ReactNode } from "react";
 import ThemeToggle from "./ThemeToggle";
 import { AuthenticatedSessionProvider } from "./AuthenticatedSessionContext";
@@ -11,9 +11,13 @@ import NavIcon, { type NavIconName } from "./NavIcon";
 import MobileNavigationMenu from "./MobileNavigationMenu";
 import PwaInstallPrompt from "./PwaInstallPrompt";
 import type { PetWidgetSummary } from "@/types/pet";
+import { clearActiveLearnerCache, setActiveLearnerId } from "@/lib/client-learning-progress-cache";
 
 const PetFloatingWidget = dynamic(() => import("./PetFloatingWidget"), { ssr: false });
 const StudyStreakCelebration = dynamic(() => import("./StudyStreakCelebration"), { ssr: false });
+
+const PREFETCH_ROUTES = ["/hub", "/listen", "/read", "/writing", "/vocab", "/practice", "/progress"];
+const prefetchedRoutes = new Set<string>();
 
 const navItems = [
   { href: "/progress", icon: "progress", label: "Tiến bộ", color: "text-primary" },
@@ -51,8 +55,20 @@ type BootstrapResponse = {
   data: AppBootstrap | null;
 };
 
+type AppSession = {
+  authenticated: boolean;
+  user: AppBootstrap["user"];
+};
+
+type SessionResponse = {
+  success: boolean;
+  data: AppSession | null;
+};
+
 let cachedBootstrap: AppBootstrap | null = null;
 let bootstrapInFlight: Promise<AppBootstrap | null> | null = null;
+let cachedSession: AppSession | null | undefined;
+let sessionInFlight: Promise<AppSession | null> | null = null;
 
 async function loadAppBootstrap(): Promise<AppBootstrap | null> {
   if (cachedBootstrap) return cachedBootstrap;
@@ -73,15 +89,56 @@ async function loadAppBootstrap(): Promise<AppBootstrap | null> {
   return bootstrapInFlight;
 }
 
+async function loadAppSession(): Promise<AppSession | null> {
+  if (cachedSession !== undefined) return cachedSession;
+  if (sessionInFlight) return sessionInFlight;
+
+  sessionInFlight = fetch("/api/app/session", { cache: "no-store" })
+    .then(async (response) => {
+      const body = await response.json() as SessionResponse;
+      if (!response.ok || !body.success || !body.data) return null;
+      cachedSession = body.data;
+      return body.data;
+    })
+    .catch(() => null)
+    .finally(() => {
+      sessionInFlight = null;
+    });
+
+  return sessionInFlight;
+}
+
 export default function AppShell({ children }: { children: ReactNode }) {
   const pathname = usePathname();
+  const router = useRouter();
   const [bootstrap, setBootstrap] = useState<AppBootstrap | null>(() => cachedBootstrap);
+  const [session, setSession] = useState<AppSession | null>(() => cachedSession ?? null);
   const authenticated = bootstrap?.authenticated === true;
+  const sessionAuthenticated = session?.authenticated === true;
   const isPracticeWorkspace =
     pathname.startsWith("/listen/practice") ||
     pathname.startsWith("/read/practice") ||
     pathname.startsWith("/practice/session") ||
     pathname.startsWith("/writing/practice");
+
+  useEffect(() => {
+    if (isPracticeWorkspace) return;
+
+    let cancelled = false;
+    void loadAppSession().then((nextSession) => {
+      if (cancelled) return;
+      setSession(nextSession);
+      if (nextSession?.authenticated && nextSession.user) {
+        setActiveLearnerId(nextSession.user.uid);
+      } else {
+        clearActiveLearnerCache();
+      }
+    });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [isPracticeWorkspace]);
 
   useEffect(() => {
     if (isPracticeWorkspace || cachedBootstrap) return;
@@ -101,12 +158,35 @@ export default function AppShell({ children }: { children: ReactNode }) {
     };
   }, [isPracticeWorkspace]);
 
+  useEffect(() => {
+    if (isPracticeWorkspace || !sessionAuthenticated) return;
+
+    let cancelled = false;
+    const timer = window.setTimeout(() => {
+      const connection = (navigator as Navigator & {
+        connection?: { saveData?: boolean; effectiveType?: string };
+      }).connection;
+      if (connection?.saveData || connection?.effectiveType === "slow-2g" || connection?.effectiveType === "2g") return;
+
+      for (const href of PREFETCH_ROUTES) {
+        if (cancelled || href === pathname || prefetchedRoutes.has(href)) continue;
+        prefetchedRoutes.add(href);
+        router.prefetch(href);
+      }
+    }, 2_000);
+
+    return () => {
+      cancelled = true;
+      window.clearTimeout(timer);
+    };
+  }, [isPracticeWorkspace, pathname, router, sessionAuthenticated]);
+
   if (isPracticeWorkspace) {
     return <>{children}</>;
   }
 
   return (
-    <AuthenticatedSessionProvider authenticated={authenticated}>
+    <AuthenticatedSessionProvider authenticated={sessionAuthenticated || authenticated}>
       <div className="app-shell design-system min-h-dvh text-ink">
       <header className="app-shell-header app-primary-nav sticky top-0 z-50 border-b bg-glass/90 backdrop-blur-xl">
         <div className="flex h-16 items-center justify-between px-4 sm:px-6">

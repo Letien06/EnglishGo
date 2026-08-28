@@ -1,11 +1,11 @@
 import AppTopbar from "@/components/AppTopbar";
-import { requireUser } from "@/lib/auth/session";
+import { requireUserForRead } from "@/lib/auth/session";
 import ContributionForm from "./ContributionForm";
 
 export const dynamic = "force-dynamic";
 
 export default async function ContributePage() {
-  const user = await requireUser();
+  const user = await requireUserForRead();
   return (
     <>
       <AppTopbar pageTitle="Contribute" pageSubtitle="Submit content for review" userName={user.displayName} userEmail={user.email} />

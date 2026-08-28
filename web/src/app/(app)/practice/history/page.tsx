@@ -1,6 +1,6 @@
 import Link from "next/link";
 import AppTopbar from "@/components/AppTopbar";
-import { requireUser } from "@/lib/auth/session";
+import { requireUserForRead } from "@/lib/auth/session";
 import { getHistory } from "@/lib/services/practice";
 
 export const dynamic = "force-dynamic";
@@ -10,7 +10,7 @@ interface Props {
 }
 
 export default async function PracticeHistoryPage({ searchParams }: Props) {
-  const user = await requireUser();
+  const user = await requireUserForRead();
   const sp = await searchParams;
   const cursor = typeof sp.cursor === "string" ? sp.cursor : null;
   const history = await getHistory(user.uid, 10, cursor);

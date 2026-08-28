@@ -1,12 +1,12 @@
 import Link from "next/link";
 import AppTopbar from "@/components/AppTopbar";
-import { requireUser } from "@/lib/auth/session";
+import { requireUserForRead } from "@/lib/auth/session";
 import { getContinueLearning } from "@/lib/services/continue-learning";
 
 export const dynamic = "force-dynamic";
 
 export default async function ContinuePage() {
-  const user = await requireUser();
+  const user = await requireUserForRead();
   const view = await getContinueLearning(user);
 
   return (

@@ -12,6 +12,7 @@ import {
   type PracticeLeaderboardScope,
 } from "./leaderboard";
 import { recordStudyActivity } from "./study-activity";
+import { invalidateProgressReportCache } from "./learner-cache";
 import { grantPetCoins } from "./pet";
 import {
   hasTestIndex,
@@ -582,6 +583,7 @@ export async function submit(
       occurredAtMillis: submittedAtMillis,
     }).catch(() => undefined),
   ]);
+  invalidateProgressReportCache(user.uid);
   return {
     attemptId,
     score,

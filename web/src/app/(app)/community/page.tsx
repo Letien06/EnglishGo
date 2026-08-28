@@ -1,13 +1,13 @@
 import Link from "next/link";
 import AppTopbar from "@/components/AppTopbar";
-import { getCurrentUser } from "@/lib/auth/session";
+import { getCurrentUserForRead } from "@/lib/auth/session";
 import { comments, leaderboard } from "@/lib/services/community";
 import CommunityCommentForm from "./CommunityCommentForm";
 
 export const dynamic = "force-dynamic";
 
 export default async function CommunityPage() {
-  const user = await getCurrentUser();
+  const user = await getCurrentUserForRead();
   const [items, leaders] = await Promise.all([comments("GENERAL", 1), leaderboard()]);
 
   return (

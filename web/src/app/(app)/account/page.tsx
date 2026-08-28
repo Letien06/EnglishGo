@@ -1,12 +1,12 @@
 import LogoutButton from "@/components/LogoutButton";
-import { requireUser } from "@/lib/auth/session";
+import { requireUserForRead } from "@/lib/auth/session";
 import { getSettings } from "@/lib/services/account";
 import AccountForms from "./AccountForms";
 
 export const dynamic = "force-dynamic";
 
 export default async function AccountPage() {
-  const user = await requireUser();
+  const user = await requireUserForRead();
   const settings = getSettings(user);
 
   return (

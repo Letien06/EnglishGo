@@ -1,5 +1,7 @@
 import { FieldValue } from "firebase-admin/firestore";
+import { revalidateTag } from "next/cache";
 import { adminDb } from "../firestore/db";
+import { readServerCache } from "../server-cache";
 import { ApiError } from "../api/response";
 import { recordSkillQuestionLeaderboard } from "./leaderboard";
 import { grantPetCoins } from "./pet";
@@ -23,6 +25,8 @@ interface ToolServiceConfig {
   favoritesCollection: string;
   vocabBasketCollection: string;
 }
+
+const PROGRESS_CACHE_SECONDS = 60;
 
 export interface LearningToolService {
   applyProgress(
@@ -75,16 +79,6 @@ export function createLearningToolService(
     return snap.docs.map(toProgressDoc);
   }
 
-  async function findProgressByPart(
-    uid: string,
-    part: number | null,
-  ): Promise<ListeningProgressDoc[]> {
-    const snap = await userCol(uid, config.progressCollection)
-      .where("part", "==", part)
-      .get();
-    return snap.docs.map(toProgressDoc);
-  }
-
   async function findProgressByParts(
     uid: string,
     parts: number[],
@@ -133,6 +127,31 @@ export function createLearningToolService(
     });
   }
 
+  function invalidateProgressCache(uid: string, part?: number | null): void {
+    const parts = part == null
+      ? Array.from({ length: config.maxPart - config.minPart + 1 }, (_, index) => config.minPart + index)
+      : [part];
+    for (const targetPart of parts) {
+      revalidateTag(progressCacheTag(uid, targetPart), { expire: 0 });
+    }
+  }
+
+  function progressCacheTag(uid: string, part: number): string {
+    return `learning-progress:${config.module}:${uid}:${part}`;
+  }
+
+  async function cachedProgressRows(uid: string, parts: number[]): Promise<ListeningProgressDoc[]> {
+    const safeParts = [...new Set(parts)].sort((left, right) => left - right);
+    return readServerCache(
+      () => findProgressByParts(uid, safeParts),
+      ["learning-progress", config.module, uid, safeParts.join(",")],
+      {
+        revalidate: PROGRESS_CACHE_SECONDS,
+        tags: safeParts.map((part) => progressCacheTag(uid, part)),
+      },
+    );
+  }
+
   async function deleteProgressByPartAndLevel(
     uid: string,
     part: number,
@@ -157,34 +176,37 @@ export function createLearningToolService(
     return summarizeRows(rows, part, level);
   }
 
+  async function applyProgressBatch(
+    uid: string | null,
+    groups: Array<{ part: number; levels: DauToeicDifficultyLevel[] }>,
+  ): Promise<Array<{ part: number; levels: DauToeicDifficultyLevel[] }>> {
+    if (!uid || groups.length === 0) return groups;
+    const parts = [...new Set(groups.map((group) => group.part))];
+    const allRows = await cachedProgressRows(uid, parts);
+    const rowsByPart = new Map<number, ListeningProgressDoc[]>();
+    for (const row of allRows) {
+      if (row.part == null) continue;
+      const bucket = rowsByPart.get(row.part);
+      if (bucket) bucket.push(row);
+      else rowsByPart.set(row.part, [row]);
+    }
+    const enrichedGroups = groups.map((group) => ({
+      part: group.part,
+      levels: applyRowsToLevels(group.levels, rowsByPart.get(group.part) ?? []),
+    }));
+    return enrichedGroups;
+  }
+
   return {
     async applyProgress(uid, levels) {
       if (!uid || levels.length === 0) return levels;
-      // Fetch all progress rows for this part in a SINGLE Firestore query,
-      // then compute each level's summary in memory. This avoids the previous
-      // one-query-per-level fan-out that made the dashboard slow on every
-      // navigation. Progress is still always fresh (not cached).
       const part = levels[0]?.part ?? null;
-      const allRows = await findProgressByPart(uid, part);
-      return applyRowsToLevels(levels, allRows);
+      if (part == null) return levels;
+      const groups = await applyProgressBatch(uid, [{ part, levels }]);
+      return groups[0]?.levels ?? levels;
     },
 
-    async applyProgressBatch(uid, groups) {
-      if (!uid || groups.length === 0) return groups;
-      const parts = [...new Set(groups.map((group) => group.part))];
-      const allRows = await findProgressByParts(uid, parts);
-      const rowsByPart = new Map<number, ListeningProgressDoc[]>();
-      for (const row of allRows) {
-        if (row.part == null) continue;
-        const bucket = rowsByPart.get(row.part);
-        if (bucket) bucket.push(row);
-        else rowsByPart.set(row.part, [row]);
-      }
-      return groups.map((group) => ({
-        part: group.part,
-        levels: applyRowsToLevels(group.levels, rowsByPart.get(group.part) ?? []),
-      }));
-    },
+    applyProgressBatch,
 
     summarize,
 
@@ -261,6 +283,7 @@ export function createLearningToolService(
         }).catch(() => undefined));
       }
       await Promise.all(followUpWrites);
+      invalidateProgressCache(uid, request.part);
       return { saved: true, authenticated: true, correct: isCorrect };
     },
 
@@ -365,6 +388,7 @@ export function createLearningToolService(
       }
       requirePartLevel(request, config);
       await deleteProgressByPartAndLevel(uid, request.part!, request.level!);
+      invalidateProgressCache(uid, request.part);
       return {
         saved: true,
         authenticated: true,

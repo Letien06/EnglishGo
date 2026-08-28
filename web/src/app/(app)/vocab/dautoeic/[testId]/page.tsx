@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import AppTopbar from "@/components/AppTopbar";
-import { getCurrentUser } from "@/lib/auth/session";
+import { getCurrentUserForRead } from "@/lib/auth/session";
 import * as dautoeicVocab from "@/lib/services/dautoeic-vocab";
 import DautoeicPartStudyButton from "./DautoeicPartStudyButton";
 
@@ -11,7 +11,7 @@ interface Props {
 
 export default async function DautoeicVocabTestPage({ params }: Props) {
   const { testId } = await params;
-  const user = await getCurrentUser();
+  const user = await getCurrentUserForRead();
   const currentPath = `/vocab/dautoeic/${encodeURIComponent(testId)}`;
 
   if (!user) {

@@ -4,6 +4,7 @@ import Image from "next/image";
 import Link from "next/link";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import PracticeMobileMenu from "../../_components/PracticeMobileMenu";
+import { invalidateLearningLevels, setActiveLearnerId } from "@/lib/client-learning-progress-cache";
 import { markVisited, routeKey } from "@/lib/nav/session-nav";
 import type {
   DauToeicDifficultySession,
@@ -19,6 +20,7 @@ interface Props {
   mode: string;
   assist: number;
   userLoggedIn: boolean;
+  userUid: string | null;
   savedAnswers?: Record<string, string>;
 }
 
@@ -50,6 +52,7 @@ export default function ListenPracticeClient({
   level,
   mode,
   assist,
+  userUid,
   savedAnswers,
 }: Props) {
   const initialMode = normalizeMode(mode);
@@ -77,6 +80,10 @@ export default function ListenPracticeClient({
   const startedAtRef = useRef(0);
   const autoAdvanceRef = useRef<number | null>(null);
   const item = items[currentIndex] ?? items[0];
+
+  useEffect(() => {
+    setActiveLearnerId(userUid);
+  }, [userUid]);
 
   useEffect(() => {
     let firstFrame = 0;
@@ -204,7 +211,7 @@ export default function ListenPracticeClient({
     setAnsweredMap((prev) => ({ ...prev, [question.id]: selectedAnswer }));
 
     try {
-      await fetch("/api/listening/progress", {
+      const response = await fetch("/api/listening/progress", {
         method: "POST",
         keepalive: true,
         headers: { "Content-Type": "application/json" },
@@ -221,6 +228,13 @@ export default function ListenPracticeClient({
           elapsedSeconds: elapsed,
         }),
       });
+      const payload = await response.json().catch(() => null) as {
+        success?: boolean;
+        data?: { saved?: boolean; authenticated?: boolean } | null;
+      } | null;
+      if (response.ok && payload?.success && payload.data?.saved && payload.data.authenticated) {
+        invalidateLearningLevels("listening", [partNum], userUid);
+      }
     } catch {
       // Saving progress is best-effort, matching the old Spring client.
     }
@@ -232,7 +246,7 @@ export default function ListenPracticeClient({
         goTo(currentIndex + 1, { play: true });
       }, 450);
     }
-  }, [activeAssist, activeMode, answeredMap, auto, currentIndex, elapsed, goTo, item.id, items.length, level, partNum]);
+  }, [activeAssist, activeMode, answeredMap, auto, currentIndex, elapsed, goTo, item.id, items.length, level, partNum, userUid]);
 
   useEffect(() => () => {
     if (autoAdvanceRef.current !== null) window.clearTimeout(autoAdvanceRef.current);

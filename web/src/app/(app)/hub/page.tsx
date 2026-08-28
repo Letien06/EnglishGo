@@ -2,12 +2,12 @@ import Link from "next/link";
 import type { CSSProperties } from "react";
 import NavIcon from "@/components/NavIcon";
 import AppTopbar from "@/components/AppTopbar";
-import { requireUser } from "@/lib/auth/session";
+import { requireUserForRead } from "@/lib/auth/session";
 import { getHub } from "@/lib/services/hub";
 import HubReadySignal from "./HubReadySignal";
 
 export default async function HubPage() {
-  const user = await requireUser();
+  const user = await requireUserForRead();
   const hub = await getHub(user);
   const totalActivities = Object.values(hub.moduleTotals).reduce((sum, value) => sum + value, 0);
   const moduleRows = [

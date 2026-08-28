@@ -2,7 +2,7 @@ import { NextRequest } from "next/server";
 import { cookies } from "next/headers";
 import { withErrorHandling } from "@/lib/api/handler";
 import { ok, fail } from "@/lib/api/response";
-import { getCurrentUser, provisionUser } from "@/lib/auth/session";
+import { getCurrentUserForRead, provisionUser } from "@/lib/auth/session";
 import { adminAuth } from "@/lib/firebase/admin";
 
 const SESSION_COOKIE = "session";
@@ -74,7 +74,7 @@ export const DELETE = withErrorHandling(async () => {
  * Check if user is authenticated. Returns user info or null.
  */
 export const GET = withErrorHandling(async () => {
-  const user = await getCurrentUser();
+  const user = await getCurrentUserForRead();
   if (!user) {
     return ok(null);
   }

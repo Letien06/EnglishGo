@@ -1,8 +1,6 @@
 import Link from "next/link";
 import LevelDashboardClient from "../_components/LevelDashboardClient";
-import { getCurrentUser } from "@/lib/auth/session";
 import * as dautoeic from "@/lib/services/dautoeic";
-import * as listening from "@/lib/services/listening";
 
 const parts = [
   { id: "part1", num: 1, label: "Part 1: Hình ảnh", title: "Luyện Part 1 theo 5 cấp độ", desc: "Câu hỏi lấy từ ngân hàng luyện nghe TOEIC và được phân loại theo tỉ lệ sai thực tế.", badge: "P1" },
@@ -63,12 +61,11 @@ export default async function ListenPage({
 
 async function loadInitialLevels(part: number) {
   try {
-    const [user, baseLevels] = await Promise.all([
-      getCurrentUser(),
-      dautoeic.listDifficultyLevels(part),
-    ]);
     return {
-      levels: await listening.applyProgress(user?.uid ?? null, baseLevels),
+      // This is public, cached catalog data. The client overlays the learner's
+      // saved progress after first paint, so navigation is never blocked by
+      // Firebase Auth or a user-progress Firestore query.
+      levels: await dautoeic.listDifficultyLevels(part),
       error: false,
     };
   } catch {

@@ -3,7 +3,7 @@ import { z } from "zod";
 import { withErrorHandling } from "@/lib/api/handler";
 import { ok } from "@/lib/api/response";
 import { parseBody } from "@/lib/api/validate";
-import { requireUser } from "@/lib/auth/session";
+import { requireUser, requireUserForRead } from "@/lib/auth/session";
 import * as vocab from "@/lib/services/vocab";
 
 const historySchema = z.object({
@@ -24,7 +24,7 @@ const historySchema = z.object({
 );
 
 export const GET = withErrorHandling(async (req: NextRequest) => {
-  const user = await requireUser();
+  const user = await requireUserForRead();
   const url = new URL(req.url);
   const setId = Number(url.searchParams.get("setId"));
   const externalPartId = url.searchParams.get("externalPartId");

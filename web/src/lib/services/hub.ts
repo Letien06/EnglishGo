@@ -6,6 +6,8 @@
  */
 import { adminDb } from "@/lib/firestore/db";
 import type { AppUser } from "@/types";
+import { readServerCache } from "@/lib/server-cache";
+import { dashboardCacheTag } from "./learner-cache";
 import { getStudyStreak, getTodayStudySummary } from "./study-activity";
 import { refreshVocabHubSummary } from "./vocab";
 
@@ -92,6 +94,14 @@ async function loadPracticeSummary(
 /* ------------------------------------------------------------------ */
 
 export async function getHub(user: AppUser): Promise<HubView> {
+  return readServerCache(
+    () => readHub(user),
+    ["learner-dashboard", user.uid],
+    { revalidate: 60, tags: [dashboardCacheTag(user.uid)] },
+  );
+}
+
+async function readHub(user: AppUser): Promise<HubView> {
   const uid = user.uid;
   const profileSnap = await adminDb.collection("users").doc(uid).get().catch(() => null);
   const profile = profileSnap?.exists ? profileSnap.data() ?? {} : {};

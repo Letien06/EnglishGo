@@ -7,7 +7,7 @@
  * Port of `ReadController.practice()` + `read/practice.html`.
  */
 import { redirect } from "next/navigation";
-import { getCurrentUser } from "@/lib/auth/session";
+import { getCurrentUserForRead } from "@/lib/auth/session";
 import * as dautoeic from "@/lib/services/dautoeic";
 import ReadPracticeClient from "./ReadPracticeClient";
 
@@ -41,7 +41,7 @@ export default async function ReadPracticePage({
     }
   })();
 
-  const user = await getCurrentUser();
+  const user = await getCurrentUserForRead();
 
   let session;
   try {
@@ -62,6 +62,7 @@ export default async function ReadPracticePage({
       level={level}
       mode={mode}
       userLoggedIn={!!user}
+      userUid={user?.uid ?? null}
     />
   );
 }

@@ -1,6 +1,6 @@
 import { withErrorHandling } from "@/lib/api/handler";
 import { ok } from "@/lib/api/response";
-import { getCurrentUser } from "@/lib/auth/session";
+import { getCurrentUserForRead } from "@/lib/auth/session";
 import * as dautoeicVocab from "@/lib/services/dautoeic-vocab";
 
 const PUBLIC_CACHE_HEADERS = {
@@ -13,7 +13,7 @@ const PUBLIC_CACHE_HEADERS = {
 };
 
 export const GET = withErrorHandling(async (req) => {
-  const user = await getCurrentUser();
+  const user = await getCurrentUserForRead();
   const catalog = await dautoeicVocab.getVocabularyCatalogView(user?.uid);
   // Progress fields are personalized for a session. Only completely anonymous
   // calls can enter a shared CDN cache; Vary also prevents a cache key collision

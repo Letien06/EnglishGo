@@ -21,6 +21,7 @@ import type { AppUser } from "../../types";
 const USERS_COLLECTION = "users";
 const USER_PROFILE_CACHE_TAG = "current-user-profile";
 const USER_PROFILE_CACHE_SECONDS = 60;
+const SESSION_REVOCATION_CACHE_SECONDS = 60;
 
 const cachedStoredUser = unstable_cache(
   async (uid: string): Promise<AppUser | null> => {
@@ -33,6 +34,25 @@ const cachedStoredUser = unstable_cache(
     revalidate: USER_PROFILE_CACHE_SECONDS,
     tags: [USER_PROFILE_CACHE_TAG],
   },
+);
+
+/**
+ * A read request does not need to contact Firebase Auth again when the same
+ * session was already revocation-checked in the last minute. Writes and role
+ * checks continue to use Firebase's immediate check below.
+ */
+const cachedSessionRevocationStatus = unstable_cache(
+  async (uid: string, authTimeSeconds: number): Promise<boolean> => {
+    const userRecord = await adminAuth.getUser(uid);
+    if (userRecord.disabled) return false;
+    const validAfterMillis = Date.parse(userRecord.tokensValidAfterTime ?? "");
+    const validAfterSeconds = Number.isFinite(validAfterMillis)
+      ? Math.floor(validAfterMillis / 1000)
+      : 0;
+    return authTimeSeconds >= validAfterSeconds;
+  },
+  ["session-revocation-status"],
+  { revalidate: SESSION_REVOCATION_CACHE_SECONDS },
 );
 
 /* ------------------------------------------------------------------ */
@@ -204,6 +224,18 @@ export async function provisionUser(decoded: {
   return user;
 }
 
+async function verifySessionCookieForRead(cookie: string) {
+  try {
+    // Signature and expiry are still verified for every request. Only the
+    // remote revocation lookup is reused briefly for read-only navigation.
+    const decoded = await adminAuth.verifySessionCookie(cookie, false);
+    const authTime = typeof decoded.auth_time === "number" ? decoded.auth_time : 0;
+    return await cachedSessionRevocationStatus(decoded.uid, authTime) ? decoded : null;
+  } catch {
+    return null;
+  }
+}
+
 /* ------------------------------------------------------------------ */
 /*  Current user (verify + provision)                                  */
 /* ------------------------------------------------------------------ */
@@ -216,12 +248,26 @@ export async function provisionUser(decoded: {
  * Returns `null` when no token is present (anonymous visitor).
  */
 export const getCurrentUser = cache(async (): Promise<AppUser | null> => {
+  return getCurrentUserFromRequest(verifySessionCookie);
+});
+
+/**
+ * For read-only pages and GET routes. The session signature is always checked,
+ * while Firebase's revocation state is cached for at most one minute.
+ */
+export const getCurrentUserForRead = cache(async (): Promise<AppUser | null> => {
+  return getCurrentUserFromRequest(verifySessionCookieForRead);
+});
+
+async function getCurrentUserFromRequest(
+  sessionVerifier: (cookie: string) => Promise<Awaited<ReturnType<typeof verifySessionCookie>>>,
+): Promise<AppUser | null> {
   /* --- 1. Try session cookie ------------------------------------------- */
   const cookieStore = await cookies();
   const sessionCookie = cookieStore.get("session");
 
   if (sessionCookie?.value) {
-    const decoded = await verifySessionCookie(sessionCookie.value);
+    const decoded = await sessionVerifier(sessionCookie.value);
     if (decoded) {
       return getStoredOrProvisionedUser(decoded);
     }
@@ -242,7 +288,7 @@ export const getCurrentUser = cache(async (): Promise<AppUser | null> => {
   }
 
   return null;
-});
+}
 
 /* ------------------------------------------------------------------ */
 /*  Guard helpers                                                      */
@@ -276,6 +322,13 @@ export async function requireRole(
       `Role "${user.role}" is not allowed. Required: ${allowed.join(" | ")}`,
     );
   }
+  return user;
+}
+
+/** Same contract as requireUser(), optimized only for read-only rendering. */
+export async function requireUserForRead(): Promise<AppUser> {
+  const user = await getCurrentUserForRead();
+  if (!user) throw Unauthorized();
   return user;
 }
 

@@ -1,6 +1,6 @@
 import { withErrorHandling } from "@/lib/api/handler";
 import { ok } from "@/lib/api/response";
-import { getCurrentUser, requireUser } from "@/lib/auth/session";
+import { getCurrentUserForRead, requireUser } from "@/lib/auth/session";
 import {
   claimStudyStreakMilestone,
   getStoredStudyStreakSummary,
@@ -8,7 +8,7 @@ import {
 } from "@/lib/services/study-activity";
 
 export const GET = withErrorHandling(async () => {
-  const user = await getCurrentUser();
+  const user = await getCurrentUserForRead();
   if (!user) {
     return ok({
       streakDays: 0,

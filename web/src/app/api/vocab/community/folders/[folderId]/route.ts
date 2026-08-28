@@ -7,7 +7,7 @@
 import { NextRequest } from "next/server";
 import { withErrorHandling } from "@/lib/api/handler";
 import { ok, BadRequest } from "@/lib/api/response";
-import { getCurrentUser, requireUser } from "@/lib/auth/session";
+import { getCurrentUserForRead, requireUser } from "@/lib/auth/session";
 import * as vocab from "@/lib/services/vocab";
 
 function parseFolderId(value: string): number {
@@ -22,7 +22,7 @@ export const GET = withErrorHandling(
     const id = parseFolderId(folderId);
 
     const url = new URL(req.url);
-    const user = await getCurrentUser();
+    const user = await getCurrentUserForRead();
 
     const folder = await vocab.getCommunityFolderCard(id);
     const sets = await vocab.findCommunitySetCards(id);

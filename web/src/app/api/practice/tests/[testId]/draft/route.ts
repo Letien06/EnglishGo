@@ -2,7 +2,7 @@ import { z } from "zod";
 import { withErrorHandling } from "@/lib/api/handler";
 import { ok } from "@/lib/api/response";
 import { parseBody } from "@/lib/api/validate";
-import { requireUser } from "@/lib/auth/session";
+import { requireUser, requireUserForRead } from "@/lib/auth/session";
 import { deleteDraft, getDraft, saveDraft } from "@/lib/services/practice";
 
 const schema = z.object({
@@ -23,7 +23,7 @@ function inputFromSearchParams(req: Request) {
 }
 
 export const GET = withErrorHandling(async (req, ctx) => {
-  const user = await requireUser();
+  const user = await requireUserForRead();
   const params = await ctx.params;
   const testId = Number(params.testId);
   return ok(await getDraft(user.uid, testId, inputFromSearchParams(req)));

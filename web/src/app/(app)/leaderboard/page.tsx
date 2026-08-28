@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { getCurrentUser } from "@/lib/auth/session";
+import { getCurrentUserForRead } from "@/lib/auth/session";
 import {
   getPracticeLeaderboard,
   normalizeLeaderboardPeriod,
@@ -22,7 +22,7 @@ interface Props {
 type LeaderboardTab = "streak" | "listening" | "reading" | "exam" | "pet" | "weekly";
 
 export default async function LeaderboardPage({ searchParams }: Props) {
-  const [user, sp] = await Promise.all([getCurrentUser(), searchParams]);
+  const [user, sp] = await Promise.all([getCurrentUserForRead(), searchParams]);
   const tab = normalizeTab(singleValue(sp.tab));
   const period = tab === "weekly" ? "WEEKLY" : normalizeLeaderboardPeriod(singleValue(sp.period));
   const scope = tab === "weekly" || tab === "pet" ? "EXAM" : scopeForTab(tab);

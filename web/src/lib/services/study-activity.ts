@@ -1,6 +1,8 @@
 import { FieldValue } from "firebase-admin/firestore";
 import { unstable_cache } from "next/cache";
 import { adminDb } from "@/lib/firestore/db";
+import { readServerCache } from "@/lib/server-cache";
+import { invalidateLearnerActivityCaches, studyStreakCacheTag } from "./learner-cache";
 
 const ACTIVITY_COLLECTION = "studyActivity";
 const DAILY_SUMMARY_COLLECTION = "dailySummaries";
@@ -151,6 +153,8 @@ export async function recordStudyActivity(
     );
   });
 
+  invalidateLearnerActivityCaches(uid);
+
 }
 
 /**
@@ -209,6 +213,15 @@ export async function getStudyStreak(uid: string): Promise<StudyStreakSummary> {
     return emptySummary();
   }
 
+  return readServerCache(
+    () => readStudyStreak(uid),
+    ["learner-study-streak", uid],
+    { revalidate: 60, tags: [studyStreakCacheTag(uid)] },
+  );
+}
+
+async function readStudyStreak(uid: string): Promise<StudyStreakSummary> {
+
   const snap = await activityCollection(uid)
     .orderBy("dateKey", "desc")
     .limit(STREAK_LOOKBACK_LIMIT)
@@ -253,6 +266,19 @@ export async function getStoredStudyStreakSummary(
   maxAgeMs = SUMMARY_MAX_AGE_MS,
 ): Promise<StudyStreakSummary | null> {
   if (!uid?.trim()) return null;
+
+  const safeMaxAgeMs = Math.max(0, Math.trunc(maxAgeMs));
+  return readServerCache(
+    () => readStoredStudyStreakSummary(uid, safeMaxAgeMs),
+    ["learner-stored-study-streak", uid, String(safeMaxAgeMs)],
+    { revalidate: 60, tags: [studyStreakCacheTag(uid)] },
+  );
+}
+
+async function readStoredStudyStreakSummary(
+  uid: string,
+  maxAgeMs: number,
+): Promise<StudyStreakSummary | null> {
 
   const snap = await adminDb.collection("users").doc(uid).get();
   if (!snap.exists) return null;

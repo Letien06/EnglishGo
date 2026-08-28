@@ -2,7 +2,7 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 import PublicHeader from "@/components/PublicHeader";
 import NavIcon from "@/components/NavIcon";
-import { getCurrentUser } from "@/lib/auth/session";
+import { getCurrentUserForRead } from "@/lib/auth/session";
 
 const features = [
   {
@@ -68,7 +68,7 @@ const steps = [
 ];
 
 export default async function HomePage() {
-  const user = await getCurrentUser();
+  const user = await getCurrentUserForRead();
   if (user) redirect("/hub");
 
   return (

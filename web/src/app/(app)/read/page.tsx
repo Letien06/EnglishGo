@@ -1,8 +1,6 @@
 import Link from "next/link";
 import LevelDashboardClient from "../_components/LevelDashboardClient";
-import { getCurrentUser } from "@/lib/auth/session";
 import * as dautoeic from "@/lib/services/dautoeic";
-import * as reading from "@/lib/services/reading";
 
 const parts = [
   { id: "part5", num: 5, label: "Part 5: Hoàn thành câu", title: "Part 5: Hoàn thành câu", desc: "Luyện câu hỏi ngữ pháp và từ vựng trong từng câu đơn TOEIC.", badge: "▤" },
@@ -60,12 +58,10 @@ export default async function ReadPage({
 
 async function loadInitialLevels(part: number) {
   try {
-    const [user, baseLevels] = await Promise.all([
-      getCurrentUser(),
-      dautoeic.listReadingDifficultyLevels(part),
-    ]);
     return {
-      levels: await reading.applyProgress(user?.uid ?? null, baseLevels),
+      // Render the public level catalog immediately. Personal progress is
+      // loaded in the client after paint and cached per learner/part.
+      levels: await dautoeic.listReadingDifficultyLevels(part),
       error: false,
     };
   } catch {

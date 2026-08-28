@@ -1,6 +1,6 @@
 import Link from "next/link";
 import AppTopbar from "@/components/AppTopbar";
-import { getCurrentUser } from "@/lib/auth/session";
+import { getCurrentUserForRead } from "@/lib/auth/session";
 import { findTests } from "@/lib/services/practice";
 import PracticeTestLauncher from "./PracticeTestLauncher";
 
@@ -14,7 +14,7 @@ export default async function PracticePage({ searchParams }: Props) {
   const sp = await searchParams;
   const cursor = typeof sp.cursor === "string" ? sp.cursor : null;
   const [user, tests] = await Promise.all([
-    getCurrentUser(),
+    getCurrentUserForRead(),
     findTests(
       sp.type as string | undefined,
       sp.difficulty as string | undefined,

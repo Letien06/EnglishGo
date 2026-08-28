@@ -7,7 +7,7 @@
  * Port of `ListenController.practice()` + `listen/practice.html`.
  */
 import { redirect } from "next/navigation";
-import { getCurrentUser } from "@/lib/auth/session";
+import { getCurrentUserForRead } from "@/lib/auth/session";
 import * as dautoeic from "@/lib/services/dautoeic";
 import * as listening from "@/lib/services/listening";
 import ListenPracticeClient from "./ListenPracticeClient";
@@ -57,7 +57,7 @@ export default async function ListenPracticePage({
     }
   })();
 
-  const user = await getCurrentUser();
+  const user = await getCurrentUserForRead();
 
   let session;
   try {
@@ -91,6 +91,7 @@ export default async function ListenPracticePage({
       mode={mode}
       assist={assist}
       userLoggedIn={!!user}
+      userUid={user?.uid ?? null}
       savedAnswers={savedAnswers}
     />
   );

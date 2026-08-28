@@ -1,6 +1,6 @@
 import Link from "next/link";
 import AppTopbar from "@/components/AppTopbar";
-import { getCurrentUser } from "@/lib/auth/session";
+import { getCurrentUserForRead } from "@/lib/auth/session";
 import { leaderboard, normalizePeriod } from "@/lib/services/community";
 
 export const dynamic = "force-dynamic";
@@ -10,7 +10,7 @@ interface Props {
 }
 
 export default async function LeaderboardPage({ searchParams }: Props) {
-  const user = await getCurrentUser();
+  const user = await getCurrentUserForRead();
   const sp = await searchParams;
   const period = normalizePeriod(sp.period as string | undefined);
   const entries = await leaderboard(period);

@@ -2,6 +2,7 @@ import { FieldValue } from "firebase-admin/firestore";
 import { adminAuth, adminDb } from "@/lib/firebase/admin";
 import { BadRequest, Unauthorized } from "@/lib/api/response";
 import { invalidateCurrentUserProfileCache } from "@/lib/auth/session";
+import { invalidateLearnerActivityCaches } from "./learner-cache";
 import type { AppUser } from "@/types";
 
 const MAX_AVATAR_DATA_URL_LENGTH = 240_000;
@@ -48,6 +49,7 @@ export async function updateSettings(
     { merge: true },
   );
   invalidateCurrentUserProfileCache();
+  invalidateLearnerActivityCaches(uid);
   return { ...user, displayName, avatarUrl, updatedAtMillis: Date.now() };
 }
 

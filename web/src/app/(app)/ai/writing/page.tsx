@@ -1,12 +1,12 @@
 import AppTopbar from "@/components/AppTopbar";
-import { requireUser } from "@/lib/auth/session";
+import { requireUserForRead } from "@/lib/auth/session";
 import { recentJobs } from "@/lib/services/ai-writing";
 import AiWritingForm from "./AiWritingForm";
 
 export const dynamic = "force-dynamic";
 
 export default async function AiWritingPage() {
-  const user = await requireUser();
+  const user = await requireUserForRead();
   const jobs = await recentJobs(user.uid);
 
   return (

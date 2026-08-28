@@ -1,27 +1,25 @@
 "use client";
 
 /**
- * Client-side level dashboard with a session (in-memory) cache.
- *
- * Why: the /listen and /read pages are Server Components, so Next.js re-runs
- * them (including the per-user Firestore progress query) on EVERY navigation,
- * flashing the loading overlay each time. This component keeps an SWR-style
- * cache keyed by `skill:partId` that lives for the browser session:
- *
- *   - First visit for a part: use the SSR `initialLevels` and store the
- *     result in the cache without immediately requesting the same data again.
- *   - Returning to the same part later: render the cached levels INSTANTLY
- *     (no overlay, no reload), then revalidate silently.
- *   - After a part loads: prefetch sibling parts in the background so switching
- *     Part 1 -> Part 2 or Part 5 -> Part 6 usually reuses hot client cache.
- *
- * Progress is still kept fresh when the tab/window regains focus (e.g. after
- * finishing a practice session and navigating back).
+ * Public level metadata is rendered by the server immediately. This client
+ * layer overlays the learner's progress after paint, using a per-user cache
+ * and refreshing only the part that reports a learning event.
  */
 import Link from "next/link";
 import { useCallback, useEffect, useRef, useState, type CSSProperties } from "react";
 import NavIcon from "@/components/NavIcon";
 import ResetLevelButton from "@/components/ResetLevelButton";
+import { useAuthenticatedSession } from "@/components/AuthenticatedSessionContext";
+import {
+  ACTIVE_LEARNER_UPDATED_EVENT,
+  LEARNING_LEVELS_UPDATED_EVENT,
+  activeLearnerId,
+  cacheLearningLevels,
+  invalidateLearningLevels,
+  isLearningLevelsDirty,
+  readCachedLearningLevels,
+  type LearningSkill,
+} from "@/lib/client-learning-progress-cache";
 import { markVisited, routeKey } from "@/lib/nav/session-nav";
 import type { DauToeicDifficultyLevel } from "@/types/dautoeic";
 
@@ -33,7 +31,7 @@ const levelStyles = [
   "border-l-4 border-l-rose-500",
 ] as const;
 
-/** Module-level cache: survives client-side navigations within a session. */
+/** Hot copy so a client-side return navigation does not parse localStorage. */
 const sessionCache = new Map<string, DauToeicDifficultyLevel[]>();
 
 interface Props {
@@ -57,63 +55,59 @@ export default function LevelDashboardClient({
   resetEndpoint,
   practiceHrefBase,
 }: Props) {
-  const cacheKey = `${skill}:${partId}`;
-  const cached = sessionCache.get(cacheKey);
+  const authenticated = useAuthenticatedSession();
+  // Do not read a prior learner's local cache until the lightweight session
+  // request has confirmed the current account.
+  const initialCachedLevels = authenticated ? readBestCachedLevels(skill, partNum) : null;
+  const [levels, setLevels] = useState<DauToeicDifficultyLevel[]>(initialCachedLevels ?? initialLevels);
+  const [error, setError] = useState(initialError && !initialCachedLevels);
+  const [loading, setLoading] = useState(!initialCachedLevels && initialLevels.length === 0 && !initialError);
+  const mounted = useRef(false);
+  const levelsRef = useRef(levels);
+  const fetchVersionRef = useRef(0);
+  const displayedLearnerRef = useRef<string | null>(authenticated ? activeLearnerId() : null);
 
-  // Seed the SSR levels into the cache on first render so a later return visit
-  // has data immediately (without waiting for a fetch).
-  if (!cached && !initialError && initialLevels.length > 0) {
-    sessionCache.set(cacheKey, initialLevels);
-  }
-
-  const [levels, setLevels] = useState<DauToeicDifficultyLevel[]>(
-    cached ?? initialLevels,
-  );
-  const [error, setError] = useState(initialError && !cached);
-  // Overlay only when we have nothing to show yet.
-  const [loading, setLoading] = useState(
-    !cached && initialLevels.length === 0 && !initialError,
-  );
-  const mounted = useRef(true);
+  useEffect(() => {
+    levelsRef.current = levels;
+  }, [levels]);
 
   const fetchLevels = useCallback(
-    async (showOverlay: boolean) => {
-      if (showOverlay) setLoading(true);
+    async ({ silent = false }: { silent?: boolean } = {}) => {
+      if (!authenticated || !activeLearnerId()) return;
+      const requestVersion = ++fetchVersionRef.current;
+      if (!silent && levelsRef.current.length === 0) setLoading(true);
       try {
-        const partNums = partNumsForSkill(skill);
         const res = await fetch(
-          `${levelsEndpoint}?parts=${partNums.join(",")}`,
+          `${levelsEndpoint}?part=${partNum}`,
           { cache: "no-store" },
         );
         const json = (await res.json()) as {
           success: boolean;
           data: {
             levels?: DauToeicDifficultyLevel[];
-            levelsByPart?: Record<string, DauToeicDifficultyLevel[]>;
+          levelsByPart?: Record<string, DauToeicDifficultyLevel[]>;
           } | null;
         };
-        if (!mounted.current) return;
+        if (!mounted.current || requestVersion !== fetchVersionRef.current) return;
         if (json.success && json.data) {
-          const levelsByPart = json.data.levelsByPart;
-          if (levelsByPart) {
-            for (const [nextPartId, nextLevels] of Object.entries(levelsByPart)) {
-              sessionCache.set(`${skill}:${nextPartId}`, nextLevels);
-            }
-          }
-          const next = levelsByPart?.[partId] ?? json.data.levels ?? [];
-          sessionCache.set(cacheKey, next);
+          const next = json.data.levelsByPart?.[partId] ?? json.data.levels ?? [];
+          cacheLevels(skill, partNum, next);
           setLevels(next);
           setError(false);
-        } else if (levels.length === 0) {
+        } else if (levelsRef.current.length === 0) {
           setError(true);
         }
       } catch {
-        if (mounted.current && levels.length === 0) setError(true);
+        if (
+          mounted.current &&
+          requestVersion === fetchVersionRef.current &&
+          levelsRef.current.length === 0
+        ) setError(true);
       } finally {
-        if (mounted.current) setLoading(false);
+        if (mounted.current && requestVersion === fetchVersionRef.current && !silent) setLoading(false);
       }
     },
-    [cacheKey, levelsEndpoint, partId, skill, levels.length],
+    [authenticated, levelsEndpoint, partId, partNum, skill],
   );
 
   useEffect(() => {
@@ -123,23 +117,53 @@ export default function LevelDashboardClient({
     // in this session. Path mirrors the dashboard pages: /listen or /read.
     const dashboardPath = skill === "listening" ? "/listen" : "/read";
     markVisited(routeKey(dashboardPath, { part: partId }));
-    // Server-rendered data is already fresh. Only show the loading state when
-    // the server could not provide a first result; otherwise wait for focus or
-    // an explicit reset before refreshing progress.
-    const revalidateTimer = levels.length === 0
-      ? window.setTimeout(() => void fetchLevels(!error), 0)
-      : null;
-    // Refresh when the user comes back to the tab (e.g. returning from a
-    // practice session) so progress numbers stay current.
-    const onFocus = () => void fetchLevels(false);
-    window.addEventListener("focus", onFocus);
+
+    const restoreOrFetch = () => {
+      if (!mounted.current) return;
+      if (!authenticated) return;
+      const uid = activeLearnerId();
+      if (displayedLearnerRef.current !== uid) {
+        displayedLearnerRef.current = uid;
+        fetchVersionRef.current += 1;
+        levelsRef.current = initialLevels;
+        setLevels(initialLevels);
+        setError(initialError);
+      }
+      if (!uid) return;
+      const cached = readBestCachedLevels(skill, partNum);
+      if (cached && !isLearningLevelsDirty(skill, partNum)) {
+        setLevels(cached);
+        setError(false);
+        setLoading(false);
+        // Stale-while-revalidate: the learner sees their last local progress
+        // immediately, while this one visible part is refreshed in the
+        // background for work done from another device or a new server event.
+        void fetchLevels({ silent: true });
+        return;
+      }
+      void fetchLevels();
+    };
+
+    const onLearnerChanged = () => restoreOrFetch();
+    const onLevelsUpdated = (event: Event) => {
+      const detail = (event as CustomEvent<{ skill?: LearningSkill; parts?: number[] }>).detail;
+      if (detail?.skill === skill && detail.parts?.includes(partNum)) {
+        void fetchLevels();
+      }
+    };
+
+    // The identity arrives independently of the optional Pet/streak bootstrap.
+    // If there is a 15-day cache, it replaces the public zero-progress view at
+    // once; otherwise only this active part is fetched in the background.
+    void Promise.resolve().then(restoreOrFetch);
+    window.addEventListener(ACTIVE_LEARNER_UPDATED_EVENT, onLearnerChanged);
+    window.addEventListener(LEARNING_LEVELS_UPDATED_EVENT, onLevelsUpdated);
     return () => {
       mounted.current = false;
-      if (revalidateTimer != null) window.clearTimeout(revalidateTimer);
-      window.removeEventListener("focus", onFocus);
+      window.removeEventListener(ACTIVE_LEARNER_UPDATED_EVENT, onLearnerChanged);
+      window.removeEventListener(LEARNING_LEVELS_UPDATED_EVENT, onLevelsUpdated);
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [cacheKey]);
+  }, [authenticated, fetchLevels, initialError, initialLevels, partId, partNum, skill]);
 
   if (loading && levels.length === 0) {
     return <SkeletonGrid />;
@@ -160,7 +184,10 @@ export default function LevelDashboardClient({
           skill={skill}
           partNum={partNum}
           endpoint={resetEndpoint}
-          onReset={() => fetchLevels(false)}
+          onReset={async () => {
+            invalidateLearningLevels(skill, [partNum]);
+            await fetchLevels();
+          }}
           href={`${practiceHrefBase}?part=${partId}&level=${level.level}&mode=normal&assist=30&q=${nextPracticeIndex(level)}`}
           className={levelStyles[index] ?? levelStyles[0]}
         />
@@ -246,8 +273,24 @@ function nextPracticeIndex(level: DauToeicDifficultyLevel) {
   return Math.max(0, Math.min(total - 1, level.done));
 }
 
-function partNumsForSkill(skill: "listening" | "reading") {
-  return skill === "listening" ? [1, 2, 3, 4] : [5, 6, 7];
+function cacheKey(skill: LearningSkill, part: number, uid = activeLearnerId()): string | null {
+  return uid ? `${skill}:${uid}:${part}` : null;
+}
+
+function readBestCachedLevels(skill: LearningSkill, part: number): DauToeicDifficultyLevel[] | null {
+  const key = cacheKey(skill, part);
+  const inMemory = key ? sessionCache.get(key) : null;
+  if (inMemory && !isLearningLevelsDirty(skill, part)) return inMemory;
+  if (isLearningLevelsDirty(skill, part)) return null;
+  const persisted = readCachedLearningLevels(skill, part);
+  if (persisted && key) sessionCache.set(key, persisted);
+  return persisted;
+}
+
+function cacheLevels(skill: LearningSkill, part: number, levels: DauToeicDifficultyLevel[]): void {
+  const key = cacheKey(skill, part);
+  if (key) sessionCache.set(key, levels);
+  cacheLearningLevels(skill, part, levels);
 }
 
 function SkeletonGrid() {

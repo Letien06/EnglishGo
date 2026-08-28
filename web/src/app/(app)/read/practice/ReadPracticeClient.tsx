@@ -4,6 +4,7 @@ import Image from "next/image";
 import Link from "next/link";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { markVisited, routeKey } from "@/lib/nav/session-nav";
+import { invalidateLearningLevels, setActiveLearnerId } from "@/lib/client-learning-progress-cache";
 import PracticeMobileMenu from "../../_components/PracticeMobileMenu";
 import type {
   DauToeicDifficultySession,
@@ -18,6 +19,7 @@ interface Props {
   level: number;
   mode: string;
   userLoggedIn: boolean;
+  userUid: string | null;
 }
 
 type PracticeMode = "normal" | "bilingual";
@@ -42,6 +44,7 @@ export default function ReadPracticeClient({
   partNum,
   level,
   mode,
+  userUid,
 }: Props) {
   const initialMode = normalizeMode(mode);
   const [activeMode, setActiveMode] = useState<PracticeMode>(initialMode);
@@ -57,6 +60,10 @@ export default function ReadPracticeClient({
   const autoAdvanceRef = useRef<number | null>(null);
   const item = items[currentIndex] ?? items[0];
   const firstQuestion = item.questions[0];
+
+  useEffect(() => {
+    setActiveLearnerId(userUid);
+  }, [userUid]);
 
   useEffect(() => {
     let firstFrame = 0;
@@ -139,7 +146,7 @@ export default function ReadPracticeClient({
     setAnsweredMap((prev) => ({ ...prev, [question.id]: selectedAnswer }));
 
     try {
-      await fetch("/api/reading/progress", {
+      const response = await fetch("/api/reading/progress", {
         method: "POST",
         keepalive: true,
         headers: { "Content-Type": "application/json" },
@@ -155,6 +162,13 @@ export default function ReadPracticeClient({
           elapsedSeconds: elapsed,
         }),
       });
+      const payload = await response.json().catch(() => null) as {
+        success?: boolean;
+        data?: { saved?: boolean; authenticated?: boolean } | null;
+      } | null;
+      if (response.ok && payload?.success && payload.data?.saved && payload.data.authenticated) {
+        invalidateLearningLevels("reading", [partNum], userUid);
+      }
     } catch {
       // Progress saving is best-effort, matching the old Spring client.
     }
@@ -166,7 +180,7 @@ export default function ReadPracticeClient({
         goTo(currentIndex + 1);
       }, 450);
     }
-  }, [activeMode, answeredMap, auto, currentIndex, elapsed, goTo, item.id, items.length, level, partNum]);
+  }, [activeMode, answeredMap, auto, currentIndex, elapsed, goTo, item.id, items.length, level, partNum, userUid]);
 
   useEffect(() => () => {
     if (autoAdvanceRef.current !== null) window.clearTimeout(autoAdvanceRef.current);

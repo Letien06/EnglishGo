@@ -7,7 +7,7 @@
 import { NextRequest } from "next/server";
 import { withErrorHandling } from "@/lib/api/handler";
 import { ok, fail } from "@/lib/api/response";
-import { getCurrentUser } from "@/lib/auth/session";
+import { getCurrentUserForRead } from "@/lib/auth/session";
 import * as vocab from "@/lib/services/vocab";
 
 export const GET = withErrorHandling(
@@ -21,7 +21,7 @@ export const GET = withErrorHandling(
     const order = url.searchParams.get("order") ?? undefined;
     const amount = url.searchParams.get("amount") ?? undefined;
 
-    const user = await getCurrentUser();
+    const user = await getCurrentUserForRead();
     const uid = user?.uid ?? "";
 
     // If filters are provided, use filtered session; otherwise plain session

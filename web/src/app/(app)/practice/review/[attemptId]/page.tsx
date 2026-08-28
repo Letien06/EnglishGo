@@ -1,6 +1,6 @@
 import Link from "next/link";
 import AppTopbar from "@/components/AppTopbar";
-import { requireUser } from "@/lib/auth/session";
+import { requireUserForRead } from "@/lib/auth/session";
 import { getAttemptReview } from "@/lib/services/practice";
 import type { PracticeSkillBreakdown } from "@/lib/services/practice";
 import ReviewBackGuard from "../ReviewBackGuard";
@@ -13,7 +13,7 @@ interface Props {
 }
 
 export default async function PracticeReviewPage({ params }: Props) {
-  const user = await requireUser();
+  const user = await requireUserForRead();
   const { attemptId } = await params;
   const review = await getAttemptReview(user.uid, Number(attemptId));
   const attempt = review.attempt;

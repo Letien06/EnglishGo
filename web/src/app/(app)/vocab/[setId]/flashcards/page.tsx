@@ -4,7 +4,7 @@
  * Server component loads session data, passes to client game component.
  * Port of VocabularyController GET /vocab/sets/{setId}/flashcards + flashcards.html.
  */
-import { getCurrentUser } from "@/lib/auth/session";
+import { getCurrentUserForRead } from "@/lib/auth/session";
 import * as vocab from "@/lib/services/vocab";
 import FlashcardGame from "./FlashcardGame";
 
@@ -17,7 +17,7 @@ export default async function FlashcardsPage({ params, searchParams }: Props) {
   const { setId } = await params;
   const sp = await searchParams;
   const id = Number(setId);
-  const user = await getCurrentUser();
+  const user = await getCurrentUserForRead();
   const uid = user?.uid ?? "";
 
   const mode = (sp.mode as string) ?? "flashcard";

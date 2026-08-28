@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useState } from "react";
+import { clearActiveLearnerCache } from "@/lib/client-learning-progress-cache";
 
 export default function LogoutButton() {
   const [busy, setBusy] = useState(false);
@@ -10,6 +11,7 @@ export default function LogoutButton() {
     try {
       await fetch("/api/auth/session", { method: "DELETE" });
     } finally {
+      clearActiveLearnerCache();
       // A document navigation clears short-lived client bootstrap data so the
       // next learner never sees a previous account's optional widgets.
       window.location.assign("/login");

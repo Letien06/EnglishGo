@@ -1,4 +1,6 @@
 import { adminDb } from "@/lib/firestore/db";
+import { readServerCache } from "@/lib/server-cache";
+import { progressReportCacheTag } from "./learner-cache";
 
 export interface ProgressAttemptInput {
   attemptId: number;
@@ -73,6 +75,10 @@ const TOEIC_MAX_SCORE = 990;
  * It deliberately never turns partial practice into a full TOEIC score forecast.
  */
 export async function getProgressReport(uid: string): Promise<ProgressReportView> {
+  return cachedProgressReport(uid);
+}
+
+async function readProgressReport(uid: string): Promise<ProgressReportView> {
   const snapshot = await adminDb
     .collection("users")
     .doc(uid)
@@ -85,6 +91,14 @@ export async function getProgressReport(uid: string): Promise<ProgressReportView
     snapshot.docs
       .map((doc) => toProgressAttempt(doc.data(), doc.id))
       .filter((attempt): attempt is ProgressAttemptInput => attempt != null),
+  );
+}
+
+function cachedProgressReport(uid: string): Promise<ProgressReportView> {
+  return readServerCache(
+    () => readProgressReport(uid),
+    ["learner-progress-report", uid],
+    { revalidate: 120, tags: [progressReportCacheTag(uid)] },
   );
 }
 

@@ -1,5 +1,5 @@
 import AppTopbar from "@/components/AppTopbar";
-import { requireUser } from "@/lib/auth/session";
+import { requireUserForRead } from "@/lib/auth/session";
 import { getPetDashboard, getPetLeaderboard } from "@/lib/services/pet";
 import PetDashboardClient from "./PetDashboardClient";
 
@@ -10,7 +10,7 @@ export default async function PetPage({
 }: {
   searchParams: Promise<{ tab?: string }>;
 }) {
-  const [user, query] = await Promise.all([requireUser(), searchParams]);
+  const [user, query] = await Promise.all([requireUserForRead(), searchParams]);
   const [dashboard, weeklyLeaders] = await Promise.all([
     getPetDashboard(user.uid),
     getPetLeaderboard("weekly"),

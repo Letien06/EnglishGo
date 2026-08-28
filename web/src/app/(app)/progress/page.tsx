@@ -1,6 +1,6 @@
 import Link from "next/link";
 import AppTopbar from "@/components/AppTopbar";
-import { requireUser } from "@/lib/auth/session";
+import { requireUserForRead } from "@/lib/auth/session";
 import {
   getProgressReport,
   type ProgressPartSummary,
@@ -11,7 +11,7 @@ import {
 export const dynamic = "force-dynamic";
 
 export default async function ProgressPage() {
-  const user = await requireUser();
+  const user = await requireUserForRead();
   const report = await getProgressReport(user.uid);
 
   return (

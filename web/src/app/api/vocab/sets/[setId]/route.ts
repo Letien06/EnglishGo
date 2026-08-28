@@ -6,7 +6,7 @@
 import { NextRequest } from "next/server";
 import { withErrorHandling } from "@/lib/api/handler";
 import { ok, fail } from "@/lib/api/response";
-import { getCurrentUser } from "@/lib/auth/session";
+import { getCurrentUserForRead } from "@/lib/auth/session";
 import * as vocab from "@/lib/services/vocab";
 
 export const GET = withErrorHandling(
@@ -15,7 +15,7 @@ export const GET = withErrorHandling(
     const id = Number(setId);
     if (!id) return fail("Invalid set ID", 400);
 
-    const user = await getCurrentUser();
+    const user = await getCurrentUserForRead();
     const uid = user?.uid ?? "";
 
     const detail = await vocab.getSetDetail(id, uid);

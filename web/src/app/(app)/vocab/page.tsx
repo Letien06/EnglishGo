@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { getCurrentUser } from "@/lib/auth/session";
+import { getCurrentUserForRead } from "@/lib/auth/session";
 import * as vocab from "@/lib/services/vocab";
 import VocabLearnTabClient from "./VocabLearnTabClient";
 import VocabMyTab from "./VocabMyTab";
@@ -22,7 +22,7 @@ export default async function VocabPage({
 }) {
   const params = await searchParams;
   const active = normalizeTab(typeof params.tab === "string" ? params.tab : "learn");
-  const user = await getCurrentUser();
+  const user = await getCurrentUserForRead();
   const folderId = typeof params.folderId === "string" ? Number(params.folderId) : undefined;
   const communityFolderId = typeof params.communityFolderId === "string" ? Number(params.communityFolderId) : undefined;
   const folderSearch = typeof params.q === "string" ? params.q : undefined;

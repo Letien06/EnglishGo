@@ -5,7 +5,7 @@
  * Port of VocabularyController GET /vocab/sets/{setId} + set-detail.html.
  */
 import Link from "next/link";
-import { getCurrentUser } from "@/lib/auth/session";
+import { getCurrentUserForRead } from "@/lib/auth/session";
 import * as vocab from "@/lib/services/vocab";
 import AppTopbar from "@/components/AppTopbar";
 import VocabSetDetailClient from "./VocabSetDetailClient";
@@ -17,7 +17,7 @@ interface Props {
 export default async function VocabSetDetailPage({ params }: Props) {
   const { setId } = await params;
   const id = Number(setId);
-  const user = await getCurrentUser();
+  const user = await getCurrentUserForRead();
   const uid = user?.uid ?? "";
 
   const detail = await vocab.getSetDetail(id, uid);

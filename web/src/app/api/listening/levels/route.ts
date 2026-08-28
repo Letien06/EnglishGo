@@ -9,7 +9,7 @@
 import { NextRequest } from "next/server";
 import { withErrorHandling } from "@/lib/api/handler";
 import { ok, ApiError } from "@/lib/api/response";
-import { getCurrentUser } from "@/lib/auth/session";
+import { getCurrentUserForRead } from "@/lib/auth/session";
 import * as dautoeic from "@/lib/services/dautoeic";
 import * as listening from "@/lib/services/listening";
 
@@ -18,7 +18,7 @@ export const GET = withErrorHandling(async (req: NextRequest) => {
   const parts = parseParts(url.searchParams.get("parts"));
   if (parts.length > 0) {
     const [user, baseGroups] = await Promise.all([
-      getCurrentUser(),
+      getCurrentUserForRead(),
       Promise.all(parts.map(async (part) => ({
         part,
         levels: await dautoeic.listDifficultyLevels(part),
@@ -40,7 +40,7 @@ export const GET = withErrorHandling(async (req: NextRequest) => {
     throw new ApiError("Listening part must be between 1 and 4", 400);
   }
   const [user, base] = await Promise.all([
-    getCurrentUser(),
+    getCurrentUserForRead(),
     dautoeic.listDifficultyLevels(part),
   ]);
   const levels = await listening.applyProgress(user?.uid ?? null, base);

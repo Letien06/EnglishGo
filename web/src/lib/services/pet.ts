@@ -2,6 +2,8 @@ import { FieldValue } from "firebase-admin/firestore";
 import { unstable_cache } from "next/cache";
 import { BadRequest } from "@/lib/api/response";
 import { adminDb } from "@/lib/firestore/db";
+import { readServerCache } from "@/lib/server-cache";
+import { invalidatePetCache, petCacheTag } from "./learner-cache";
 import type {
   PetCompanionDefinition,
   PetCompanionId,
@@ -184,7 +186,7 @@ export async function grantPetCoins(input: GrantPetCoinsInput): Promise<PetRewar
   const sourceKey = safeDocumentId(input.sourceKey);
   const dateKey = petDateKeyForMillis(now);
 
-  return adminDb.runTransaction(async (tx) => {
+  const result = await adminDb.runTransaction(async (tx) => {
     const [claimSnap, walletSnap, rewardDaySnap] = await Promise.all([
       tx.get(pet.rewardClaims.doc(sourceKey)),
       tx.get(pet.wallet),
@@ -244,9 +246,19 @@ export async function grantPetCoins(input: GrantPetCoinsInput): Promise<PetRewar
       dailyCapReached: earnedToday + granted >= DAILY_REWARD_CAP,
     };
   });
+  invalidatePetCache(input.uid);
+  return result;
 }
 
 export async function getPetDashboard(uid: string): Promise<PetDashboard> {
+  return readServerCache(
+    () => readPetDashboard(uid),
+    ["learner-pet-dashboard", uid],
+    { revalidate: 60, tags: [petCacheTag(uid)] },
+  );
+}
+
+async function readPetDashboard(uid: string): Promise<PetDashboard> {
   const pet = petRefs(uid);
   let [profileSnap, walletSnap, inventorySnap, companionSnap, historySnap] = await loadPetDashboardSnapshots(pet);
   if (!profileSnap.exists) {
@@ -284,6 +296,14 @@ export async function getPetDashboard(uid: string): Promise<PetDashboard> {
  * time the shared app shell appears.
  */
 export async function getPetWidgetSummary(uid: string): Promise<PetWidgetSummary> {
+  return readServerCache(
+    () => readPetWidgetSummary(uid),
+    ["learner-pet-widget", uid],
+    { revalidate: 60, tags: [petCacheTag(uid)] },
+  );
+}
+
+async function readPetWidgetSummary(uid: string): Promise<PetWidgetSummary> {
   const pet = petRefs(uid);
   let [profileSnap, walletSnap] = await Promise.all([pet.profile.get(), pet.wallet.get()]);
   if (!profileSnap.exists) {
@@ -337,6 +357,7 @@ export async function buyPetFood(uid: string, foodId: PetFoodId): Promise<PetAct
     }));
   });
 
+  invalidatePetCache(uid);
   return { dashboard: await getPetDashboard(uid), evolved: false };
 }
 
@@ -385,6 +406,7 @@ export async function buyPetCompanion(uid: string, companionId: PetCompanionId):
     }));
   });
 
+  invalidatePetCache(uid);
   return { dashboard: await getPetDashboard(uid), evolved: false };
 }
 
@@ -461,6 +483,7 @@ export async function feedPet(uid: string, foodId: PetFoodId): Promise<PetAction
     }
   });
 
+  invalidatePetCache(uid);
   return { dashboard: await getPetDashboard(uid), evolved };
 }
 
@@ -527,6 +550,7 @@ export async function updatePetProfile(
     }), { merge: true });
   });
   if (!updatedProfile) throw new Error("Không thể cập nhật thú cưng lúc này.");
+  invalidatePetCache(uid);
   return updatedProfile;
 }
 

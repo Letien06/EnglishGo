@@ -1,4 +1,4 @@
-import { requireUser } from "@/lib/auth/session";
+import { requireUserForRead } from "@/lib/auth/session";
 import { getPracticeSession } from "@/lib/services/practice";
 import PracticeSessionClient from "./PracticeSessionClient";
 
@@ -10,7 +10,7 @@ interface Props {
 }
 
 export default async function PracticeSessionPage({ params, searchParams }: Props) {
-  const user = await requireUser();
+  const user = await requireUserForRead();
   const { testId } = await params;
   const sp = await searchParams;
   const session = await getPracticeSession(Number(testId), user.uid, {

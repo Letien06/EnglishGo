@@ -1,6 +1,6 @@
 import { withErrorHandling } from "@/lib/api/handler";
 import { ok } from "@/lib/api/response";
-import { getCurrentUser } from "@/lib/auth/session";
+import { getCurrentUserForRead } from "@/lib/auth/session";
 import { getPetWidgetSummary } from "@/lib/services/pet";
 import { getStoredStudyStreakSummary, getStudyStreak } from "@/lib/services/study-activity";
 import type { AppUser } from "@/types";
@@ -20,7 +20,7 @@ type AppBootstrapPayload = {
  * and any learning content.
  */
 export const GET = withErrorHandling(async () => {
-  const user = await getCurrentUser();
+  const user = await getCurrentUserForRead();
   if (!user) {
     return ok<AppBootstrapPayload>({ authenticated: false, user: null, streak: null, pet: null });
   }
