@@ -13,7 +13,6 @@ import {
 } from "./leaderboard";
 import { recordStudyActivity } from "./study-activity";
 import { invalidateProgressReportCache } from "./learner-cache";
-import { grantPetCoins } from "./pet";
 import {
   hasTestIndex,
   queryTestIndex,
@@ -573,13 +572,6 @@ export async function submit(
       module: "practice",
       activityType: config.mode === "exam" ? "practice_exam_submit" : "practice_part_submit",
       sourceId: attemptId,
-      occurredAtMillis: submittedAtMillis,
-    }).catch(() => undefined),
-    grantPetCoins({
-      uid: user.uid,
-      sourceKey: `practice:${attemptId}`,
-      amount: config.mode === "exam" ? 25 : 20,
-      title: config.mode === "exam" ? "Hoàn thành đề thi TOEIC" : "Hoàn thành phần luyện tập",
       occurredAtMillis: submittedAtMillis,
     }).catch(() => undefined),
   ]);

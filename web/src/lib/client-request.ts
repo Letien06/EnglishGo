@@ -5,8 +5,6 @@ export const CLIENT_PERFORMANCE_BUDGETS = {
   dautoeic_part_sync: 3_000,
   vocab_review_batch: 3_000,
   vocab_save_complete: 4_000,
-  pet_profile: 2_000,
-  pet_leaderboard: 2_000,
 } as const;
 
 export type ClientPerformanceFlow = keyof typeof CLIENT_PERFORMANCE_BUDGETS;

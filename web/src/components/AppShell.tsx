@@ -10,10 +10,8 @@ import StudyStreakBadge from "./StudyStreakBadge";
 import NavIcon, { type NavIconName } from "./NavIcon";
 import MobileNavigationMenu from "./MobileNavigationMenu";
 import PwaInstallPrompt from "./PwaInstallPrompt";
-import type { PetWidgetSummary } from "@/types/pet";
 import { clearActiveLearnerCache, setActiveLearnerId } from "@/lib/client-learning-progress-cache";
 
-const PetFloatingWidget = dynamic(() => import("./PetFloatingWidget"), { ssr: false });
 const StudyStreakCelebration = dynamic(() => import("./StudyStreakCelebration"), { ssr: false });
 
 const PREFETCH_ROUTES = ["/hub", "/listen", "/read", "/writing", "/vocab", "/practice", "/progress"];
@@ -27,7 +25,6 @@ const navItems = [
   { href: "/writing", icon: "writing", label: "Viết", color: "text-terracotta" },
   { href: "/vocab", icon: "vocab", label: "Từ vựng", color: "text-jade" },
   { href: "/practice", icon: "practice", label: "Đề thi", color: "text-terracotta" },
-  { href: "/pet", icon: "pet", label: "Thú cưng", color: "text-primary" },
   { href: "/leaderboard", icon: "leaderboard", label: "Bảng xếp hạng", color: "text-primary" },
 ] as const satisfies ReadonlyArray<{
   href: string;
@@ -47,7 +44,6 @@ type AppBootstrap = {
     todayDateKey: string;
     authenticated: boolean;
   } | null;
-  pet: PetWidgetSummary | null;
 };
 
 type BootstrapResponse = {
@@ -242,7 +238,6 @@ export default function AppShell({ children }: { children: ReactNode }) {
       </header>
 
         {children}
-        {authenticated && <PetFloatingWidget initialSummary={bootstrap?.pet} />}
         {authenticated && <StudyStreakCelebration />}
       </div>
     </AuthenticatedSessionProvider>

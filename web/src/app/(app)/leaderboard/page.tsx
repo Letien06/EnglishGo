@@ -10,8 +10,6 @@ import {
   type PracticeLeaderboardScope,
 } from "@/lib/services/leaderboard";
 import { getStudyStreakLeaderboard, type StudyStreakLeaderboardEntry } from "@/lib/services/study-activity";
-import { getPetLeaderboard } from "@/lib/services/pet";
-import type { PetLeaderboardEntry } from "@/types/pet";
 
 export const dynamic = "force-dynamic";
 
@@ -19,19 +17,17 @@ interface Props {
   searchParams: Promise<Record<string, string | string[] | undefined>>;
 }
 
-type LeaderboardTab = "streak" | "listening" | "reading" | "exam" | "pet" | "weekly";
+type LeaderboardTab = "streak" | "listening" | "reading" | "exam" | "weekly";
 
 export default async function LeaderboardPage({ searchParams }: Props) {
   const [user, sp] = await Promise.all([getCurrentUserForRead(), searchParams]);
   const tab = normalizeTab(singleValue(sp.tab));
   const period = tab === "weekly" ? "WEEKLY" : normalizeLeaderboardPeriod(singleValue(sp.period));
-  const scope = tab === "weekly" || tab === "pet" ? "EXAM" : scopeForTab(tab);
+  const scope = tab === "weekly" ? "EXAM" : scopeForTab(tab);
 
-  const [streakEntries, practiceEntries, petEntries] = tab === "streak"
-    ? [await getStudyStreakLeaderboard(100), [] as PracticeLeaderboardEntry[], [] as PetLeaderboardEntry[]]
-    : tab === "pet"
-      ? [[] as StudyStreakLeaderboardEntry[], [] as PracticeLeaderboardEntry[], await getPetLeaderboard(period === "WEEKLY" ? "weekly" : "all-time", 100)]
-      : [[] as StudyStreakLeaderboardEntry[], await getPracticeLeaderboard(scope, period, 100), [] as PetLeaderboardEntry[]];
+  const [streakEntries, practiceEntries] = tab === "streak"
+    ? [await getStudyStreakLeaderboard(100), [] as PracticeLeaderboardEntry[]]
+    : [[] as StudyStreakLeaderboardEntry[], await getPracticeLeaderboard(scope, period, 100)];
 
   return (
     <main className="app-canvas leaderboard-page min-h-[calc(100dvh-4rem)] bg-bg px-5 py-8 lg:px-8">
@@ -51,9 +47,7 @@ export default async function LeaderboardPage({ searchParams }: Props) {
           <div className="leaderboard-count rounded-2xl border border-amber-100 bg-white px-4 py-3 text-sm font-extrabold text-primary shadow-sm">
             {tab === "streak"
               ? `${streakEntries.length}/100 người`
-              : tab === "pet"
-                ? `${petEntries.length}/100 pet`
-                : `${practiceEntries.length}/100 lượt xếp hạng`}
+              : `${practiceEntries.length}/100 lượt xếp hạng`}
           </div>
         </header>
 
@@ -62,7 +56,6 @@ export default async function LeaderboardPage({ searchParams }: Props) {
           <TabLink href="/leaderboard?tab=listening" active={tab === "listening"} label="Nghe" />
           <TabLink href="/leaderboard?tab=reading" active={tab === "reading"} label="Đọc" />
           <TabLink href="/leaderboard?tab=exam" active={tab === "exam"} label="Đề thi" />
-          <TabLink href="/leaderboard?tab=pet" active={tab === "pet"} label="Thú cưng" />
           <TabLink href="/leaderboard?tab=weekly" active={tab === "weekly"} label="Tuần này" />
         </nav>
 
@@ -85,8 +78,6 @@ export default async function LeaderboardPage({ searchParams }: Props) {
 
         {tab === "streak" ? (
           <StreakBoard entries={streakEntries} currentUid={user?.uid ?? null} />
-        ) : tab === "pet" ? (
-          <PetBoard entries={petEntries} currentUid={user?.uid ?? null} />
         ) : (
           <PracticeBoard
             entries={practiceEntries}
@@ -97,60 +88,6 @@ export default async function LeaderboardPage({ searchParams }: Props) {
         )}
       </section>
     </main>
-  );
-}
-
-function PetBoard({
-  entries,
-  currentUid,
-}: {
-  entries: PetLeaderboardEntry[];
-  currentUid: string | null;
-}) {
-  return (
-    <section className="leaderboard-board overflow-hidden rounded-[28px] border border-line bg-white shadow-sm">
-      <div className="grid grid-cols-[72px_1fr_112px_140px] gap-3 border-b border-line bg-slate-50 px-5 py-3 text-xs font-extrabold uppercase tracking-wide text-slate-600 max-md:grid-cols-[56px_1fr_96px]">
-        <span>Hạng</span>
-        <span>Thú cưng</span>
-        <span className="text-right">Cấp</span>
-        <span className="text-right max-md:hidden">Điểm chăm sóc</span>
-      </div>
-
-      {entries.length === 0 ? (
-        <div className="p-10 text-center text-muted">
-          Chưa có thú cưng nào trên bảng xếp hạng. Hãy bật hiển thị BXH tại trang Thú cưng để tham gia.
-        </div>
-      ) : (
-        <div className="divide-y divide-line">
-          {entries.map((entry) => (
-            <article
-              key={entry.uid}
-              className={`leaderboard-row grid grid-cols-[72px_1fr_112px_140px] items-center gap-3 px-5 py-4 max-md:grid-cols-[56px_1fr_96px] ${
-                entry.uid === currentUid ? "bg-amber-50/70" : "bg-white"
-              }`}
-            >
-              <RankBadge rank={entry.rank} />
-              <div className="flex min-w-0 items-center gap-4">
-                <span className="inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-primary/10 text-2xl" aria-hidden="true">🐾</span>
-                <div className="min-w-0">
-                  <h2 className="truncate text-base font-extrabold text-ink">
-                    {entry.petName}
-                    {entry.uid === currentUid ? (
-                      <span className="ml-2 rounded-full bg-primary/10 px-2 py-0.5 text-[10px] font-extrabold text-primary">Bạn</span>
-                    ) : null}
-                  </h2>
-                  <p className="mt-0.5 truncate text-xs font-bold text-muted">
-                    {entry.displayName ?? "Người học ENGLISHGO"}
-                  </p>
-                </div>
-              </div>
-              <strong className="text-right text-lg font-extrabold text-primary">Cấp {entry.evolutionStage}</strong>
-              <strong className="text-right text-lg font-extrabold text-ink max-md:hidden">{entry.careXpTotal.toLocaleString("vi-VN")} XP</strong>
-            </article>
-          ))}
-        </div>
-      )}
-    </section>
   );
 }
 
@@ -342,7 +279,7 @@ function Avatar({ name, avatarUrl }: { name: string; avatarUrl: string | null })
 }
 
 function normalizeTab(value?: string | null): LeaderboardTab {
-  if (value === "streak" || value === "listening" || value === "reading" || value === "exam" || value === "pet" || value === "weekly") {
+  if (value === "streak" || value === "listening" || value === "reading" || value === "exam" || value === "weekly") {
     return value;
   }
   return "streak";
@@ -351,7 +288,6 @@ function normalizeTab(value?: string | null): LeaderboardTab {
 function scopeForTab(tab: LeaderboardTab): PracticeLeaderboardScope {
   if (tab === "listening") return "LISTENING";
   if (tab === "reading") return "READING";
-  if (tab === "pet") return "EXAM";
   return normalizeLeaderboardScope(tab);
 }
 

@@ -16,7 +16,6 @@ const navItems = [
   { href: "/writing", icon: "writing", label: "Viết", color: "text-terracotta" },
   { href: "/vocab", icon: "vocab", label: "Từ vựng", color: "text-jade" },
   { href: "/practice", icon: "practice", label: "Đề thi", color: "text-terracotta" },
-  { href: "/pet", icon: "pet", label: "Thú cưng", color: "text-primary" },
   { href: "/leaderboard", icon: "leaderboard", label: "Bảng xếp hạng", color: "text-primary" },
 ] as const satisfies ReadonlyArray<{ href: string; icon: NavIconName; label: string; color: string }>;
 

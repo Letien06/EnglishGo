@@ -13,10 +13,6 @@ export function studyStreakCacheTag(uid: string): string {
   return `learner-study-streak:${uid}`;
 }
 
-export function petCacheTag(uid: string): string {
-  return `learner-pet:${uid}`;
-}
-
 export function invalidateLearnerActivityCaches(uid: string): void {
   if (!uid?.trim()) return;
   revalidateTag(dashboardCacheTag(uid), { expire: 0 });
@@ -27,9 +23,4 @@ export function invalidateProgressReportCache(uid: string): void {
   if (!uid?.trim()) return;
   revalidateTag(progressReportCacheTag(uid), { expire: 0 });
   revalidateTag(dashboardCacheTag(uid), { expire: 0 });
-}
-
-export function invalidatePetCache(uid: string): void {
-  if (!uid?.trim()) return;
-  revalidateTag(petCacheTag(uid), { expire: 0 });
 }

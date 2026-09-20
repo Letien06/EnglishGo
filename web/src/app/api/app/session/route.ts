@@ -10,7 +10,7 @@ type AppSessionPayload = {
 
 /**
  * Lightweight identity endpoint for client caches. It deliberately excludes
- * streak, Pet, and other dashboard data so pages can identify the current
+ * streak and other dashboard data so pages can identify the current
  * learner before optional widgets begin loading.
  */
 export const GET = withErrorHandling(async () => {

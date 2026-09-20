@@ -41,7 +41,6 @@ import {
 import { enrichCandidatePronunciation, enrichWithDictionary } from "./dictionary";
 import { parseImportFile, parseDelimitedWords } from "@/lib/parsers/vocab-import";
 import { getStoredStudyStreakSummary, getStudyStreak, recordStudyActivity } from "./study-activity";
-import { grantPetCoins, petDateKeyForMillis } from "./pet";
 import { enforceDailyActionLimit } from "./rate-limit";
 
 /* ------------------------------------------------------------------ */
@@ -1005,13 +1004,6 @@ export async function recordStudyHistory(
     sourceId: input.externalPartId ?? input.externalTestId ?? input.setId,
     occurredAtMillis: finishedAtMillis,
   }).catch(() => undefined);
-  await grantPetCoins({
-    uid,
-    sourceKey: `vocab:game:${id}`,
-    amount: 10,
-    title: "Hoàn thành game từ vựng",
-    occurredAtMillis: finishedAtMillis,
-  }).catch(() => undefined);
   return { id };
 }
 
@@ -1361,15 +1353,6 @@ export async function review(
     sourceId: wordId,
     occurredAtMillis: updated.lastReviewedAtMillis,
   }).catch(() => undefined);
-  if (quality >= 3 && updated.lastReviewedAtMillis) {
-    await grantPetCoins({
-      uid,
-      sourceKey: `vocab:review:${wordId}:${petDateKeyForMillis(updated.lastReviewedAtMillis)}`,
-      amount: 2,
-      title: "Ôn từ vựng tốt",
-      occurredAtMillis: updated.lastReviewedAtMillis,
-    }).catch(() => undefined);
-  }
 
   return {
     wordId,
@@ -1674,13 +1657,6 @@ export async function markMastered(
     module: "vocab",
     activityType: "vocab_mastered",
     sourceId: wordId,
-    occurredAtMillis: now,
-  }).catch(() => undefined);
-  await grantPetCoins({
-    uid,
-    sourceKey: `vocab:mastered:${wordId}`,
-    amount: 5,
-    title: "Đã thành thạo từ mới",
     occurredAtMillis: now,
   }).catch(() => undefined);
   return {
@@ -2193,7 +2169,14 @@ function boolVal(data: Record<string, unknown>, key: string): boolean {
 }
 
 export function vocabDayStartForMillis(millis: number): number {
-  const dayKey = petDateKeyForMillis(millis);
+  const parts = new Intl.DateTimeFormat("en-CA", {
+    timeZone: "Asia/Ho_Chi_Minh",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).formatToParts(new Date(millis));
+  const value = (type: Intl.DateTimeFormatPartTypes) => parts.find((part) => part.type === type)?.value ?? "";
+  const dayKey = `${value("year")}-${value("month")}-${value("day")}`;
   const localMidnight = Date.parse(`${dayKey}T00:00:00+07:00`);
   return Number.isFinite(localMidnight) ? localMidnight : millis;
 }

@@ -152,7 +152,7 @@ export default function LevelDashboardClient({
       }
     };
 
-    // The identity arrives independently of the optional Pet/streak bootstrap.
+    // The identity arrives independently of the optional streak bootstrap.
     // If there is a 15-day cache, it replaces the public zero-progress view at
     // once; otherwise only this active part is fetched in the background.
     void Promise.resolve().then(restoreOrFetch);

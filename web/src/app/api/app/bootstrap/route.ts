@@ -1,34 +1,28 @@
 import { withErrorHandling } from "@/lib/api/handler";
 import { ok } from "@/lib/api/response";
 import { getCurrentUserForRead } from "@/lib/auth/session";
-import { getPetWidgetSummary } from "@/lib/services/pet";
 import { getStoredStudyStreakSummary, getStudyStreak } from "@/lib/services/study-activity";
 import type { AppUser } from "@/types";
-import type { PetWidgetSummary } from "@/types/pet";
 import type { StudyStreakSummary } from "@/lib/services/study-activity";
 
 type AppBootstrapPayload = {
   authenticated: boolean;
   user: Pick<AppUser, "uid" | "email" | "displayName" | "role"> | null;
   streak: (StudyStreakSummary & { authenticated: true }) | null;
-  pet: PetWidgetSummary | null;
 };
 
 /**
  * One small request after the first paint replaces separate session, streak,
- * and floating-pet requests. It intentionally excludes inventories, history,
+ * and optional widget requests. It intentionally excludes inventories, history,
  * and any learning content.
  */
 export const GET = withErrorHandling(async () => {
   const user = await getCurrentUserForRead();
   if (!user) {
-    return ok<AppBootstrapPayload>({ authenticated: false, user: null, streak: null, pet: null });
+    return ok<AppBootstrapPayload>({ authenticated: false, user: null, streak: null });
   }
 
-  const [storedStreak, pet] = await Promise.all([
-    getStoredStudyStreakSummary(user.uid),
-    getPetWidgetSummary(user.uid),
-  ]);
+  const storedStreak = await getStoredStudyStreakSummary(user.uid);
   const streak = storedStreak ?? await getStudyStreak(user.uid);
 
   return ok<AppBootstrapPayload>({
@@ -40,6 +34,5 @@ export const GET = withErrorHandling(async () => {
       role: user.role,
     },
     streak: { ...streak, authenticated: true },
-    pet,
   });
 });
