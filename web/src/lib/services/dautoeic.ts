@@ -282,13 +282,15 @@ const cachedReadingDifficultyLevels = unstable_cache(
 
 const cachedListeningDifficultySession = unstable_cache(
   async (part: number, level: number, limit: number | null) => difficultySession(part, level, limit),
-  ["dautoeic-difficulty-session"],
+  // Bump the cache namespace so deployments do not keep a previously
+  // generated empty session after the source data has been repaired.
+  ["dautoeic-difficulty-session-v2"],
   { revalidate: 600 },
 );
 
 const cachedReadingDifficultySession = unstable_cache(
   async (part: number, level: number, limit: number | null) => difficultySession(part, level, limit),
-  ["dautoeic-reading-difficulty-session"],
+  ["dautoeic-reading-difficulty-session-v2"],
   { revalidate: 600 },
 );
 
@@ -310,7 +312,7 @@ function difficultyLevels(
   for (let l = 1; l <= 5; l++) byLevel.set(l, []);
 
   for (const stat of stats) {
-    if (stat.level != null && byLevel.has(stat.level)) {
+    if ((stat.part == null || stat.part === part) && stat.level != null && byLevel.has(stat.level)) {
       byLevel.get(stat.level)!.push(stat);
     }
   }
@@ -366,7 +368,11 @@ async function difficultySession(
   const effectiveLimit = limit && limit > 0 ? limit : Infinity;
   const allStats = await statsLoader(part);
   const levelStats = allStats
-    .filter((s) => s.level === level)
+    // Keep the part constraint here as a defensive guard. The RPC normally
+    // applies `p_part`, but older deployments returned a broader stats set;
+    // mixing those IDs made the resulting session appear empty after question
+    // lookup and triggered the dashboard redirect.
+    .filter((s) => (s.part == null || s.part === part) && s.level === level)
     .slice(0, effectiveLimit);
 
   const items =
@@ -543,7 +549,11 @@ async function mirrorSessionFirst(
   fetcher: () => Promise<DauToeicDifficultySession>,
 ): Promise<DauToeicDifficultySession> {
   const mirrored = await readMirrorSession(key).catch(() => null);
-  if (mirrored) return mirrored;
+  // A mirror document can outlive its source data and contain only an empty
+  // session (for example when a sync ran while the upstream API was
+  // temporarily unavailable). Treat that as a cache miss so the learner does
+  // not get silently redirected back to the dashboard.
+  if (mirrored && mirrored.items.length > 0) return mirrored;
   const fresh = await fetcher();
   await writeMirrorSession(key, fresh).catch(() => undefined);
   return fresh;

@@ -214,6 +214,7 @@ function LevelCard({
   className: string;
 }) {
   const total = level.total ?? 0;
+  const hasPracticeItems = total > 0;
   const progress = total > 0 ? Math.round((level.done / total) * 100) : 0;
 
   return (
@@ -251,7 +252,7 @@ function LevelCard({
         <span className="text-xs font-extrabold text-muted">{total} item</span>
         <div className="flex items-center gap-3">
           <ResetLevelButton part={partNum} level={level.level} endpoint={endpoint} onReset={onReset} />
-          <Link
+          {hasPracticeItems ? <Link
             href={href}
             data-overdelay={skill === "listening" ? "Đang mở bài luyện nghe..." : "Đang mở bài luyện đọc..."}
             data-overdelay-timeout="9000"
@@ -260,7 +261,13 @@ function LevelCard({
           >
             <NavIcon name="play" className="h-4 w-4" />
             Luyện ngay
-          </Link>
+          </Link> : <span
+            aria-disabled="true"
+            title="Level này hiện chưa có câu hỏi"
+            className="inline-flex cursor-not-allowed items-center gap-1.5 rounded-xl bg-slate-200 px-5 py-2 text-sm font-extrabold text-slate-500"
+          >
+            Chưa có dữ liệu
+          </span>}
         </div>
       </footer>
     </article>

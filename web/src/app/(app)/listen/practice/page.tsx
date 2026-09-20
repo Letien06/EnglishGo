@@ -62,11 +62,21 @@ export default async function ListenPracticePage({
   let session;
   try {
     session = await dautoeic.getDifficultySession(pNum, level, null);
-  } catch {
+  } catch (error) {
+    console.error("listen-practice-session-failed", {
+      part: pNum,
+      level,
+      message: error instanceof Error ? error.message : String(error),
+    });
     redirect(`/listen?part=${partId}`);
   }
 
   if (!session || session.items.length === 0) {
+    console.warn("listen-practice-session-empty", {
+      part: pNum,
+      level,
+      total: session?.total ?? 0,
+    });
     redirect(`/listen?part=${partId}`);
   }
 
