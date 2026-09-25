@@ -225,9 +225,7 @@ function LevelCard({
         </span>
         <div>
           <h3 className="text-base font-extrabold text-ink">{level.title}</h3>
-          <p className="text-xs text-muted">
-            Tỉ lệ sai: {Math.round((level.errorRateMin ?? 0) * 100)}% - {Math.round((level.errorRateMax ?? 0) * 100)}%
-          </p>
+          <p className="text-xs text-muted">{hasPracticeItems ? "Bài hiện có trong nguồn kết nối" : "Nguồn kết nối chưa cung cấp bài ở level này"}</p>
         </div>
         <span className="ml-auto text-xs text-muted">{level.done}/{total}</span>
       </header>
@@ -263,7 +261,7 @@ function LevelCard({
             Luyện ngay
           </Link> : <span
             aria-disabled="true"
-            title="Level này hiện chưa có câu hỏi"
+            title="API nguồn hiện không trả nội dung cho level này; đăng nhập ở trang nguồn không tự cấp quyền cho website này."
             className="inline-flex cursor-not-allowed items-center gap-1.5 rounded-xl bg-slate-200 px-5 py-2 text-sm font-extrabold text-slate-500"
           >
             Chưa có dữ liệu

@@ -5,6 +5,8 @@ import { readServerCache } from "../server-cache";
 import { ApiError } from "../api/response";
 import { recordSkillQuestionLeaderboard } from "./leaderboard";
 import { recordStudyActivity, type StudyModule } from "./study-activity";
+import { listDifficultyLevels, listReadingDifficultyLevels } from "./dautoeic";
+import { DAUTOEIC_LEVEL_COUNT } from "./dautoeic-source";
 import type { DauToeicDifficultyLevel } from "../../types/dautoeic";
 import type {
   ListeningProgressDoc,
@@ -71,11 +73,19 @@ export function createLearningToolService(
     part: number | null,
     level: number | null,
   ): Promise<ListeningProgressDoc[]> {
-    const snap = await userCol(uid, config.progressCollection)
-      .where("part", "==", part)
-      .where("level", "==", level)
-      .get();
-    return snap.docs.map(toProgressDoc);
+    if (part == null || level == null) return [];
+    const [rows, itemIds] = await Promise.all([
+      cachedProgressRows(uid, [part]),
+      currentLevelItemIds(part, level),
+    ]);
+    return rows.filter((row) => row.itemId && itemIds.has(row.itemId));
+  }
+
+  async function currentLevelItemIds(part: number, level: number): Promise<Set<string>> {
+    const levels = config.module === "listening"
+      ? await listDifficultyLevels(part)
+      : await listReadingDifficultyLevels(part);
+    return new Set(levels.find((entry) => entry.level === level)?.itemIds ?? []);
   }
 
   async function findProgressByParts(
@@ -106,15 +116,15 @@ export function createLearningToolService(
     levels: DauToeicDifficultyLevel[],
     rows: ListeningProgressDoc[],
   ): DauToeicDifficultyLevel[] {
-    const rowsByLevel = new Map<number | null, ListeningProgressDoc[]>();
+    const rowsByItem = new Map<string, ListeningProgressDoc[]>();
     for (const row of rows) {
-      const key = row.level ?? null;
-      const bucket = rowsByLevel.get(key);
+      if (!row.itemId) continue;
+      const bucket = rowsByItem.get(row.itemId);
       if (bucket) bucket.push(row);
-      else rowsByLevel.set(key, [row]);
+      else rowsByItem.set(row.itemId, [row]);
     }
     return levels.map((level) => {
-      const levelRows = rowsByLevel.get(level.level) ?? [];
+      const levelRows = [...new Set(level.itemIds ?? [])].flatMap((itemId) => rowsByItem.get(itemId) ?? []);
       const summary = summarizeRows(levelRows, level.part, level.level);
       return {
         ...level,
@@ -156,13 +166,20 @@ export function createLearningToolService(
     part: number,
     level: number,
   ): Promise<void> {
+    const itemIds = await currentLevelItemIds(part, level);
+    if (itemIds.size === 0) return;
     const snap = await userCol(uid, config.progressCollection)
       .where("part", "==", part)
-      .where("level", "==", level)
       .get();
-    const batch = adminDb.batch();
-    for (const doc of snap.docs) batch.delete(doc.ref);
-    await batch.commit();
+    const matchingDocs = snap.docs.filter((doc) => {
+      const itemId = toProgressDoc(doc).itemId;
+      return itemId && itemIds.has(itemId);
+    });
+    for (let offset = 0; offset < matchingDocs.length; offset += 400) {
+      const batch = adminDb.batch();
+      for (const doc of matchingDocs.slice(offset, offset + 400)) batch.delete(doc.ref);
+      await batch.commit();
+    }
   }
 
   async function summarize(
@@ -412,8 +429,8 @@ function requirePartLevel(
   if (req.part == null || req.part < config.minPart || req.part > config.maxPart) {
     throw new ApiError(`Part must be between ${config.minPart} and ${config.maxPart}`);
   }
-  if (req.level == null || req.level < 1 || req.level > 5) {
-    throw new ApiError("Difficulty level must be between 1 and 5");
+  if (req.level == null || !Number.isInteger(req.level) || req.level < 1 || req.level > DAUTOEIC_LEVEL_COUNT) {
+    throw new ApiError(`Difficulty level must be between 1 and ${DAUTOEIC_LEVEL_COUNT}`);
   }
 }
 

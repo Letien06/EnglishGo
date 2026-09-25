@@ -8,6 +8,7 @@
  */
 import { getCurrentUserForRead } from "@/lib/auth/session";
 import * as dautoeic from "@/lib/services/dautoeic";
+import { DAUTOEIC_LEVEL_COUNT } from "@/lib/services/dautoeic-source";
 import * as listening from "@/lib/services/listening";
 import ListenPracticeClient from "./ListenPracticeClient";
 
@@ -31,7 +32,7 @@ export default async function ListenPracticePage({
     ? params.part
     : "part1";
   const pNum = partNumber(partId);
-  const level = Math.max(1, Math.min(5, Number(params.level) || 1));
+  const level = Math.max(1, Math.min(DAUTOEIC_LEVEL_COUNT, Math.trunc(Number(params.level)) || 1));
 
   const mode = (() => {
     switch (params.mode) {

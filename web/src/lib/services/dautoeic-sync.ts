@@ -9,6 +9,7 @@ import {
   fetchListTestsFromSource,
 } from "./dautoeic";
 import { writeTestIndex } from "./dautoeic-test-index";
+import { DAUTOEIC_DIFFICULTY_BANDS } from "./dautoeic-source";
 import {
   mirrorKey,
   readSyncStatus,
@@ -28,7 +29,7 @@ const SYNC_INTERVAL_MS = 7 * 24 * 60 * 60 * 1000;
 const DEFAULT_BUDGET_MS = 45_000;
 const LISTENING_PARTS = [1, 2, 3, 4] as const;
 const READING_PARTS = [5, 6, 7] as const;
-const LEVELS = [1, 2, 3, 4, 5] as const;
+const LEVELS = DAUTOEIC_DIFFICULTY_BANDS.map((band) => band.level);
 const TEST_PARTS = [1, 2, 3, 4, 5, 6, 7] as const;
 
 type SyncTask = {

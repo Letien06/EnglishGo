@@ -36,10 +36,11 @@ function jsonResponse(value: unknown, status = 200): Response {
 function mockPart(part: number, count = 1) {
   const passageBased = [3, 4, 6, 7].includes(part);
   const ids = Array.from({ length: count }, (_, index) => `readable-${index}`);
-  fetchMock.mockImplementation(async (input) => {
+  fetchMock.mockImplementation(async (input, init) => {
     const url = new URL(String(input));
-    if (url.pathname.endsWith("/get_practice_stats")) {
-      return jsonResponse(["hidden", ...ids].map((id) => ({
+    if (url.pathname.endsWith("/get_practice_stats_page")) {
+      const body = JSON.parse(String(init?.body));
+      return jsonResponse(["hidden", ...ids].slice(body.p_offset, body.p_offset + body.p_limit).map((id) => ({
         item_id: id,
         part,
         item_type: passageBased ? "passage" : "question",
@@ -163,8 +164,12 @@ describe("publicly readable practice content", () => {
       ? await fetchListeningDifficultyLevelsFromSource(part)
       : await fetchReadingDifficultyLevelsFromSource(part);
     expect(levels[0].total).toBe(3);
+    expect(levels).toHaveLength(4);
+    expect(levels[0].title).toBe("Level 1 — Dưới 200");
+    expect(levels[0].itemIds).toEqual(["readable-0", "readable-1", "readable-2"]);
     expect(levels[0].totalAttempts).toBe(30);
     expect(levels[1].total).toBe(0);
+    expect(levels[1].itemIds).toEqual([]);
   });
 
   it("paginates readable IDs instead of truncating the catalog at 1000", async () => {
@@ -176,6 +181,15 @@ describe("publicly readable practice content", () => {
       .filter((url) => url.searchParams.get("select") === "id")
       .map((url) => url.searchParams.get("offset"));
     expect(offsets).toEqual(["0", "1000"]);
+    const statsOffsets = fetchMock.mock.calls
+      .filter(([input]) => String(input).includes("/get_practice_stats_page"))
+      .map(([, init]) => JSON.parse(String(init?.body)).p_offset);
+    expect(statsOffsets).toEqual([0, 1000]);
+  });
+
+  it.each([0, 5, 1.5, NaN])("rejects unsupported difficulty level %s before fetching", async (level) => {
+    await expect(fetchListeningDifficultySessionFromSource(1, level)).rejects.toThrow("between 1 and 4");
+    expect(fetchMock).not.toHaveBeenCalled();
   });
 
   it("batches ID lookups so larger sessions do not exceed URL limits", async () => {

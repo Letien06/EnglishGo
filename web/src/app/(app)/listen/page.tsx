@@ -3,10 +3,10 @@ import LevelDashboardClient from "../_components/LevelDashboardClient";
 import * as dautoeic from "@/lib/services/dautoeic";
 
 const parts = [
-  { id: "part1", num: 1, label: "Part 1: Hình ảnh", title: "Luyện Part 1 theo 5 cấp độ", desc: "Câu hỏi lấy từ ngân hàng luyện nghe TOEIC và được phân loại theo tỉ lệ sai thực tế.", badge: "P1" },
-  { id: "part2", num: 2, label: "Part 2: Hỏi - Đáp", title: "Luyện Part 2 theo 5 cấp độ", desc: "Luyện phản xạ nghe hỏi đáp ngắn với dữ liệu được chia theo độ khó.", badge: "P2" },
-  { id: "part3", num: 3, label: "Part 3: Hội thoại ngắn", title: "Luyện Part 3 theo 5 cấp độ", desc: "Nghe hội thoại TOEIC theo nhóm câu hỏi và tăng dần độ khó.", badge: "P3" },
-  { id: "part4", num: 4, label: "Part 4: Độc thoại", title: "Luyện Part 4 theo 5 cấp độ", desc: "Luyện nghe bài nói chuyện, thông báo và bài độc thoại TOEIC.", badge: "P4" },
+  { id: "part1", num: 1, label: "Part 1: Hình ảnh", title: "Luyện Part 1 theo 4 cấp độ", desc: "Câu hỏi lấy từ ngân hàng luyện nghe TOEIC và được phân loại theo dải điểm của nguồn.", badge: "P1" },
+  { id: "part2", num: 2, label: "Part 2: Hỏi - Đáp", title: "Luyện Part 2 theo 4 cấp độ", desc: "Luyện phản xạ nghe hỏi đáp ngắn với dữ liệu được chia theo độ khó.", badge: "P2" },
+  { id: "part3", num: 3, label: "Part 3: Hội thoại ngắn", title: "Luyện Part 3 theo 4 cấp độ", desc: "Nghe hội thoại TOEIC theo nhóm câu hỏi và tăng dần độ khó.", badge: "P3" },
+  { id: "part4", num: 4, label: "Part 4: Độc thoại", title: "Luyện Part 4 theo 4 cấp độ", desc: "Luyện nghe bài nói chuyện, thông báo và bài độc thoại TOEIC.", badge: "P4" },
 ] as const;
 
 export default async function ListenPage({

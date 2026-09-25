@@ -119,6 +119,24 @@ Expected response:
 {"success":true,"data":{"status":"up"},"error":null}
 ```
 
+## Dau English Access And Progress
+
+- The current difficulty catalog uses four score bands: below 200, 200–300,
+  300–400, and 400–495. Read the paginated `get_practice_stats_page` RPC and
+  intersect its IDs with readable question/passage rows; metadata alone does
+  not guarantee access to full content.
+- A learner signing in to Dau English in a browser does not authenticate Vercel's
+  requests. Keep personal access/refresh tokens out of Git, client code, and the
+  shared server configuration. Additional restricted content requires a
+  provider-authorized integration, not changing the public publishable key.
+- Level metadata includes the current readable `itemIds`. Dashboard progress,
+  saved answers, and level resets use these IDs rather than historical level
+  numbers. Retired history is preserved, not included in current totals.
+- `dauenglish-v2` invalidates old server and browser level caches without
+  deleting learner history. The migration does not grant additional source access.
+- Live smoke tests check all four levels for every Part, including valid empty
+  levels, and load a full sample question for each nonempty level.
+
 ## Firebase Rules And Indexes
 
 Deploy Firestore rules and indexes from the repo root:

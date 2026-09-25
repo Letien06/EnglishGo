@@ -17,6 +17,7 @@ export interface DauToeicDifficultyLevel {
   errorRateMin: number | null;
   errorRateMax: number | null;
   total: number | null;
+  itemIds: string[];
   done: number;
   correct: number;
   wrong: number;

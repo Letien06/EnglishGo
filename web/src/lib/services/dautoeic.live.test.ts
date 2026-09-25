@@ -18,27 +18,33 @@ describe.skipIf(process.env.DAUENGLISH_LIVE_SMOKE !== "1")("Dau English read-onl
     const levels = part <= 4
       ? await fetchListeningDifficultyLevelsFromSource(part)
       : await fetchReadingDifficultyLevelsFromSource(part);
-    const level = levels.find((entry) => (entry.total ?? 0) > 0);
-    expect(level).toBeDefined();
-    const session = part <= 4
-      ? await fetchListeningDifficultySessionFromSource(part, level!.level, 1)
-      : await fetchReadingDifficultySessionFromSource(part, level!.level, 1);
-    expect(session.items).toHaveLength(1);
-    expect(session.items[0].questions.length).toBeGreaterThan(0);
-    expect(session.items[0].questions[0].correctAnswer).toMatch(/^[ABCD]$/);
-    if (part >= 5) {
-      expect(session.items[0].questions[0].questionText).toBeTruthy();
-      expect(session.items[0].questions[0].optionA).toBeTruthy();
+    expect(levels).toHaveLength(4);
+    expect(levels.some((level) => (level.total ?? 0) > 0)).toBe(true);
+    for (const level of levels) {
+      expect(level.itemIds).toHaveLength(level.total ?? 0);
+      const session = part <= 4
+        ? await fetchListeningDifficultySessionFromSource(part, level.level, 1)
+        : await fetchReadingDifficultySessionFromSource(part, level.level, 1);
+      expect(session.total).toBe(session.items.length);
+      expect(session.items).toHaveLength((level.total ?? 0) > 0 ? 1 : 0);
+      if (session.items.length === 0) continue;
+      expect(level.itemIds).toContain(session.items[0].id);
+      expect(session.items[0].questions.length).toBeGreaterThan(0);
+      expect(session.items[0].questions[0].correctAnswer).toMatch(/^[ABCD]$/);
+      if (part >= 5) {
+        expect(session.items[0].questions[0].questionText).toBeTruthy();
+        expect(session.items[0].questions[0].optionA).toBeTruthy();
+      }
+      if (part <= 4) {
+        expect(session.items[0].audioUrl).toMatch(/^https:\/\//);
+        const response = await fetch(session.items[0].audioUrl!, {
+          method: "HEAD", signal: AbortSignal.timeout(15_000),
+        });
+        expect(response.ok).toBe(true);
+        expect(response.headers.get("content-type")).toMatch(/^audio\//);
+      }
     }
-    if (part <= 4) {
-      expect(session.items[0].audioUrl).toMatch(/^https:\/\//);
-      const response = await fetch(session.items[0].audioUrl!, {
-        method: "HEAD", signal: AbortSignal.timeout(15_000),
-      });
-      expect(response.ok).toBe(true);
-      expect(response.headers.get("content-type")).toMatch(/^audio\//);
-    }
-    console.info(`Part ${part}: ${levels.reduce((sum, entry) => sum + (entry.total ?? 0), 0)} readable items; sample has ${session.items[0].questions.length} questions`);
+    console.info(`Part ${part}: readable level counts ${levels.map((level) => level.total).join(", ")}; all four levels checked`);
   }, 60_000);
 
   it("loads the public mock-test catalog and Part 1 images", async () => {

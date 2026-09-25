@@ -1,4 +1,5 @@
 import type { DauToeicDifficultyLevel } from "@/types/dautoeic";
+import { DAUTOEIC_SOURCE_VERSION } from "@/lib/services/dautoeic-source";
 
 export type LearningSkill = "listening" | "reading";
 
@@ -6,8 +7,8 @@ export const LEARNING_LEVELS_UPDATED_EVENT = "englishgo:learning-levels-updated"
 export const ACTIVE_LEARNER_UPDATED_EVENT = "englishgo:active-learner-updated";
 
 const ACTIVE_LEARNER_KEY = "englishgo:active-learner:v1";
-const LEVEL_CACHE_PREFIX = "englishgo:learning-levels:v1:";
-const DIRTY_PART_PREFIX = "englishgo:learning-levels-dirty:v1:";
+const LEVEL_CACHE_PREFIX = `englishgo:learning-levels:${DAUTOEIC_SOURCE_VERSION}:`;
+const DIRTY_PART_PREFIX = `englishgo:learning-levels-dirty:${DAUTOEIC_SOURCE_VERSION}:`;
 const CACHE_TTL_MS = 15 * 24 * 60 * 60 * 1000;
 
 type CachedLevels = {

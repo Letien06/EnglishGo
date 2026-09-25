@@ -9,7 +9,7 @@
 import { unstable_cache } from "next/cache";
 import { serverEnv } from "../env";
 import { ApiError } from "../api/response";
-import { DAUTOEIC_SOURCE_VERSION, dauToeicApiHeaders } from "./dautoeic-source";
+import { DAUTOEIC_DIFFICULTY_BANDS, DAUTOEIC_LEVEL_COUNT, DAUTOEIC_SOURCE_VERSION, dauToeicApiHeaders } from "./dautoeic-source";
 import type {
   DauToeicDifficultyLevel,
   DauToeicDifficultySession,
@@ -185,6 +185,7 @@ export async function getDifficultySession(
   limit?: number | null,
 ): Promise<DauToeicDifficultySession> {
   requireListeningPart(part);
+  requireDifficultyLevel(level);
   const cleanLimit = normalizeLimit(limit);
   const key = mirrorKey("listening", "session", part, level, cleanLimit);
   return mirrorSessionFirst(key, () => cachedListeningDifficultySession(part, level, cleanLimit));
@@ -196,6 +197,7 @@ export async function getReadingDifficultySession(
   limit?: number | null,
 ): Promise<DauToeicDifficultySession> {
   requireReadingPart(part);
+  requireDifficultyLevel(level);
   const cleanLimit = normalizeLimit(limit);
   const key = mirrorKey("reading", "session", part, level, cleanLimit);
   return mirrorSessionFirst(key, () => cachedReadingDifficultySession(part, level, cleanLimit));
@@ -310,7 +312,7 @@ function difficultyLevels(
   stats: PracticeStat[],
 ): DauToeicDifficultyLevel[] {
   const byLevel = new Map<number, PracticeStat[]>();
-  for (let l = 1; l <= 5; l++) byLevel.set(l, []);
+  for (const band of DAUTOEIC_DIFFICULTY_BANDS) byLevel.set(band.level, []);
 
   for (const stat of stats) {
     if ((stat.part == null || stat.part === part) && stat.level != null && byLevel.has(stat.level)) {
@@ -332,8 +334,8 @@ function difficultyLevels(
     const errorRates = levelStats
       .map((s) => s.errorRate)
       .filter((r): r is number => r != null);
-    const min = errorRates.length > 0 ? Math.min(...errorRates) : defaultErrorMin(level);
-    const max = errorRates.length > 0 ? Math.max(...errorRates) : defaultErrorMax(level);
+    const min = errorRates.length > 0 ? Math.min(...errorRates) : null;
+    const max = errorRates.length > 0 ? Math.max(...errorRates) : null;
 
     levels.push({
       part,
@@ -342,6 +344,7 @@ function difficultyLevels(
       errorRateMin: min,
       errorRateMax: max,
       total,
+      itemIds: levelStats.map((stat) => stat.itemId),
       done: 0,
       correct: 0,
       wrong: 0,
@@ -363,9 +366,7 @@ async function difficultySession(
   limit?: number | null,
   statsLoader: (part: number) => Promise<PracticeStat[]> = cachedPracticeStats,
 ): Promise<DauToeicDifficultySession> {
-  if (level < 1 || level > 5) {
-    throw new ApiError("Difficulty level must be between 1 and 5");
-  }
+  requireDifficultyLevel(level);
   const effectiveLimit = limit && limit > 0 ? limit : Infinity;
   const allStats = await statsLoader(part);
   const levelStats = allStats
@@ -480,11 +481,11 @@ async function passagePracticeItems(
 
 async function uncachedPracticeStats(part: number): Promise<PracticeStat[]> {
   const [rows, availableIds] = await Promise.all([
-    supabasePost("/rest/v1/rpc/get_practice_stats", { p_part: part }),
+    practiceStatsPages(part),
     availablePracticeIds(part),
   ]);
-  if (!Array.isArray(rows)) return [];
-  return rows.filter((row) => availableIds.has(text(row, "item_id") ?? "")).map(
+  const uniqueRows = new Map(rows.map((row) => [text(row, "item_id"), row]));
+  return [...uniqueRows.values()].filter((row) => availableIds.has(text(row, "item_id") ?? "")).map(
     (row: Record<string, unknown>): PracticeStat => ({
       itemId: text(row, "item_id") ?? "",
       itemType: text(row, "item_type"),
@@ -575,6 +576,22 @@ async function questionsForTestPart(
   return rows.map((row: Record<string, unknown>) =>
     mapQuestion(row, new Map([[test.id, test]])),
   );
+}
+
+async function practiceStatsPages(part: number): Promise<Record<string, unknown>[]> {
+  const pageSize = 1000;
+  const stats: Record<string, unknown>[] = [];
+  for (let page = 0; page < 100; page++) {
+    const rows = await supabasePost("/rest/v1/rpc/get_practice_stats_page", {
+      p_part: part,
+      p_limit: pageSize,
+      p_offset: page * pageSize,
+    });
+    if (!Array.isArray(rows)) throw new ApiError("Invalid practice stats response", 502);
+    stats.push(...rows);
+    if (rows.length < pageSize) return stats;
+  }
+  throw new ApiError("Practice stats pagination limit exceeded", 502);
 }
 
 async function availablePracticeIds(part: number): Promise<Set<string>> {
@@ -873,35 +890,13 @@ function requireReadingPart(part: number): void {
 /* ------------------------------------------------------------------ */
 
 function levelTitle(level: number): string {
-  switch (level) {
-    case 1: return "Level 1 — Dễ";
-    case 2: return "Level 2 — Cơ bản";
-    case 3: return "Level 3 — Trung bình";
-    case 4: return "Level 4 — Khó";
-    case 5: return "Level 5 — Rất khó";
-    default: return `Level ${level}`;
-  }
+  const band = DAUTOEIC_DIFFICULTY_BANDS.find((entry) => entry.level === level);
+  return band ? `Level ${level} — ${band.label}` : `Level ${level}`;
 }
 
-function defaultErrorMin(level: number): number {
-  switch (level) {
-    case 1: return 0.01;
-    case 2: return 0.14;
-    case 3: return 0.23;
-    case 4: return 0.32;
-    case 5: return 0.43;
-    default: return 0.0;
-  }
-}
-
-function defaultErrorMax(level: number): number {
-  switch (level) {
-    case 1: return 0.14;
-    case 2: return 0.23;
-    case 3: return 0.32;
-    case 4: return 0.43;
-    case 5: return 0.85;
-    default: return 1.0;
+function requireDifficultyLevel(level: number): void {
+  if (!Number.isInteger(level) || level < 1 || level > DAUTOEIC_LEVEL_COUNT) {
+    throw new ApiError(`Difficulty level must be between 1 and ${DAUTOEIC_LEVEL_COUNT}`);
   }
 }
 
