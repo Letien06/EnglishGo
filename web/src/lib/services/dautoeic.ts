@@ -9,6 +9,7 @@
 import { unstable_cache } from "next/cache";
 import { serverEnv } from "../env";
 import { ApiError } from "../api/response";
+import { DAUTOEIC_SOURCE_VERSION, dauToeicApiHeaders } from "./dautoeic-source";
 import type {
   DauToeicDifficultyLevel,
   DauToeicDifficultySession,
@@ -246,37 +247,37 @@ export async function fetchReadingDifficultySessionFromSource(
 
 const cachedListSets = unstable_cache(
   uncachedListSets,
-  ["dautoeic-sets"],
+  ["dautoeic-sets", DAUTOEIC_SOURCE_VERSION],
   { revalidate: 600 },
 );
 
 const cachedListTests = unstable_cache(
   uncachedListTests,
-  ["dautoeic-tests"],
+  ["dautoeic-tests", DAUTOEIC_SOURCE_VERSION],
   { revalidate: 600 },
 );
 
 const cachedGetTest = unstable_cache(
   uncachedGetTest,
-  ["dautoeic-test"],
+  ["dautoeic-test", DAUTOEIC_SOURCE_VERSION],
   { revalidate: 600 },
 );
 
 const cachedGetPart = unstable_cache(
   uncachedGetPart,
-  ["dautoeic-part"],
+  ["dautoeic-part", DAUTOEIC_SOURCE_VERSION],
   { revalidate: 600 },
 );
 
 const cachedListeningDifficultyLevels = unstable_cache(
   async (part: number) => difficultyLevels(part, await cachedPracticeStats(part)),
-  ["dautoeic-difficulty-levels"],
+  ["dautoeic-difficulty-levels", DAUTOEIC_SOURCE_VERSION],
   { revalidate: 600 },
 );
 
 const cachedReadingDifficultyLevels = unstable_cache(
   async (part: number) => difficultyLevels(part, await cachedPracticeStats(part)),
-  ["dautoeic-reading-difficulty-levels"],
+  ["dautoeic-reading-difficulty-levels", DAUTOEIC_SOURCE_VERSION],
   { revalidate: 600 },
 );
 
@@ -284,19 +285,19 @@ const cachedListeningDifficultySession = unstable_cache(
   async (part: number, level: number, limit: number | null) => difficultySession(part, level, limit),
   // Bump the cache namespace so deployments do not keep a previously
   // generated empty session after the source data has been repaired.
-  ["dautoeic-difficulty-session-v2"],
+  ["dautoeic-difficulty-session-v2", DAUTOEIC_SOURCE_VERSION],
   { revalidate: 600 },
 );
 
 const cachedReadingDifficultySession = unstable_cache(
   async (part: number, level: number, limit: number | null) => difficultySession(part, level, limit),
-  ["dautoeic-reading-difficulty-session-v2"],
+  ["dautoeic-reading-difficulty-session-v2", DAUTOEIC_SOURCE_VERSION],
   { revalidate: 600 },
 );
 
 const cachedPracticeStats = unstable_cache(
   uncachedPracticeStats,
-  ["dautoeic-practice-stats"],
+  ["dautoeic-practice-stats", DAUTOEIC_SOURCE_VERSION],
   { revalidate: 600 },
 );
 
@@ -384,7 +385,7 @@ async function difficultySession(
     part,
     level,
     title: levelTitle(level),
-    total: levelStats.length,
+    total: items.length,
     items,
   };
 }
@@ -478,11 +479,12 @@ async function passagePracticeItems(
 /* ------------------------------------------------------------------ */
 
 async function uncachedPracticeStats(part: number): Promise<PracticeStat[]> {
-  const rows = await supabasePost("/rest/v1/rpc/get_practice_stats", {
-    p_part: part,
-  });
+  const [rows, availableIds] = await Promise.all([
+    supabasePost("/rest/v1/rpc/get_practice_stats", { p_part: part }),
+    availablePracticeIds(part),
+  ]);
   if (!Array.isArray(rows)) return [];
-  return rows.map(
+  return rows.filter((row) => availableIds.has(text(row, "item_id") ?? "")).map(
     (row: Record<string, unknown>): PracticeStat => ({
       itemId: text(row, "item_id") ?? "",
       itemType: text(row, "item_type"),
@@ -575,9 +577,31 @@ async function questionsForTestPart(
   );
 }
 
+async function availablePracticeIds(part: number): Promise<Set<string>> {
+  const table = part <= 2 || part === 5 ? "mock_test_questions" : "mock_test_passages";
+  const ids = new Set<string>();
+  const pageSize = 1000;
+  for (let offset = 0; ; offset += pageSize) {
+    const rows = await supabaseGet(`/rest/v1/${table}`, {
+      select: "id",
+      part: `eq.${part}`,
+      order: "id.asc",
+      limit: String(pageSize),
+      offset: String(offset),
+    });
+    if (!Array.isArray(rows)) break;
+    for (const row of rows) {
+      const id = text(row, "id");
+      if (id) ids.add(id);
+    }
+    if (rows.length < pageSize) break;
+  }
+  return ids;
+}
+
 const cachedQuestionsForTestPart = unstable_cache(
   questionsForTestPart,
-  ["dautoeic-test-part-questions"],
+  ["dautoeic-test-part-questions", DAUTOEIC_SOURCE_VERSION],
   { revalidate: 600 },
 );
 
@@ -599,7 +623,7 @@ async function passagesForTestPart(
 
 const cachedPassagesForTestPart = unstable_cache(
   passagesForTestPart,
-  ["dautoeic-test-part-passages"],
+  ["dautoeic-test-part-passages", DAUTOEIC_SOURCE_VERSION],
   { revalidate: 600 },
 );
 
@@ -728,6 +752,24 @@ async function supabaseGet(
   path: string,
   params: Record<string, string>,
 ): Promise<unknown> {
+  const idFilter = Object.entries(params).find(([column, value]) =>
+    (column === "id" || column === "passage_id") && value.startsWith("in.(") && value.endsWith(")"),
+  );
+  if (idFilter) {
+    const [column, filter] = idFilter;
+    const ids = filter.slice(4, -1).split(",");
+    if (ids.length > 100) {
+      const rows: unknown[] = [];
+      for (let offset = 0; offset < ids.length; offset += 100) {
+        const batch = await supabaseGet(path, {
+          ...params,
+          [column]: `in.(${ids.slice(offset, offset + 100).join(",")})`,
+        });
+        if (Array.isArray(batch)) rows.push(...batch);
+      }
+      return rows;
+    }
+  }
   const url = new URL(path, serverEnv.dauToeicSupabaseUrl);
   for (const [k, v] of Object.entries(params)) {
     url.searchParams.set(k, v);
@@ -754,11 +796,9 @@ async function supabaseFetch(url: string, init: RequestInit): Promise<unknown> {
   try {
     const response = await fetch(url, {
       ...init,
+      signal: init.signal ?? AbortSignal.timeout(15_000),
       headers: {
-        apikey: anonKey,
-        Authorization: `Bearer ${anonKey}`,
-        Accept: "application/json",
-        "Content-Type": "application/json",
+        ...dauToeicApiHeaders(anonKey),
         ...(init.headers as Record<string, string> | undefined),
       },
       next: { revalidate: 300 }, // cache for 5 minutes
@@ -769,8 +809,23 @@ async function supabaseFetch(url: string, init: RequestInit): Promise<unknown> {
     return await response.json();
   } catch (err) {
     if (err instanceof ApiError) throw err;
-    throw new ApiError("Cannot connect to DauToeic API", 502);
+    // Keep the upstream status generic for HTTP failures, but expose the
+    // network failure class/message so the practice page can distinguish a
+    // missing DNS record, timeout, TLS error, or a paused Supabase project.
+    // The URL contains no credentials (the anon key is sent in headers).
+    const rootCause = err instanceof Error && err.cause instanceof Error
+      ? `; cause=${rootCauseMessage(err.cause)}`
+      : "";
+    const cause = err instanceof Error
+      ? `${err.name}: ${err.message}${rootCause}`
+      : String(err);
+    throw new ApiError(`Cannot connect to DauToeic API (${cause})`, 502);
   }
+}
+
+function rootCauseMessage(error: Error): string {
+  const code = "code" in error && typeof error.code === "string" ? ` [${error.code}]` : "";
+  return `${error.name}: ${error.message}${code}`;
 }
 
 /* ------------------------------------------------------------------ */

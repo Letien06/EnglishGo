@@ -1,4 +1,5 @@
 import { unstable_cache } from "next/cache";
+import { DAUTOEIC_SOURCE_VERSION, dauToeicApiHeaders } from "./dautoeic-source";
 import { adminDb } from "@/lib/firestore/db";
 import { ApiError, NotFound } from "@/lib/api/response";
 import { serverEnv } from "@/lib/env";
@@ -280,25 +281,25 @@ async function findCatalogTest(testId: string): Promise<DauToeicVocabTest> {
 
 const cachedVocabularyCatalog = unstable_cache(
   uncachedVocabularyCatalog,
-  ["dautoeic-vocab-catalog"],
+  ["dautoeic-vocab-catalog", DAUTOEIC_SOURCE_VERSION],
   { revalidate: CATALOG_REVALIDATE_SECONDS },
 );
 
 const cachedVocabularyParts = unstable_cache(
   uncachedVocabularyParts,
-  ["dautoeic-vocab-parts"],
+  ["dautoeic-vocab-parts", DAUTOEIC_SOURCE_VERSION],
   { revalidate: CATALOG_REVALIDATE_SECONDS },
 );
 
 const cachedWordsForPart = unstable_cache(
   uncachedWordsForPart,
-  ["dautoeic-vocab-words-for-part"],
+  ["dautoeic-vocab-words-for-part", DAUTOEIC_SOURCE_VERSION],
   { revalidate: CATALOG_REVALIDATE_SECONDS },
 );
 
 const cachedWordCountEntriesByPart = unstable_cache(
   uncachedWordCountEntriesByPart,
-  ["dautoeic-vocab-word-counts-by-part"],
+  ["dautoeic-vocab-word-counts-by-part", DAUTOEIC_SOURCE_VERSION],
   { revalidate: CATALOG_REVALIDATE_SECONDS },
 );
 
@@ -561,11 +562,9 @@ async function supabaseFetch(url: string, init: RequestInit): Promise<unknown> {
   try {
     const response = await fetch(url, {
       ...init,
+      signal: init.signal ?? AbortSignal.timeout(15_000),
       headers: {
-        apikey: anonKey,
-        Authorization: `Bearer ${anonKey}`,
-        Accept: "application/json",
-        "Content-Type": "application/json",
+        ...dauToeicApiHeaders(anonKey),
         ...(init.headers as Record<string, string> | undefined),
       },
       next: { revalidate: 300 },

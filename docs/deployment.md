@@ -30,9 +30,9 @@ GEMINI_API_KEY=<gemini-api-key>
 GEMINI_MODEL=gemini-2.5-flash
 ADMIN_EMAILS=<comma-separated-admin-emails>
 
-DAUTOEIC_SUPABASE_URL=https://qfhmnlvgweznzcsoijyr.supabase.co
-DAUTOEIC_ANON_KEY=<dautoeic-anon-key>
-DAUTOEIC_MEDIA_BASE_URL=https://qfhmnlvgweznzcsoijyr.supabase.co/storage/v1/object/public/mock-test-media
+DAUTOEIC_SUPABASE_URL=https://odlnhfaygiotcyehuysw.supabase.co
+DAUTOEIC_ANON_KEY=<dauenglish-public-publishable-key>
+DAUTOEIC_MEDIA_BASE_URL=https://odlnhfaygiotcyehuysw.supabase.co/storage/v1/object/public/mock-test-media
 MEDIA_BASE_URL=<optional-firebase-storage-base-url>
 
 UPSTASH_REDIS_REST_URL=<https://...upstash.io>
@@ -45,6 +45,44 @@ GEMINI_TIMEOUT_MS=20000
 ```
 
 `FIREBASE_STORAGE_BUCKET` is optional only when the default bucket name is correct for the Firebase project. If uploads fail with a bucket error, set it explicitly from Firebase Console.
+
+## Dau English Migration (September 26, 2026)
+
+The upstream website is now `https://dauenglish.com/`, backed by Supabase project
+`odlnhfaygiotcyehuysw`. Changing the website domain alone does not update the API.
+Keep the `DAUTOEIC_*` variable names for compatibility, but update all three values
+above in each Vercel environment and redeploy. Existing Vercel values override
+the defaults in source code; the old project URL/key must not be retained.
+
+Use the public `sb_publishable_...` key published by Dau English's frontend for
+`DAUTOEIC_ANON_KEY`, not a service-role key or a learner's login token. Publishable
+keys are sent in `apikey` only; legacy JWT anon keys also use `Authorization`.
+These values stay server-side. The local configuration is `web/.env.local` and
+is not deployed or committed.
+
+The migration versions the Next.js caches, Firestore mirrors, test index and
+practice snapshots. Old content is not deleted, and learner progress/attempt
+IDs are unchanged. Canonical content is refreshed lazily; the weekly sync starts
+a new source-specific cycle. The test index keeps the `dauToeicTestIndex`
+collection ID under a versioned parent, so existing composite indexes apply.
+
+The upstream stats RPC includes questions from tests that are no longer publicly
+readable. Difficulty counts and session selection intersect those stats with
+readable content before applying a session limit. Only publicly accessible
+material is loaded; the adapter does not bypass login or paid-content rules.
+
+Run the opt-in read-only upstream smoke tests from `web/` after configuring
+`web/.env.local` (they skip during ordinary unit tests):
+
+```powershell
+$env:DAUENGLISH_LIVE_SMOKE = "1"
+node --env-file=.env.local node_modules/vitest/vitest.mjs run src/lib/services/dautoeic.live.test.ts
+Remove-Item Env:DAUENGLISH_LIVE_SMOKE
+```
+
+These tests load one practice item per Part, a sample mock-test Part and a sample
+vocabulary part, plus media HEAD requests. Firestore and Next.js caching are
+mocked, so the check neither changes learner data nor downloads the full library.
 
 ## Local Development
 

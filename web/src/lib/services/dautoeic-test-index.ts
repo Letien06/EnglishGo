@@ -2,8 +2,9 @@ import { FieldPath, FieldValue } from "firebase-admin/firestore";
 import { adminDb } from "@/lib/firestore/db";
 import type { DauToeicTest } from "@/types/dautoeic";
 import { routeTestId } from "./dautoeic";
+import { DAUTOEIC_SOURCE_VERSION } from "./dautoeic-source";
 
-const TEST_INDEX = "dauToeicTestIndex";
+const TEST_INDEX = `dauToeicSources/${DAUTOEIC_SOURCE_VERSION}/dauToeicTestIndex`;
 
 export interface TestIndexQuery {
   difficulty?: string | null;

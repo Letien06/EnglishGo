@@ -2,6 +2,7 @@ import { FieldValue } from "firebase-admin/firestore";
 import { adminDb } from "@/lib/firestore/db";
 import { COLLECTIONS } from "@/lib/firestore/collections";
 import type { DauToeicPassage, DauToeicQuestion, DauToeicSet, DauToeicTest } from "@/types/dautoeic";
+import { DAUTOEIC_SOURCE_VERSION } from "./dautoeic-source";
 
 const SOURCE = "DAUTOEIC";
 const WRITE_BATCH_SIZE = 450;
@@ -27,6 +28,7 @@ export async function writeCanonicalSets(sets: DauToeicSet[]): Promise<void> {
         {
           ...set,
           source: SOURCE,
+          sourceVersion: DAUTOEIC_SOURCE_VERSION,
           externalId: set.id,
           routeId,
           syncedAtMillis: now,
@@ -45,6 +47,7 @@ export async function readCanonicalSets(): Promise<DauToeicSet[]> {
     .where("source", "==", SOURCE)
     .get();
   const sets = snap.docs
+    .filter((doc) => doc.get("sourceVersion") === DAUTOEIC_SOURCE_VERSION)
     .map((doc) => toSet(doc.data()))
     .filter((set): set is DauToeicSet => Boolean(set?.id));
   sets.sort((a, b) => (a.orderIndex ?? 999_999) - (b.orderIndex ?? 999_999) || a.id.localeCompare(b.id));
@@ -65,6 +68,7 @@ export async function writeCanonicalTests(
         {
           ...test,
           source: SOURCE,
+          sourceVersion: DAUTOEIC_SOURCE_VERSION,
           originalSource: test.source,
           externalId: test.id,
           routeId,
@@ -81,6 +85,7 @@ export async function writeCanonicalTests(
       {
         source: SOURCE,
         complete: true,
+        sourceVersion: DAUTOEIC_SOURCE_VERSION,
         count: tests.length,
         syncedAtMillis: now,
         updatedAt: FieldValue.serverTimestamp(),
@@ -111,6 +116,7 @@ export async function writeCanonicalPart(partContent: DauToeicCanonicalPart): Pr
     data: {
       ...partContent.test,
       source: SOURCE,
+      sourceVersion: DAUTOEIC_SOURCE_VERSION,
       originalSource: partContent.test.source,
       externalId: partContent.test.id,
       routeId: routeTestId,
@@ -118,6 +124,7 @@ export async function writeCanonicalPart(partContent: DauToeicCanonicalPart): Pr
         [String(partContent.part)]: {
           part: partContent.part,
           skill: partContent.skill,
+          sourceVersion: DAUTOEIC_SOURCE_VERSION,
           questionIds,
           passageIds,
           questionCount: questionIds.length,
@@ -214,17 +221,20 @@ export async function writeCanonicalPart(partContent: DauToeicCanonicalPart): Pr
 export async function readCanonicalTestByRouteId(routeId: number): Promise<DauToeicTest | null> {
   const snap = await adminDb.collection(COLLECTIONS.tests).doc(canonicalDocId(routeId)).get();
   if (!snap.exists || snap.get("source") !== SOURCE) return null;
+  if (snap.get("sourceVersion") !== DAUTOEIC_SOURCE_VERSION) return null;
   return toTest(snap.data());
 }
 
 export async function readCanonicalTests(setId?: string | null): Promise<DauToeicTest[]> {
   const meta = await adminDb.collection(META_COLLECTION).doc(TEST_CATALOG_DOC).get();
   if (!meta.exists || meta.get("complete") !== true) return [];
+  if (meta.get("sourceVersion") !== DAUTOEIC_SOURCE_VERSION) return [];
   const snap = await adminDb
     .collection(COLLECTIONS.tests)
     .where("source", "==", SOURCE)
     .get();
   const tests = snap.docs
+    .filter((doc) => doc.get("sourceVersion") === DAUTOEIC_SOURCE_VERSION)
     .map((doc) => toTest(doc.data()))
     .filter((test): test is DauToeicTest => Boolean(test?.id))
     .filter((test) => !setId?.trim() || test.setId === setId.trim());
@@ -240,6 +250,7 @@ export async function readCanonicalPart(
   const testSnap = await testRef.get();
   if (!testSnap.exists || testSnap.get("source") !== SOURCE) return null;
   const partMeta = recordValue(recordValue(testSnap.get("parts"))[String(part)]);
+  if (partMeta.sourceVersion !== DAUTOEIC_SOURCE_VERSION) return null;
   const questionIds = arrayValue(partMeta.questionIds)
     .map(numberValue)
     .filter((id): id is number => id != null && id > 0);

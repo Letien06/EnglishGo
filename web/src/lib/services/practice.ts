@@ -5,6 +5,7 @@ import { unstable_cache } from "next/cache";
 import type { AppUser } from "@/types";
 import type { DauToeicQuestion, DauToeicTest } from "@/types/dautoeic";
 import * as dautoeic from "./dautoeic";
+import { DAUTOEIC_SOURCE_VERSION } from "./dautoeic-source";
 import {
   buildPracticeLeaderboardDecision,
   recordPracticeLeaderboardAttempt,
@@ -229,7 +230,7 @@ const TOEIC_SECTION_MIN_SCORE = 5;
 const TOEIC_SECTION_MAX_SCORE = 495;
 const TOEIC_SCORE_NOTE =
   "TOEIC estimate only: official raw-to-scaled conversion varies by test form.";
-const PRACTICE_CACHE_VERSION = "v6";
+const PRACTICE_CACHE_VERSION = `v6-${DAUTOEIC_SOURCE_VERSION}`;
 const PRACTICE_CACHE_TTL_MILLIS = 24 * 60 * 60 * 1000;
 export const PART_DEFAULTS: Record<number, { questionCount: number; suggestedMinutes: number; skill: "LISTENING" | "READING" }> = {
   1: { questionCount: 6, suggestedMinutes: 4, skill: "LISTENING" },
@@ -274,7 +275,7 @@ const cachedFindTests = unstable_cache(
     nextCursor: page.nextCursor,
   };
   },
-  ["practice-tests-page"],
+  ["practice-tests-page", DAUTOEIC_SOURCE_VERSION],
   { revalidate: 600 },
 );
 
@@ -782,7 +783,7 @@ const cachedLoadContent = unstable_cache(
     const parts = normalizeParts(partsKey);
     return loadContentUncached(routeTestId, parts);
   },
-  ["practice-content-v3"],
+  ["practice-content-v3", DAUTOEIC_SOURCE_VERSION],
   { revalidate: 3600 },
 );
 

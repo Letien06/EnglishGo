@@ -1,6 +1,7 @@
 import { FieldValue } from "firebase-admin/firestore";
 import { adminDb } from "@/lib/firestore/db";
 import type { DauToeicDifficultySession } from "@/types/dautoeic";
+import { DAUTOEIC_SOURCE_VERSION } from "./dautoeic-source";
 
 const MIRROR_COLLECTION = "dauToeicMirror";
 const SYNC_COLLECTION = "dauToeicSyncStatus";
@@ -29,7 +30,7 @@ export interface SyncStatus {
 }
 
 export function mirrorKey(...parts: Array<string | number | null | undefined>) {
-  return parts
+  return [DAUTOEIC_SOURCE_VERSION, ...parts]
     .map((part) => String(part ?? "all").trim().replace(/[^a-zA-Z0-9_-]+/g, "_"))
     .join("__");
 }
@@ -171,7 +172,7 @@ export async function writeMirrorSession(
   await batch.commit();
 }
 
-export async function readSyncStatus(id = "weeklyMirror"): Promise<SyncStatus | null> {
+export async function readSyncStatus(id = mirrorKey("weeklyMirror")): Promise<SyncStatus | null> {
   const snap = await adminDb.collection(SYNC_COLLECTION).doc(id).get();
   if (!snap.exists) return null;
   const data = snap.data() as Partial<SyncStatus> | undefined;
@@ -190,7 +191,7 @@ export async function readSyncStatus(id = "weeklyMirror"): Promise<SyncStatus | 
 
 export async function writeSyncStatus(
   status: Partial<SyncStatus>,
-  id = "weeklyMirror",
+  id = mirrorKey("weeklyMirror"),
 ): Promise<void> {
   const now = Date.now();
   await adminDb.collection(SYNC_COLLECTION).doc(id).set(

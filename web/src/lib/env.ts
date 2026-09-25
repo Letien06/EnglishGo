@@ -50,7 +50,7 @@ export const serverEnv = {
   get dauToeicSupabaseUrl() {
     return optional(
       "DAUTOEIC_SUPABASE_URL",
-      "https://qfhmnlvgweznzcsoijyr.supabase.co",
+      "https://odlnhfaygiotcyehuysw.supabase.co",
     );
   },
   get dauToeicAnonKey() {
@@ -59,7 +59,7 @@ export const serverEnv = {
   get dauToeicMediaBaseUrl() {
     return optional(
       "DAUTOEIC_MEDIA_BASE_URL",
-      "https://qfhmnlvgweznzcsoijyr.supabase.co/storage/v1/object/public/mock-test-media",
+      `${serverEnv.dauToeicSupabaseUrl.replace(/\/+$/, "")}/storage/v1/object/public/mock-test-media`,
     );
   },
   get cronSecret() {
