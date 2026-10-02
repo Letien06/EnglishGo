@@ -56,6 +56,23 @@ export const serverEnv = {
   get dauToeicAnonKey() {
     return optional("DAUTOEIC_ANON_KEY");
   },
+  get dauToeicContentStorage() {
+    const value = optional("DAUTOEIC_CONTENT_STORAGE", "firestore");
+    if (value !== "firestore" && value !== "google-drive") throw new Error("Invalid DAUTOEIC_CONTENT_STORAGE.");
+    return value;
+  },
+  get googleDriveClientId() {
+    return required("GOOGLE_DRIVE_CLIENT_ID");
+  },
+  get googleDriveClientSecret() {
+    return required("GOOGLE_DRIVE_CLIENT_SECRET");
+  },
+  get googleDriveRefreshToken() {
+    return required("GOOGLE_DRIVE_REFRESH_TOKEN");
+  },
+  get googleDriveManifestId() {
+    return required("GOOGLE_DRIVE_MANIFEST_ID");
+  },
   get dauToeicMediaBaseUrl() {
     return optional(
       "DAUTOEIC_MEDIA_BASE_URL",

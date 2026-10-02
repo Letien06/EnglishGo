@@ -6,6 +6,7 @@ import type { AppUser } from "@/types";
 import type { DauToeicQuestion, DauToeicTest } from "@/types/dautoeic";
 import * as dautoeic from "./dautoeic";
 import { DAUTOEIC_SOURCE_VERSION } from "./dautoeic-source";
+import { contentCacheKey, isDriveContentEnabled } from "./dautoeic-drive";
 import {
   buildPracticeLeaderboardDecision,
   recordPracticeLeaderboardAttempt,
@@ -275,7 +276,7 @@ const cachedFindTests = unstable_cache(
     nextCursor: page.nextCursor,
   };
   },
-  ["practice-tests-page", DAUTOEIC_SOURCE_VERSION],
+  ["practice-tests-page", contentCacheKey()],
   { revalidate: 600 },
 );
 
@@ -783,7 +784,7 @@ const cachedLoadContent = unstable_cache(
     const parts = normalizeParts(partsKey);
     return loadContentUncached(routeTestId, parts);
   },
-  ["practice-content-v3", DAUTOEIC_SOURCE_VERSION],
+  ["practice-content-v3", contentCacheKey()],
   { revalidate: 3600 },
 );
 
@@ -810,9 +811,9 @@ async function loadPartContentSnapshot(
   externalTest: DauToeicTest,
   part: number,
 ): Promise<PracticePartContentSnapshot> {
-  const ref = practicePartContentCacheRef(routeTestId, part);
-  const snap = await ref.get();
-  if (isFreshCacheSnapshot(snap)) {
+  const ref = isDriveContentEnabled() ? null : practicePartContentCacheRef(routeTestId, part);
+  const snap = await ref?.get();
+  if (snap && isFreshCacheSnapshot(snap)) {
     return {
       questions: arrayValue(snap.get("questions")).map(toCachedQuestion),
       optionsByQuestionId: toCachedOptionsByQuestionId(snap.get("optionsByQuestionId")),
@@ -832,7 +833,7 @@ async function loadPartContentSnapshot(
     correctAnswerByQuestionId[String(question.id)] = cleanAnswer(externalQuestion.correctAnswer);
   }
   const snapshot = { questions, optionsByQuestionId, correctAnswerByQuestionId };
-  await ref.set(
+  await ref?.set(
     {
       schemaVersion: PRACTICE_CACHE_VERSION,
       source: "DAUTOEIC",
@@ -868,6 +869,7 @@ function toTestCard(test: DauToeicTest): PracticeTestCard {
 
 async function loadAnswerKey(routeTestId: number, parts: number[]): Promise<PracticeAnswerKeyContent> {
   const normalizedParts = normalizeParts(parts);
+  if (isDriveContentEnabled()) return buildAnswerKeyFromContent(await loadContent(routeTestId, normalizedParts));
   const ref = practiceAnswerKeyCacheRef(routeTestId, normalizedParts);
   const snap = await ref.get();
   if (isFreshCacheSnapshot(snap)) {
@@ -917,6 +919,7 @@ async function writeAnswerKeyCache(
   parts: number[],
   answerKey: PracticeAnswerKeyContent,
 ): Promise<void> {
+  if (isDriveContentEnabled()) return;
   await practiceAnswerKeyCacheRef(routeTestId, parts).set(
     {
       schemaVersion: PRACTICE_CACHE_VERSION,

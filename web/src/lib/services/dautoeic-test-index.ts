@@ -1,7 +1,8 @@
 import { FieldPath, FieldValue } from "firebase-admin/firestore";
 import { adminDb } from "@/lib/firestore/db";
 import type { DauToeicTest } from "@/types/dautoeic";
-import { routeTestId } from "./dautoeic";
+import { listTests, routeTestId } from "./dautoeic";
+import { isDriveContentEnabled } from "./dautoeic-drive";
 import { DAUTOEIC_SOURCE_VERSION } from "./dautoeic-source";
 
 const TEST_INDEX = `dauToeicSources/${DAUTOEIC_SOURCE_VERSION}/dauToeicTestIndex`;
@@ -26,6 +27,7 @@ interface TestIndexDoc extends DauToeicTest {
 }
 
 export async function writeTestIndex(tests: DauToeicTest[]): Promise<void> {
+  if (isDriveContentEnabled()) return;
   for (let index = 0; index < tests.length; index += 450) {
     const batch = adminDb.batch();
     for (const test of tests.slice(index, index + 450)) {
@@ -46,6 +48,17 @@ export async function queryTestIndex({
   size,
 }: TestIndexQuery): Promise<TestIndexPage> {
   const safeSize = Math.min(Math.max(size, 1), 50);
+  if (isDriveContentEnabled()) {
+    const tests = (await listTests(null)).map(toIndexDoc)
+      .filter((test) => !difficulty?.trim() || test.difficultyLevel === Number(difficulty.trim()))
+      .filter((test) => !search?.trim() || test.searchTokens.includes(normalizeToken(search)))
+      .sort((first, second) => first.orderIndexSort - second.orderIndexSort || compareIds(String(first.routeId), String(second.routeId)));
+    const after = cursor?.trim() ? parseCursor(cursor) : null;
+    const remaining = after ? tests.filter((test) => test.orderIndexSort > after.orderIndexSort || (test.orderIndexSort === after.orderIndexSort && String(test.routeId) > after.docId)) : tests;
+    const page = remaining.slice(0, safeSize);
+    const last = page.at(-1);
+    return { tests: page.map(fromIndexDoc), total: tests.length, nextCursor: remaining.length > safeSize && last ? makeCursor(last.orderIndexSort, String(last.routeId)) : undefined };
+  }
   let baseQuery: FirebaseFirestore.Query = adminDb.collection(TEST_INDEX);
   if (difficulty?.trim()) {
     baseQuery = baseQuery.where("difficultyLevel", "==", Number(difficulty.trim()));
@@ -84,8 +97,13 @@ export async function queryTestIndex({
 }
 
 export async function hasTestIndex(): Promise<boolean> {
+  if (isDriveContentEnabled()) return true;
   const snap = await adminDb.collection(TEST_INDEX).limit(1).get();
   return !snap.empty;
+}
+
+function compareIds(first: string, second: string) {
+  return first < second ? -1 : first > second ? 1 : 0;
 }
 
 function toIndexDoc(test: DauToeicTest): TestIndexDoc {

@@ -9,6 +9,7 @@ import {
   fetchListTestsFromSource,
 } from "./dautoeic";
 import { writeTestIndex } from "./dautoeic-test-index";
+import { isDriveContentEnabled } from "./dautoeic-drive";
 import { DAUTOEIC_DIFFICULTY_BANDS } from "./dautoeic-source";
 import {
   mirrorKey,
@@ -56,6 +57,7 @@ export async function runDauToeicMirrorSync({
   force?: boolean;
   budgetMs?: number;
 } = {}): Promise<DauToeicSyncResult> {
+  if (isDriveContentEnabled()) return { started: false, completed: false, skipped: true, reason: "google_drive_content_publish_with_cli", cursor: 0, totalTasks: 0, processed: 0, errors: [], lastFinishedAtMs: null };
   const now = Date.now();
   const status = await readSyncStatus();
   const running = status?.status === "running";

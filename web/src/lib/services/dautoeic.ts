@@ -9,6 +9,7 @@
 import { unstable_cache } from "next/cache";
 import { serverEnv } from "../env";
 import { ApiError } from "../api/response";
+import { isDriveContentEnabled, readDriveMaterial } from "./dautoeic-drive";
 import { DAUTOEIC_DIFFICULTY_BANDS, DAUTOEIC_LEVEL_COUNT, DAUTOEIC_SOURCE_VERSION, dauToeicApiHeaders } from "./dautoeic-source";
 import type {
   DauToeicDifficultyLevel,
@@ -49,6 +50,7 @@ export async function listDifficultyLevels(part: number): Promise<DauToeicDiffic
 }
 
 export async function listSets(): Promise<DauToeicSet[]> {
+  if (isDriveContentEnabled()) return readDriveMaterial(mirrorKey("sets", "all"));
   const canonical = await readCanonicalSets().catch(() => []);
   if (canonical.length > 0) return canonical;
   const key = mirrorKey("sets", "all");
@@ -59,6 +61,10 @@ export async function listSets(): Promise<DauToeicSet[]> {
 
 export async function listTests(setId?: string | null): Promise<DauToeicTest[]> {
   const cleanSetId = setId?.trim() || null;
+  if (isDriveContentEnabled()) {
+    const tests = await readDriveMaterial<DauToeicTest[]>(mirrorKey("tests", "all"));
+    return cleanSetId ? tests.filter((test) => test.setId === cleanSetId) : tests;
+  }
   const canonical = await readCanonicalTests(cleanSetId).catch(() => []);
   if (canonical.length > 0) return canonical;
   const key = mirrorKey("tests", cleanSetId);
@@ -101,6 +107,7 @@ export async function getTest(testId: string): Promise<DauToeicTest> {
     throw new ApiError("testId is required", 400);
   }
   const cleanTestId = testId.trim();
+  if (isDriveContentEnabled()) return readDriveMaterial(mirrorKey("test", cleanTestId));
   const canonical = await readCanonicalTestByRouteId(routeTestId(cleanTestId)).catch(() => null);
   if (canonical) return canonical;
   const key = mirrorKey("test", cleanTestId);
@@ -132,6 +139,7 @@ export async function getPart(testId: string, part: number): Promise<{
     throw new ApiError("TOEIC part must be between 1 and 7", 400);
   }
   const cleanTestId = testId.trim();
+  if (isDriveContentEnabled()) return readDriveMaterial(mirrorKey("test-part", cleanTestId, part));
   const canonical = await readCanonicalPart(routeTestId(cleanTestId), part).catch(() => null);
   if (canonical) return canonical;
   const key = mirrorKey("test-part", cleanTestId, part);
@@ -540,6 +548,7 @@ async function mirrorJsonFirst<T>(
   fetcher: () => Promise<T>,
   kind: string,
 ): Promise<T> {
+  if (isDriveContentEnabled()) return readDriveMaterial<T>(key);
   const mirrored = await readMirrorJson<T>(key).catch(() => null);
   if (mirrored) return mirrored;
   const fresh = await fetcher();
@@ -551,6 +560,13 @@ async function mirrorSessionFirst(
   key: string,
   fetcher: () => Promise<DauToeicDifficultySession>,
 ): Promise<DauToeicDifficultySession> {
+  if (isDriveContentEnabled()) {
+    const parts = key.split("__");
+    const limit = parts.pop();
+    const session = await readDriveMaterial<DauToeicDifficultySession>([...parts, "all"].join("__"));
+    const items = limit === "all" ? session.items : session.items.slice(0, Number(limit));
+    return { ...session, items, total: items.length };
+  }
   const mirrored = await readMirrorSession(key).catch(() => null);
   // A mirror document can outlive its source data and contain only an empty
   // session (for example when a sync ran while the upstream API was
