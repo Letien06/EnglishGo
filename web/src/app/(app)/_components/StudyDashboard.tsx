@@ -26,7 +26,7 @@ export default function StudyDashboard({ skill, part, tests, error }: {
   const total = tests.reduce((sum, test) => sum + test.questionCount, 0);
 
   return (
-    <main className="study-dashboard">
+    <main className={`study-dashboard study-dashboard--${listening ? "listen" : "read"}`}>
       <div className="study-dashboard-topline">
         <span className="study-eyebrow">KHÔNG GIAN LUYỆN TẬP</span>
         <nav className="study-skill-switch" aria-label="Kỹ năng luyện tập">

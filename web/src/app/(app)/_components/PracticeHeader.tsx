@@ -2,6 +2,7 @@
 
 import Link from "@/components/IntentLink";
 import NavIcon from "@/components/NavIcon";
+import ThemeToggle from "@/components/ThemeToggle";
 import PracticeMobileMenu, { type PracticeMode } from "./PracticeMobileMenu";
 
 interface Props {
@@ -40,6 +41,7 @@ export default function PracticeHeader({ skill, partId, part, level, testId, tes
       </select>}
       <span className="practice-timer">{elapsed}</span>
     </div>
+    <ThemeToggle className="practice-theme-toggle" />
     <PracticeMobileMenu modes={modes} activeMode={activeMode} auto={auto} onToggleAuto={onToggleAuto} onModeChange={onModeChange} onAssistChange={onAssistChange} assist={assist} assistOptions={assistOptions} elapsed={elapsed} modeHref={(nextMode) => `${base}/practice?part=${partId}&${selection}&mode=${nextMode}`} assistHref={(value) => `${base}/practice?part=${partId}&${selection}&assist=${value}`} />
   </header>;
 }

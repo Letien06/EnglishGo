@@ -15,6 +15,8 @@ const session: DauToeicDifficultySession = { part: 3, level: 1, total: 2, title:
 
 beforeEach(() => {
   vi.useFakeTimers();
+  window.localStorage.clear();
+  document.documentElement.dataset.theme = "light";
   vi.stubGlobal("React", React);
   vi.stubGlobal("fetch", vi.fn(() => new Promise(() => undefined)));
   vi.spyOn(window, "scrollTo").mockImplementation(() => undefined);
@@ -22,6 +24,21 @@ beforeEach(() => {
 afterEach(() => { cleanup(); vi.useRealTimers(); vi.restoreAllMocks(); vi.unstubAllGlobals(); });
 
 describe.each(["listening", "reading"] as const)("%s responsive practice", (skill) => {
+  it("switches themes without changing the selected answer or test", () => {
+    const testSession = { ...session, testId: "theme-test", testName: "Test 1" };
+    const common = { session: testSession, level: 1, mode: "normal", userLoggedIn: false, userUid: null, initialIndex: 0 };
+    const { container } = render(skill === "listening" ? <ListenPracticeClient {...common} partId="part3" partNum={3} assist={30} /> : <ReadPracticeClient {...common} partId="part7" partNum={7} />);
+    fireEvent.click(screen.getAllByLabelText("Đáp án B")[0]);
+    expect(container.querySelector('[data-answer-state="wrong"]')).toHaveClass("bg-danger-soft", "text-danger-ink");
+    expect(container.querySelector('[data-answer-state="correct"]')).toHaveClass("bg-success-soft", "text-success-ink");
+    fireEvent.click(screen.getByRole("button", { name: "Chuyển sang giao diện tối" }));
+    expect(document.documentElement.dataset.theme).toBe("dark");
+    expect(screen.getAllByLabelText("Đáp án B")[0]).toBeChecked();
+    expect(new URL(window.location.href).searchParams.get("testId")).toBe("theme-test");
+    fireEvent.click(screen.getByRole("button", { name: "Chuyển sang giao diện sáng" }));
+    expect(document.documentElement.dataset.theme).toBe("light");
+    expect(screen.getAllByLabelText("Đáp án B")[0]).toBeChecked();
+  });
   it("keeps the selected test in the header, mode URL and save request", () => {
     const testSession = { ...session, testId: "test-two", testName: "Test 2", setName: "Crack TOEIC Vol 1" };
     const common = { session: testSession, level: 1, mode: "normal", userLoggedIn: true, userUid: "learner", initialIndex: 0 };
@@ -47,6 +64,22 @@ describe.each(["listening", "reading"] as const)("%s responsive practice", (skil
     expect(screen.getByText("#2/2")).toBeInTheDocument();
     expect(fetch).toHaveBeenCalledTimes(2);
   });
+});
+
+it("uses themed fill feedback and hidden word controls without submitting an answer", () => {
+  const fillSession = { ...session, part: 1, items: [item("one", [{ ...question("fill"), optionA: "apple", optionB: "pear" }])] };
+  render(<ListenPracticeClient session={fillSession} partId="part1" partNum={1} level={1} mode="fill" assist={30} userLoggedIn={false} userUid={null} initialIndex={0} />);
+  const input = screen.getAllByRole("textbox", { name: "Điền từ còn thiếu" })[0];
+  expect(input).toHaveAttribute("data-feedback", "idle");
+  fireEvent.change(input, { target: { value: "wrong" } });
+  expect(input).toHaveAttribute("data-feedback", "wrong");
+  fireEvent.change(input, { target: { value: "apple" } });
+  expect(input).toHaveAttribute("data-feedback", "correct");
+  fireEvent.click(screen.getByRole("button", { name: "Lật từ" }));
+  const hidden = screen.getAllByRole("button", { name: "Lật từ", exact: true }).find((button) => button.classList.contains("practice-hidden-word"))!;
+  expect(hidden).toHaveClass("bg-teal-soft", "text-teal-ink");
+  fireEvent.click(hidden);
+  expect(fetch).not.toHaveBeenCalled();
 });
 
 it("shows a Part 5 question only once when its transcript duplicates the prompt", () => {

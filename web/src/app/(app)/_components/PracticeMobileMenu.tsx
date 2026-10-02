@@ -87,14 +87,14 @@ export default function PracticeMobileMenu({
           />
 
           {/* Slide-in panel */}
-          <div className="absolute right-0 top-0 flex h-full w-[85vw] max-w-sm flex-col gap-6 overflow-y-auto bg-white p-5 shadow-2xl">
+          <div className="absolute right-0 top-0 flex h-full w-[85vw] max-w-sm flex-col gap-6 overflow-y-auto bg-surface p-5 shadow-2xl">
             <div className="flex items-center justify-between">
               <h2 className="text-lg font-extrabold text-ink">Menu & công cụ</h2>
               <button
                 type="button"
                 data-dialog-initial-focus
                 onClick={() => setOpen(false)}
-                className="inline-flex h-9 w-9 items-center justify-center rounded-lg border border-slate-200 text-lg font-bold text-ink"
+                className="inline-flex h-9 w-9 items-center justify-center rounded-lg border border-line text-lg font-bold text-ink"
                 aria-label="Đóng"
               >
                 ✕
@@ -103,8 +103,8 @@ export default function PracticeMobileMenu({
 
             <nav className="grid grid-cols-2 gap-2" aria-label="Điều hướng chính">
               {navigationItems.map((item) => (
-                <Link key={item.href} href={item.href} onClick={() => setOpen(false)} className="flex min-h-11 items-center gap-2 rounded-xl border border-slate-200 px-3 text-sm font-extrabold text-ink">
-                  <NavIcon name={item.icon} className="h-4 w-4 text-primary" />
+                <Link key={item.href} href={item.href} onClick={() => setOpen(false)} className="flex min-h-11 items-center gap-2 rounded-xl border border-line px-3 text-sm font-extrabold text-ink">
+                  <NavIcon name={item.icon} className="h-4 w-4 text-primary-ink" />
                   {item.label}
                 </Link>
               ))}
@@ -123,8 +123,8 @@ export default function PracticeMobileMenu({
                 {modes.map(([key, icon, label]) => {
                   const className = `inline-flex items-center justify-center gap-2 rounded-xl border px-3 py-3 text-sm font-extrabold ${
                     activeMode === key
-                      ? "border-primary bg-primary/10 text-primary"
-                      : "border-slate-200 text-ink"
+                      ? "border-primary bg-primary/10 text-primary-ink"
+                      : "border-line text-ink"
                   }`;
                   if (onModeChange) {
                     return (
@@ -165,17 +165,17 @@ export default function PracticeMobileMenu({
                 onToggleAuto();
               }}
               className={`flex items-center justify-between rounded-xl border px-4 py-3 text-sm font-extrabold ${
-                auto ? "border-primary bg-primary/10 text-primary" : "border-slate-200 text-ink"
+                auto ? "border-primary bg-primary/10 text-primary-ink" : "border-line text-ink"
               }`}
             >
               <span>Tự chuyển bài khi đúng</span>
               <span
                 className={`inline-flex h-6 w-11 items-center rounded-full p-0.5 transition-colors ${
-                  auto ? "bg-primary" : "bg-slate-300"
+                  auto ? "bg-primary" : "bg-control-line"
                 }`}
               >
                 <span
-                  className={`h-5 w-5 rounded-full bg-white transition-transform ${
+                  className={`h-5 w-5 rounded-full bg-ink transition-transform ${
                     auto ? "translate-x-5" : "translate-x-0"
                   }`}
                 />
@@ -189,8 +189,8 @@ export default function PracticeMobileMenu({
                   {assistOptions.map((value) => {
                     const className = `inline-flex items-center justify-center rounded-xl border px-3 py-3 text-sm font-extrabold ${
                       assist === value
-                        ? "border-primary bg-primary/10 text-primary"
-                        : "border-slate-200 text-ink"
+                        ? "border-primary bg-primary/10 text-primary-ink"
+                        : "border-line text-ink"
                     }`;
                     if (onAssistChange) {
                       return (

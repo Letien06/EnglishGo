@@ -258,19 +258,19 @@ export default function ListenPracticeClient({
   const currentQuestion = item.questions[0];
 
   return (
-    <main className="skill-workspace skill-workspace--listen design-system min-h-dvh bg-white" onPointerDownCapture={markInteraction} onKeyDownCapture={markInteraction}>
+    <main className="skill-workspace skill-workspace--listen design-system min-h-dvh bg-surface" onPointerDownCapture={markInteraction} onKeyDownCapture={markInteraction}>
       <PracticeHeader skill="listening" partId={partId} part={partNum} level={level} testId={session.testId} testName={session.testName} setName={session.setName} grouped={session.grouping === "balanced"} modes={modes} activeMode={activeMode} onModeChange={switchMode} auto={auto} onToggleAuto={() => setAuto((value) => !value)} elapsed={formatElapsed(elapsed)} assist={activeAssist} onAssistChange={switchAssist} />
       {(saveError || resumeStatus) && <div className="practice-save-status" role="status">{saveError || resumeStatus}</div>}
 
       <div className="practice-content grid min-h-[calc(100dvh-8rem)] lg:grid-cols-[1fr_1fr]">
-        <section className="border-b border-slate-200 px-4 py-5 sm:px-6 lg:border-b-0 lg:border-r lg:px-10 lg:py-8">
+        <section className="practice-source-pane border-b border-line px-4 py-5 sm:px-6 lg:border-b-0 lg:border-r lg:px-10 lg:py-8">
           <p className="mb-5 text-lg italic text-ink sm:text-xl lg:mb-8">
             {partNum === 1
               ? "Select the one statement that best describes what you see in the picture."
               : "Select the best response to each question."}
           </p>
 
-          <div className="rounded-2xl border border-slate-200 bg-white p-4">
+          <div className="practice-audio-card rounded-2xl border border-line bg-surface p-4">
             {(item.audioUrl || currentQuestion?.audioUrl) && (
               <audio
                 ref={audioRef}
@@ -286,7 +286,7 @@ export default function ListenPracticeClient({
                 }}
               />
             )}
-            <div className="mt-3 flex gap-2">
+            <div className="practice-audio-actions mt-3 flex gap-2">
               <button
                 type="button"
                 onClick={() => {
@@ -294,7 +294,7 @@ export default function ListenPracticeClient({
                   rewindAudio(audioRef.current, 3);
                   replayCountRef.current += 1;
                 }}
-                className="rounded-xl border border-amber-200 px-4 py-2 text-sm font-extrabold text-primary"
+                className="rounded-xl border border-warning-line px-4 py-2 text-sm font-extrabold text-primary-ink"
               >
                 ↺ 3s
               </button>
@@ -305,7 +305,7 @@ export default function ListenPracticeClient({
                   rewindAudio(audioRef.current, 5);
                   replayCountRef.current += 1;
                 }}
-                className="rounded-xl border border-amber-200 px-4 py-2 text-sm font-extrabold text-primary"
+                className="rounded-xl border border-warning-line px-4 py-2 text-sm font-extrabold text-primary-ink"
               >
                 ↺ 5s
               </button>
@@ -316,7 +316,7 @@ export default function ListenPracticeClient({
                   if (audioRef.current) audioRef.current.playbackRate = nextRate;
                   setPlaybackRate(nextRate);
                 }}
-                className="rounded-xl border border-amber-200 px-4 py-2 text-sm font-extrabold text-primary"
+                className="rounded-xl border border-warning-line px-4 py-2 text-sm font-extrabold text-primary-ink"
               >
                 {playbackRate}x
               </button>
@@ -332,15 +332,15 @@ export default function ListenPracticeClient({
                 width={1200}
                 height={800}
                 sizes="(max-width: 1024px) 100vw, 50vw"
-                className="mt-2 max-h-[62dvh] w-full object-contain opacity-75 grayscale"
+                className="practice-source-image mt-4 max-h-[62dvh] w-full object-contain"
               />
             ) : null;
           })()}
         </section>
 
-        <section className="px-4 py-5 sm:px-6 lg:px-10 lg:py-8">
+        <section className="practice-question-pane px-4 py-5 sm:px-6 lg:px-10 lg:py-8">
           <div className="mb-4 flex items-center justify-between">
-            <span className="rounded-full border border-blue-200 bg-blue-50 px-4 py-1 text-sm font-extrabold text-ink">
+            <span className="practice-question-count rounded-full border border-info-line bg-info-soft px-4 py-1 text-sm font-extrabold text-info-ink">
               #{currentIndex + 1}/{items.length}
             </span>
             <button
@@ -355,7 +355,7 @@ export default function ListenPracticeClient({
                   questionId: currentQuestion.id,
                 });
               }}
-              className={`rounded-xl border px-4 py-3 ${favorite ? "border-amber-300 bg-amber-50 text-primary" : "border-slate-200 text-primary"}`}
+              className={`rounded-xl border px-4 py-3 ${favorite ? "border-warning-line bg-warning-soft text-primary-ink" : "border-line text-primary-ink"}`}
               aria-label="Yêu thích"
             >
               {favorite ? "★" : "☆"}
@@ -365,7 +365,7 @@ export default function ListenPracticeClient({
             {partNum === 3 || partNum === 4 ? "Nhóm câu hỏi" : "Question"}
           </h2>
 
-          <div className="rounded-2xl border border-slate-200 bg-white p-5">
+          <div className="practice-question-card rounded-2xl border border-line bg-surface p-5">
             {item.questions.map((question, index) => (
               <QuestionCard
                 key={question.id}
@@ -414,9 +414,9 @@ export default function ListenPracticeClient({
         </section>
       </div>
 
-      <footer className="skill-workspace-footer sticky bottom-0 z-40 flex h-16 items-center justify-between gap-2 bg-gradient-to-r from-cyan-500 to-blue-800 px-3 text-white sm:px-7">
+      <footer className="skill-workspace-footer sticky bottom-0 z-40 flex h-16 items-center justify-between gap-2 px-3 sm:px-7">
         <div className="flex gap-2 sm:gap-3">
-          <button onClick={() => setShowNote((value) => !value)} className="rounded-xl bg-white px-3 py-2 text-sm font-extrabold text-primary sm:px-5" aria-label="Ghi chú">
+          <button onClick={() => setShowNote((value) => !value)} className="rounded-xl bg-surface px-3 py-2 text-sm font-extrabold text-primary-ink sm:px-5" aria-label="Ghi chú">
             ✎<span className="hidden sm:inline"> Ghi chú</span>
           </button>
         </div>
@@ -481,11 +481,11 @@ function QuestionCard({
       ) : null}
 
       {(mode === "fill" || mode === "flip") && hasMaskableOptionText && (
-        <div className="mb-4 flex items-center justify-between rounded-xl border border-violet-200 bg-violet-50 px-4 py-3">
-          <strong className="text-base text-ink">
+        <div className="practice-hintbar mb-4 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-teal-line bg-teal-soft px-4 py-3">
+          <strong className="text-sm text-teal-ink">
             Nghe & {mode === "fill" ? "Điền từ" : "Lật từ"} - {assist}%
           </strong>
-          <div className="flex gap-6 text-sm font-extrabold text-ink">
+          <div className="flex flex-wrap gap-2 text-sm font-bold text-teal-ink">
             <button type="button" onClick={() => onHint(1)}>
               {mode === "fill" ? "Gợi ý" : "Lật từ tiếp"}
             </button>
@@ -524,7 +524,7 @@ function QuestionCard({
       </div>
 
       {answered && (
-        <small className={`mt-4 block text-sm font-extrabold ${correct ? "text-emerald-600" : "text-red-600"}`} aria-live="polite">
+        <small className={`mt-4 block text-sm font-extrabold ${correct ? "text-success-ink" : "text-danger-ink"}`} aria-live="polite">
           {correct ? "Đúng" : `Chưa đúng. Đáp án đúng: ${correctAnswer}`}
         </small>
       )}
@@ -566,11 +566,11 @@ function ResultCard({ correct, value }: { correct: boolean; value: string }) {
   return (
     <section
       className={`rounded-2xl border p-4 ${
-        correct ? "border-emerald-300 bg-emerald-50 text-emerald-800" : "border-red-300 bg-red-50 text-red-800"
+        correct ? "border-success-line bg-success-soft text-success-ink" : "border-danger-line bg-danger-soft text-danger-ink"
       }`}
     >
       <div className="flex items-start gap-3">
-        <span className="inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-white text-base font-extrabold">
+        <span className="inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-surface text-base font-extrabold">
           {correct ? "✓" : "!"}
         </span>
         <div>
@@ -584,9 +584,9 @@ function ResultCard({ correct, value }: { correct: boolean; value: string }) {
 
 function SolutionBlock({ title, value, tone }: { title: string; value: string; tone: "blue" | "sky" }) {
   const toneClass = tone === "sky"
-    ? "border-sky-300 bg-sky-50 text-sky-900"
-    : "border-blue-300 bg-blue-50 text-blue-900";
-  const iconClass = tone === "sky" ? "bg-sky-100 text-sky-700" : "bg-blue-100 text-blue-700";
+    ? "border-teal-line bg-teal-soft text-teal-ink"
+    : "border-info-line bg-info-soft text-info-ink";
+  const iconClass = tone === "sky" ? "bg-teal-soft text-teal-ink" : "bg-info-soft text-info-ink";
 
   return (
     <section className={`rounded-2xl border p-4 ${toneClass}`}>
@@ -678,10 +678,10 @@ function VocabularyStudyBlock({
   };
 
   return (
-    <section className="overflow-hidden rounded-2xl border border-amber-300 bg-amber-50 text-amber-950">
-      <div className="flex items-center justify-between gap-3 border-b border-amber-200 px-4 py-3">
+    <section className="overflow-hidden rounded-2xl border border-warning-line bg-warning-soft text-warning-ink">
+      <div className="flex items-center justify-between gap-3 border-b border-warning-line px-4 py-3">
         <div className="flex items-center gap-3">
-          <span className="inline-flex h-7 w-7 items-center justify-center rounded-full bg-amber-100 text-sm font-extrabold text-amber-700">
+          <span className="inline-flex h-7 w-7 items-center justify-center rounded-full bg-warning-soft text-sm font-extrabold text-warning-ink">
             □
           </span>
           <strong className="text-base">Từ vựng nên học</strong>
@@ -689,27 +689,27 @@ function VocabularyStudyBlock({
         <button
           type="button"
           onClick={() => setShowDetails((open) => !open)}
-          className="rounded-full border border-amber-300 bg-white px-3 py-1 text-xs font-extrabold text-amber-800"
+          className="rounded-full border border-warning-line bg-surface px-3 py-1 text-xs font-extrabold text-warning-ink"
         >
           {showDetails ? "Ẩn chi tiết" : "Xem chi tiết"}
         </button>
       </div>
 
-      <div className="m-3 overflow-hidden rounded-xl border border-amber-200 bg-white">
-        <div className="flex flex-wrap items-center gap-2 border-b border-amber-100 p-3">
+      <div className="m-3 overflow-hidden rounded-xl border border-warning-line bg-surface">
+        <div className="flex flex-wrap items-center gap-2 border-b border-warning-line p-3">
           <button
             type="button"
             onClick={toggleAll}
-            className="rounded-xl border border-amber-300 bg-white px-4 py-2 text-sm font-extrabold text-amber-800"
+            className="rounded-xl border border-warning-line bg-surface px-4 py-2 text-sm font-extrabold text-warning-ink"
           >
             {allSelected ? "Bỏ chọn" : "Chọn tất cả"}
           </button>
           {loadingSets ? (
-            <span className="text-sm font-bold text-amber-700">Đang tải bộ từ...</span>
+            <span className="text-sm font-bold text-warning-ink">Đang tải bộ từ...</span>
           ) : sets.length === 0 ? (
             <Link
               href="/vocab"
-              className="rounded-xl border border-amber-300 bg-white px-4 py-2 text-sm font-extrabold text-amber-800"
+              className="rounded-xl border border-warning-line bg-surface px-4 py-2 text-sm font-extrabold text-warning-ink"
             >
               Tạo bộ từ của tôi
             </Link>
@@ -718,7 +718,7 @@ function VocabularyStudyBlock({
               <select
                 value={setId}
                 onChange={(event) => setSetId(event.target.value)}
-                className="rounded-xl border border-amber-300 bg-white px-3 py-2 text-sm font-extrabold text-amber-800"
+                className="rounded-xl border border-warning-line bg-surface px-3 py-2 text-sm font-extrabold text-warning-ink"
                 aria-label="Chọn bộ từ của tôi"
               >
                 {sets.map((set) => (
@@ -731,29 +731,29 @@ function VocabularyStudyBlock({
                 type="button"
                 onClick={addSelected}
                 disabled={selected.size === 0 || saving || !setId}
-                className="rounded-xl bg-orange-400 px-4 py-2 text-sm font-extrabold text-white disabled:cursor-not-allowed disabled:opacity-50"
+                className="rounded-xl bg-primary px-4 py-2 text-sm font-extrabold text-gold-ink disabled:cursor-not-allowed disabled:opacity-50"
               >
                 {saving ? "Đang thêm..." : "Thêm vào bộ từ của tôi"}
               </button>
             </>
           )}
-          {status && <span className="text-sm font-bold text-amber-800">{status}</span>}
+          {status && <span className="text-sm font-bold text-warning-ink">{status}</span>}
         </div>
 
-        <div className="divide-y divide-slate-100">
+        <div className="divide-y divide-line">
           {entries.map((entry) => (
             <label key={entry.id} className="flex cursor-pointer items-start gap-3 px-4 py-4">
               <input
                 type="checkbox"
                 checked={selected.has(entry.id)}
                 onChange={() => toggleEntry(entry.id)}
-                className="mt-1 h-5 w-5 rounded border-amber-300"
+                className="mt-1 h-5 w-5 rounded border-warning-line"
               />
               <span className="min-w-0 flex-1">
                 <span className="flex flex-wrap items-center gap-2">
                   <strong className="text-base text-ink">{entry.word}</strong>
-                  {entry.partOfSpeech && <em className="text-sm text-orange-700">({entry.partOfSpeech})</em>}
-                  {entry.level && <span className="rounded-md bg-sky-100 px-2 py-0.5 text-xs font-extrabold text-sky-700">{entry.level}</span>}
+                  {entry.partOfSpeech && <em className="text-sm text-warning-ink">({entry.partOfSpeech})</em>}
+                  {entry.level && <span className="rounded-md bg-teal-soft px-2 py-0.5 text-xs font-extrabold text-teal-ink">{entry.level}</span>}
                 </span>
                 <span className="mt-1 block text-sm leading-relaxed text-ink">{entry.meaning}</span>
                 {showDetails && entry.raw !== `${entry.word} ${entry.meaning}` && (
@@ -808,14 +808,15 @@ function AnswerOption({
   const showBilingualText = showOptionText && !isAnswered && mode === "bilingual" && (hasOptionText || Boolean(translation));
   const showMaskedText = showOptionText && !isAnswered && hasOptionText && (mode === "fill" || mode === "flip");
   const stateClass = isCorrectChoice
-    ? "border-green-400 bg-green-50 text-green-700"
+    ? "border-success-line bg-success-soft text-success-ink"
     : isWrongChoice
-      ? "border-red-400 bg-red-50 text-red-700"
-      : "border-slate-300 bg-white text-ink hover:border-primary";
+      ? "border-danger-line bg-danger-soft text-danger-ink"
+      : "border-control-line bg-surface text-ink hover:border-primary";
 
   return (
     <div
       role="radio"
+      data-answer-state={isCorrectChoice ? "correct" : isWrongChoice ? "wrong" : "idle"}
       aria-checked={isSelected}
       tabIndex={0}
       onClick={() => {
@@ -827,7 +828,7 @@ function AnswerOption({
           onAnswer();
         }
       }}
-      className={`flex w-full cursor-pointer items-start gap-4 rounded-xl border px-5 py-3 text-left text-base font-extrabold transition-colors ${stateClass}`}
+      className={`practice-answer flex w-full cursor-pointer items-start gap-4 rounded-xl border px-5 py-3 text-left text-base font-semibold transition-colors ${stateClass}`}
     >
       <input
         type="radio"
@@ -910,7 +911,7 @@ function MaskedText({
         if (!hiddenSet.has(index)) return <span key={index}>{token.value}</span>;
         if (revealedSet.has(index)) {
           return variant === "flip" ? (
-            <span key={index} className="rounded-lg border border-emerald-300 bg-emerald-50 px-3 py-1 text-emerald-700">
+            <span key={index} className="rounded-lg border border-success-line bg-success-soft px-3 py-1 text-success-ink">
               {token.value}
             </span>
           ) : (
@@ -923,18 +924,19 @@ function MaskedText({
           const normalizedValue = normalizeWord(value);
           const normalizedAnswer = normalizeWord(token.value);
           const checkedClass = !normalizedValue
-            ? "border-slate-300 bg-white"
+            ? "border-control-line bg-surface"
             : normalizedValue === normalizedAnswer
-              ? "border-emerald-400 bg-emerald-50"
-              : "border-red-300 bg-red-50";
+              ? "border-success-line bg-success-soft"
+              : "border-danger-line bg-danger-soft";
           return (
             <input
               key={index}
               value={value}
+              data-feedback={!normalizedValue ? "idle" : normalizedValue === normalizedAnswer ? "correct" : "wrong"}
               onClick={(event) => event.stopPropagation()}
               onKeyDown={(event) => event.stopPropagation()}
               onChange={(event) => onFillValue(key, event.target.value)}
-              className={`mx-1 h-8 rounded-lg border px-2 text-sm outline-none ${checkedClass}`}
+              className={`practice-word-input mx-1 h-8 rounded-lg border px-2 text-sm ${checkedClass}`}
               style={{ width: Math.max(48, token.value.length * 12) }}
               autoComplete="off"
               spellCheck={false}
@@ -951,7 +953,7 @@ function MaskedText({
               event.stopPropagation();
               onReveal([index]);
             }}
-            className="mx-1 rounded-lg border border-slate-300 bg-slate-100 px-3 py-1 tracking-[0.25em] text-ink"
+            className="practice-hidden-word mx-1 rounded-lg border border-teal-line bg-teal-soft px-3 py-1 tracking-[0.25em] text-teal-ink"
             aria-label="Lật từ"
           >
             {"•".repeat(Math.max(3, Math.min(token.value.length, 10)))}
@@ -979,7 +981,7 @@ function ToolBox({
 }) {
   return (
     <form
-      className="mt-4 rounded-xl border border-slate-200 bg-white p-4"
+      className="mt-4 rounded-xl border border-line bg-surface p-4"
       onSubmit={async (event) => {
         event.preventDefault();
         await onSubmit(new FormData(event.currentTarget));
@@ -988,14 +990,14 @@ function ToolBox({
       <h3 className="font-extrabold text-ink">{title}</h3>
       <textarea
         name={textareaName}
-        className="mt-3 w-full rounded-lg border border-slate-200 p-3 text-sm"
+        className="mt-3 w-full rounded-lg border border-line p-3 text-sm"
         rows={3}
         placeholder={placeholder}
       />
       {secondaryInput && (
         <input
           name="meaning"
-          className="mt-3 w-full rounded-lg border border-slate-200 p-3 text-sm"
+          className="mt-3 w-full rounded-lg border border-line p-3 text-sm"
           placeholder="Nghĩa"
           autoComplete="off"
         />

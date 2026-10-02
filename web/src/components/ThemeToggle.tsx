@@ -1,12 +1,15 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useSyncExternalStore } from "react";
 
 const STORAGE_KEY = "englishgo-theme";
 const MANUAL_STORAGE_KEY = "englishgo-theme-manual";
+const THEME_CHANGED_EVENT = "englishgo:theme-changed";
 
 function readTheme(): "dark" | "light" {
   if (typeof window === "undefined") return "light";
+  const current = document.documentElement.dataset.theme;
+  if (current === "dark" || current === "light") return current;
   try {
     const saved = localStorage.getItem(STORAGE_KEY);
     const hasManualChoice = localStorage.getItem(MANUAL_STORAGE_KEY) === "1";
@@ -17,15 +20,23 @@ function readTheme(): "dark" | "light" {
   return "light";
 }
 
-export default function ThemeToggle({ className }: { className?: string }) {
-  const [theme, setTheme] = useState<"dark" | "light">(() => readTheme());
+function subscribe(onChange: () => void) {
+  window.addEventListener(THEME_CHANGED_EVENT, onChange);
+  const observer = new MutationObserver(onChange);
+  observer.observe(document.documentElement, { attributes: true, attributeFilter: ["data-theme"] });
+  return () => {
+    window.removeEventListener(THEME_CHANGED_EVENT, onChange);
+    observer.disconnect();
+  };
+}
 
-  useEffect(() => {
-    document.documentElement.dataset.theme = theme;
-  }, [theme]);
+const serverTheme = () => "light" as const;
+
+export default function ThemeToggle({ className }: { className?: string }) {
+  const theme = useSyncExternalStore(subscribe, readTheme, serverTheme);
 
   const toggle = useCallback(() => {
-    const next = theme === "dark" ? "light" : "dark";
+    const next = readTheme() === "dark" ? "light" : "dark";
     document.documentElement.dataset.theme = next;
     try {
       localStorage.setItem(STORAGE_KEY, next);
@@ -33,8 +44,8 @@ export default function ThemeToggle({ className }: { className?: string }) {
     } catch {
       /* ignore */
     }
-    setTheme(next);
-  }, [theme]);
+    window.dispatchEvent(new Event(THEME_CHANGED_EVENT));
+  }, []);
 
   const label =
     theme === "dark" ? "Chuyển sang giao diện sáng" : "Chuyển sang giao diện tối";
