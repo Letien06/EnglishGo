@@ -56,3 +56,14 @@ it("shows a Part 5 question only once when its transcript duplicates the prompt"
   expect(screen.getAllByText(prompt)).toHaveLength(1);
   expect(screen.getByRole("button", { name: "Ghi chú" })).toBeInTheDocument();
 });
+
+it("renders exam passage headings, entities and literal email brackets as text, not HTML", () => {
+  const transcript = "<h2>STAFF TRAINING SESSION</h2><p>Topic: Caf&eacute; &mdash; &pound;30</p><p>&lt;contact@example.test&gt;</p><p>&lt;img src=x onerror=alert(1)&gt;</p>";
+  const readingSession = { ...session, part: 7, testId: "test-one", items: [{ ...session.items[0], transcript }] };
+  const { container } = render(<ReadPracticeClient session={readingSession} partId="part7" partNum={7} level={1} mode="normal" userLoggedIn={false} userUid={null} initialIndex={0} />);
+  const passage = container.querySelector("pre")!;
+  expect(passage.textContent).toContain("STAFF TRAINING SESSION\nTopic: Caf\u00e9 \u2014 \u00a330");
+  expect(passage.textContent).toContain("<contact@example.test>");
+  expect(passage.textContent).toContain("<img src=x onerror=alert(1)>");
+  expect(passage.querySelector("img")).toBeNull();
+});

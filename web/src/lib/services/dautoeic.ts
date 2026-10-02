@@ -184,9 +184,9 @@ export function practiceSessionFromPart(content: Awaited<ReturnType<typeof getPa
       audioUrl: passage?.audioUrl ?? question.audioUrl,
       imageUrl: passage?.imageUrl ?? question.imageUrl,
       transcript: passage
-        ? combinedText(passage.transcript, passage.passageText, passage.passageText2, passage.passageText3)
-        : plainText(firstText(question.passageText, question.questionText)),
-      translation: plainText(firstQuestionText(group, (entry) => entry.translationVi)),
+        ? [...new Set([passage.transcript, passage.passageText, passage.passageText2, passage.passageText3].filter((value) => value?.trim()))].join("\n\n") || null
+        : firstText(question.passageText, question.questionText),
+      translation: firstQuestionText(group, (entry) => entry.translationVi),
       vocabulary: firstQuestionText(group, (entry) => entry.vocabulary),
       questions: group,
     };

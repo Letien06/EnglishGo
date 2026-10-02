@@ -57,6 +57,12 @@ describe("test-part practice content", () => {
     expect(() => practiceSessionFromPart(source)).toThrow("missing a referenced passage");
   });
 
+  it("preserves HTML boundaries and encoded literals for a single client-side text conversion", () => {
+    const source = content(7);
+    source.passages[0].passageText = "<h2>Title &mdash; notice</h2><p>&lt;contact@example.test&gt;</p>";
+    expect(practiceSessionFromPart(source).items[0].transcript).toContain(source.passages[0].passageText);
+  });
+
   it("keeps a standalone question without a passage ID", () => {
     const source = content();
     source.questions = [question("standalone", 1, 3, "test-one", null)];
