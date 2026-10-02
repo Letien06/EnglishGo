@@ -1,10 +1,25 @@
 import { createHash } from "node:crypto";
+import { readFile } from "node:fs/promises";
+import path from "node:path";
 import { unstable_cache } from "next/cache";
 import { serverEnv } from "../env";
 import { ApiError } from "../api/response";
 import { createDriveClient, driveFileId } from "../storage/google-drive";
 import { driveManifestSchema } from "../storage/drive-manifest";
 import { DAUTOEIC_SOURCE_VERSION } from "./dautoeic-source";
+import { createTextMemoryCache } from "../storage/text-memory-cache";
+
+const manifestMemory = createTextMemoryCache(2_000_000, 2);
+const materialMemory = createTextMemoryCache(32_000_000, 128);
+
+async function bundledText(manifestId: string, name: string): Promise<string | null> {
+  try {
+    return await readFile(path.join(process.cwd(), ".content", "dauenglish", manifestId, name), "utf8");
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code === "ENOENT") return null;
+    throw error;
+  }
+}
 
 let configuredClient: { fingerprint: string; client: ReturnType<typeof createDriveClient> } | undefined;
 
@@ -36,15 +51,25 @@ const cachedChunk = unstable_cache(async (fileId: string, expectedHash: string, 
 
 export async function readDriveMaterial<T>(key: string): Promise<T> {
   try {
-    const manifest = await cachedManifest(driveFileId(serverEnv.googleDriveManifestId));
-    const entry = manifest.entries[key];
-    if (!entry) throw new ApiError("Không tìm thấy tài liệu trong bản Google Drive hiện tại.", 404);
-    const chunks: string[] = [];
-    for (let offset = 0; offset < entry.chunks.length; offset += 4) {
-      chunks.push(...await Promise.all(entry.chunks.slice(offset, offset + 4).map((chunk) => cachedChunk(chunk.fileId, chunk.sha256, chunk.bytes))));
-    }
-    const text = chunks.join("");
-    if (createHash("sha256").update(text).digest("hex") !== entry.sha256) throw new Error("Drive material checksum mismatch.");
+    const manifestId = driveFileId(serverEnv.googleDriveManifestId);
+    const text = await materialMemory.get(`${manifestId}:${key}`, async () => {
+      const manifestText = await manifestMemory.get(manifestId, async () =>
+        await bundledText(manifestId, "manifest.json") ?? JSON.stringify(await cachedManifest(manifestId)),
+      );
+      const manifest = driveManifestSchema.parse(JSON.parse(manifestText));
+      const entry = manifest.entries[key];
+      if (!entry) throw new ApiError("Không tìm thấy tài liệu trong bản Google Drive hiện tại.", 404);
+      let material = await bundledText(manifestId, `${entry.sha256}.json`);
+      if (material === null) {
+        const chunks: string[] = [];
+        for (let offset = 0; offset < entry.chunks.length; offset += 4) {
+          chunks.push(...await Promise.all(entry.chunks.slice(offset, offset + 4).map((chunk) => cachedChunk(chunk.fileId, chunk.sha256, chunk.bytes))));
+        }
+        material = chunks.join("");
+      }
+      if (Buffer.byteLength(material) !== entry.bytes || createHash("sha256").update(material).digest("hex") !== entry.sha256) throw new Error("Drive material checksum mismatch.");
+      return material;
+    });
     return JSON.parse(text) as T;
   } catch (error) {
     if (error instanceof ApiError) throw error;

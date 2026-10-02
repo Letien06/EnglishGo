@@ -14,6 +14,7 @@ export const applyProgress = service.applyProgress;
 export const applyProgressBatch = service.applyProgressBatch;
 export const summarize = service.summarize;
 export const recordProgress = service.recordProgress;
+export const loadAnswers = service.loadAnswers;
 export const saveNote = service.saveNote;
 export const toggleFavorite = service.toggleFavorite;
 export const addVocab = service.addVocab;

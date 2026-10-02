@@ -15,7 +15,7 @@ export default function ResetLevelButton({ part, level, endpoint, onReset, group
   const [error, setError] = useState("");
 
   const handleClick = async () => {
-    if (!confirm(grouped ? "Reset tiến độ nhóm luyện tập này?" : "Reset tiến độ level này?")) return;
+    if (!confirm(grouped ? "Xóa tiến độ nhóm này để học lại từ đầu?" : "Xóa tiến độ cấp này để học lại từ đầu?")) return;
     setBusy(true);
     setError("");
     try {
@@ -42,10 +42,10 @@ export default function ResetLevelButton({ part, level, endpoint, onReset, group
         type="button"
         onClick={handleClick}
         disabled={busy}
-        className="rounded-lg border border-amber-200 bg-white px-4 py-2 text-xs font-extrabold text-muted transition-colors hover:border-red-300 hover:text-red-500 disabled:opacity-50"
-        title="Reset tiến độ"
+        className="study-reset-button"
+        title="Xóa tiến độ để học lại từ đầu"
       >
-        {busy ? "Đang reset..." : "Reset"}
+        {busy ? "Đang xóa..." : "Làm lại"}
       </button>
       {error ? <small role="alert" className="max-w-40 text-right text-[10px] font-semibold text-red-600">{error}</small> : null}
     </span>

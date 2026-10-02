@@ -11,7 +11,7 @@
  * opens a slide-in panel containing all of those controls in a touch-friendly
  * vertical layout, so the header stays clean and everything is reachable.
  */
-import Link from "next/link";
+import Link from "@/components/IntentLink";
 import { useEffect, useState } from "react";
 import NavIcon, { type NavIconName } from "@/components/NavIcon";
 
@@ -72,7 +72,7 @@ export default function PracticeMobileMenu({
       <button
         type="button"
         onClick={() => setOpen(true)}
-        className="inline-flex h-10 w-10 items-center justify-center rounded-xl border border-white/30 bg-white/10 text-white"
+        className="practice-mobile-trigger"
         aria-label="Mở công cụ luyện tập"
         aria-expanded={open}
       >

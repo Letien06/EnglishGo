@@ -1,4 +1,5 @@
 @import "tailwindcss";
+@import "./study.css";
 
 /* ── QUÝ NGỮ BRAND TOKENS — Dark (default) ── */
 :root {
@@ -1282,8 +1283,7 @@ h1, h2, h3, h4, h5 {
 
 .continue-list > :is(a, article) { transition: background-color var(--motion-fast) ease; }
 
-.exam-workspace,
-.skill-workspace {
+.exam-workspace {
   background:
     radial-gradient(circle at 6% -4%, color-mix(in srgb, var(--azure) 12%, transparent), transparent 26rem),
     var(--bg);
@@ -1297,12 +1297,6 @@ h1, h2, h3, h4, h5 {
 }
 
 .exam-workspace-header { background: linear-gradient(105deg, #173957, #1f5d7f 58%, color-mix(in srgb, var(--azure) 72%, #193e60)); }
-
-.skill-workspace--listen .skill-workspace-header,
-.skill-workspace--listen .skill-workspace-footer { background: linear-gradient(105deg, #12516e, #147f9c 54%, #23508f); }
-
-.skill-workspace--read .skill-workspace-header,
-.skill-workspace--read .skill-workspace-footer { background: linear-gradient(105deg, #213d6e, #2875a2 55%, #185b7c); }
 
 .exam-workspace :is(section, aside).bg-surface,
 .skill-workspace :is(section, article).bg-white {

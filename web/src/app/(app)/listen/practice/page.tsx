@@ -6,10 +6,9 @@
  *
  * Port of `ListenController.practice()` + `listen/practice.html`.
  */
-import { getCurrentUserForRead } from "@/lib/auth/session";
+import { getReadIdentity } from "@/lib/auth/session";
 import * as dautoeic from "@/lib/services/dautoeic";
 import { DAUTOEIC_LEVEL_COUNT } from "@/lib/services/dautoeic-source";
-import * as listening from "@/lib/services/listening";
 import ListenPracticeClient from "./ListenPracticeClient";
 
 function partNumber(partId: string): number {
@@ -25,7 +24,7 @@ function partNumber(partId: string): number {
 export default async function ListenPracticePage({
   searchParams,
 }: {
-  searchParams: Promise<{ part?: string; level?: string; mode?: string; assist?: string }>;
+  searchParams: Promise<{ part?: string; level?: string; mode?: string; q?: string; assist?: string }>;
 }) {
   const params = await searchParams;
   const partId = params.part && ["part1", "part2", "part3", "part4"].includes(params.part)
@@ -57,11 +56,11 @@ export default async function ListenPracticePage({
     }
   })();
 
-  const user = await getCurrentUserForRead();
 
   let session;
+  let user;
   try {
-    session = await dautoeic.getDifficultySession(pNum, level, null);
+    [session, user] = await Promise.all([dautoeic.getDifficultySession(pNum, level, null), getReadIdentity()]);
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
     console.error("listen-practice-session-failed", {
@@ -89,20 +88,10 @@ export default async function ListenPracticePage({
     );
   }
 
-  // Restore previously saved answers so the practice UI resumes where the
-  // learner left off (fixes progress showing on dashboard but resetting here).
-  let savedAnswers: Record<string, string> = {};
-  if (user) {
-    try {
-      savedAnswers = await listening.loadAnswers(user.uid, pNum, level);
-    } catch {
-      // Best-effort: fall back to a fresh session if progress cannot be read.
-      savedAnswers = {};
-    }
-  }
-
   return (
     <ListenPracticeClient
+      key={`listen:${partId}:${level}:${user?.uid ?? "guest"}`}
+      initialIndex={Math.max(0, Math.min(session.items.length - 1, Math.trunc(Number(params.q)) || 0))}
       session={session}
       partId={partId}
       partNum={pNum}
@@ -111,7 +100,6 @@ export default async function ListenPracticePage({
       assist={assist}
       userLoggedIn={!!user}
       userUid={user?.uid ?? null}
-      savedAnswers={savedAnswers}
     />
   );
 }

@@ -1,8 +1,8 @@
 "use client";
 
-import Link from "next/link";
+import Link from "./IntentLink";
 import dynamic from "next/dynamic";
-import { usePathname, useRouter } from "next/navigation";
+import { usePathname } from "next/navigation";
 import { useEffect, useState, type ReactNode } from "react";
 import ThemeToggle from "./ThemeToggle";
 import { AuthenticatedSessionProvider } from "./AuthenticatedSessionContext";
@@ -13,9 +13,6 @@ import PwaInstallPrompt from "./PwaInstallPrompt";
 import { clearActiveLearnerCache, setActiveLearnerId } from "@/lib/client-learning-progress-cache";
 
 const StudyStreakCelebration = dynamic(() => import("./StudyStreakCelebration"), { ssr: false });
-
-const PREFETCH_ROUTES = ["/hub", "/listen", "/read", "/writing", "/vocab", "/practice", "/progress"];
-const prefetchedRoutes = new Set<string>();
 
 const navItems = [
   { href: "/progress", icon: "progress", label: "Tiến bộ", color: "text-primary" },
@@ -106,7 +103,6 @@ async function loadAppSession(): Promise<AppSession | null> {
 
 export default function AppShell({ children }: { children: ReactNode }) {
   const pathname = usePathname();
-  const router = useRouter();
   const [bootstrap, setBootstrap] = useState<AppBootstrap | null>(() => cachedBootstrap);
   const [session, setSession] = useState<AppSession | null>(() => cachedSession ?? null);
   const authenticated = bootstrap?.authenticated === true;
@@ -153,29 +149,6 @@ export default function AppShell({ children }: { children: ReactNode }) {
       window.clearTimeout(timer);
     };
   }, [isPracticeWorkspace]);
-
-  useEffect(() => {
-    if (isPracticeWorkspace || !sessionAuthenticated) return;
-
-    let cancelled = false;
-    const timer = window.setTimeout(() => {
-      const connection = (navigator as Navigator & {
-        connection?: { saveData?: boolean; effectiveType?: string };
-      }).connection;
-      if (connection?.saveData || connection?.effectiveType === "slow-2g" || connection?.effectiveType === "2g") return;
-
-      for (const href of PREFETCH_ROUTES) {
-        if (cancelled || href === pathname || prefetchedRoutes.has(href)) continue;
-        prefetchedRoutes.add(href);
-        router.prefetch(href);
-      }
-    }, 2_000);
-
-    return () => {
-      cancelled = true;
-      window.clearTimeout(timer);
-    };
-  }, [isPracticeWorkspace, pathname, router, sessionAuthenticated]);
 
   if (isPracticeWorkspace) {
     return <>{children}</>;

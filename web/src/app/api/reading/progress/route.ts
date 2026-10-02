@@ -10,6 +10,9 @@ import { parseBody } from "@/lib/api/validate";
 import { progressRequestSchema } from "@/lib/api/learning-tool-validate";
 import { getCurrentUser } from "@/lib/auth/session";
 import * as reading from "@/lib/services/reading";
+import { practiceHistoryHandler } from "@/lib/api/practice-history";
+
+export const GET = practiceHistoryHandler(5, 7, reading.loadAnswers);
 
 export const POST = withErrorHandling(async (req: NextRequest) => {
   const user = await getCurrentUser();

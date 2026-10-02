@@ -4,6 +4,7 @@
   "private": true,
   "scripts": {
     "dev": "next dev",
+    "prebuild": "node scripts/prepare-dauenglish-cache.mjs",
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
@@ -40,6 +41,7 @@
     "@types/react-dom": "^19",
     "eslint": "^9",
     "eslint-config-next": "16.2.10",
+    "jiti": "^2.7.0",
     "jsdom": "^29.1.1",
     "tailwindcss": "^4",
     "typescript": "^5",

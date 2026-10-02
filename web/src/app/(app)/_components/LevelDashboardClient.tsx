@@ -5,8 +5,8 @@
  * layer overlays the learner's progress after paint, using a per-user cache
  * and refreshing only the part that reports a learning event.
  */
-import Link from "next/link";
-import { useCallback, useEffect, useRef, useState, type CSSProperties } from "react";
+import Link from "@/components/IntentLink";
+import { useCallback, useEffect, useRef, useState } from "react";
 import NavIcon from "@/components/NavIcon";
 import ResetLevelButton from "@/components/ResetLevelButton";
 import { useAuthenticatedSession } from "@/components/AuthenticatedSessionContext";
@@ -22,14 +22,6 @@ import {
 } from "@/lib/client-learning-progress-cache";
 import { markVisited, routeKey } from "@/lib/nav/session-nav";
 import type { DauToeicDifficultyLevel } from "@/types/dautoeic";
-
-const levelStyles = [
-  "border-l-4 border-l-emerald-500",
-  "border-l-4 border-l-blue-600",
-  "border-l-4 border-l-cyan-500",
-  "border-l-4 border-l-amber-500",
-  "border-l-4 border-l-rose-500",
-] as const;
 
 /** Hot copy so a client-side return navigation does not parse localStorage. */
 const sessionCache = new Map<string, DauToeicDifficultyLevel[]>();
@@ -176,12 +168,11 @@ export default function LevelDashboardClient({
   }
 
   return (
-    <div className="grid gap-5 xl:grid-cols-2 2xl:grid-cols-3">
-      {levels.map((level, index) => (
+    <div className="study-level-grid">
+      {levels.map((level) => (
         <LevelCard
           key={level.level}
           level={level}
-          skill={skill}
           partNum={partNum}
           endpoint={resetEndpoint}
           onReset={async () => {
@@ -189,7 +180,6 @@ export default function LevelDashboardClient({
             await fetchLevels();
           }}
           href={`${practiceHrefBase}?part=${partId}&level=${level.level}&mode=normal&assist=30&q=${nextPracticeIndex(level)}`}
-          className={levelStyles[index] ?? levelStyles[0]}
         />
       ))}
     </div>
@@ -198,76 +188,43 @@ export default function LevelDashboardClient({
 
 function LevelCard({
   level,
-  skill,
   partNum,
   endpoint,
   onReset,
   href,
-  className,
 }: {
   level: DauToeicDifficultyLevel;
-  skill: "listening" | "reading";
   partNum: number;
   endpoint: string;
   onReset: () => Promise<void>;
   href: string;
-  className: string;
 }) {
   const total = level.total ?? 0;
   const hasPracticeItems = total > 0;
-  const progress = total > 0 ? Math.round((level.done / total) * 100) : 0;
+  const progress = total > 0 ? Math.min(100, Math.round((level.done / total) * 100)) : 0;
   const grouped = level.grouping === "balanced";
 
   return (
-    <article className={`premium-card premium-card--interactive p-5 ${className}`}>
-      <header className="mb-4 flex items-start gap-4">
-        <span className="inline-flex h-10 w-10 items-center justify-center rounded-lg bg-surface-soft text-xs font-extrabold text-primary">
-          {grouped ? `N${level.level}` : `Lv${level.level}`}
-        </span>
-        <div>
-          <h3 className="text-base font-extrabold text-ink">{level.title}</h3>
-          <p className="text-xs text-muted">{grouped ? "Chia đều số bài · Không xếp theo độ khó" : hasPracticeItems ? "Bài hiện có trong nguồn kết nối" : "Nguồn kết nối chưa cung cấp bài ở level này"}</p>
-        </div>
-        <span className="ml-auto text-xs text-muted">{level.done}/{total}</span>
+    <article className="study-level-card">
+      <header>
+        <span className="study-level-number">{String(level.level).padStart(2, "0")}</span>
+        <div><h3>{grouped ? `Nhóm ${level.level}` : level.title}</h3><p>{total} {[1, 2, 5].includes(partNum) ? "câu hỏi" : "cụm câu hỏi"}</p></div>
+        <span className="study-level-state">{progress === 100 ? "Hoàn thành" : level.done > 0 ? "Đang học" : "Chưa học"}</span>
       </header>
-
-      <div>
-        <div className="mb-2 flex justify-between text-xs font-bold text-muted">
-          <span>Tiến độ</span>
-          <span>{progress}%</span>
-        </div>
-        <div className="progress-bar h-1 bg-surface-soft">
-          <span style={{ "--progress": progress / 100 } as CSSProperties} />
-        </div>
+      <div className="study-level-progress">
+        <div><span>{level.done}/{total} đã học</span><strong>{progress}%</strong></div>
+        <progress max={100} value={progress} aria-label={`Tiến độ ${level.title}`} />
       </div>
-
-      <div className="mt-4 grid grid-cols-3 gap-2 text-center text-xs font-extrabold">
-        <span className="rounded-md bg-slate-100 py-2">✓ {level.correct}</span>
-        <span className="rounded-md bg-slate-100 py-2">× {level.wrong}</span>
-        <span className="rounded-md bg-slate-100 py-2">○ {level.remaining}</span>
+      <div className="study-level-stats">
+        <span><strong>{level.correct}</strong> đúng</span>
+        <span><strong>{level.wrong}</strong> sai</span>
+        <span><strong>{level.remaining}</strong> còn lại</span>
       </div>
-
-      <footer className="mt-5 flex items-center justify-between">
-        <span className="text-xs font-extrabold text-muted">{total} {grouped ? (partNum === 2 ? "câu" : "cụm câu hỏi") : "item"}</span>
-        <div className="flex items-center gap-3">
-          <ResetLevelButton part={partNum} level={level.level} endpoint={endpoint} onReset={onReset} grouped={grouped} />
-          {hasPracticeItems ? <Link
-            href={href}
-            data-overdelay={skill === "listening" ? "Đang mở bài luyện nghe..." : "Đang mở bài luyện đọc..."}
-            data-overdelay-timeout="9000"
-            data-overdelay-wait-for="practice-ready"
-            className="premium-primary inline-flex gap-1.5 px-5 py-2 text-sm"
-          >
-            <NavIcon name="play" className="h-4 w-4" />
-            Luyện ngay
-          </Link> : <span
-            aria-disabled="true"
-            title={grouped ? "Chưa có bài trong nhóm luyện tập này." : "API nguồn hiện không trả nội dung cho level này; đăng nhập ở trang nguồn không tự cấp quyền cho website này."}
-            className="inline-flex cursor-not-allowed items-center gap-1.5 rounded-xl bg-slate-200 px-5 py-2 text-sm font-extrabold text-slate-500"
-          >
-            Chưa có dữ liệu
-          </span>}
-        </div>
+      <footer>
+        {level.done > 0 && <ResetLevelButton part={partNum} level={level.level} endpoint={endpoint} onReset={onReset} grouped={grouped} />}
+        {hasPracticeItems ? <Link href={href} className="study-start-link" aria-label={`${level.done > 0 ? "Học tiếp" : "Bắt đầu"} ${level.title}`}>
+          {progress === 100 ? "Ôn lại" : level.done > 0 ? "Học tiếp" : "Bắt đầu"}<NavIcon name="arrow-right" />
+        </Link> : <span className="study-unavailable">Chưa có bài</span>}
       </footer>
     </article>
   );
@@ -301,8 +258,8 @@ function cacheLevels(skill: LearningSkill, part: number, levels: DauToeicDifficu
 
 function SkeletonGrid() {
   return (
-    <div className="grid gap-5 xl:grid-cols-2 2xl:grid-cols-3">
-      {Array.from({ length: 5 }).map((_, i) => (
+    <div className="study-level-grid">
+      {Array.from({ length: 4 }).map((_, i) => (
         <div
           key={i}
           className="premium-card h-52 animate-pulse border-l-4 border-l-slate-200 p-5"

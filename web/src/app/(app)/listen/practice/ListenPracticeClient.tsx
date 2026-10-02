@@ -1,9 +1,10 @@
 "use client";
 
 import Image from "next/image";
-import Link from "next/link";
+import Link from "@/components/IntentLink";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import PracticeMobileMenu from "../../_components/PracticeMobileMenu";
+import PracticeHeader from "../../_components/PracticeHeader";
+import { usePracticeResume } from "@/lib/use-practice-resume";
 import { invalidateLearningLevels, setActiveLearnerId } from "@/lib/client-learning-progress-cache";
 import { markVisited, routeKey } from "@/lib/nav/session-nav";
 import type {
@@ -20,8 +21,8 @@ interface Props {
   mode: string;
   assist: number;
   userLoggedIn: boolean;
+  initialIndex: number;
   userUid: string | null;
-  savedAnswers?: Record<string, string>;
 }
 
 type PracticeMode = "normal" | "bilingual" | "fill" | "flip";
@@ -43,7 +44,6 @@ const modes: Array<[PracticeMode, string, string]> = [
   ["flip", "⇄", "Lật từ"],
 ];
 
-const assistOptions = [30, 50, 100];
 
 export default function ListenPracticeClient({
   session,
@@ -53,22 +53,18 @@ export default function ListenPracticeClient({
   mode,
   assist,
   userUid,
-  savedAnswers,
+  initialIndex,
 }: Props) {
   const initialMode = normalizeMode(mode);
   const [activeMode, setActiveMode] = useState<PracticeMode>(initialMode);
   const [activeAssist, setActiveAssist] = useState(assist);
   const items = session.items;
-  const initialAnswers = useMemo(
-    () => normalizeSavedAnswers(savedAnswers),
-    [savedAnswers],
-  );
-  const [currentIndex, setCurrentIndex] = useState(() =>
-    initialItemIndex(items, initialAnswers),
-  );
-  const [answeredMap, setAnsweredMap] = useState<Record<string, string>>(initialAnswers);
+  const [currentIndex, setCurrentIndex] = useState(initialIndex);
+  const [answeredMap, setAnsweredMap] = useState<Record<string, string>>({});
   const [revealedMap, setRevealedMap] = useState<Record<string, number[]>>({});
   const [fillValues, setFillValues] = useState<Record<string, string>>({});
+  const { markInteraction, resumeStatus } = usePracticeResume({ skill: "listening", uid: userUid, part: partNum, level, items, setAnswers: setAnsweredMap, setIndex: setCurrentIndex });
+  const [saveError, setSaveError] = useState("");
   const [showNote, setShowNote] = useState(false);
   const [auto, setAuto] = useState(false);
   const [elapsed, setElapsed] = useState(0);
@@ -124,12 +120,6 @@ export default function ListenPracticeClient({
     updatePracticeUrl({ assist: nextAssist });
   }, [activeAssist, updatePracticeUrl]);
 
-  useEffect(() => {
-    const timer = window.setTimeout(() => {
-      setCurrentIndex(initialItemIndex(items, initialAnswers));
-    }, 0);
-    return () => window.clearTimeout(timer);
-  }, [items, initialAnswers]);
 
   useEffect(() => {
     startedAtRef.current = Date.now();
@@ -210,6 +200,14 @@ export default function ListenPracticeClient({
     const correct = selectedAnswer === correctAnswer;
     setAnsweredMap((prev) => ({ ...prev, [question.id]: selectedAnswer }));
 
+    if (correct && auto && currentIndex < items.length - 1 && item.questions.every((entry) => entry.id === question.id || answeredMap[entry.id] === normalizeAnswer(entry.correctAnswer))) {
+      if (autoAdvanceRef.current !== null) window.clearTimeout(autoAdvanceRef.current);
+      autoAdvanceRef.current = window.setTimeout(() => {
+        autoAdvanceRef.current = null;
+        goTo(currentIndex + 1, { play: true });
+      }, 450);
+    }
+
     try {
       const response = await fetch("/api/listening/progress", {
         method: "POST",
@@ -234,19 +232,15 @@ export default function ListenPracticeClient({
       } | null;
       if (response.ok && payload?.success && payload.data?.saved && payload.data.authenticated) {
         invalidateLearningLevels("listening", [partNum], userUid);
+      } else if (userUid) {
+        setSaveError("Chưa lưu được một số câu. Hãy kiểm tra kết nối trước khi rời bài.");
       }
     } catch {
-      // Saving progress is best-effort, matching the old Spring client.
+      if (userUid) setSaveError("Chưa lưu được một số câu. Hãy kiểm tra kết nối trước khi rời bài.");
     }
 
-    if (correct && auto && currentIndex < items.length - 1) {
-      if (autoAdvanceRef.current !== null) window.clearTimeout(autoAdvanceRef.current);
-      autoAdvanceRef.current = window.setTimeout(() => {
-        autoAdvanceRef.current = null;
-        goTo(currentIndex + 1, { play: true });
-      }, 450);
-    }
-  }, [activeAssist, activeMode, answeredMap, auto, currentIndex, elapsed, goTo, item.id, items.length, level, partNum, userUid]);
+
+  }, [activeAssist, activeMode, answeredMap, auto, currentIndex, elapsed, goTo, item.id, item.questions, items.length, level, partNum, userUid]);
 
   useEffect(() => () => {
     if (autoAdvanceRef.current !== null) window.clearTimeout(autoAdvanceRef.current);
@@ -255,80 +249,11 @@ export default function ListenPracticeClient({
   const currentQuestion = item.questions[0];
 
   return (
-    <main className="skill-workspace skill-workspace--listen design-system min-h-dvh bg-white">
-      <header className="skill-workspace-header sticky top-0 z-40 flex h-16 items-center gap-2 bg-gradient-to-r from-cyan-500 to-blue-800 px-3 text-white shadow-md sm:gap-4 sm:px-7">
-        <Link
-          href={`/listen?part=${partId}`}
-          className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-white/30 bg-white/10 text-xl font-bold"
-          aria-label="Thoát"
-        >
-          ←
-        </Link>
-        <span className="hidden h-11 w-11 shrink-0 items-center justify-center rounded-full bg-primary text-xl font-extrabold text-gold-ink sm:inline-flex">
-          文
-        </span>
-        <h1 className="min-w-0 flex-1 truncate text-base font-extrabold sm:text-xl">
-          Part {partNum} · {session.grouping === "balanced" ? `Nhóm luyện tập ${level}` : `Cấp ${level}`} · Nghe
-        </h1>
+    <main className="skill-workspace skill-workspace--listen design-system min-h-dvh bg-white" onPointerDownCapture={markInteraction} onKeyDownCapture={markInteraction}>
+      <PracticeHeader skill="listening" partId={partId} part={partNum} level={level} grouped={session.grouping === "balanced"} modes={modes} activeMode={activeMode} onModeChange={switchMode} auto={auto} onToggleAuto={() => setAuto((value) => !value)} elapsed={formatElapsed(elapsed)} assist={activeAssist} onAssistChange={switchAssist} />
+      {(saveError || resumeStatus) && <div className="practice-save-status" role="status">{saveError || resumeStatus}</div>}
 
-        <nav className="hidden flex-1 items-center justify-center rounded-xl border border-white/25 bg-white/10 p-1 lg:flex">
-          {modes.map(([key, icon, label]) => (
-            <button
-              key={key}
-              type="button"
-              onClick={() => switchMode(key)}
-              className={`inline-flex min-w-36 items-center justify-center gap-2 rounded-lg px-4 py-2 text-sm font-extrabold ${
-                activeMode === key ? "bg-white/20 ring-2 ring-white/35" : "hover:bg-white/10"
-              }`}
-            >
-              <span>{icon}</span>
-              {label}
-            </button>
-          ))}
-        </nav>
-
-        <button
-          type="button"
-          onClick={() => setAuto((value) => !value)}
-          className={`hidden rounded-xl border border-white/30 px-4 py-2 text-sm font-extrabold lg:block ${
-            auto ? "bg-white text-blue-700" : "bg-white/10 text-white"
-          }`}
-          title="Tự chuyển bài khi trả lời đúng"
-        >
-          Auto
-        </button>
-        <span className="hidden min-w-14 text-center text-sm font-extrabold tabular-nums lg:inline">{formatElapsed(elapsed)}</span>
-        <select
-          value={activeAssist}
-          className="hidden rounded-xl border border-white/30 bg-white/10 px-4 py-2 text-sm font-extrabold text-white lg:block"
-          onChange={(event) => {
-            switchAssist(Number(event.target.value));
-          }}
-          aria-label="Tỉ lệ hỗ trợ"
-        >
-          {assistOptions.map((value) => (
-            <option key={value} className="text-ink" value={value}>
-              {value}%
-            </option>
-          ))}
-        </select>
-
-        <PracticeMobileMenu
-          modes={modes}
-          activeMode={activeMode}
-          auto={auto}
-          onToggleAuto={() => setAuto((value) => !value)}
-          onModeChange={switchMode}
-          onAssistChange={switchAssist}
-          assist={activeAssist}
-          assistOptions={assistOptions}
-          elapsed={formatElapsed(elapsed)}
-          modeHref={(m) => `/listen/practice?part=${partId}&level=${level}&mode=${m}&assist=${activeAssist}&q=${currentIndex}`}
-          assistHref={(v) => `/listen/practice?part=${partId}&level=${level}&mode=${activeMode}&assist=${v}&q=${currentIndex}`}
-        />
-      </header>
-
-      <div className="grid min-h-[calc(100dvh-8rem)] lg:grid-cols-[1fr_1fr]">
+      <div className="practice-content grid min-h-[calc(100dvh-8rem)] lg:grid-cols-[1fr_1fr]">
         <section className="border-b border-slate-200 px-4 py-5 sm:px-6 lg:border-b-0 lg:border-r lg:px-10 lg:py-8">
           <p className="mb-5 text-lg italic text-ink sm:text-xl lg:mb-8">
             {partNum === 1
@@ -487,9 +412,9 @@ export default function ListenPracticeClient({
           </button>
         </div>
         <div className="flex items-center gap-2 sm:gap-3">
-          <button onClick={() => goTo(currentIndex - 1)} disabled={currentIndex === 0} className="rounded-xl bg-blue-600 px-4 py-3 font-extrabold disabled:opacity-40 sm:px-5">‹</button>
-          <span className="rounded-xl bg-green-500 px-3 py-3 text-sm font-extrabold tabular-nums sm:px-5 sm:text-base">{currentIndex + 1}/{items.length}</span>
-          <button onClick={() => goTo(currentIndex + 1)} disabled={currentIndex >= items.length - 1} className="rounded-xl bg-blue-600 px-4 py-3 font-extrabold disabled:opacity-40 sm:px-5">›</button>
+          <button aria-label="Bài trước" onClick={() => goTo(currentIndex - 1)} disabled={currentIndex === 0} className="rounded-xl px-4 py-3 font-extrabold disabled:opacity-40 sm:px-5">‹</button>
+          <span className="px-3 py-3 text-sm font-bold tabular-nums sm:px-5">{currentIndex + 1}/{items.length}</span>
+          <button aria-label="Bài tiếp" onClick={() => goTo(currentIndex + 1)} disabled={currentIndex >= items.length - 1} className="rounded-xl px-4 py-3 font-extrabold disabled:opacity-40 sm:px-5">›</button>
         </div>
       </footer>
     </main>
@@ -1201,59 +1126,8 @@ function decodeHtmlEntities(value: string): string {
     .replace(/&#x([0-9a-f]+);/gi, (_, code: string) => String.fromCharCode(parseInt(code, 16)));
 }
 
-function normalizeSavedAnswers(
-  saved: Record<string, string> | undefined,
-): Record<string, string> {
-  if (!saved) return {};
-  const normalized: Record<string, string> = {};
-  for (const [questionId, answer] of Object.entries(saved)) {
-    if (questionId && answer) {
-      normalized[questionId] = normalizeAnswer(answer);
-    }
-  }
-  return normalized;
-}
 
-function firstUnansweredIndex(
-  items: DauToeicPracticeItem[],
-  answers: Record<string, string>,
-): number {
-  for (let index = 0; index < items.length; index += 1) {
-    const questions = items[index]?.questions ?? [];
-    const allAnswered =
-      questions.length > 0 && questions.every((question) => answers[question.id]);
-    if (!allAnswered) return index;
-  }
-  // Every question is answered: keep the learner on the last item.
-  return Math.max(0, items.length - 1);
-}
 
-function initialItemIndex(
-  items: DauToeicPracticeItem[],
-  answers: Record<string, string>,
-) {
-  const total = items.length;
-  if (typeof window === "undefined") return 0;
-
-  // If the learner has already answered something, always resume at the first
-  // unanswered question (e.g. 4/90 done → open item 5). A stale `q` param left
-  // in the URL from the auto-sync effect must NOT override this resume logic.
-  const hasSavedAnswers = Object.keys(answers).length > 0;
-  if (hasSavedAnswers) {
-    return firstUnansweredIndex(items, answers);
-  }
-
-  // No saved progress: honour an explicit `q` param (deep link / in-page nav).
-  const params = new URLSearchParams(window.location.search);
-  const rawParam = params.get("q");
-  if (rawParam != null && rawParam !== "") {
-    const raw = Number.parseInt(rawParam, 10);
-    if (!Number.isNaN(raw)) {
-      return Math.max(0, Math.min(Math.max(total - 1, 0), raw));
-    }
-  }
-  return 0;
-}
 
 function chooseHiddenIndexes(tokens: Token[], percent: number) {
   const eligible = tokens

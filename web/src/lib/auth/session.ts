@@ -259,6 +259,22 @@ export const getCurrentUserForRead = cache(async (): Promise<AppUser | null> => 
   return getCurrentUserFromRequest(verifySessionCookieForRead);
 });
 
+export const getReadIdentity = cache(async (): Promise<{ uid: string } | null> => {
+  const session = (await cookies()).get("session")?.value;
+  if (session) {
+    const decoded = await verifySessionCookieForRead(session);
+    if (decoded) return { uid: decoded.uid };
+  }
+  const authorization = (await headers()).get("authorization");
+  if (!authorization?.startsWith("Bearer ")) return null;
+  try {
+    const decoded = await adminAuth.verifyIdToken(authorization.slice(7), true);
+    return { uid: decoded.uid };
+  } catch {
+    return null;
+  }
+});
+
 async function getCurrentUserFromRequest(
   sessionVerifier: (cookie: string) => Promise<Awaited<ReturnType<typeof verifySessionCookie>>>,
 ): Promise<AppUser | null> {

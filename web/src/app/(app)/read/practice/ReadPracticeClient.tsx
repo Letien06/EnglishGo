@@ -1,11 +1,12 @@
 "use client";
 
 import Image from "next/image";
-import Link from "next/link";
+import Link from "@/components/IntentLink";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { markVisited, routeKey } from "@/lib/nav/session-nav";
 import { invalidateLearningLevels, setActiveLearnerId } from "@/lib/client-learning-progress-cache";
-import PracticeMobileMenu from "../../_components/PracticeMobileMenu";
+import PracticeHeader from "../../_components/PracticeHeader";
+import { usePracticeResume } from "@/lib/use-practice-resume";
 import type {
   DauToeicDifficultySession,
   DauToeicPracticeItem,
@@ -19,6 +20,7 @@ interface Props {
   level: number;
   mode: string;
   userLoggedIn: boolean;
+  initialIndex: number;
   userUid: string | null;
 }
 
@@ -45,12 +47,15 @@ export default function ReadPracticeClient({
   level,
   mode,
   userUid,
+  initialIndex,
 }: Props) {
   const initialMode = normalizeMode(mode);
   const [activeMode, setActiveMode] = useState<PracticeMode>(initialMode);
   const items = session.items;
-  const [currentIndex, setCurrentIndex] = useState(0);
+  const [currentIndex, setCurrentIndex] = useState(initialIndex);
   const [answeredMap, setAnsweredMap] = useState<Record<string, string>>({});
+  const { markInteraction, resumeStatus } = usePracticeResume({ skill: "reading", uid: userUid, part: partNum, level, items, setAnswers: setAnsweredMap, setIndex: setCurrentIndex });
+  const [saveError, setSaveError] = useState("");
   const [showNote, setShowNote] = useState(false);
   const [auto, setAuto] = useState(false);
   const [elapsed, setElapsed] = useState(0);
@@ -97,10 +102,6 @@ export default function ReadPracticeClient({
     updatePracticeUrl({ mode: nextMode });
   }, [activeMode, updatePracticeUrl]);
 
-  useEffect(() => {
-    const timer = window.setTimeout(() => setCurrentIndex(initialItemIndex(items.length)), 0);
-    return () => window.clearTimeout(timer);
-  }, [items.length]);
 
   useEffect(() => {
     startedAtRef.current = Date.now();
@@ -145,6 +146,14 @@ export default function ReadPracticeClient({
     const correct = selectedAnswer === correctAnswer;
     setAnsweredMap((prev) => ({ ...prev, [question.id]: selectedAnswer }));
 
+    if (correct && auto && currentIndex < items.length - 1 && item.questions.every((entry) => entry.id === question.id || answeredMap[entry.id] === normalizeAnswer(entry.correctAnswer))) {
+      if (autoAdvanceRef.current !== null) window.clearTimeout(autoAdvanceRef.current);
+      autoAdvanceRef.current = window.setTimeout(() => {
+        autoAdvanceRef.current = null;
+        goTo(currentIndex + 1);
+      }, 450);
+    }
+
     try {
       const response = await fetch("/api/reading/progress", {
         method: "POST",
@@ -168,19 +177,15 @@ export default function ReadPracticeClient({
       } | null;
       if (response.ok && payload?.success && payload.data?.saved && payload.data.authenticated) {
         invalidateLearningLevels("reading", [partNum], userUid);
+      } else if (userUid) {
+        setSaveError("Chưa lưu được một số câu. Hãy kiểm tra kết nối trước khi rời bài.");
       }
     } catch {
-      // Progress saving is best-effort, matching the old Spring client.
+      if (userUid) setSaveError("Chưa lưu được một số câu. Hãy kiểm tra kết nối trước khi rời bài.");
     }
 
-    if (correct && auto && currentIndex < items.length - 1) {
-      if (autoAdvanceRef.current !== null) window.clearTimeout(autoAdvanceRef.current);
-      autoAdvanceRef.current = window.setTimeout(() => {
-        autoAdvanceRef.current = null;
-        goTo(currentIndex + 1);
-      }, 450);
-    }
-  }, [activeMode, answeredMap, auto, currentIndex, elapsed, goTo, item.id, items.length, level, partNum, userUid]);
+
+  }, [activeMode, answeredMap, auto, currentIndex, elapsed, goTo, item.id, item.questions, items.length, level, partNum, userUid]);
 
   useEffect(() => () => {
     if (autoAdvanceRef.current !== null) window.clearTimeout(autoAdvanceRef.current);
@@ -209,68 +214,11 @@ export default function ReadPracticeClient({
   }, [answeredMap, currentIndex, goTo, handleAnswer, item.questions]);
 
   return (
-    <main className="skill-workspace skill-workspace--read design-system min-h-dvh bg-white">
-      <header className="skill-workspace-header sticky top-0 z-40 flex h-16 items-center gap-2 bg-gradient-to-r from-cyan-500 to-blue-800 px-3 text-white shadow-md sm:gap-4 sm:px-7">
-        <Link
-          href={`/read?part=${partId}`}
-          className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-white/30 bg-white/10 text-xl font-bold"
-          aria-label="Thoát"
-        >
-          ←
-        </Link>
-        <span className="hidden h-11 w-11 items-center justify-center rounded-full bg-primary text-xl font-extrabold text-gold-ink sm:inline-flex">
-          文
-        </span>
-        <h1 className="min-w-0 flex-1 truncate text-base font-extrabold sm:text-xl">
-          Part {partNum} · {session.grouping === "balanced" ? `Nhóm luyện tập ${level}` : `Cấp ${level}`} · Đọc
-        </h1>
+    <main className="skill-workspace skill-workspace--read design-system min-h-dvh bg-white" onPointerDownCapture={markInteraction} onKeyDownCapture={markInteraction}>
+      <PracticeHeader skill="reading" partId={partId} part={partNum} level={level} grouped={session.grouping === "balanced"} modes={modes} activeMode={activeMode} onModeChange={(nextMode) => { if (nextMode === "normal" || nextMode === "bilingual") switchMode(nextMode); }} auto={auto} onToggleAuto={() => setAuto((value) => !value)} elapsed={formatElapsed(elapsed)} />
+      {(saveError || resumeStatus) && <div className="practice-save-status" role="status">{saveError || resumeStatus}</div>}
 
-        <nav className="hidden flex-1 items-center justify-center rounded-xl border border-white/25 bg-white/10 p-1 lg:flex">
-          {modes.map(([key, icon, label]) => (
-            <button
-              key={key}
-              type="button"
-              onClick={() => switchMode(key)}
-              className={`inline-flex min-w-36 items-center justify-center gap-2 rounded-lg px-4 py-2 text-sm font-extrabold ${
-                activeMode === key ? "bg-white/20 ring-2 ring-white/35" : "hover:bg-white/10"
-              }`}
-            >
-              <span>{icon}</span>
-              {label}
-            </button>
-          ))}
-        </nav>
-
-        <button
-          type="button"
-          onClick={() => setAuto((value) => !value)}
-          className={`hidden rounded-xl border border-white/30 px-4 py-2 text-sm font-extrabold lg:block ${
-            auto ? "bg-white text-blue-700" : "bg-white/10 text-white"
-          }`}
-          title="Tự chuyển bài khi trả lời đúng"
-        >
-          Auto
-        </button>
-        <span className="hidden min-w-14 text-center text-sm font-extrabold tabular-nums lg:inline">{formatElapsed(elapsed)}</span>
-        <PracticeMobileMenu
-          modes={modes}
-          activeMode={activeMode}
-          auto={auto}
-          onToggleAuto={() => setAuto((value) => !value)}
-          onModeChange={(nextMode) => {
-            if (nextMode === "normal" || nextMode === "bilingual") {
-              switchMode(nextMode);
-            }
-          }}
-          assist={0}
-          assistOptions={[]}
-          elapsed={formatElapsed(elapsed)}
-          modeHref={(m) => `/read/practice?part=${partId}&level=${level}&mode=${m}&q=${currentIndex}`}
-          assistHref={() => `/read/practice?part=${partId}&level=${level}&mode=${activeMode}&q=${currentIndex}`}
-        />
-      </header>
-
-      <div className="grid min-h-[calc(100dvh-8rem)] lg:grid-cols-[1fr_1fr]">
+      <div className={`practice-content grid min-h-[calc(100dvh-8rem)] lg:grid-cols-[1fr_1fr] ${partNum === 5 ? "practice-content--single" : ""}`}>
         <section className="border-b border-slate-200 px-4 py-5 sm:px-6 lg:border-b-0 lg:border-r lg:px-10 lg:py-6">
           <p className="mb-5 text-lg italic text-ink sm:text-xl">{readingInstruction(partNum)}</p>
 
@@ -364,16 +312,16 @@ export default function ReadPracticeClient({
         </section>
       </div>
 
-      <footer className="sticky bottom-0 z-40 flex h-16 items-center justify-between gap-2 bg-gradient-to-r from-cyan-500 to-blue-800 px-3 text-white sm:px-7">
+      <footer className="skill-workspace-footer sticky bottom-0 z-40 flex h-16 items-center justify-between gap-2 px-3 sm:px-7">
         <div className="flex gap-2 sm:gap-3">
           <button onClick={() => setShowNote((value) => !value)} className="rounded-xl bg-white px-3 py-2 text-sm font-extrabold text-primary sm:px-5">
             ✎<span className="hidden sm:inline"> Ghi chú</span>
           </button>
         </div>
         <div className="flex items-center gap-2 sm:gap-3">
-          <button onClick={() => goTo(currentIndex - 1)} disabled={currentIndex === 0} className="rounded-xl bg-blue-600 px-4 py-3 font-extrabold disabled:opacity-40 sm:px-5">‹</button>
-          <span className="rounded-xl bg-green-500 px-4 py-3 font-extrabold sm:px-5">{currentIndex + 1}/{items.length}</span>
-          <button onClick={() => goTo(currentIndex + 1)} disabled={currentIndex >= items.length - 1} className="rounded-xl bg-blue-600 px-4 py-3 font-extrabold disabled:opacity-40 sm:px-5">›</button>
+          <button aria-label="Bài trước" onClick={() => goTo(currentIndex - 1)} disabled={currentIndex === 0} className="rounded-xl px-4 py-3 font-extrabold disabled:opacity-40 sm:px-5">‹</button>
+          <span className="px-4 py-3 text-sm font-bold tabular-nums sm:px-5">{currentIndex + 1}/{items.length}</span>
+          <button aria-label="Bài tiếp" onClick={() => goTo(currentIndex + 1)} disabled={currentIndex >= items.length - 1} className="rounded-xl px-4 py-3 font-extrabold disabled:opacity-40 sm:px-5">›</button>
         </div>
       </footer>
     </main>
@@ -777,11 +725,6 @@ function questionOptions(question: DauToeicQuestion): Array<{ key: string; text:
     .map((option) => ({ ...option, text: cleanDisplayText(option.text) }));
 }
 
-function initialItemIndex(total: number) {
-  const raw = Number.parseInt(new URLSearchParams(window.location.search).get("q") ?? "0", 10);
-  if (Number.isNaN(raw)) return 0;
-  return Math.max(0, Math.min(Math.max(total - 1, 0), raw));
-}
 
 function parseOptionTranslations(text: string): Record<string, string> {
   const result: Record<string, string> = {};
