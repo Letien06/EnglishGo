@@ -12,7 +12,8 @@
  * vertical layout, so the header stays clean and everything is reachable.
  */
 import Link from "@/components/IntentLink";
-import { useEffect, useState } from "react";
+import { useRef, useState } from "react";
+import useDialogFocus from "@/components/useDialogFocus";
 import NavIcon, { type NavIconName } from "@/components/NavIcon";
 
 export type PracticeMode = "normal" | "bilingual" | "fill" | "flip";
@@ -56,16 +57,8 @@ export default function PracticeMobileMenu({
   assistHref,
 }: Props) {
   const [open, setOpen] = useState(false);
-
-  // Lock body scroll while the panel is open.
-  useEffect(() => {
-    if (!open) return;
-    const prev = document.body.style.overflow;
-    document.body.style.overflow = "hidden";
-    return () => {
-      document.body.style.overflow = prev;
-    };
-  }, [open]);
+  const dialogRef = useRef<HTMLDivElement>(null);
+  useDialogFocus(open, () => setOpen(false), dialogRef);
 
   return (
     <div className="lg:hidden">
@@ -77,14 +70,14 @@ export default function PracticeMobileMenu({
         aria-expanded={open}
       >
         <span className="flex flex-col gap-[5px]">
-          <span className="block h-0.5 w-5 rounded bg-white" />
-          <span className="block h-0.5 w-5 rounded bg-white" />
-          <span className="block h-0.5 w-5 rounded bg-white" />
+          <span className="block h-0.5 w-5 rounded bg-current" />
+          <span className="block h-0.5 w-5 rounded bg-current" />
+          <span className="block h-0.5 w-5 rounded bg-current" />
         </span>
       </button>
 
       {open && (
-        <div className="fixed inset-0 z-[70]" role="dialog" aria-modal="true">
+        <div ref={dialogRef} tabIndex={-1} className="fixed inset-0 z-[70]" role="dialog" aria-modal="true" aria-label="Công cụ luyện tập">
           {/* Backdrop */}
           <button
             type="button"
@@ -99,6 +92,7 @@ export default function PracticeMobileMenu({
               <h2 className="text-lg font-extrabold text-ink">Menu & công cụ</h2>
               <button
                 type="button"
+                data-dialog-initial-focus
                 onClick={() => setOpen(false)}
                 className="inline-flex h-9 w-9 items-center justify-center rounded-lg border border-slate-200 text-lg font-bold text-ink"
                 aria-label="Đóng"
@@ -137,6 +131,7 @@ export default function PracticeMobileMenu({
                       <button
                         key={key}
                         type="button"
+                        aria-pressed={activeMode === key}
                         onClick={() => {
                           onModeChange(key);
                           setOpen(false);

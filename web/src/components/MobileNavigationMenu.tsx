@@ -1,6 +1,6 @@
 "use client";
 
-import Link from "next/link";
+import Link from "./IntentLink";
 import { useRef, useState } from "react";
 import { usePathname } from "next/navigation";
 import { createPortal } from "react-dom";
