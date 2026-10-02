@@ -314,7 +314,7 @@ export default function ReadPracticeClient({
 
       <footer className="skill-workspace-footer sticky bottom-0 z-40 flex h-16 items-center justify-between gap-2 px-3 sm:px-7">
         <div className="flex gap-2 sm:gap-3">
-          <button onClick={() => setShowNote((value) => !value)} className="rounded-xl bg-white px-3 py-2 text-sm font-extrabold text-primary sm:px-5">
+          <button aria-label="Ghi chú" onClick={() => setShowNote((value) => !value)} className="rounded-xl bg-white px-3 py-2 text-sm font-extrabold text-primary sm:px-5">
             ✎<span className="hidden sm:inline"> Ghi chú</span>
           </button>
         </div>
@@ -359,7 +359,7 @@ function QuestionCard({
       <h3 className="mb-4 text-xl font-extrabold text-ink">
         {questionText}
       </h3>
-      {partNum === 5 && item.transcript && (
+      {partNum === 5 && item.transcript && cleanDisplayText(item.transcript) !== questionText && (
         <p className="mb-4 rounded-xl bg-slate-50 p-4 text-sm font-bold leading-relaxed text-ink">{cleanDisplayText(item.transcript)}</p>
       )}
 

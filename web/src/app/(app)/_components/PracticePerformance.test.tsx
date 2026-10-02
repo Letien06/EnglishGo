@@ -35,3 +35,11 @@ describe.each(["listening", "reading"] as const)("%s responsive practice", (skil
     expect(fetch).toHaveBeenCalledTimes(2);
   });
 });
+
+it("shows a Part 5 question only once when its transcript duplicates the prompt", () => {
+  const prompt = "The team is remarkably -------.";
+  const readingSession = { ...session, part: 5, items: [{ ...session.items[0], transcript: prompt, questions: [{ ...question("single"), questionText: prompt }] }] };
+  render(<ReadPracticeClient session={readingSession} partId="part5" partNum={5} level={1} mode="normal" userLoggedIn={false} userUid={null} initialIndex={0} />);
+  expect(screen.getAllByText(prompt)).toHaveLength(1);
+  expect(screen.getByRole("button", { name: "Ghi chú" })).toBeInTheDocument();
+});
