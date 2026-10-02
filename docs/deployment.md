@@ -310,7 +310,9 @@ answers, explanations, media links, and IDs are unchanged.
 Grouped catalogs and sessions carry `grouping: "balanced"`. The dashboard and
 practice header display **Nhóm luyện tập 1–4**, not score bands. Learner history
 continues to follow current item membership without migrating or deleting
-Firestore records. The client catalog cache is versioned to discard the old
+Firestore records. Answer rewards use each item's server-loaded `sourceLevel`,
+so moving a question to another group preserves its previous points. The client
+catalog cache is versioned to discard the old
 level-3-only layout. After a future source download, rerun the regrouping command
 before publishing if these groups should be retained. Grouping is deterministic
 for the same set of IDs, but adding or removing items can change membership.

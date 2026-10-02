@@ -5,7 +5,7 @@ import { readServerCache } from "../server-cache";
 import { ApiError } from "../api/response";
 import { recordSkillQuestionLeaderboard } from "./leaderboard";
 import { recordStudyActivity, type StudyModule } from "./study-activity";
-import { listDifficultyLevels, listReadingDifficultyLevels } from "./dautoeic";
+import { getDifficultySession, getReadingDifficultySession, listDifficultyLevels, listReadingDifficultyLevels } from "./dautoeic";
 import { DAUTOEIC_LEVEL_COUNT } from "./dautoeic-source";
 import type { DauToeicDifficultyLevel } from "../../types/dautoeic";
 import type {
@@ -86,6 +86,24 @@ export function createLearningToolService(
       ? await listDifficultyLevels(part)
       : await listReadingDifficultyLevels(part);
     return new Set(levels.find((entry) => entry.level === level)?.itemIds ?? []);
+  }
+
+  async function scoringLevelFor(request: ProgressRequest): Promise<number> {
+    const part = request.part!;
+    const level = request.level!;
+    const levels = config.module === "listening"
+      ? await listDifficultyLevels(part)
+      : await listReadingDifficultyLevels(part);
+    if (levels.find((entry) => entry.level === level)?.grouping !== "balanced") return level;
+    const session = config.module === "listening"
+      ? await getDifficultySession(part, level, null)
+      : await getReadingDifficultySession(part, level, null);
+    const item = session.items.find((entry) => entry.id === request.itemId?.trim() && entry.questions.some((question) => question.id === request.questionId?.trim()));
+    if (!item) throw new ApiError("Question does not belong to this practice group.", 400);
+    if (item.sourceLevel == null || !Number.isInteger(item.sourceLevel) || item.sourceLevel < 1 || item.sourceLevel > DAUTOEIC_LEVEL_COUNT) {
+      throw new ApiError("Practice group is missing its original scoring level.", 503);
+    }
+    return item.sourceLevel;
   }
 
   async function findProgressByParts(
@@ -246,6 +264,7 @@ export function createLearningToolService(
       if (!uid) return { saved: false, authenticated: false, correct: isCorrect };
 
       validateProgressRequest(request, config);
+      const scoringLevel = await scoringLevelFor(request);
       const questionId = request.questionId!.trim();
       const now = Date.now();
       const progressRef = userCol(uid, config.progressCollection).doc(questionId);
@@ -255,6 +274,7 @@ export function createLearningToolService(
             source: "DAUTOEIC",
             part: request.part,
             level: request.level,
+            sourceLevel: scoringLevel,
             itemId: request.itemId!.trim(),
             questionId,
             selectedAnswer: cleanAnswer(request.selectedAnswer),
@@ -264,7 +284,7 @@ export function createLearningToolService(
             assistPercent: normalizeAssist(request.assistPercent),
             replayCount: Math.max(0, request.replayCount ?? 0),
             elapsedSeconds: Math.max(0, request.elapsedSeconds ?? 0),
-            score: isCorrect ? (request.level ?? 1) * 10 : 0,
+            score: isCorrect ? scoringLevel * 10 : 0,
             completedAtMillis: now,
             updatedAt: FieldValue.serverTimestamp(),
           },
@@ -283,7 +303,7 @@ export function createLearningToolService(
           uid,
           module: config.module,
           part: request.part!,
-          level: request.level!,
+          level: scoringLevel,
           itemId: request.itemId!.trim(),
           questionId,
           correct: isCorrect,
