@@ -7,6 +7,7 @@
 import { getCurrentUserForRead } from "@/lib/auth/session";
 import * as vocab from "@/lib/services/vocab";
 import FlashcardGame from "./FlashcardGame";
+import { isDriveContentEnabled } from "@/lib/services/dautoeic-drive";
 
 interface Props {
   params: Promise<{ setId: string }>;
@@ -63,6 +64,7 @@ export default async function FlashcardsPage({ params, searchParams }: Props) {
       session={session}
       initialMode={mode}
       initialTab={tab}
+      partsReady={isDriveContentEnabled()}
       practiceOptions={[]}
       loadExtrasInBackground
       reviewMode={false}

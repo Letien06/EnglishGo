@@ -8,18 +8,25 @@ import { isDriveContentEnabled } from "@/lib/services/dautoeic-drive";
 
 interface Props {
   params: Promise<{ testId: string }>;
+  searchParams: Promise<{ tab?: string }>;
 }
 
-export default async function DautoeicVocabTestPage({ params }: Props) {
+export default async function DautoeicVocabTestPage({ params, searchParams }: Props) {
   const { testId } = await params;
+  const { tab: requestedTab } = await searchParams;
+  const tab = requestedTab === "view" || requestedTab === "learn" || requestedTab === "play" ? requestedTab : undefined;
   const user = await getCurrentUserForRead();
-  const currentPath = `/vocab/dautoeic/${encodeURIComponent(testId)}`;
+  const currentPath = `/vocab/dautoeic/${encodeURIComponent(testId)}${tab ? `?tab=${tab}` : ""}`;
 
   if (!user) {
     redirect(`/login?redirect=${encodeURIComponent(currentPath)}`);
   }
 
   const view = await dautoeicVocab.getDautoeicVocabTestView(testId);
+  const firstPart = view.parts.find((part) => part.wordCount > 0);
+  if (tab && firstPart && isDriveContentEnabled()) {
+    redirect(`/vocab/${firstPart.internalSetId}/flashcards?mode=menu&tab=${tab}&partId=${encodeURIComponent(firstPart.id)}&mastery=all&order=ordered&amount=all`);
+  }
 
   return (
     <>
@@ -35,7 +42,7 @@ export default async function DautoeicVocabTestPage({ params }: Props) {
             ← Quay lại từ vựng
           </Link>
 
-          <section className="rounded-2xl border border-sky-100 bg-white p-6 shadow-sm">
+          <section className="rounded-2xl border border-info-line bg-surface p-6 shadow-sm">
             <p className="text-xs font-extrabold uppercase tracking-widest text-primary">
               {view.setName}
             </p>
@@ -47,7 +54,7 @@ export default async function DautoeicVocabTestPage({ params }: Props) {
             </p>
           </section>
 
-          <DautoeicPartsClient key={`${user.uid}:${testId}`} testId={testId} parts={view.parts} ready={isDriveContentEnabled()} />
+          <DautoeicPartsClient key={`${user.uid}:${testId}`} testId={testId} parts={view.parts} ready={isDriveContentEnabled()} tab={tab} />
         </div>
       </main>
     </>

@@ -5,8 +5,8 @@ import type { DauToeicVocabPartSummary } from "@/types/dautoeic";
 import { fetchWithTimeout } from "@/lib/client-request";
 import DautoeicPartStudyButton from "./DautoeicPartStudyButton";
 
-export default function DautoeicPartsClient({ testId, parts, ready }: {
-  testId: string; parts: DauToeicVocabPartSummary[]; ready: boolean;
+export default function DautoeicPartsClient({ testId, parts, ready, tab }: {
+  testId: string; parts: DauToeicVocabPartSummary[]; ready: boolean; tab?: "view" | "learn" | "play";
 }) {
   const [progress, setProgress] = useState<DauToeicVocabPartSummary[] | null>(null);
   const [failed, setFailed] = useState(false);
@@ -36,7 +36,7 @@ export default function DautoeicPartsClient({ testId, parts, ready }: {
           {current ? <><span>{current.masteredWords}/{part.wordCount} từ đã thuộc</span>{current.dueWords > 0 && <span className="text-danger-ink">{current.dueWords} cần ôn</span>}</>
             : <span>{failed ? "Chưa tải được tiến độ. Bạn vẫn có thể vào học." : "Đang tải tiến độ..."}</span>}
         </div>
-        <DautoeicPartStudyButton testId={testId} partId={part.id} setId={part.internalSetId} ready={ready} />
+        <DautoeicPartStudyButton testId={testId} partId={part.id} setId={part.internalSetId} ready={ready} tab={tab} />
       </article>;
     })}
   </section>;

@@ -18,6 +18,7 @@ import {
   useMemo,
   useRef,
   useState,
+  useSyncExternalStore,
 } from "react";
 import type {
   VocabSetCard,
@@ -30,9 +31,11 @@ import { consolidateVocabGameAnswers } from "@/lib/vocab-game-results";
 import { englishExampleForSpeech } from "@/lib/vocab-speech";
 import type { VocabularyRoundResult } from "@/lib/vocab-arcade";
 import WordExplorer from "./WordExplorer";
+import VocabularySidebar from "./VocabularySidebar";
 import styles from "./vocabulary.module.css";
 
 interface Props {
+  partsReady?: boolean;
   initialTab?: "view" | "learn" | "play";
   session: VocabSetSession;
   initialMode: string;
@@ -59,6 +62,14 @@ type PlayMode =
 type QuizMode = "wordMeaning" | "context" | "meaningWord";
 type Screen = "hub" | "play" | "result";
 type WorkspaceTab = "view" | "learn" | "play";
+
+function subscribeWorkspaceWidth(onChange: () => void) {
+  const query = window.matchMedia?.("(min-width: 901px)");
+  query?.addEventListener("change", onChange);
+  return () => query?.removeEventListener("change", onChange);
+}
+const isWideWorkspace = () => window.matchMedia?.("(min-width: 901px)").matches ?? true;
+const serverWorkspaceWidth = () => true;
 
 interface AnswerRecord {
   id: number;
@@ -281,12 +292,12 @@ function parseGameDraft(raw: string | null): VocabGameDraftPayload | null {
 /* ================================================================== */
 
 export default function FlashcardGame({
+  partsReady = false,
   initialTab,
   session,
   initialMode,
   practiceOptions,
   loadExtrasInBackground = false,
-  reviewMode,
   isAuthenticated,
   loginHref,
   selectedMastery = "learning",
@@ -301,6 +312,10 @@ export default function FlashcardGame({
   const [screen, setScreen] = useState<Screen>(startInPlay ? "play" : "hub");
   const [workspaceTab, setWorkspaceTab] = useState<WorkspaceTab>(initialTab ?? (startInPlay ? (["quiz", "matching", "blast", "rain"].includes(initialMode) ? "play" : "learn") : "view"));
   const [pendingTab, setPendingTab] = useState<WorkspaceTab | null>(null);
+  const [pendingHref, setPendingHref] = useState<string | null>(null);
+  const [sidebarOverride, setSidebarOpen] = useState<boolean | null>(null);
+  const wideWorkspace = useSyncExternalStore(subscribeWorkspaceWidth, isWideWorkspace, serverWorkspaceWidth);
+  const sidebarOpen = sidebarOverride ?? wideWorkspace;
   const [mode, setMode] = useState<PlayMode>(
     startInPlay && isPlayMode(initialMode) ? (initialMode as PlayMode) : "flashcard",
   );
@@ -436,30 +451,15 @@ export default function FlashcardGame({
   }
 
   return (
-    <main className={`${styles.workspace} w-full flex-1 overflow-y-auto px-4 py-6 lg:px-8 space-y-6`}>
+    <main className={`${styles.workspace} w-full flex-1 overflow-y-auto`}>
       {filterPending && (
         <div className="fixed inset-x-0 top-16 z-50 mx-auto w-fit rounded-full border border-amber-200 bg-white px-4 py-2 text-xs font-extrabold text-ink shadow-lg">
           Đang nạp bộ lọc từ vựng...
         </div>
       )}
 
-      <Link
-        href={session.set.externalTestId ? `/vocab/dautoeic/${encodeURIComponent(session.set.externalTestId)}` : reviewMode ? "/vocab?tab=learn" : `/vocab/${setId}`}
-        className="text-accent text-sm"
-      >
-        ← Quay lại
-      </Link>
-
-      <section>
-        <span className="text-xs uppercase tracking-widest text-muted font-semibold">
-          {session.set.topic}
-        </span>
-        <h1 className="text-xl font-bold text-ink mt-1">{session.set.title}</h1>
-        <p className="text-sm text-muted">
-          <strong>{words.length}</strong> từ sẵn sàng
-        </p>
-      </section>
-
+      <header className={styles.workspaceHeader}>
+      <button className={styles.button} aria-label={sidebarOpen ? "Ẩn các phần" : "Hiện các phần"} aria-expanded={sidebarOpen} aria-controls="vocab-part-sidebar" onClick={() => setSidebarOpen(!sidebarOpen)}><span aria-hidden="true">☷</span><span className={styles.workspaceMenuLabel}>{sidebarOpen ? "Ẩn các phần" : "Hiện các phần"}</span></button>
       <nav className={styles.tabs} role="tablist" aria-label="Hoạt động từ vựng" onKeyDown={(event) => {
         if (!["ArrowLeft", "ArrowRight", "Home", "End"].includes(event.key)) return;
         const tabs = Array.from(event.currentTarget.querySelectorAll<HTMLButtonElement>('[role="tab"]'));
@@ -471,8 +471,11 @@ export default function FlashcardGame({
       }}>
         {([{ key: "view", label: "Xem từ" }, { key: "learn", label: "Học" }, { key: "play", label: "Chơi" }] as const).map((tab) => <button key={tab.key} id={`vocab-tab-${tab.key}`} role="tab" aria-selected={workspaceTab === tab.key} aria-controls="vocab-workspace-panel" onClick={() => selectWorkspaceTab(tab.key)}>{tab.label}</button>)}
       </nav>
-
-      <div id="vocab-workspace-panel" role="tabpanel" aria-labelledby={`vocab-tab-${workspaceTab}`}>
+      <span className={styles.workspaceCount}>{words.length} từ · {session.set.topic}</span>
+      </header>
+      <div className={styles.workspaceBody} data-sidebar={sidebarOpen}>
+      {sidebarOpen && <div id="vocab-part-sidebar"><VocabularySidebar key={session.set.externalTestId ?? setId} testId={isAuthenticated ? session.set.externalTestId : undefined} partId={session.set.externalPartId} title={session.set.title} count={words.length} tab={workspaceTab} ready={partsReady} onNavigate={(href) => { if (screen === "play") setPendingHref(href); else router.push(href); }} /></div>}
+      <div id="vocab-workspace-panel" className={styles.workspaceContent} role="tabpanel" aria-labelledby={`vocab-tab-${workspaceTab}`}>
 
       {screen === "hub" && (
         <Hub
@@ -507,7 +510,7 @@ export default function FlashcardGame({
           externalTestId={session.set.externalTestId}
           externalPartId={session.set.externalPartId}
           mode={mode}
-          suspended={pendingTab !== null}
+          suspended={pendingTab !== null || pendingHref !== null}
           quizMode={quizMode}
           muted={muted}
           isAuthenticated={isAuthenticated}
@@ -540,8 +543,9 @@ export default function FlashcardGame({
         </section>
       )}
       </div>
+      </div>
 
-      {pendingTab && <LeaveSessionDialog onCancel={() => setPendingTab(null)} onLeave={() => { setWorkspaceTab(pendingTab); setScreen("hub"); setQuizChooser(false); setPendingTab(null); }} />}
+      {(pendingTab || pendingHref) && <LeaveSessionDialog onCancel={() => { setPendingTab(null); setPendingHref(null); }} onLeave={() => { if (pendingHref) { router.push(pendingHref); return; } setWorkspaceTab(pendingTab!); setScreen("hub"); setQuizChooser(false); setPendingTab(null); }} />}
 
       {completionNotice ? (
         <div
@@ -610,7 +614,7 @@ function Hub({
   return (
     <div className="space-y-6">
       {!isAuthenticated ? (
-        <aside className="flex flex-col items-start gap-3 rounded-2xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-950 sm:flex-row sm:items-center sm:justify-between">
+        <aside className="flex flex-col items-start gap-3 rounded-2xl border border-warning-line bg-warning-soft p-4 text-sm text-warning-ink sm:flex-row sm:items-center sm:justify-between">
           <p>
             Bạn đang học thử. <strong>Đăng nhập</strong> để lưu kết quả, lịch ôn và điểm thưởng.
           </p>
@@ -707,7 +711,7 @@ function Hub({
                 card.quiz ? onOpenQuizChooser() : onStartMode(card.key)
               }
               data-game={card.key}
-              className={`${styles.gameCard} relative flex min-h-[150px] flex-col items-center justify-center gap-2 overflow-hidden p-5 text-center`}
+              className={`${styles.gameCard} relative flex min-h-[190px] flex-col items-start justify-center gap-2 overflow-hidden p-6 text-left`}
             >
               {card.hot && (
                 <em className="absolute right-3 top-3 rounded bg-red-500 px-2 py-0.5 text-[10px] font-bold not-italic text-white">
@@ -717,7 +721,7 @@ function Hub({
               <span className={`rounded-full px-4 py-3 text-2xl ${tone.icon}`}>{card.icon}</span>
               <strong className="text-lg font-extrabold text-ink">{card.title}</strong>
               <small className="text-sm font-medium text-ink2">{card.desc}</small>
-              <b className={`mt-1 rounded-full px-3 py-1 text-sm font-bold ${tone.badge}`}>{card.points}</b>
+              <b className={`mt-1 rounded-full px-3 py-1 text-xs font-bold ${tone.badge}`}>{card.points}</b><span className={styles.gameArrow} aria-hidden="true">↗</span>
             </button>
           );
         })}

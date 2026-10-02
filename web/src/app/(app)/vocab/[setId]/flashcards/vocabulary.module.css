@@ -1,4 +1,38 @@
-.workspace { max-width: 1120px; margin-inline: auto; }
+.workspace { max-width: 1520px; margin-inline: auto; }
+.workspaceHeader { position: sticky; top: 0; z-index: 10; display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 14px 24px; border-bottom: 1px solid var(--line); background: var(--surface); }
+.workspaceCount { font-size: 12px; color: var(--muted); max-width: 160px; }
+.workspaceBody { display: grid; grid-template-columns: minmax(0, 1fr); }
+.workspaceBody[data-sidebar="true"] { grid-template-columns: 220px minmax(0, 1fr); }
+.workspaceContent { padding: clamp(16px, 3vw, 36px); min-width: 0; }
+.sidebar { position: sticky; top: 92px; padding: 24px 16px; color: var(--ink); }
+.sidebar h1 { font-weight: 800; font-size: 20px; margin-block: 12px 4px; overflow-wrap: anywhere; }
+.sidebar p { color: var(--muted); font-size: 12px; }
+.sidebar nav { display: grid; gap: 6px; margin-block: 24px; }
+.sidebar nav button { display: flex; align-items: center; text-align: left; gap: 10px; min-height: 48px; padding: 10px; border: 1px solid transparent; border-radius: 12px; font-size: 14px; }
+.sidebar nav button > span { display: grid; place-items: center; width: 28px; height: 28px; border-radius: 8px; background: var(--surface-soft); }
+.sidebar nav button small { margin-left: auto; color: var(--muted); }
+.sidebar nav button[aria-current] { background: var(--info-soft); border-color: var(--info-line); color: var(--info-ink); }
+.sidebar nav button[aria-current] > span { background: var(--primary); color: var(--gold-ink); }
+.sidebarTip { padding: 16px; border-radius: 16px; background: var(--teal-soft); border: 1px solid var(--teal-line); font-size: 12px; }
+.sidebarTip p { margin-top: 8px; color: var(--ink2); }
+.backLink { display: block; min-height: 44px; margin-bottom: 24px; font-size: 13px; color: var(--ink2); }
+.catalogGrid { display: grid; gap: 16px; grid-template-columns: repeat(4, minmax(0, 1fr)); }
+.catalogIntro { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 24px; border: 1px solid var(--teal-line); border-radius: 22px; padding: 28px; background: radial-gradient(ellipse at top right, var(--teal-soft), transparent 70%), var(--surface); }
+.catalogIntro h2 { font-size: clamp(24px, 3vw, 32px); font-weight: 800; letter-spacing: -.03em; color: var(--ink); margin-block: 8px; }
+.catalogIntro p { color: var(--muted); font-size: 14px; }
+.catalogSummary { display: flex; flex-wrap: wrap; align-items: center; gap: 24px; font-size: 11px; color: var(--muted); }
+.catalogSummary strong { display: block; color: var(--ink); font-size: 24px; font-variant-numeric: tabular-nums; }
+.catalogCard { min-width: 0; border: 1px solid var(--line); border-radius: 18px; padding: 20px; background: var(--surface); box-shadow: 0 2px 3px #00000008, 0 8px 24px #00000006; }
+.catalogTop { display: flex; align-items: center; justify-content: space-between; gap: 8px; font-size: 10px; color: var(--muted); }
+.catalogTop > span { border-radius: 6px; background: var(--info-soft); color: var(--info-ink); padding: 4px 8px; font-weight: 800; }
+.catalogCard h3 { font-size: 20px; font-weight: 800; margin-top: 16px; color: var(--ink); }
+.catalogCard p { color: var(--muted); font-size: 12px; margin-block: 6px 18px; }
+.catalogCard p b { color: var(--warning-ink); font-weight: 600; }
+.catalogActions { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 6px; margin-top: 18px; }
+.catalogActions a { display: flex; justify-content: center; align-items: center; gap: 5px; min-height: 44px; border: 1px solid var(--line); border-radius: 9px; font-size: 12px; font-weight: 750; color: var(--ink2); }
+.catalogActions svg { width: 14px; height: 14px; }
+.catalogActions a[data-action="learn"] { background: var(--primary); border-color: var(--primary); color: var(--gold-ink); }
+.catalogActions a[data-action="play"] { border-color: var(--teal-line); background: var(--teal-soft); color: var(--teal-ink); }
 .tabs { display: flex; gap: 4px; padding: 5px; width: fit-content; border: 1px solid var(--line); border-radius: 16px; background: var(--surface-soft); }
 .tabs button { min-height: 44px; padding: 10px 24px; border-radius: 12px; color: var(--ink2); font-weight: 750; }
 .tabs button[aria-selected="true"] { background: var(--primary); color: var(--gold-ink); }
@@ -16,6 +50,7 @@
 .gameCard[data-game="quiz"], .gameCard[data-game="mixed"] { border-color: var(--warning-line); background: radial-gradient(ellipse at top right, var(--warning-soft), transparent 95%), var(--surface); }
 .gameCard:focus-visible { outline: 3px solid var(--primary); outline-offset: 3px; }
 .gameCard:disabled { opacity: .5; cursor: not-allowed; }
+.gameArrow { position: absolute; right: 24px; top: 24px; font-size: 26px; color: var(--muted); }
 .input { width: 100%; min-height: 46px; border: 1px solid var(--control-line); border-radius: 12px; background: var(--surface); color: var(--ink); padding: 10px 14px; }
 .input:focus-visible { outline: 3px solid var(--primary); outline-offset: 2px; }
 .card { width: 100%; min-height: 250px; display: flex; flex-direction: column; justify-content: center; align-items: center; gap: 14px; padding: 30px 20px; text-align: center; border: 1px solid var(--info-line); border-radius: 24px; background: radial-gradient(ellipse at top right, var(--info-soft), transparent 80%), var(--surface); color: var(--ink); overflow-wrap: anywhere; }
@@ -34,12 +69,53 @@
 .success, .error { padding: 14px 18px; border-radius: 12px; border: 1px solid; }
 .success { background: var(--success-soft); color: var(--success-ink); border-color: var(--success-line); }
 .error { background: var(--danger-soft); color: var(--danger-ink); border-color: var(--danger-line); }
+.arcadeRound { max-width: 960px; margin-inline: auto; display: grid; gap: 16px; }
 .arcade { overflow: hidden; border: 1px solid var(--info-line); border-radius: 24px; background: var(--surface); }
 .scoreboard { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 12px; padding: 16px 20px; border-bottom: 1px solid var(--line); background: var(--info-soft); color: var(--info-ink); font-weight: 750; }
-.field { position: relative; height: 330px; overflow: hidden; background: radial-gradient(ellipse at 50% 0%, var(--teal-soft), transparent 75%), repeating-linear-gradient(0deg, transparent 0 39px, var(--line) 40px), var(--surface); }
+.field { position: relative; height: 350px; overflow: hidden; }
 .ground { position: absolute; inset: auto 0 0; height: 3px; background: var(--danger-line); }
-.targets { position: absolute; inset: 0 12px auto; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; transition: transform 100ms linear; }
-.target { min-height: 62px; padding: 12px; border: 2px solid var(--info-line); border-radius: 16px; background: var(--surface); color: var(--ink); font-size: clamp(15px, 2vw, 20px); font-weight: 750; overflow-wrap: anywhere; }
+.targets { position: absolute; inset: 0 8% auto; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 20px 36px; transition: transform 100ms linear; }
+.target { position: relative; justify-self: center; width: min(100%, 260px); min-height: 60px; padding: 12px 16px; border: 1px solid var(--target-color); border-radius: 20px; background: var(--arcade-panel); color: var(--arcade-text); font-size: clamp(15px, 2vw, 20px); font-weight: 750; overflow-wrap: anywhere; box-shadow: 0 0 16px color-mix(in srgb, var(--target-color) 22%, transparent), inset 0 0 16px color-mix(in srgb, var(--target-color) 12%, transparent); transition: transform 100ms linear; }
+.target:nth-child(1) { --target-color: var(--arcade-cyan); }
+.target:nth-child(2) { --target-color: var(--arcade-gold); }
+.target:nth-child(3) { --target-color: var(--arcade-teal); }
+.target:nth-child(4) { --target-color: var(--arcade-pink); }
+.target kbd { display: inline-grid; place-items: center; width: 22px; height: 22px; margin-right: 8px; border: 1px solid var(--target-color); border-radius: 6px; font-size: 10px; color: var(--target-color); vertical-align: middle; }
+.target[data-hit="correct"] { background: color-mix(in srgb, var(--arcade-teal) 25%, var(--arcade-panel)); opacity: 1; }
+.target[data-hit="wrong"] { border-color: var(--arcade-pink); }
+.hitBurst { position: absolute; inset: 0; display: grid; place-items: center; color: var(--target-color); font-size: 60px; pointer-events: none; animation: hit-burst 450ms ease-out both; }
+.blastArena { --arcade-bg: #071426; --arcade-panel: #102a40; --arcade-text: #eefaff; --arcade-cyan: #5cd9ff; --arcade-gold: #ffd27b; --arcade-teal: #54eed0; --arcade-pink: #ffa2bc; background: radial-gradient(ellipse at 10% 30%, #0e749033, transparent 65%), repeating-linear-gradient(0deg, transparent 0 5px, #89e4ff06 6px), var(--arcade-bg); border-color: #27768b; color: var(--arcade-text); }
+.blastArena .scoreboard { background: #06111e99; color: var(--arcade-cyan); border-color: #5cd9ff22; font-variant-numeric: tabular-nums; }
+.blastClue { text-align: center; padding: 22px 20px 12px; }
+.blastClue p { font-size: 10px; letter-spacing: .2em; color: var(--arcade-cyan); }
+.blastClue h3 { font-size: clamp(24px, 4vw, 36px); line-height: 1.25; font-weight: 800; margin-block: 10px 6px; color: var(--arcade-text); }
+.blastClue small { font-size: 11px; color: #a4c0d3; }
+.blastArena .ground { height: 36px; border-top: 2px solid var(--arcade-cyan); background: linear-gradient(#13c9d926, transparent); }
+.cannon { position: absolute; bottom: 6px; left: calc(50% - 36px); width: 72px; height: 72px; pointer-events: none; }
+.cannon svg { width: 100%; height: 100%; fill: #123951; stroke: var(--arcade-cyan); stroke-width: 2; filter: drop-shadow(0 0 8px #5cd9ff66); }
+.shotBeam { position: absolute; bottom: 55px; left: calc(50% - 2px); width: 4px; height: 65%; transform-origin: bottom center; background: linear-gradient(transparent, var(--arcade-text), var(--arcade-cyan)); pointer-events: none; animation: laser-shot 350ms ease-out both; }
+.field[data-paused="true"] :is(.shotBeam, .hitBurst) { animation-play-state: paused; }
+@keyframes laser-shot { from { opacity: .9; transform: scaleY(.1); } to { opacity: 0; transform: scaleY(1); } }
+.arcadeHelp { font-size: 12px; color: var(--muted); text-align: center; }
+.rainArena { overflow: hidden; border: 1px solid var(--line); border-radius: 22px; background: var(--surface); }
+.rainField { position: relative; height: clamp(280px, 46vh, 430px); overflow: hidden; background: radial-gradient(ellipse at top, var(--info-soft), transparent 75%), var(--surface-soft); }
+.rainTrack { position: absolute; top: 16px; bottom: 118px; width: 42%; left: 5%; transition: transform 100ms linear; }
+.rainTrack[data-lane="1"] { left: 53%; }
+.rainClue { position: absolute; left: 50%; transform: translateX(-50%); width: min(100%, 240px); min-height: 94px; border: 1px solid var(--control-line); border-radius: 14px; padding: 14px 12px; text-align: center; background: var(--surface); color: var(--ink); box-shadow: 0 5px 12px #0000000d; overflow-wrap: anywhere; }
+.rainClue strong { display: block; font-size: clamp(13px, 1.7vw, 18px); line-height: 1.3; max-height: 48px; overflow-y: auto; }
+.rainClue span { display: block; font-family: monospace; color: var(--muted); letter-spacing: .13em; margin-top: 8px; font-size: 12px; }
+.rainClue small { color: var(--muted); font-size: 10px; }
+.rainClue[data-matching="true"] { border-color: var(--teal-ink); box-shadow: 0 0 0 3px var(--teal-soft); }
+.rainClue[data-matching="true"] span { color: var(--teal-ink); }
+.hearts { color: var(--danger-ink); letter-spacing: 4px; font-size: 22px; }
+.hearts span { color: var(--muted); }
+.rainInput { display: flex; gap: 8px; }
+.rainInput input { min-width: 0; font-size: 16px; }
+.matchGrid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; }
+.matchTile { min-height: 100px; padding: 16px 12px; border: 2px solid var(--warning-line); background: var(--warning-soft); color: var(--warning-ink); border-radius: 14px; font-size: 16px; font-weight: 750; overflow-wrap: anywhere; }
+.matchTile[data-language="vi"] { border-color: var(--info-line); background: var(--info-soft); color: var(--info-ink); }
+.matchTile[aria-pressed="true"] { border-color: var(--primary); box-shadow: 0 0 0 3px var(--primary-soft); }
+.matchTile:disabled { border-color: var(--success-line); background: var(--success-soft); color: var(--success-ink); opacity: .5; }
 .target:disabled { opacity: .45; }
 .drop { position: absolute; inset: 0 12px auto; border: 2px solid var(--teal-line); background: var(--teal-soft); color: var(--teal-ink); padding: 16px; border-radius: 16px; text-align: center; transition: transform 100ms linear; }
 .drop strong { display: block; font-size: clamp(19px, 3vw, 27px); line-height: 1.25; }
@@ -49,4 +125,12 @@
 .pause { position: absolute; inset: 0; display: grid; align-content: center; justify-items: center; gap: 16px; background: var(--surface); z-index: 1; color: var(--ink); }
 @media (hover: hover) and (pointer: fine) { .button:not(:disabled):hover, .wordRow:hover { border-color: var(--primary); } .target:not(:disabled):hover { border-color: var(--primary); background: var(--primary-soft); } }
 @media (max-width: 540px) { .tabs { width: 100%; } .tabs button { flex: 1; padding-inline: 10px; } .scoreboard { padding: 12px; font-size: 12px; } .field { height: 290px; } }
-@media (prefers-reduced-motion: reduce) { .targets, .drop { transform: translateY(45px) !important; transition: none; } }
+@keyframes hit-burst { from { opacity: 1; transform: scale(.6); } to { opacity: 0; transform: scale(1.6); } }
+.workspace :is(button, a, summary):focus-visible, .catalogActions a:focus-visible { outline: 3px solid var(--primary); outline-offset: 3px; }
+@media (hover: hover) and (pointer: fine) { .gameCard:hover { border-color: var(--primary); } .blastArena .target:not(:disabled):hover { background: var(--arcade-panel); border-color: var(--arcade-text); } }
+@media (max-width: 1200px) { .catalogGrid { grid-template-columns: repeat(3, minmax(0, 1fr)); } .workspaceCount { display: none; } }
+@media (max-width: 900px) { .catalogGrid { grid-template-columns: repeat(2, minmax(0, 1fr)); } .workspaceBody[data-sidebar="true"] { grid-template-columns: minmax(0, 1fr); } .sidebar { position: static; padding: 16px 20px; border-bottom: 1px solid var(--line); } .sidebar h1 { font-size: 16px; } .sidebar nav { display: flex; margin-block: 12px 0; overflow-x: auto; } .sidebar nav button { flex-shrink: 0; min-width: 120px; } .sidebarTip, .sidebar > .eyebrow { display: none; } .backLink { margin-bottom: 4px; } .matchGrid { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
+@media (max-width: 540px) { .catalogGrid { grid-template-columns: minmax(0, 1fr); } .workspaceHeader { padding: 10px 12px; flex-wrap: wrap; gap: 8px; } .workspaceHeader > button { min-height: 36px; padding: 6px 12px; font-size: 12px; } .workspaceContent { padding: 16px 12px; } .sidebar { padding: 12px; } .targets { inset-inline: 7%; gap: 18px; } .target { padding: 10px 6px; min-height: 56px; border-radius: 14px; font-size: 13px; } .target kbd { display: none; } .matchGrid { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; } .matchTile { font-size: 14px; padding: 12px 8px; } .rainTrack { width: 44%; left: 3%; } .rainTrack[data-lane="1"] { left: 53%; } .rainClue { padding: 12px 8px; } }
+@media (max-width: 540px) { .workspaceHeader { flex-wrap: nowrap; } .workspaceMenuLabel { display: none; } .workspaceHeader > button { min-height: 44px; min-width: 44px; font-size: 20px; padding: 8px; } .workspaceHeader .tabs { width: auto; flex: 1; } .workspaceHeader .tabs button { padding-inline: 8px; font-size: 13px; } .rainField { height: clamp(180px, 34svh, 280px); } .arcadeRound { gap: 12px; } }
+@media (min-width: 360px) and (max-width: 540px) { .matchGrid { grid-template-columns: repeat(3, minmax(0, 1fr)); } .matchTile { min-height: 88px; font-size: 12px; padding: 10px 6px; } }
+@media (prefers-reduced-motion: reduce) { .targets, .drop { transform: translateY(45px) !important; transition: none; } .target { transform: none !important; transition: none; } .hitBurst, .shotBeam { animation: none; display: none; } .rainTrack { transform: translateY(30%) !important; transition: none; } .cannon g { transform: none !important; } }

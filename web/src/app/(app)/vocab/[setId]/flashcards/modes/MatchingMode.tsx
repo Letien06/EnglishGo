@@ -1,3 +1,5 @@
+import styles from "../vocabulary.module.css";
+
 interface MatchItem { id: number; word: string; meaning: string }
 
 export default function MatchingMode({ words, meanings, matchedIds, selWord, selMeaning, lives, timer, onWord, onMeaning }: {
@@ -11,14 +13,16 @@ export default function MatchingMode({ words, meanings, matchedIds, selWord, sel
   onWord: (id: number) => void;
   onMeaning: (id: number) => void;
 }) {
-  const tone = (id: number, selected: number | null) => matchedIds.includes(id) ? "border-green-500 bg-green-500/10 opacity-60" : selected === id ? "border-accent bg-accent/10" : "border-line hover:border-accent/50";
+  const tiles = words.flatMap((word, index) => {
+    const meaning = meanings[(index + 2) % meanings.length];
+    const pair = [{ item: word, language: "en" as const }, ...(meaning ? [{ item: meaning, language: "vi" as const }] : [])];
+    return index % 2 ? pair.reverse() : pair;
+  });
   return (
     <section className="space-y-4 rounded-2xl border border-line bg-surface p-5">
       <header className="flex items-center justify-between"><div className="text-red-500">{"❤ ".repeat(Math.max(0, lives)).trim()}</div><span className="text-xs text-muted">{timer}s</span></header>
-      <div className="grid grid-cols-2 gap-4">
-        <div className="space-y-2"><h3 className="text-xs font-semibold text-muted">Tiếng Anh</h3>{words.map((item) => <button key={item.id} type="button" disabled={matchedIds.includes(item.id)} onClick={() => onWord(item.id)} className={`block w-full rounded-lg border px-3 py-2 text-sm ${tone(item.id, selWord)}`}>{item.word}</button>)}</div>
-        <div className="space-y-2"><h3 className="text-xs font-semibold text-muted">Tiếng Việt</h3>{meanings.map((item) => <button key={item.id} type="button" disabled={matchedIds.includes(item.id)} onClick={() => onMeaning(item.id)} className={`block w-full rounded-lg border px-3 py-2 text-sm ${tone(item.id, selMeaning)}`}>{item.meaning}</button>)}</div>
-      </div>
+      <p className="text-sm text-muted">Chọn một từ tiếng Anh và nghĩa tiếng Việt tương ứng.</p>
+      <div className={styles.matchGrid}>{tiles.map(({ item, language }) => <button key={`${language}-${item.id}`} type="button" className={styles.matchTile} data-language={language} aria-pressed={(language === "en" ? selWord : selMeaning) === item.id} disabled={matchedIds.includes(item.id)} onClick={() => language === "en" ? onWord(item.id) : onMeaning(item.id)}>{matchedIds.includes(item.id) && <span aria-hidden="true">✓ </span>}{language === "en" ? item.word : item.meaning}</button>)}</div>
       <strong className="block text-center text-sm">Đã ghép: {matchedIds.length} / {words.length}</strong>
     </section>
   );

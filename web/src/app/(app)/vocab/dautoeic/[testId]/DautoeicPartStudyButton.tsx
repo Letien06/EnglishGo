@@ -10,6 +10,7 @@ interface Props {
   partId: string;
   setId: number;
   ready?: boolean;
+  tab?: "view" | "learn" | "play";
 }
 
 interface SyncResponse {
@@ -20,12 +21,13 @@ interface SyncResponse {
 
 type StudyState = "idle" | "syncing" | "navigating";
 
-export default function DautoeicPartStudyButton({ testId, partId, setId, ready = false }: Props) {
+export default function DautoeicPartStudyButton({ testId, partId, setId, ready = false, tab }: Props) {
   const router = useRouter();
   const [state, setState] = useState<StudyState>("idle");
   const [error, setError] = useState<string | null>(null);
   const loading = state !== "idle";
-  const destination = `/vocab/${setId}/flashcards?mode=menu&partId=${encodeURIComponent(partId)}&mastery=all&order=random&amount=all`;
+  const tabQuery = tab ? `&tab=${tab}` : "";
+  const destination = `/vocab/${setId}/flashcards?mode=menu&partId=${encodeURIComponent(partId)}&mastery=all&order=random&amount=all${tabQuery}`;
 
   async function startStudy() {
     if (loading) return;
@@ -49,7 +51,7 @@ export default function DautoeicPartStudyButton({ testId, partId, setId, ready =
       const syncedSetId = payload?.data?.setId ?? setId;
       setState("navigating");
       router.push(
-        `/vocab/${syncedSetId}/flashcards?mode=menu&partId=${encodeURIComponent(partId)}&mastery=all&order=random&amount=all`,
+        `/vocab/${syncedSetId}/flashcards?mode=menu&partId=${encodeURIComponent(partId)}&mastery=all&order=random&amount=all${tabQuery}`,
       );
     } catch (reason) {
       setState("idle");

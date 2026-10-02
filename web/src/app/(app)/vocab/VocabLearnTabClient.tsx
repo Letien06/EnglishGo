@@ -1,12 +1,12 @@
 "use client";
 
 import Link from "@/components/IntentLink";
-import { useEffect, useMemo, useState, type CSSProperties } from "react";
+import { useEffect, useMemo, useState } from "react";
 import type { DauToeicVocabCatalogView } from "@/types/dautoeic";
 import type { VocabSetCard } from "@/types/vocab";
-import { LearningHero, LearningTip, LearningEmpty } from "../_components/LearningDashboardUI";
+import { LearningTip, LearningEmpty } from "../_components/LearningDashboardUI";
 import Icon from "../listen/_components/ListeningIcon";
-import { ListeningProgressRing } from "../listen/_components/ListeningTestCard";
+import vocabStyles from "./[setId]/flashcards/vocabulary.module.css";
 import { ListeningGridSkeleton } from "../listen/_components/ListeningLoading";
 import styles from "../listen/_components/listening.module.css";
 import { fetchWithTimeout, recordNextPaint } from "@/lib/client-request";
@@ -117,14 +117,7 @@ export default function VocabLearnTabClient({ groupId, userUid, initialCatalog =
     const filters = [{ id: "all", label: "Tất cả" }, { id: "new", label: "Chưa học" }, { id: "learning", label: "Đang học" }, { id: "complete", label: "Đã thuộc" }, { id: "due", label: "Cần ôn" }];
     function clearFilters() { setFilter("all"); setQuery(""); }
     return <section>
-      <LearningHero icon="book" title={resume ? "Giữ nhịp học. Nhớ lâu hơn." : "Thêm một từ, mở thêm cơ hội."}
-        description={next ? `${next.setName} · ${next.title} · ${next.wordCount} từ vựng` : "Chọn một bộ từ và bắt đầu bằng chế độ yêu thích."}
-        href={next ? `/vocab/dautoeic/${encodeURIComponent(next.id)}` : undefined} cta={resume ? "Tiếp tục học" : "Khám phá bộ từ"} note="Xem từ · Flashcard · Trò chơi"
-        stats={[
-          { label: "Kho từ đang chọn", value: totals.words, unit: "từ", detail: `${cards.length} bộ từ để khám phá`, icon: "book" },
-          { label: "Từ đã thuộc", value: ready ? totals.mastered : "—", unit: "từ", detail: "Theo tiến độ ghi nhớ của bạn", icon: "check" },
-          { label: "Đến lúc ôn", value: ready ? totals.due : "—", unit: "từ", detail: "Ôn đúng lúc để nhớ lâu hơn", icon: "clock" },
-        ]} />
+      <div className={vocabStyles.catalogIntro}><div><span className={vocabStyles.eyebrow}>HỌC ÍT MỖI NGÀY · NHỚ LÂU HƠN</span><h2>Kho từ vựng của bạn</h2><p>Xem từ, học trong ngữ cảnh, rồi thử sức với trò chơi.</p></div><div className={vocabStyles.catalogSummary}><span><strong>{ready ? totals.mastered : "—"}</strong> từ đã thuộc</span><span><strong>{ready ? totals.due : "—"}</strong> cần ôn</span>{next && <Link className={`${vocabStyles.button} ${vocabStyles.primary}`} href={`/vocab/dautoeic/${encodeURIComponent(next.id)}?tab=learn`}>{resume ? "Tiếp tục học" : "Bắt đầu học"} →</Link>}</div></div>
       <div className={styles.sectionLabel}><span className={styles.eyebrow}>01 / CHỌN BỘ ĐỀ</span><span>Một ít mỗi ngày, nhớ lâu hơn</span></div>
       <nav className={styles.filters} aria-label="Nhóm từ vựng">{state.catalog.groups.map((group) => <button key={group.id} type="button" onClick={() => selectGroup(group.id)} aria-pressed={group.id === selectedGroupId}>{group.name}<span>{group.count}</span></button>)}</nav>
       <section className={styles.library} aria-label="Danh sách bộ từ">
@@ -135,14 +128,14 @@ export default function VocabLearnTabClient({ groupId, userUid, initialCatalog =
         </div>
         {!ready && <p className={styles.notice} role="status">{progressStatus === "loading" ? "Đang tải tiến độ..." : "Chưa tải được tiến độ. Bạn vẫn có thể vào học ngay."}</p>}
         <p className={styles.resultCount} aria-live="polite">Hiển thị {visible.length}/{cards.length} bộ từ</p>
-        <div className={styles.grid}>{visible.map((card, index) => {
+        <div className={vocabStyles.catalogGrid}>{visible.map((card) => {
           const percent = card.wordCount > 0 ? Math.min(100, Math.round(card.masteredWords / card.wordCount * 100)) : 0;
-          return <article key={card.id} className={styles.card} data-status={ready ? status(card) : "unknown"} style={{ "--card-delay": `${Math.min(index, 5) * 35}ms` } as CSSProperties}>
-            <div className={styles.cardTop}><span className={styles.cardLabel}>{card.setName}</span><span className={styles.badge} data-status={ready ? status(card) : "unknown"}><span />{ready ? statusLabel[status(card)] : "Chưa có tiến độ"}</span></div>
-            <div className={styles.cardHeading}><div><h2>{card.title}</h2><p>{card.wordCount} từ vựng</p></div><ListeningProgressRing percent={percent} ready={ready} label={`Từ đã thuộc: ${card.title}`} /></div>
-            <div className={styles.answerStats}><span data-tone="good"><i /><strong>{ready ? card.masteredWords : "—"}</strong> đã thuộc</span><span data-tone="bad"><i /><strong>{ready ? card.dueWords : "—"}</strong> cần ôn</span><span><i /><strong>{ready ? Math.max(0, card.wordCount - card.masteredWords) : "—"}</strong> chưa thuộc</span></div>
-            <div className={styles.metadata}><span><Icon name="book" />{card.partCount} phần học</span><span><Icon name="spark" />Flashcard & trò chơi</span></div>
-            <footer className={styles.cardFooter}><Link href={`/vocab/dautoeic/${encodeURIComponent(card.id)}`} data-overdelay="Đang mở bộ từ vựng..." className={styles.cardCta}>Vào học<Icon name="arrow" /></Link></footer>
+          return <article key={card.id} className={vocabStyles.catalogCard}>
+            <div className={vocabStyles.catalogTop}><span>{card.setName}</span><small>{ready ? statusLabel[status(card)] : "Sẵn sàng học"}</small></div>
+            <h3>{card.title}</h3>
+            <p>{ready && card.masteredWords > 0 ? `${card.masteredWords}/${card.wordCount} từ đã thuộc` : `${card.wordCount} từ vựng`}{ready && card.dueWords > 0 && <b> · {card.dueWords} cần ôn</b>}</p>
+            <div className={vocabStyles.progress} role="progressbar" aria-label={`Từ đã thuộc: ${card.title}`} aria-valuemin={0} aria-valuemax={100} aria-valuenow={ready ? percent : undefined}><span style={{ transform: `scaleX(${ready ? percent / 100 : 0})` }} /></div>
+            <footer className={vocabStyles.catalogActions}>{([{ tab: "view", label: "Xem từ", icon: "book" }, { tab: "learn", label: "Học", icon: "spark" }, { tab: "play", label: "Chơi", icon: "arrow" }] as const).map((action) => <Link key={action.tab} href={`/vocab/dautoeic/${encodeURIComponent(card.id)}?tab=${action.tab}`} data-overdelay="Đang mở bộ từ vựng..." data-action={action.tab}><Icon name={action.icon} />{action.label}</Link>)}</footer>
           </article>;
         })}</div>
         {!visible.length && <LearningEmpty title="Chưa tìm thấy bộ từ phù hợp" description="Thử một tên khác hoặc bỏ bộ lọc để khám phá thư viện." onReset={clearFilters} />}
@@ -168,22 +161,7 @@ export default function VocabLearnTabClient({ groupId, userUid, initialCatalog =
                 </p>
               </div>
             </div>
-            <div className="mt-5 flex flex-wrap gap-2">
-              <Link
-                href={`/vocab/${set.id}`}
-                data-overdelay="Đang mở chi tiết bộ từ..."
-                className="rounded-full border border-line px-4 py-2 text-xs font-extrabold text-ink hover:bg-surface-soft"
-              >
-                Xem chi tiết
-              </Link>
-              <Link
-                href={`/vocab/${set.id}/flashcards?mode=menu`}
-                data-overdelay="Đang nạp game từ vựng..."
-                className="rounded-full bg-primary px-4 py-2 text-xs font-extrabold text-gold-ink hover:opacity-90"
-              >
-                Chọn chế độ học
-              </Link>
-            </div>
+            <div className={vocabStyles.catalogActions}>{([{ tab: "view", label: "Xem từ" }, { tab: "learn", label: "Học" }, { tab: "play", label: "Chơi" }] as const).map((action) => <Link key={action.tab} data-action={action.tab} href={`/vocab/${set.id}/flashcards?mode=menu&tab=${action.tab}&mastery=all&amount=all`}>{action.label}</Link>)}</div>
           </article>
         ))}
       </section>

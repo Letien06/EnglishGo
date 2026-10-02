@@ -7,6 +7,42 @@ const words = [{ id: 1, word: "carry", meaning: "mang theo", mastered: false }];
 afterEach(() => { vi.useRealTimers(); vi.unstubAllGlobals(); });
 
 describe("arcade interaction", () => {
+  it("shows simultaneous rain drops, matches typed prefixes, and auto-catches a complete answer", () => {
+    vi.useFakeTimers();
+    const pool = [...words, { id: 2, word: "office", meaning: "văn phòng", mastered: false }, { id: 3, word: "invoice", meaning: "hóa đơn", mastered: false }];
+    render(<VocabularyArcade words={pool} mode="rain" muted onComplete={vi.fn()} onExit={vi.fn()} />);
+    fireEvent.click(screen.getByRole("button", { name: "Bắt đầu chơi" }));
+    act(() => vi.advanceTimersByTime(4000));
+    expect(screen.getAllByTestId("rain-drop")).toHaveLength(2);
+    const clue = screen.getAllByTestId("rain-drop")[1];
+    const answer = pool.find((word) => clue.textContent?.includes(word.meaning))!.word;
+    fireEvent.change(screen.getByRole("textbox"), { target: { value: answer.slice(0, 2) } });
+    expect(clue).toHaveAttribute("data-matching", "true");
+    fireEvent.change(screen.getByRole("textbox"), { target: { value: answer } });
+    expect(screen.getByRole("textbox")).toHaveValue("");
+    expect(screen.getByRole("status")).toHaveTextContent("Chính xác");
+    expect(screen.getAllByTestId("rain-drop")).toHaveLength(1);
+  });
+  it("suspends rain for leave confirmation and automatically pauses a hidden page", () => {
+    vi.useFakeTimers();
+    const props = { words, mode: "rain" as const, muted: true, onComplete: vi.fn(), onExit: vi.fn() };
+    const view = render(<VocabularyArcade {...props} />);
+    fireEvent.click(screen.getByRole("button", { name: "Bắt đầu chơi" }));
+    view.rerender(<VocabularyArcade {...props} suspended />);
+    act(() => vi.advanceTimersByTime(30000));
+    expect(screen.getByLabelText("Còn 3 mạng")).toBeInTheDocument();
+    expect(screen.getByRole("textbox")).toBeDisabled();
+    view.rerender(<VocabularyArcade {...props} />);
+    const hidden = vi.spyOn(document, "hidden", "get").mockReturnValue(true);
+    fireEvent(document, new Event("visibilitychange"));
+    hidden.mockReturnValue(false);
+    act(() => vi.advanceTimersByTime(30000));
+    expect(screen.getByRole("heading", { name: "Đã tạm dừng" })).toBeInTheDocument();
+    expect(screen.getByLabelText("Còn 3 mạng")).toBeInTheDocument();
+    hidden.mockRestore();
+    view.unmount();
+    expect(vi.getTimerCount()).toBe(0);
+  });
   it("waits for an explicit start, pauses time, and finishes without network calls", () => {
     vi.useFakeTimers();
     const fetcher = vi.fn();

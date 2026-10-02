@@ -34,7 +34,7 @@ describe("vocabulary loading", () => {
     expect(screen.getAllByRole("article")).toHaveLength(1);
     expect(screen.getByRole("heading", { name: "Test C" })).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "Cần ôn" }));
-    expect(screen.getByRole("link", { name: "Vào học" })).toHaveAttribute("href", "/vocab/dautoeic/learning");
+    expect(screen.getByRole("link", { name: "Học" })).toHaveAttribute("href", "/vocab/dautoeic/learning?tab=learn");
     fireEvent.click(screen.getByRole("button", { name: "Tất cả" }));
     fireEvent.change(screen.getByRole("combobox"), { target: { value: "progress" } });
     expect(screen.getAllByRole("article")[0]).toHaveTextContent("Test C");
@@ -61,7 +61,9 @@ describe("vocabulary loading", () => {
   it("renders the bundled catalog immediately while progress is still pending", () => {
     render(<VocabLearnTabClient initialCatalog={catalog} userUid="learner" />);
     expect(screen.getByRole("heading", { name: "Test 1" })).toBeInTheDocument();
-    expect(screen.getByRole("link", { name: "Vào học" })).toHaveAttribute("href", "/vocab/dautoeic/source-test");
+    expect(screen.getByRole("link", { name: "Xem từ" })).toHaveAttribute("href", "/vocab/dautoeic/source-test?tab=view");
+    expect(screen.getByRole("link", { name: "Học" })).toHaveAttribute("href", "/vocab/dautoeic/source-test?tab=learn");
+    expect(screen.getByRole("link", { name: "Chơi" })).toHaveAttribute("href", "/vocab/dautoeic/source-test?tab=play");
     expect(screen.getByText("Đang tải tiến độ...")).toBeInTheDocument();
     expect(fetch).toHaveBeenCalledTimes(1);
     expect(fetch).not.toHaveBeenCalledWith("/api/vocab/sets", expect.anything());
