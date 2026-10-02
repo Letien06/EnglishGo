@@ -5,15 +5,26 @@ import type { DauToeicPracticeItem } from "@/types/dautoeic";
 import { usePracticeResume } from "./use-practice-resume";
 
 const items = [{ id: "one", questions: [{ id: "q1" }, { id: "q2" }] }, { id: "two", questions: [{ id: "q3" }] }] as DauToeicPracticeItem[];
-function useHarness(uid: string | null = "learner") {
+function useHarness(uid: string | null = "learner", testId?: string) {
   const [answers, setAnswers] = useState<Record<string, string>>({});
   const [index, setIndex] = useState(0);
-  const resume = usePracticeResume({ skill: "reading", uid, part: 7, level: 1, items, setAnswers, setIndex });
+  const resume = usePracticeResume({ skill: "reading", uid, part: 7, level: 1, testId, items, setAnswers, setIndex });
   return { ...resume, answers, index, setAnswers, setIndex };
 }
 afterEach(() => vi.unstubAllGlobals());
 
 describe("background practice history", () => {
+  it("requests history by test ID and cancels the previous test's request", () => {
+    const fetcher = vi.fn(() => new Promise(() => undefined));
+    vi.stubGlobal("fetch", fetcher);
+    const view = renderHook(({ testId }) => useHarness("learner", testId), { initialProps: { testId: "test-one" } });
+    expect(fetcher).toHaveBeenCalledWith("/api/reading/progress?part=7&testId=test-one", expect.anything());
+    const first = (fetcher.mock.calls[0] as unknown as [string, RequestInit])[1];
+    view.rerender({ testId: "test-two" });
+    expect(first.signal?.aborted).toBe(true);
+    expect(fetcher).toHaveBeenLastCalledWith("/api/reading/progress?part=7&testId=test-two", expect.anything());
+    view.unmount();
+  });
   it("resumes after the last complete passage", async () => {
     vi.stubGlobal("fetch", vi.fn().mockResolvedValue({ ok: true, json: async () => ({ success: true, data: { uid: "learner", answers: { q1: "a", q2: "B", unrelated: "D" } } }) }));
     const { result } = renderHook(() => useHarness());

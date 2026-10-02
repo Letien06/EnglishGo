@@ -7,7 +7,8 @@ import { recordSkillQuestionLeaderboard } from "./leaderboard";
 import { recordStudyActivity, type StudyModule } from "./study-activity";
 import { getDifficultySession, getReadingDifficultySession, listDifficultyLevels, listReadingDifficultyLevels } from "./dautoeic";
 import { DAUTOEIC_LEVEL_COUNT } from "./dautoeic-source";
-import type { DauToeicDifficultyLevel } from "../../types/dautoeic";
+import { getTestPartSession, type TestPartCatalogEntry } from "./test-part-practice";
+import type { DauToeicDifficultyLevel, DauToeicPartTest } from "../../types/dautoeic";
 import type {
   ListeningProgressDoc,
   ProgressRequest,
@@ -30,6 +31,7 @@ interface ToolServiceConfig {
 const PROGRESS_CACHE_SECONDS = 60;
 
 export interface LearningToolService {
+  applyTestProgress(uid: string | null, entries: TestPartCatalogEntry[]): Promise<DauToeicPartTest[]>;
   applyProgress(
     uid: string | null,
     levels: DauToeicDifficultyLevel[],
@@ -47,6 +49,7 @@ export interface LearningToolService {
     uid: string,
     part: number | null,
     level: number | null,
+    testId?: string | null,
   ): Promise<Record<string, string>>;
   recordProgress(
     uid: string | null,
@@ -72,7 +75,13 @@ export function createLearningToolService(
     uid: string,
     part: number | null,
     level: number | null,
+    testId?: string | null,
   ): Promise<ListeningProgressDoc[]> {
+    if (part != null && testId) {
+      const [rows, session] = await Promise.all([cachedProgressRows(uid, [part]), getTestPartSession(testId, part)]);
+      const questionIds = new Set(session.items.flatMap((item) => item.questions.map((question) => question.id)));
+      return rows.filter((row) => row.questionId && questionIds.has(row.questionId));
+    }
     if (part == null || level == null) return [];
     const [rows, itemIds] = await Promise.all([
       cachedProgressRows(uid, [part]),
@@ -183,14 +192,18 @@ export function createLearningToolService(
     uid: string,
     part: number,
     level: number,
+    testId?: string | null,
   ): Promise<void> {
-    const itemIds = await currentLevelItemIds(part, level);
+    const itemIds = testId
+      ? new Set((await getTestPartSession(testId, part)).items.flatMap((item) => item.questions.map((question) => question.id)))
+      : await currentLevelItemIds(part, level);
     if (itemIds.size === 0) return;
     const snap = await userCol(uid, config.progressCollection)
       .where("part", "==", part)
       .get();
     const matchingDocs = snap.docs.filter((doc) => {
-      const itemId = toProgressDoc(doc).itemId;
+      const row = toProgressDoc(doc);
+      const itemId = testId ? row.questionId : row.itemId;
       return itemId && itemIds.has(itemId);
     });
     for (let offset = 0; offset < matchingDocs.length; offset += 400) {
@@ -232,6 +245,21 @@ export function createLearningToolService(
   }
 
   return {
+    async applyTestProgress(uid, entries) {
+      if (!uid || entries.length === 0) return entries.map((entry) => entry.test);
+      const rows = await cachedProgressRows(uid, [...new Set(entries.map((entry) => entry.test.part))]);
+      const byQuestion = new Map(rows.filter((row) => row.questionId && row.selectedAnswer).map((row) => [`${row.part}:${row.questionId}`, row]));
+      return entries.map(({ test, items }) => {
+        const answers = [...new Set(items.flatMap((item) => item.questionIds))].flatMap((questionId) => {
+          const row = byQuestion.get(`${test.part}:${questionId}`);
+          return row ? [row] : [];
+        });
+        const nextIndex = items.findIndex((item) => item.questionIds.some((questionId) => !byQuestion.has(`${test.part}:${questionId}`)));
+        const correct = answers.filter((row) => row.correct).length;
+        return { ...test, done: answers.length, correct, wrong: answers.length - correct, nextIndex: Math.max(0, nextIndex) };
+      });
+    },
+
     async applyProgress(uid, levels) {
       if (!uid || levels.length === 0) return levels;
       const part = levels[0]?.part ?? null;
@@ -244,9 +272,9 @@ export function createLearningToolService(
 
     summarize,
 
-    async loadAnswers(uid, part, level) {
+    async loadAnswers(uid, part, level, testId) {
       if (!uid) return {};
-      const rows = await findProgressByPartAndLevel(uid, part, level);
+      const rows = await findProgressByPartAndLevel(uid, part, level, testId);
       const answers: Record<string, string> = {};
       for (const row of rows) {
         if (row.questionId && row.selectedAnswer) {
@@ -257,14 +285,31 @@ export function createLearningToolService(
     },
 
     async recordProgress(uid, request) {
-      const isCorrect =
+      let isCorrect =
         normalizeAnswer(request.selectedAnswer) ===
         normalizeAnswer(request.correctAnswer);
 
       if (!uid) return { saved: false, authenticated: false, correct: isCorrect };
 
       validateProgressRequest(request, config);
-      const scoringLevel = await scoringLevelFor(request);
+      let scoringLevel: number;
+      let correctAnswer = request.correctAnswer;
+      if (request.testId) {
+        const session = await getTestPartSession(request.testId, request.part!);
+        const item = session.items.find((entry) => entry.id === request.itemId?.trim());
+        const question = item?.questions.find((entry) => entry.id === request.questionId?.trim());
+        if (!item || !question) throw new ApiError("Question does not belong to this test part.", 400);
+        correctAnswer = question.correctAnswer;
+        if (!/^[A-D]$/.test(normalizeAnswer(correctAnswer)) || !/^[A-D]$/.test(normalizeAnswer(request.selectedAnswer))) throw new ApiError("Invalid answer.", 400);
+        isCorrect = normalizeAnswer(request.selectedAnswer) === normalizeAnswer(correctAnswer);
+        const levels = config.module === "listening" ? await listDifficultyLevels(request.part!) : await listReadingDifficultyLevels(request.part!);
+        const original = levels.find((entry) => entry.itemIds.includes(item.id));
+        scoringLevel = original
+          ? await scoringLevelFor({ ...request, level: original.level })
+          : item.sourceLevel ?? 1;
+      } else {
+        scoringLevel = await scoringLevelFor(request);
+      }
       const questionId = request.questionId!.trim();
       const now = Date.now();
       const progressRef = userCol(uid, config.progressCollection).doc(questionId);
@@ -273,12 +318,13 @@ export function createLearningToolService(
           {
             source: "DAUTOEIC",
             part: request.part,
-            level: request.level,
+            level: request.testId ? scoringLevel : request.level,
+            testId: request.testId ?? null,
             sourceLevel: scoringLevel,
             itemId: request.itemId!.trim(),
             questionId,
             selectedAnswer: cleanAnswer(request.selectedAnswer),
-            correctAnswer: cleanAnswer(request.correctAnswer),
+            correctAnswer: cleanAnswer(correctAnswer),
             correct: isCorrect,
             modeUsed: normalizeMode(request.modeUsed),
             assistPercent: normalizeAssist(request.assistPercent),
@@ -416,13 +462,13 @@ export function createLearningToolService(
         return unauthenticatedToolResponse("Đăng nhập để reset tiến độ.");
       }
       requirePartLevel(request, config);
-      await deleteProgressByPartAndLevel(uid, request.part!, request.level!);
+      await deleteProgressByPartAndLevel(uid, request.part!, request.level!, request.testId);
       invalidateProgressCache(uid, request.part);
       return {
         saved: true,
         authenticated: true,
         favorite: null,
-        message: "Đã reset tiến độ level.",
+        message: request.testId ? "Đã xóa tiến độ Part này trong test." : "Đã reset tiến độ level.",
       };
     },
   };
@@ -446,7 +492,7 @@ function requirePartLevel(
   req: Pick<ProgressRequest, "part" | "level">,
   config: ToolServiceConfig,
 ): void {
-  if (req.part == null || req.part < config.minPart || req.part > config.maxPart) {
+  if (req.part == null || !Number.isInteger(req.part) || req.part < config.minPart || req.part > config.maxPart) {
     throw new ApiError(`Part must be between ${config.minPart} and ${config.maxPart}`);
   }
   if (req.level == null || !Number.isInteger(req.level) || req.level < 1 || req.level > DAUTOEIC_LEVEL_COUNT) {

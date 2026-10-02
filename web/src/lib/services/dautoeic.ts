@@ -161,6 +161,39 @@ export function routeTestId(externalId: string): number {
   return stableId(externalId);
 }
 
+export function practiceSessionFromPart(content: Awaited<ReturnType<typeof getPart>>): DauToeicDifficultySession {
+  const { test, part, passages } = content;
+  const questions = [...new Map(content.questions.filter((question) => question.part === part && question.testId === test.id).map((question) => [question.id, question])).values()]
+    .sort((left, right) => (left.questionNumber ?? left.orderIndex ?? 0) - (right.questionNumber ?? right.orderIndex ?? 0));
+  const passageById = new Map(passages.filter((passage) => passage.part === part && passage.testId === test.id).map((passage) => [passage.id, passage]));
+  const groups = new Map<string, DauToeicQuestion[]>();
+  for (const question of questions) {
+    const itemId = ![1, 2, 5].includes(part) && question.passageId ? question.passageId : question.id;
+    const group = groups.get(itemId) ?? [];
+    group.push(question);
+    groups.set(itemId, group);
+  }
+  const items = [...groups].map(([itemId, group]): DauToeicPracticeItem => {
+    const question = group[0];
+    const passage = passageById.get(itemId);
+    if (![1, 2, 5].includes(part) && question.passageId && !passage) throw new ApiError("Test part is missing a referenced passage.", 503);
+    const sourceLevel = Math.max(1, Math.min(DAUTOEIC_LEVEL_COUNT, Math.trunc(question.difficultyLevel ?? test.difficultyLevel ?? 1)));
+    return {
+      id: itemId, itemType: passage ? "passage" : "question", part, level: sourceLevel, sourceLevel,
+      errorRate: null, totalAttempts: null, wrongCount: null,
+      audioUrl: passage?.audioUrl ?? question.audioUrl,
+      imageUrl: passage?.imageUrl ?? question.imageUrl,
+      transcript: passage
+        ? combinedText(passage.transcript, passage.passageText, passage.passageText2, passage.passageText3)
+        : plainText(firstText(question.passageText, question.questionText)),
+      translation: plainText(firstQuestionText(group, (entry) => entry.translationVi)),
+      vocabulary: firstQuestionText(group, (entry) => entry.vocabulary),
+      questions: group,
+    };
+  });
+  return { testId: test.id, testName: test.name ?? "Test", setName: test.setName ?? "Bộ đề TOEIC", part, level: 1, title: test.name, total: items.length, items };
+}
+
 export function routeQuestionId(externalId: string): number {
   return stableId(externalId);
 }

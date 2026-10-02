@@ -9,6 +9,7 @@
 import { redirect } from "next/navigation";
 import { getReadIdentity } from "@/lib/auth/session";
 import * as dautoeic from "@/lib/services/dautoeic";
+import { getTestPartSession } from "@/lib/services/test-part-practice";
 import { DAUTOEIC_LEVEL_COUNT } from "@/lib/services/dautoeic-source";
 import ReadPracticeClient from "./ReadPracticeClient";
 
@@ -24,7 +25,7 @@ function partNumber(partId: string): number {
 export default async function ReadPracticePage({
   searchParams,
 }: {
-  searchParams: Promise<{ part?: string; level?: string; mode?: string; q?: string }>;
+  searchParams: Promise<{ part?: string; level?: string; testId?: string; mode?: string; q?: string }>;
 }) {
   const params = await searchParams;
   const partId = params.part && ["part5", "part6", "part7"].includes(params.part)
@@ -46,7 +47,10 @@ export default async function ReadPracticePage({
   let session;
   let user;
   try {
-    [session, user] = await Promise.all([dautoeic.getReadingDifficultySession(pNum, level, null), getReadIdentity()]);
+    [session, user] = await Promise.all([
+      params.testId !== undefined ? getTestPartSession(params.testId, pNum) : dautoeic.getReadingDifficultySession(pNum, level, null),
+      getReadIdentity(),
+    ]);
   } catch {
     redirect(`/read?part=${partId}`);
   }
@@ -57,7 +61,7 @@ export default async function ReadPracticePage({
 
   return (
     <ReadPracticeClient
-      key={`read:${partId}:${level}:${user?.uid ?? "guest"}`}
+      key={`read:${partId}:${params.testId ?? level}:${user?.uid ?? "guest"}`}
       initialIndex={Math.max(0, Math.min(session.items.length - 1, Math.trunc(Number(params.q)) || 0))}
       session={session}
       partId={partId}

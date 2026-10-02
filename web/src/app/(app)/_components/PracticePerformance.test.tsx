@@ -22,6 +22,19 @@ beforeEach(() => {
 afterEach(() => { cleanup(); vi.useRealTimers(); vi.restoreAllMocks(); vi.unstubAllGlobals(); });
 
 describe.each(["listening", "reading"] as const)("%s responsive practice", (skill) => {
+  it("keeps the selected test in the header, mode URL and save request", () => {
+    const testSession = { ...session, testId: "test-two", testName: "Test 2", setName: "Crack TOEIC Vol 1" };
+    const common = { session: testSession, level: 1, mode: "normal", userLoggedIn: true, userUid: "learner", initialIndex: 0 };
+    render(skill === "listening" ? <ListenPracticeClient {...common} partId="part3" partNum={3} assist={30} /> : <ReadPracticeClient {...common} partId="part7" partNum={7} />);
+    expect(screen.getByRole("heading", { level: 1 })).toHaveTextContent(/Part (3|7) · Test 2/);
+    expect(screen.getByText("Crack TOEIC Vol 1")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Song ngữ" }));
+    expect(new URL(window.location.href).searchParams.get("testId")).toBe("test-two");
+    expect(new URL(window.location.href).searchParams.has("level")).toBe(false);
+    fireEvent.click(screen.getAllByLabelText("Đáp án A")[0]);
+    const call = vi.mocked(fetch).mock.calls[0];
+    expect(JSON.parse(call[1]!.body as string)).toMatchObject({ testId: "test-two", questionId: "q1", itemId: "one" });
+  });
   it("waits for the full passage, then advances without waiting for a slow save", async () => {
     const common = { session, level: 1, mode: "normal", userLoggedIn: true, userUid: "learner", initialIndex: 0 };
     render(skill === "listening" ? <ListenPracticeClient {...common} partId="part3" partNum={3} assist={30} /> : <ReadPracticeClient {...common} partId="part7" partNum={7} />);

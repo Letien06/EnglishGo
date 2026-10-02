@@ -21,7 +21,7 @@
 const STORAGE_KEY = "englishgo:visited-routes:v1";
 
 /** Query params that actually change what a page loads (so they belong in the key). */
-const RELEVANT_PARAMS = ["part", "level", "mode", "assist"] as const;
+const RELEVANT_PARAMS = ["part", "level", "testId", "mode", "assist"] as const;
 
 function isBrowser(): boolean {
   return typeof window !== "undefined";

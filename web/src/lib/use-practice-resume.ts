@@ -3,11 +3,12 @@
 import { useCallback, useEffect, useRef, useState, type Dispatch, type SetStateAction } from "react";
 import type { DauToeicPracticeItem } from "@/types/dautoeic";
 
-export function usePracticeResume({ skill, uid, part, level, items, setAnswers, setIndex }: {
+export function usePracticeResume({ skill, uid, part, level, testId, items, setAnswers, setIndex }: {
   skill: "listening" | "reading";
   uid: string | null;
   part: number;
   level: number;
+  testId?: string;
   items: DauToeicPracticeItem[];
   setAnswers: Dispatch<SetStateAction<Record<string, string>>>;
   setIndex: Dispatch<SetStateAction<number>>;
@@ -19,7 +20,8 @@ export function usePracticeResume({ skill, uid, part, level, items, setAnswers, 
   useEffect(() => {
     if (!uid) return;
     const controller = new AbortController();
-    void fetch(`/api/${skill}/progress?part=${part}&level=${level}`, { cache: "no-store", signal: controller.signal })
+    const selection = testId ? `testId=${encodeURIComponent(testId)}` : `level=${level}`;
+    void fetch(`/api/${skill}/progress?part=${part}&${selection}`, { cache: "no-store", signal: controller.signal })
       .then(async (response) => {
         const payload = await response.json();
         if (!response.ok || !payload.success || payload.data?.uid !== uid) throw new Error("History unavailable");
@@ -43,7 +45,7 @@ export function usePracticeResume({ skill, uid, part, level, items, setAnswers, 
         if (!controller.signal.aborted) setStatus("Chưa tải được tiến độ cũ. Câu trả lời mới vẫn được lưu khi có kết nối.");
       });
     return () => controller.abort();
-  }, [items, level, part, setAnswers, setIndex, skill, uid]);
+  }, [items, level, part, testId, setAnswers, setIndex, skill, uid]);
 
   return { markInteraction, resumeStatus: status };
 }

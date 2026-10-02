@@ -28,12 +28,28 @@ export interface DauToeicDifficultyLevel {
 }
 
 export interface DauToeicDifficultySession {
+  testId?: string;
+  testName?: string;
+  setName?: string;
   part: number;
   level: number;
   grouping?: "balanced";
   title: string | null;
   total: number;
   items: DauToeicPracticeItem[];
+}
+
+export interface DauToeicPartTest {
+  testId: string;
+  testName: string;
+  setName: string;
+  part: number;
+  questionCount: number;
+  itemCount: number;
+  done: number;
+  correct: number;
+  wrong: number;
+  nextIndex: number;
 }
 
 export interface DauToeicSet {

@@ -5,6 +5,7 @@ import { z } from "zod";
 // instead of `T | null | undefined`, which breaks under
 // `exactOptionalPropertyTypes: true` during `next build` type checking.
 export const progressRequestSchema = z.object({
+  testId: z.string().trim().regex(/^[a-zA-Z0-9_-]{1,200}$/).nullable().default(null),
   part: z.coerce.number().nullable().default(null),
   level: z.coerce.number().nullable().default(null),
   itemId: z.string().nullable().default(null),
@@ -18,6 +19,7 @@ export const progressRequestSchema = z.object({
 });
 
 export const toolRequestSchema = z.object({
+  testId: z.string().trim().regex(/^[a-zA-Z0-9_-]{1,200}$/).nullable().default(null),
   part: z.coerce.number().nullable().default(null),
   level: z.coerce.number().nullable().default(null),
   itemId: z.string().nullable().default(null),

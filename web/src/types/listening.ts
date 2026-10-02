@@ -66,6 +66,7 @@ export interface ListeningVocabBasketDoc {
 /* ------------------------------------------------------------------ */
 
 export interface ProgressRequest {
+  testId?: string | null;
   part: number | null;
   level: number | null;
   itemId: string | null;
@@ -93,6 +94,7 @@ export interface ProgressSummary {
 }
 
 export interface ToolRequest {
+  testId?: string | null;
   part: number | null;
   level: number | null;
   itemId: string | null;

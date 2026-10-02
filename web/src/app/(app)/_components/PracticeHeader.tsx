@@ -9,6 +9,9 @@ interface Props {
   partId: string;
   part: number;
   level: number;
+  testId?: string;
+  testName?: string;
+  setName?: string;
   grouped: boolean;
   modes: Array<[PracticeMode, string, string]>;
   activeMode: PracticeMode;
@@ -20,12 +23,13 @@ interface Props {
   onAssistChange?: (value: number) => void;
 }
 
-export default function PracticeHeader({ skill, partId, part, level, grouped, modes, activeMode, onModeChange, auto, onToggleAuto, elapsed, assist = 0, onAssistChange }: Props) {
+export default function PracticeHeader({ skill, partId, part, level, testId, testName, setName, grouped, modes, activeMode, onModeChange, auto, onToggleAuto, elapsed, assist = 0, onAssistChange }: Props) {
   const base = skill === "listening" ? "/listen" : "/read";
+  const selection = testId ? `testId=${encodeURIComponent(testId)}` : `level=${level}`;
   const assistOptions = skill === "listening" ? [30, 50, 100] : [];
   return <header className="skill-workspace-header practice-toolbar">
     <Link className="practice-back" href={`${base}?part=${partId}`} aria-label="Quay lại danh sách bài"><NavIcon name="arrow-right" /></Link>
-    <div className="practice-title"><span>{skill === "listening" ? "LUYỆN NGHE" : "LUYỆN ĐỌC"}</span><h1>Part {part} · {grouped ? "Nhóm" : "Cấp"} {level}</h1></div>
+    <div className="practice-title"><span>{skill === "listening" ? "LUYỆN NGHE" : "LUYỆN ĐỌC"}</span><h1>Part {part} · {testId ? <span className="practice-test-name">{testName}</span> : <>{grouped ? "Nhóm" : "Cấp"} {level}</>}</h1>{testId && <span className="practice-set-name">{setName}</span>}</div>
     <nav className="practice-modes" aria-label="Chế độ luyện tập">
       {modes.map(([key, , label]) => <button type="button" key={key} aria-pressed={key === activeMode} onClick={() => onModeChange(key)}>{label}</button>)}
     </nav>
@@ -36,6 +40,6 @@ export default function PracticeHeader({ skill, partId, part, level, grouped, mo
       </select>}
       <span className="practice-timer">{elapsed}</span>
     </div>
-    <PracticeMobileMenu modes={modes} activeMode={activeMode} auto={auto} onToggleAuto={onToggleAuto} onModeChange={onModeChange} onAssistChange={onAssistChange} assist={assist} assistOptions={assistOptions} elapsed={elapsed} modeHref={(nextMode) => `${base}/practice?part=${partId}&level=${level}&mode=${nextMode}`} assistHref={(value) => `${base}/practice?part=${partId}&level=${level}&assist=${value}`} />
+    <PracticeMobileMenu modes={modes} activeMode={activeMode} auto={auto} onToggleAuto={onToggleAuto} onModeChange={onModeChange} onAssistChange={onAssistChange} assist={assist} assistOptions={assistOptions} elapsed={elapsed} modeHref={(nextMode) => `${base}/practice?part=${partId}&${selection}&mode=${nextMode}`} assistHref={(value) => `${base}/practice?part=${partId}&${selection}&assist=${value}`} />
   </header>;
 }

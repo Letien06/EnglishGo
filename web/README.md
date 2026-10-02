@@ -50,3 +50,18 @@ Listening and reading load material alongside verified identity, without a
 Firestore profile read. Private answer history loads after the lesson renders;
 late responses never replace new answers or interrupt an active learner.
 Answer saving retains the existing authenticated POST checks and scoring rules.
+
+### Practice by exam test
+
+Listening Parts 1-4 and reading Parts 5-7 now show exam tests grouped by book,
+using the same test-part material as the full-exam practice area. A practice URL
+uses `testId` and `part`; it never combines questions from different tests.
+Multi-question passages stay together, including all reading texts and media.
+Catalog metadata is cached by content snapshot, while private progress loads
+in the background and is counted by question ID, independent of the old level.
+
+Existing `level` URLs still work. Old answers, notes, and favorites retain their
+question/item IDs, and source scoring levels are preserved. Resetting a test
+clears only that Part's question progress, not other tests or Parts. The bundled
+snapshot already contains the full tests; no new Drive upload or environment
+variable is required for this change.

@@ -8,6 +8,7 @@
  */
 import { getReadIdentity } from "@/lib/auth/session";
 import * as dautoeic from "@/lib/services/dautoeic";
+import { getTestPartSession } from "@/lib/services/test-part-practice";
 import { DAUTOEIC_LEVEL_COUNT } from "@/lib/services/dautoeic-source";
 import ListenPracticeClient from "./ListenPracticeClient";
 
@@ -24,7 +25,7 @@ function partNumber(partId: string): number {
 export default async function ListenPracticePage({
   searchParams,
 }: {
-  searchParams: Promise<{ part?: string; level?: string; mode?: string; q?: string; assist?: string }>;
+  searchParams: Promise<{ part?: string; level?: string; testId?: string; mode?: string; q?: string; assist?: string }>;
 }) {
   const params = await searchParams;
   const partId = params.part && ["part1", "part2", "part3", "part4"].includes(params.part)
@@ -60,7 +61,10 @@ export default async function ListenPracticePage({
   let session;
   let user;
   try {
-    [session, user] = await Promise.all([dautoeic.getDifficultySession(pNum, level, null), getReadIdentity()]);
+    [session, user] = await Promise.all([
+      params.testId !== undefined ? getTestPartSession(params.testId, pNum) : dautoeic.getDifficultySession(pNum, level, null),
+      getReadIdentity(),
+    ]);
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
     console.error("listen-practice-session-failed", {
@@ -90,7 +94,7 @@ export default async function ListenPracticePage({
 
   return (
     <ListenPracticeClient
-      key={`listen:${partId}:${level}:${user?.uid ?? "guest"}`}
+      key={`listen:${partId}:${params.testId ?? level}:${user?.uid ?? "guest"}`}
       initialIndex={Math.max(0, Math.min(session.items.length - 1, Math.trunc(Number(params.q)) || 0))}
       session={session}
       partId={partId}
@@ -132,7 +136,7 @@ function PracticeLoadError({
           <p className="mt-2 break-words font-mono text-xs text-rose-800"><strong>Chi tiết:</strong> {detail}</p>
         </div>
         <p className="mt-4 text-xs text-rose-800">Bạn có thể chụp màn hình phần “Chi tiết” này để kiểm tra cấu hình API hoặc dữ liệu đồng bộ.</p>
-        <a href={`/listen?part=${partId}`} className="mt-5 inline-flex rounded-xl bg-rose-700 px-4 py-2 text-sm font-extrabold text-white no-underline hover:bg-rose-800">← Quay lại danh sách level</a>
+        <a href={`/listen?part=${partId}`} className="mt-5 inline-flex rounded-xl bg-rose-700 px-4 py-2 text-sm font-extrabold text-white no-underline hover:bg-rose-800">← Quay lại danh sách bài</a>
       </section>
     </main>
   );

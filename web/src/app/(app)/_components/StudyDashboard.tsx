@@ -1,7 +1,7 @@
 import Link from "@/components/IntentLink";
 import NavIcon from "@/components/NavIcon";
-import LevelDashboardClient from "./LevelDashboardClient";
-import type { DauToeicDifficultyLevel } from "@/types/dautoeic";
+import TestDashboardClient from "./TestDashboardClient";
+import type { DauToeicPartTest } from "@/types/dautoeic";
 
 export const STUDY_PARTS = [
   { number: 1, name: "Hình ảnh", description: "Quan sát hình và chọn mô tả phù hợp." },
@@ -13,19 +13,17 @@ export const STUDY_PARTS = [
   { number: 7, name: "Đọc hiểu", description: "Đọc email, thông báo và các bài đọc theo cụm." },
 ] as const;
 
-export default function StudyDashboard({ skill, part, levels, error }: {
+export default function StudyDashboard({ skill, part, tests, error }: {
   skill: "listening" | "reading";
   part: number;
-  levels: DauToeicDifficultyLevel[];
+  tests: DauToeicPartTest[];
   error: boolean;
 }) {
   const listening = skill === "listening";
   const base = listening ? "/listen" : "/read";
   const active = STUDY_PARTS.find((entry) => entry.number === part)!;
   const parts = STUDY_PARTS.filter((entry) => listening ? entry.number <= 4 : entry.number >= 5);
-  const grouped = levels.some((level) => level.grouping === "balanced");
-  const total = levels.reduce((sum, level) => sum + (level.total ?? 0), 0);
-  const unit = [1, 2, 5].includes(part) ? "câu hỏi" : "cụm câu hỏi";
+  const total = tests.reduce((sum, test) => sum + test.questionCount, 0);
 
   return (
     <main className="study-dashboard">
@@ -39,7 +37,7 @@ export default function StudyDashboard({ skill, part, levels, error }: {
       <header className="study-intro">
         <div>
           <h1>Luyện {listening ? "nghe" : "đọc"}<span className="study-heading-dot">.</span></h1>
-          <p>Chọn một phần, mở bài và bắt đầu học.</p>
+          <p>Chọn Part, chọn test và học đúng bài trong bộ đề.</p>
         </div>
         {listening && <Link className="study-extra-link" href="/listen/dictation">Nghe - chép video<NavIcon name="arrow-right" /></Link>}
       </header>
@@ -53,10 +51,10 @@ export default function StudyDashboard({ skill, part, levels, error }: {
       <section className="study-section" aria-labelledby="study-section-heading">
         <div className="study-section-heading">
           <div><h2 id="study-section-heading">Part {part} <span>/</span> {active.name}</h2><p>{active.description}</p></div>
-          {!error && <span className="study-total">{total} {unit}</span>}
+          {!error && <span className="study-total">{tests.length} test · {total} câu hỏi</span>}
         </div>
-        <LevelDashboardClient key={`${skill}:${part}`} skill={skill} partId={`part${part}`} partNum={part} initialLevels={levels} initialError={error} levelsEndpoint={`/api/${skill}/levels`} resetEndpoint={`/api/${skill}/reset`} practiceHrefBase={`${base}/practice`} />
-        {!error && <p className="study-caption">{grouped ? "Bốn nhóm có số bài gần bằng nhau. Bạn có thể học từ bất kỳ nhóm nào." : "Các cấp độ được giữ theo phân loại của bộ tài liệu."}</p>}
+        <TestDashboardClient key={`${skill}:${part}`} skill={skill} part={part} initialTests={tests} initialError={error} />
+        {!error && <p className="study-caption">Mỗi test chỉ gồm Part {part} của đề tương ứng. Tiến độ được giữ theo từng câu hỏi.</p>}
       </section>
     </main>
   );

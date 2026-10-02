@@ -54,7 +54,7 @@ export default function ReadPracticeClient({
   const items = session.items;
   const [currentIndex, setCurrentIndex] = useState(initialIndex);
   const [answeredMap, setAnsweredMap] = useState<Record<string, string>>({});
-  const { markInteraction, resumeStatus } = usePracticeResume({ skill: "reading", uid: userUid, part: partNum, level, items, setAnswers: setAnsweredMap, setIndex: setCurrentIndex });
+  const { markInteraction, resumeStatus } = usePracticeResume({ skill: "reading", uid: userUid, part: partNum, level, testId: session.testId, items, setAnswers: setAnsweredMap, setIndex: setCurrentIndex });
   const [saveError, setSaveError] = useState("");
   const [showNote, setShowNote] = useState(false);
   const [auto, setAuto] = useState(false);
@@ -90,11 +90,17 @@ export default function ReadPracticeClient({
     if (typeof window === "undefined") return;
     const url = new URL(window.location.href);
     url.searchParams.set("part", partId);
-    url.searchParams.set("level", String(level));
+    if (session.testId) {
+      url.searchParams.set("testId", session.testId);
+      url.searchParams.delete("level");
+    } else {
+      url.searchParams.set("level", String(level));
+      url.searchParams.delete("testId");
+    }
     url.searchParams.set("mode", next.mode ?? activeMode);
     url.searchParams.set("q", String(next.q ?? currentIndex));
     window.history.replaceState(null, "", `${url.pathname}${url.search}`);
-  }, [activeMode, currentIndex, level, partId]);
+  }, [activeMode, currentIndex, level, partId, session.testId]);
 
   const switchMode = useCallback((nextMode: PracticeMode) => {
     if (nextMode === activeMode) return;
@@ -117,11 +123,12 @@ export default function ReadPracticeClient({
     markVisited(
       routeKey("/read/practice", {
         part: partId,
-        level: String(level),
+        level: session.testId ? undefined : String(level),
+        testId: session.testId,
         mode: activeMode,
       }),
     );
-  }, [activeMode, partId, level]);
+  }, [activeMode, partId, level, session.testId]);
 
   useEffect(() => {
     updatePracticeUrl({ q: currentIndex });
@@ -162,6 +169,7 @@ export default function ReadPracticeClient({
         body: JSON.stringify({
           part: partNum,
           level,
+          testId: session.testId,
           itemId: item.id,
           questionId: question.id,
           selectedAnswer,
@@ -185,7 +193,7 @@ export default function ReadPracticeClient({
     }
 
 
-  }, [activeMode, answeredMap, auto, currentIndex, elapsed, goTo, item.id, item.questions, items.length, level, partNum, userUid]);
+  }, [activeMode, answeredMap, auto, currentIndex, elapsed, goTo, item.id, item.questions, items.length, level, partNum, userUid, session.testId]);
 
   useEffect(() => () => {
     if (autoAdvanceRef.current !== null) window.clearTimeout(autoAdvanceRef.current);
@@ -215,7 +223,7 @@ export default function ReadPracticeClient({
 
   return (
     <main className="skill-workspace skill-workspace--read design-system min-h-dvh bg-white" onPointerDownCapture={markInteraction} onKeyDownCapture={markInteraction}>
-      <PracticeHeader skill="reading" partId={partId} part={partNum} level={level} grouped={session.grouping === "balanced"} modes={modes} activeMode={activeMode} onModeChange={(nextMode) => { if (nextMode === "normal" || nextMode === "bilingual") switchMode(nextMode); }} auto={auto} onToggleAuto={() => setAuto((value) => !value)} elapsed={formatElapsed(elapsed)} />
+      <PracticeHeader skill="reading" partId={partId} part={partNum} level={level} testId={session.testId} testName={session.testName} setName={session.setName} grouped={session.grouping === "balanced"} modes={modes} activeMode={activeMode} onModeChange={(nextMode) => { if (nextMode === "normal" || nextMode === "bilingual") switchMode(nextMode); }} auto={auto} onToggleAuto={() => setAuto((value) => !value)} elapsed={formatElapsed(elapsed)} />
       {(saveError || resumeStatus) && <div className="practice-save-status" role="status">{saveError || resumeStatus}</div>}
 
       <div className={`practice-content grid min-h-[calc(100dvh-8rem)] lg:grid-cols-[1fr_1fr] ${partNum === 5 ? "practice-content--single" : ""}`}>

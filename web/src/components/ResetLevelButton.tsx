@@ -8,21 +8,23 @@ interface Props {
   endpoint: string;
   onReset?: () => void | Promise<void>;
   grouped?: boolean;
+  testId?: string;
+  testName?: string;
 }
 
-export default function ResetLevelButton({ part, level, endpoint, onReset, grouped = false }: Props) {
+export default function ResetLevelButton({ part, level, endpoint, onReset, grouped = false, testId, testName }: Props) {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
 
   const handleClick = async () => {
-    if (!confirm(grouped ? "Xóa tiến độ nhóm này để học lại từ đầu?" : "Xóa tiến độ cấp này để học lại từ đầu?")) return;
+    if (!confirm(testId ? `Xóa tiến độ Part ${part} của ${testName ?? "test này"} để học lại từ đầu?` : grouped ? "Xóa tiến độ nhóm này để học lại từ đầu?" : "Xóa tiến độ cấp này để học lại từ đầu?")) return;
     setBusy(true);
     setError("");
     try {
       const response = await fetch(endpoint, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ part, level }),
+        body: JSON.stringify({ part, level, testId }),
       });
       const payload = await response.json().catch(() => null);
       if (!response.ok || payload?.success === false) {
