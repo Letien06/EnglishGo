@@ -7,14 +7,15 @@ interface Props {
   level: number;
   endpoint: string;
   onReset?: () => void | Promise<void>;
+  grouped?: boolean;
 }
 
-export default function ResetLevelButton({ part, level, endpoint, onReset }: Props) {
+export default function ResetLevelButton({ part, level, endpoint, onReset, grouped = false }: Props) {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
 
   const handleClick = async () => {
-    if (!confirm("Reset tiến độ level này?")) return;
+    if (!confirm(grouped ? "Reset tiến độ nhóm luyện tập này?" : "Reset tiến độ level này?")) return;
     setBusy(true);
     setError("");
     try {

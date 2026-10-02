@@ -288,6 +288,36 @@ node scripts/sync-dauenglish-drive.mjs verify '<materials-json-path>'
 - Every snapshot gets a new immutable manifest ID. Keep the previous ID for
   rollback; never overwrite a manifest that a deployed website is using.
 
+### Optional Balanced Practice Groups
+
+To split Parts 2, 3, 4, 6, and 7 into four practice groups without claiming a
+TOEIC difficulty or score band, create a separate snapshot before uploading:
+
+```powershell
+node scripts/regroup-dauenglish.mjs '<source-materials.json>' '<new-grouped-materials.json>'
+node scripts/sync-dauenglish-drive.mjs upload '<new-grouped-materials.json>'
+node scripts/sync-dauenglish-drive.mjs verify '<new-grouped-materials.json>'
+```
+
+The offline regrouping command validates the input and output and refuses to
+overwrite an existing file. It preserves the original source timestamp, all
+test materials, and Parts 1 and 5. Items are sorted by their stable IDs, then
+divided into four groups whose item counts differ by at most one. A passage and
+all its questions always stay together; question counts per group can differ.
+Each moved item retains its original `sourceLevel`; question difficulty fields,
+answers, explanations, media links, and IDs are unchanged.
+
+Grouped catalogs and sessions carry `grouping: "balanced"`. The dashboard and
+practice header display **Nhóm luyện tập 1–4**, not score bands. Learner history
+continues to follow current item membership without migrating or deleting
+Firestore records. The client catalog cache is versioned to discard the old
+level-3-only layout. After a future source download, rerun the regrouping command
+before publishing if these groups should be retained. Grouping is deterministic
+for the same set of IDs, but adding or removing items can change membership.
+
+Activate the new manifest only after verification, and retain the original
+manifest for rollback. The regrouping command does not publish anything itself.
+
 ### Activate On Vercel
 
 Only after a successful upload, the CLI writes a secret

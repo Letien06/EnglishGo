@@ -268,7 +268,7 @@ export default function ListenPracticeClient({
           文
         </span>
         <h1 className="min-w-0 flex-1 truncate text-base font-extrabold sm:text-xl">
-          Part {partNum} · Cấp {level} · Nghe
+          Part {partNum} · {session.grouping === "balanced" ? `Nhóm luyện tập ${level}` : `Cấp ${level}`} · Nghe
         </h1>
 
         <nav className="hidden flex-1 items-center justify-center rounded-xl border border-white/25 bg-white/10 p-1 lg:flex">

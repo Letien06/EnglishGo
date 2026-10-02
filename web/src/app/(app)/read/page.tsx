@@ -16,6 +16,7 @@ export default async function ReadPage({
   const { part: partParam } = await searchParams;
   const activePart = parts.find((part) => part.id === partParam) ?? parts[0];
   const initial = await loadInitialLevels(activePart.num);
+  const grouped = initial.levels.some((level) => level.grouping === "balanced");
 
   return (
     <main className="app-canvas skill-index-page skill-index-page--read min-h-[calc(100dvh-4rem)] px-4 py-5 lg:px-8">
@@ -28,13 +29,13 @@ export default async function ReadPage({
           <section>
             <div className="mb-5">
               <span className="inline-flex rounded-full bg-primary/10 px-3 py-1 text-[11px] font-extrabold text-primary">
-                Level practice
+                {grouped ? "Practice groups" : "Level practice"}
               </span>
               <h2 className="mt-2 text-2xl font-extrabold text-ink">
-                Chọn cấp độ luyện đọc
+                {grouped ? "Chọn nhóm luyện đọc" : "Chọn cấp độ luyện đọc"}
               </h2>
               <p className="text-sm text-muted">
-                Mỗi level được gom theo tỉ lệ sai từ ngân hàng câu hỏi Đậu TOEIC.
+                {grouped ? "Bài được chia đều thành 4 nhóm, không xếp theo độ khó hay mốc điểm TOEIC. Mỗi đoạn đọc được giữ nguyên cùng các câu hỏi đi kèm." : "Giữ nguyên cách phân cấp của nguồn tài liệu Đậu TOEIC."}
               </p>
             </div>
 

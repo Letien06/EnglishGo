@@ -54,6 +54,21 @@ beforeEach(() => {
 });
 
 describe("progress against the current content catalog", () => {
+  it("keeps level-3 passage answers when balanced groups move them to group 1", async () => {
+    rows([
+      progress("moved", { part: 3, level: 3, questionId: "answer-1", selectedAnswer: "B" }),
+      progress("moved", { part: 3, level: 3, questionId: "answer-2", correct: false }),
+      progress("elsewhere", { part: 3, level: 3 }),
+    ]);
+    const groups = [{ ...level(1, ["moved"], 3), grouping: "balanced" as const }, level(2, ["elsewhere"], 3)];
+    mocks.levels.mockResolvedValue(groups);
+    const result = await service.applyProgress("learner", groups);
+    expect(result[0]).toMatchObject({ grouping: "balanced", done: 1, correct: 1, wrong: 1 });
+    await expect(service.loadAnswers("learner", 3, 1)).resolves.toEqual({ "answer-1": "B", "answer-2": "A" });
+    expect(mocks.delete).not.toHaveBeenCalled();
+    expect(mocks.commit).not.toHaveBeenCalled();
+  });
+
   it("does not turn 36 historical completions into 3600% of one current item", async () => {
     rows(Array.from({ length: 36 }, (_, index) => progress(`old-${index}`)));
     const result = await service.applyProgress("learner", [level(1, ["current"])]);

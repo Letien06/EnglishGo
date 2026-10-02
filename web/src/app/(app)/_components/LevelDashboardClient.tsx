@@ -216,16 +216,17 @@ function LevelCard({
   const total = level.total ?? 0;
   const hasPracticeItems = total > 0;
   const progress = total > 0 ? Math.round((level.done / total) * 100) : 0;
+  const grouped = level.grouping === "balanced";
 
   return (
     <article className={`premium-card premium-card--interactive p-5 ${className}`}>
       <header className="mb-4 flex items-start gap-4">
         <span className="inline-flex h-10 w-10 items-center justify-center rounded-lg bg-surface-soft text-xs font-extrabold text-primary">
-          Lv{level.level}
+          {grouped ? `N${level.level}` : `Lv${level.level}`}
         </span>
         <div>
           <h3 className="text-base font-extrabold text-ink">{level.title}</h3>
-          <p className="text-xs text-muted">{hasPracticeItems ? "Bài hiện có trong nguồn kết nối" : "Nguồn kết nối chưa cung cấp bài ở level này"}</p>
+          <p className="text-xs text-muted">{grouped ? "Chia đều số bài · Không xếp theo độ khó" : hasPracticeItems ? "Bài hiện có trong nguồn kết nối" : "Nguồn kết nối chưa cung cấp bài ở level này"}</p>
         </div>
         <span className="ml-auto text-xs text-muted">{level.done}/{total}</span>
       </header>
@@ -247,9 +248,9 @@ function LevelCard({
       </div>
 
       <footer className="mt-5 flex items-center justify-between">
-        <span className="text-xs font-extrabold text-muted">{total} item</span>
+        <span className="text-xs font-extrabold text-muted">{total} {grouped ? (partNum === 2 ? "câu" : "cụm câu hỏi") : "item"}</span>
         <div className="flex items-center gap-3">
-          <ResetLevelButton part={partNum} level={level.level} endpoint={endpoint} onReset={onReset} />
+          <ResetLevelButton part={partNum} level={level.level} endpoint={endpoint} onReset={onReset} grouped={grouped} />
           {hasPracticeItems ? <Link
             href={href}
             data-overdelay={skill === "listening" ? "Đang mở bài luyện nghe..." : "Đang mở bài luyện đọc..."}
@@ -261,7 +262,7 @@ function LevelCard({
             Luyện ngay
           </Link> : <span
             aria-disabled="true"
-            title="API nguồn hiện không trả nội dung cho level này; đăng nhập ở trang nguồn không tự cấp quyền cho website này."
+            title={grouped ? "Chưa có bài trong nhóm luyện tập này." : "API nguồn hiện không trả nội dung cho level này; đăng nhập ở trang nguồn không tự cấp quyền cho website này."}
             className="inline-flex cursor-not-allowed items-center gap-1.5 rounded-xl bg-slate-200 px-5 py-2 text-sm font-extrabold text-slate-500"
           >
             Chưa có dữ liệu

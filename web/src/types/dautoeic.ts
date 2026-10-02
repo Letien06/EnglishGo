@@ -13,6 +13,7 @@
 export interface DauToeicDifficultyLevel {
   part: number;
   level: number;
+  grouping?: "balanced";
   title: string | null;
   errorRateMin: number | null;
   errorRateMax: number | null;
@@ -29,6 +30,7 @@ export interface DauToeicDifficultyLevel {
 export interface DauToeicDifficultySession {
   part: number;
   level: number;
+  grouping?: "balanced";
   title: string | null;
   total: number;
   items: DauToeicPracticeItem[];
@@ -135,6 +137,7 @@ export interface DauToeicPracticeItem {
   itemType: string | null;
   part: number;
   level: number;
+  sourceLevel?: number;
   errorRate: number | null;
   totalAttempts: number | null;
   wrongCount: number | null;
