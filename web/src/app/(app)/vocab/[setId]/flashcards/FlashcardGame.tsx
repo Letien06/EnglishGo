@@ -28,8 +28,12 @@ import useDialogFocus from "@/components/useDialogFocus";
 import { ClientRequestTimeoutError, fetchWithTimeout } from "@/lib/client-request";
 import { consolidateVocabGameAnswers } from "@/lib/vocab-game-results";
 import { englishExampleForSpeech } from "@/lib/vocab-speech";
+import type { VocabularyRoundResult } from "@/lib/vocab-arcade";
+import WordExplorer from "./WordExplorer";
+import styles from "./vocabulary.module.css";
 
 interface Props {
+  initialTab?: "view" | "learn" | "play";
   session: VocabSetSession;
   initialMode: string;
   practiceOptions: VocabSetCard[];
@@ -43,6 +47,9 @@ interface Props {
 }
 
 type PlayMode =
+  | "learn"
+  | "blast"
+  | "rain"
   | "flashcard"
   | "quiz"
   | "matching"
@@ -51,6 +58,7 @@ type PlayMode =
   | "mixed";
 type QuizMode = "wordMeaning" | "context" | "meaningWord";
 type Screen = "hub" | "play" | "result";
+type WorkspaceTab = "view" | "learn" | "play";
 
 interface AnswerRecord {
   id: number;
@@ -111,6 +119,8 @@ const MODE_CARDS: {
   quiz?: boolean;
   hot?: boolean;
 }[] = [
+  { key: "blast", icon: "↯", title: "Word Blast", desc: "Bắt đúng từ trước khi chạm vạch", points: "3 mạng" },
+  { key: "rain", icon: "☂", title: "Mưa từ vựng", desc: "Gõ nhanh, nhớ lâu, nối combo", points: "Combo x4" },
   { key: "flashcard", icon: "☷", title: "Flashcard", desc: "Lật thẻ học từ vựng", points: "+5" },
   { key: "quiz", icon: "☑", title: "Trắc nghiệm", desc: "Chọn đáp án đúng", points: "+10", quiz: true },
   { key: "matching", icon: "▦", title: "Nối từ với nghĩa", desc: "Ghép đôi từ vựng và nghĩa", points: "+10" },
@@ -120,6 +130,9 @@ const MODE_CARDS: {
 ];
 
 const MODE_TONES: Record<PlayMode, ModeTone> = {
+  learn: { card: "border-success-line bg-success-soft", icon: "bg-surface text-success-ink", badge: "bg-surface text-success-ink" },
+  blast: { card: "border-info-line bg-info-soft", icon: "bg-surface text-info-ink", badge: "bg-surface text-info-ink" },
+  rain: { card: "border-teal-line bg-teal-soft", icon: "bg-surface text-teal-ink", badge: "bg-surface text-teal-ink" },
   flashcard: {
     card: "border-indigo-200 bg-indigo-50/80 hover:border-indigo-400",
     icon: "bg-indigo-100 text-indigo-700",
@@ -157,6 +170,8 @@ const QuizBody = dynamic(() => import("./modes/QuizMode"), { loading: ModeLoadin
 const MatchingBody = dynamic(() => import("./modes/MatchingMode"), { loading: ModeLoading });
 const TypingBody = dynamic(() => import("./modes/TypingMode"), { loading: ModeLoading });
 const ListeningBody = dynamic(() => import("./modes/ListeningMode"), { loading: ModeLoading });
+const ContextLearning = dynamic(() => import("./modes/ContextLearning"), { loading: ModeLoading });
+const VocabularyArcade = dynamic(() => import("./modes/VocabularyArcade"), { loading: ModeLoading });
 
 function ModeLoading() {
   return <div className="mx-auto min-h-72 max-w-2xl animate-pulse rounded-2xl border border-line bg-white" />;
@@ -212,6 +227,9 @@ function modeLabelFor(mode: PlayMode, quizMode: QuizMode): string {
   }
   return (
     {
+      learn: "Học theo ngữ cảnh",
+      blast: "Word Blast",
+      rain: "Mưa từ vựng",
       flashcard: "Flashcard",
       typing: "Gõ từ vựng",
       listening: "Nghe viết",
@@ -263,6 +281,7 @@ function parseGameDraft(raw: string | null): VocabGameDraftPayload | null {
 /* ================================================================== */
 
 export default function FlashcardGame({
+  initialTab,
   session,
   initialMode,
   practiceOptions,
@@ -280,6 +299,8 @@ export default function FlashcardGame({
 
   const startInPlay = initialMode && initialMode !== "menu";
   const [screen, setScreen] = useState<Screen>(startInPlay ? "play" : "hub");
+  const [workspaceTab, setWorkspaceTab] = useState<WorkspaceTab>(initialTab ?? (startInPlay ? (["quiz", "matching", "blast", "rain"].includes(initialMode) ? "play" : "learn") : "view"));
+  const [pendingTab, setPendingTab] = useState<WorkspaceTab | null>(null);
   const [mode, setMode] = useState<PlayMode>(
     startInPlay && isPlayMode(initialMode) ? (initialMode as PlayMode) : "flashcard",
   );
@@ -365,6 +386,7 @@ export default function FlashcardGame({
   );
 
   function startMode(next: PlayMode) {
+    setWorkspaceTab(["blast", "rain", "matching", "quiz"].includes(next) ? "play" : "learn");
     setMode(next);
     setQuizChooser(false);
     setScreen("play");
@@ -378,6 +400,13 @@ export default function FlashcardGame({
   }
 
   function goHub() {
+    setPendingTab(workspaceTab);
+  }
+
+  function selectWorkspaceTab(next: WorkspaceTab) {
+    if (screen === "play") { setPendingTab(next); return; }
+    setQuizChooser(false);
+    setWorkspaceTab(next);
     setScreen("hub");
   }
 
@@ -390,6 +419,7 @@ export default function FlashcardGame({
     setFilterPending(true);
     const params = new URLSearchParams({
       mode: "menu",
+      tab: workspaceTab,
       mastery: next.mastery ?? selectedMastery,
       order: next.order ?? selectedOrder,
       amount: next.amount ?? selectedAmount,
@@ -406,7 +436,7 @@ export default function FlashcardGame({
   }
 
   return (
-    <main className="flex-1 overflow-y-auto px-4 py-6 lg:px-8 space-y-6">
+    <main className={`${styles.workspace} w-full flex-1 overflow-y-auto px-4 py-6 lg:px-8 space-y-6`}>
       {filterPending && (
         <div className="fixed inset-x-0 top-16 z-50 mx-auto w-fit rounded-full border border-amber-200 bg-white px-4 py-2 text-xs font-extrabold text-ink shadow-lg">
           Đang nạp bộ lọc từ vựng...
@@ -414,7 +444,7 @@ export default function FlashcardGame({
       )}
 
       <Link
-        href={reviewMode || session.set.sourceType === "DAUTOEIC" ? "/vocab?tab=learn" : `/vocab/${setId}`}
+        href={session.set.externalTestId ? `/vocab/dautoeic/${encodeURIComponent(session.set.externalTestId)}` : reviewMode ? "/vocab?tab=learn" : `/vocab/${setId}`}
         className="text-accent text-sm"
       >
         ← Quay lại
@@ -430,8 +460,23 @@ export default function FlashcardGame({
         </p>
       </section>
 
+      <nav className={styles.tabs} role="tablist" aria-label="Hoạt động từ vựng" onKeyDown={(event) => {
+        if (!["ArrowLeft", "ArrowRight", "Home", "End"].includes(event.key)) return;
+        const tabs = Array.from(event.currentTarget.querySelectorAll<HTMLButtonElement>('[role="tab"]'));
+        const current = tabs.indexOf(event.target as HTMLButtonElement);
+        if (current < 0) return;
+        event.preventDefault();
+        const next = event.key === "Home" ? 0 : event.key === "End" ? tabs.length - 1 : (current + (event.key === "ArrowRight" ? 1 : tabs.length - 1)) % tabs.length;
+        tabs[next]?.focus();
+      }}>
+        {([{ key: "view", label: "Xem từ" }, { key: "learn", label: "Học" }, { key: "play", label: "Chơi" }] as const).map((tab) => <button key={tab.key} id={`vocab-tab-${tab.key}`} role="tab" aria-selected={workspaceTab === tab.key} aria-controls="vocab-workspace-panel" onClick={() => selectWorkspaceTab(tab.key)}>{tab.label}</button>)}
+      </nav>
+
+      <div id="vocab-workspace-panel" role="tabpanel" aria-labelledby={`vocab-tab-${workspaceTab}`}>
+
       {screen === "hub" && (
         <Hub
+          tab={workspaceTab}
           words={words}
           setId={setId}
           practiceOptions={availableSets}
@@ -456,12 +501,13 @@ export default function FlashcardGame({
       {screen === "play" && words.length > 0 && (
         <PlaySurface
           key={`${mode}-${quizMode}`}
-          words={words}
+          words={mode === "quiz" ? words.slice(0, 20) : words}
           setId={setId}
           title={session.set.title}
           externalTestId={session.set.externalTestId}
           externalPartId={session.set.externalPartId}
           mode={mode}
+          suspended={pendingTab !== null}
           quizMode={quizMode}
           muted={muted}
           isAuthenticated={isAuthenticated}
@@ -493,6 +539,9 @@ export default function FlashcardGame({
           </p>
         </section>
       )}
+      </div>
+
+      {pendingTab && <LeaveSessionDialog onCancel={() => setPendingTab(null)} onLeave={() => { setWorkspaceTab(pendingTab); setScreen("hub"); setQuizChooser(false); setPendingTab(null); }} />}
 
       {completionNotice ? (
         <div
@@ -513,6 +562,7 @@ export default function FlashcardGame({
 /* ================================================================== */
 
 function Hub({
+  tab,
   words,
   setId,
   practiceOptions,
@@ -532,6 +582,7 @@ function Hub({
   onClearHistory,
   onApplyFilters,
 }: {
+  tab: WorkspaceTab;
   words: VocabWordCard[];
   setId: number;
   practiceOptions: VocabSetCard[];
@@ -572,7 +623,9 @@ function Hub({
         </aside>
       ) : null}
       {/* Filters */}
-      <section className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+      <details className="rounded-xl border border-line bg-surface px-4 py-3">
+      <summary className="cursor-pointer text-sm font-semibold text-ink2">Bộ lọc luyện tập · {words.length} từ trong lượt chọn</summary>
+      <section className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
         <FilterSelect
           label="Bộ từ vựng"
           value={String(setId)}
@@ -614,10 +667,19 @@ function Hub({
           ]}
         />
       </section>
+      </details>
+
+      {tab === "view" ? <WordExplorer words={words} onLearn={() => onStartMode("learn")} /> : <>
+      {tab === "learn" && <section className={styles.hero}>
+        <span className={styles.eyebrow}>Một từ, nhiều cách ghi nhớ</span>
+        <h2>Hiểu trong câu.<br />Nhớ khi cần.</h2>
+        <p>Từ đơn → cụm từ → câu ví dụ → tự gõ lại. Mỗi lượt tối đa 20 từ; chỉ hiện những bước có dữ liệu trong bộ từ của bạn.</p>
+        <button className={`${styles.button} ${styles.primary} mt-5`} disabled={!words.length} onClick={() => onStartMode("learn")}>Bắt đầu học theo ngữ cảnh →</button>
+      </section>}
 
       {/* Topline */}
       <div className="flex items-center justify-between gap-3">
-        <h2 className="text-lg font-bold text-ink">Chọn game:</h2>
+        <h2 className="text-lg font-bold text-ink">{tab === "play" ? "Chọn trò chơi" : "Luyện riêng từng kỹ năng"}</h2>
         <div className="flex items-center gap-3">
           <button
             type="button"
@@ -633,17 +695,19 @@ function Hub({
       </div>
 
       {/* Game cards */}
-      <section className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-        {MODE_CARDS.map((card) => {
+      <section className="grid gap-3 sm:grid-cols-2">
+        {MODE_CARDS.filter((card) => tab === "play" ? ["blast", "rain", "matching", "quiz"].includes(card.key) : ["flashcard", "typing", "listening", "mixed"].includes(card.key)).map((card) => {
           const tone = MODE_TONES[card.key];
           return (
             <button
               key={card.key}
               type="button"
+              disabled={!words.length}
               onClick={() =>
                 card.quiz ? onOpenQuizChooser() : onStartMode(card.key)
               }
-              className={`game-mode-card premium-card premium-card--interactive relative flex min-h-[170px] flex-col items-center justify-center gap-2 overflow-hidden p-5 text-center ${tone.card}`}
+              data-game={card.key}
+              className={`${styles.gameCard} relative flex min-h-[150px] flex-col items-center justify-center gap-2 overflow-hidden p-5 text-center`}
             >
               {card.hot && (
                 <em className="absolute right-3 top-3 rounded bg-red-500 px-2 py-0.5 text-[10px] font-bold not-italic text-white">
@@ -660,7 +724,7 @@ function Hub({
       </section>
 
       {/* SRS banner */}
-      <section className="flex flex-col items-start gap-3 rounded-2xl border border-violet-200 bg-violet-50/80 p-5 shadow-sm sm:flex-row sm:items-center sm:justify-between">
+      {tab === "learn" && <section className="flex flex-col items-start gap-3 rounded-2xl border border-success-line bg-success-soft p-5 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <strong className="block text-ink">Ôn tập ngắt quãng (SRS)</strong>
           <span className="text-sm text-muted">
@@ -669,12 +733,12 @@ function Hub({
         </div>
         <button
           type="button"
-          onClick={() => onStartMode("flashcard")}
+          onClick={() => onApplyFilters({ mastery: "due" })}
           className="game-utility-button shrink-0 rounded-xl bg-violet-600 px-5 py-2.5 text-sm font-semibold text-white hover:bg-violet-700"
         >
           Bắt đầu ôn tập
         </button>
-      </section>
+      </section>}
 
       {/* History */}
       <section className="space-y-3">
@@ -726,8 +790,21 @@ function Hub({
       {quizChooser && (
         <QuizChooser onClose={onCloseQuizChooser} onSelect={onStartQuiz} />
       )}
+      </>}
     </div>
   );
+}
+
+function LeaveSessionDialog({ onCancel, onLeave }: { onCancel: () => void; onLeave: () => void }) {
+  const dialogRef = useRef<HTMLDivElement>(null);
+  useDialogFocus(true, onCancel, dialogRef);
+  return <div className="fixed inset-0 z-[80] grid place-items-center bg-black/60 p-4">
+    <div ref={dialogRef} role="dialog" aria-modal="true" aria-labelledby="leave-vocab-title" tabIndex={-1} className="w-full max-w-md space-y-4 rounded-2xl border border-line bg-surface p-6 shadow-xl">
+      <h2 id="leave-vocab-title" className="text-xl font-bold text-ink">Rời phiên hiện tại?</h2>
+      <p className="text-sm text-ink2">Kết quả chưa lưu sẽ không được ghi vào tiến độ. Bạn có thể ở lại để hoàn thành lượt này.</p>
+      <div className="flex flex-wrap gap-2"><button data-dialog-initial-focus className={`${styles.button} ${styles.primary}`} onClick={onCancel}>Ở lại học tiếp</button><button className={styles.button} onClick={onLeave}>Rời phiên</button></div>
+    </div>
+  </div>;
 }
 
 function FilterSelect({
@@ -835,6 +912,7 @@ function PlaySurface({
   externalTestId,
   externalPartId,
   mode,
+  suspended,
   quizMode,
   muted,
   isAuthenticated,
@@ -848,6 +926,7 @@ function PlaySurface({
   externalTestId?: string;
   externalPartId?: string;
   mode: PlayMode;
+  suspended: boolean;
   quizMode: QuizMode;
   muted: boolean;
   isAuthenticated: boolean;
@@ -913,6 +992,7 @@ function PlaySurface({
   );
 
   const usesTimer = activeMode === "quiz" || activeMode === "matching";
+  const localRound = mode === "learn" || mode === "blast" || mode === "rain";
 
   const makeDraftPayload = useCallback(() => {
     const payload: VocabGameDraftPayload = {
@@ -952,6 +1032,7 @@ function PlaySurface({
   }, [showResult, words.length]);
 
   useEffect(() => {
+    if (localRound) return;
     let cancelled = false;
     const localDraft = parseGameDraft(window.localStorage.getItem(draftStorageKey));
     if (localDraft) {
@@ -990,10 +1071,10 @@ function PlaySurface({
     return () => {
       cancelled = true;
     };
-  }, [applyDraft, draftStorageKey, externalPartId, isAuthenticated, mode, quizMode, setId]);
+  }, [applyDraft, draftStorageKey, externalPartId, isAuthenticated, localRound, mode, quizMode, setId]);
 
   useEffect(() => {
-    if (!hydratedDraftRef.current) return;
+    if (localRound || !hydratedDraftRef.current) return;
     const payload = makeDraftPayload();
     window.localStorage.setItem(draftStorageKey, payload);
     if (showResult) return;
@@ -1004,7 +1085,7 @@ function PlaySurface({
     return () => {
       if (draftTimerRef.current) window.clearTimeout(draftTimerRef.current);
     };
-  }, [answers, attempts, draftStorageKey, index, makeDraftPayload, saveDraftToServer, score, showResult]);
+  }, [answers, attempts, draftStorageKey, index, localRound, makeDraftPayload, saveDraftToServer, score, showResult]);
 
   const speakItem = useCallback(
     (item?: VocabWordCard | AnswerRecord, accent: "us" | "uk" = "us") => {
@@ -1044,7 +1125,7 @@ function PlaySurface({
   useEffect(() => {
     if (activeMode !== "matching") return;
     const timer = window.setTimeout(() => {
-      const chosen = shuffle(words).slice(0, Math.min(8, words.length));
+      const chosen = shuffle(words).slice(0, Math.min(6, words.length));
       const items: MatchItem[] = chosen.map((w) => ({
         id: w.id,
         word: w.word,
@@ -1086,7 +1167,7 @@ function PlaySurface({
   // Start / restart timer per question for timed modes.
   useEffect(() => {
     const timer = window.setTimeout(() => {
-      if (usesTimer && !feedback && !showResult) startTimer();
+      if (usesTimer && !feedback && !showResult && !suspended) startTimer();
       else stopTimer();
     }, 0);
     return () => {
@@ -1094,7 +1175,7 @@ function PlaySurface({
       stopTimer();
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [index, activeMode, feedback, showResult]);
+  }, [index, activeMode, feedback, showResult, suspended]);
 
   // Auto-speak on entering a listening card.
   useEffect(() => {
@@ -1367,7 +1448,7 @@ function PlaySurface({
         const status = await submitReviewBatch(
           outcomes.map(({ answer, needsReview }) => needsReview
             ? { wordId: answer.id, quality: 2 }
-            : { wordId: answer.id, mastered: true }),
+            : localRound ? { wordId: answer.id, quality: 4 } : { wordId: answer.id, mastered: true }),
         );
         if (status !== 200 && status !== 204) {
           setSaving(false);
@@ -1394,7 +1475,7 @@ function PlaySurface({
         title,
         mode: modeLabel,
         startedAtMillis: startedAtRef.current,
-        totalWords: Math.max(words.length, answered),
+        totalWords: localRound ? answered : mode === "matching" ? matchWords.length : Math.max(words.length, answered),
         correctWords,
         wrongWords,
         accuracy,
@@ -1419,14 +1500,14 @@ function PlaySurface({
         );
         return;
       }
-      window.localStorage.removeItem(draftStorageKey);
+      if (!localRound) window.localStorage.removeItem(draftStorageKey);
       const draftParams = new URLSearchParams({
         setId: String(setId),
         mode,
         quizMode,
       });
       if (externalPartId) draftParams.set("externalPartId", externalPartId);
-      void fetchWithTimeout(
+      if (!localRound) void fetchWithTimeout(
         `/api/vocab/game-draft?${draftParams.toString()}`,
         { method: "DELETE" },
         3_000,
@@ -1452,6 +1533,7 @@ function PlaySurface({
 
   /* ---- Keyboard shortcuts ---- */
   useEffect(() => {
+    if (localRound || showResult || suspended) return;
     function onKey(e: KeyboardEvent) {
       const target = e.target as HTMLElement | null;
       const editable =
@@ -1498,10 +1580,12 @@ function PlaySurface({
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [activeMode, feedback, options, index, typed]);
+  }, [activeMode, feedback, options, index, typed, localRound, showResult, suspended]);
 
   if (showResult) {
     return (
+      <div className="space-y-4">
+      <button className={styles.button} onClick={onExit}>Quay lại các hoạt động</button>
       <ResultScreen
         answers={resultAnswers}
         attempts={attempts}
@@ -1517,8 +1601,19 @@ function PlaySurface({
           if (item) speakItem(item as VocabWordCard);
         }}
       />
+      </div>
     );
   }
+
+  function completeLocalRound(result: VocabularyRoundResult) {
+    setAnswers(result.answers.map(({ item, ...answer }) => ({ ...item, ...answer, mode: modeLabelFor(mode, quizMode) })));
+    setAttempts(result.answers.length);
+    setScore(result.score);
+    setShowResult(true);
+  }
+
+  if (mode === "learn") return <ContextLearning words={words.slice(0, 20)} onComplete={completeLocalRound} onExit={onExit} />;
+  if (mode === "blast" || mode === "rain") return <VocabularyArcade words={words} mode={mode} muted={muted} suspended={suspended} onComplete={completeLocalRound} onExit={onExit} />;
 
   const progressPercent =
     activeMode === "matching"
@@ -1903,7 +1998,7 @@ function ResultScreen({
           tone="correct"
           icon="✓"
           title={`Trả lời đúng (${correctItems.length})`}
-          subtitle="Chọn từ đánh dấu &quot;Đã thuộc&quot;"
+          subtitle="Những từ trả lời đúng trong lượt này"
           items={correctItems}
           onSpeak={onSpeak}
           muted={muted}
@@ -2014,7 +2109,7 @@ function ResultColumn({
 /* ================================================================== */
 
 function isPlayMode(value: string): value is PlayMode {
-  return ["flashcard", "quiz", "matching", "typing", "listening", "mixed"].includes(
+  return ["learn", "blast", "rain", "flashcard", "quiz", "matching", "typing", "listening", "mixed"].includes(
     value,
   );
 }

@@ -21,6 +21,7 @@ export default async function FlashcardsPage({ params, searchParams }: Props) {
   const uid = user?.uid ?? "";
 
   const mode = (sp.mode as string) ?? "flashcard";
+  const tab = sp.tab === "view" || sp.tab === "learn" || sp.tab === "play" ? sp.tab : undefined;
   const mastery = (sp.mastery as string) ?? undefined;
   const order = (sp.order as string) ?? undefined;
   const amount = (sp.amount as string) ?? undefined;
@@ -47,6 +48,7 @@ export default async function FlashcardsPage({ params, searchParams }: Props) {
         )
       : vocab.getSession(id);
   const returnParams = new URLSearchParams({ mode });
+  if (tab) returnParams.set("tab", tab);
   if (mastery) returnParams.set("mastery", mastery);
   if (order) returnParams.set("order", order);
   if (amount) returnParams.set("amount", amount);
@@ -60,6 +62,7 @@ export default async function FlashcardsPage({ params, searchParams }: Props) {
       key={returnPath}
       session={session}
       initialMode={mode}
+      initialTab={tab}
       practiceOptions={[]}
       loadExtrasInBackground
       reviewMode={false}

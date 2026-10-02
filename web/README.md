@@ -75,6 +75,25 @@ does not write to Firestore. After read-back verification, update the production
 `GOOGLE_DRIVE_MANIFEST_ID` and redeploy. Audio/image URLs remain source URLs;
 the JSON backup is not a backup of the media files themselves.
 
+### Vocabulary workspace
+
+Vocabulary sessions have three client-side tabs: word browsing, contextual
+learning, and games. Browsing includes search, reversible cards, session-only
+stars, pronunciation, and available phrases/examples from the existing Drive
+snapshot. No new sync, environment variable, or material upload is required.
+
+Context learning walks through words, translated phrases, example sentences,
+and exact English recall (up to 20 words per round). Word Blast and Vocabulary
+Rain also use up to 20 words, three lives, pause-on-hidden-tab, and an optional
+untimed mode. Rain reveals hints at 40%/70% of the time budget and rewards
+streaks; reduced-motion users see stationary targets. These new rounds run
+locally without draft/progress requests per answer. They load on demand.
+
+Progress and history are saved only through the existing explicit save action
+at the result screen. Incorrect attempts remain in review even if a later
+retry succeeds; correct new-mode answers use SRS quality 4, not forced mastery.
+Leaving an unfinished round asks for confirmation. Multiplayer is not included.
+
 ### Practice by exam test
 
 Listening Parts 1-4 and reading Parts 5-7 now show exam tests grouped by book,

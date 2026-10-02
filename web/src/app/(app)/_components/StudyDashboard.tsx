@@ -2,6 +2,7 @@ import Link from "@/components/IntentLink";
 import NavIcon from "@/components/NavIcon";
 import TestDashboardClient from "./TestDashboardClient";
 import type { DauToeicPartTest } from "@/types/dautoeic";
+import type { ListeningMetadata } from "../listen/_components/listening-view-model";
 
 export const STUDY_PARTS = [
   { number: 1, name: "Hình ảnh", description: "Quan sát hình và chọn mô tả phù hợp." },
@@ -13,13 +14,15 @@ export const STUDY_PARTS = [
   { number: 7, name: "Đọc hiểu", description: "Đọc email, thông báo và các bài đọc theo cụm." },
 ] as const;
 
-export default function StudyDashboard({ skill, part, tests, error }: {
+export default function StudyDashboard({ skill, part, tests, error, listeningMetadata }: {
   skill: "listening" | "reading";
   part: number;
   tests: DauToeicPartTest[];
   error: boolean;
+  listeningMetadata?: ListeningMetadata;
 }) {
   const listening = skill === "listening";
+  if (listening) return <TestDashboardClient key={`${skill}:${part}`} skill={skill} part={part} initialTests={tests} initialError={error} listeningMetadata={listeningMetadata} />;
   const base = listening ? "/listen" : "/read";
   const active = STUDY_PARTS.find((entry) => entry.number === part)!;
   const parts = STUDY_PARTS.filter((entry) => listening ? entry.number <= 4 : entry.number >= 5);

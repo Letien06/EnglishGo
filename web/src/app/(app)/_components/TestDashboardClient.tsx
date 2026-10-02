@@ -7,17 +7,20 @@ import ResetLevelButton from "@/components/ResetLevelButton";
 import { useAuthenticatedSession } from "@/components/AuthenticatedSessionContext";
 import { ACTIVE_LEARNER_UPDATED_EVENT, LEARNING_LEVELS_UPDATED_EVENT, activeLearnerId, invalidateLearningLevels, isLearningLevelsDirty } from "@/lib/client-learning-progress-cache";
 import type { DauToeicPartTest } from "@/types/dautoeic";
+import ListeningDashboard from "../listen/_components/ListeningDashboard";
+import { summarizeTests, type ListeningMetadata, type PartProgress } from "../listen/_components/listening-view-model";
 
 const progressCache = new Map<string, DauToeicPartTest[]>();
 
-export default function TestDashboardClient({ skill, part, initialTests, initialError }: {
+export default function TestDashboardClient({ skill, part, initialTests, initialError, listeningMetadata }: {
   skill: "listening" | "reading";
   part: number;
   initialTests: DauToeicPartTest[];
   initialError: boolean;
+  listeningMetadata?: ListeningMetadata;
 }) {
   const authenticated = useAuthenticatedSession();
-  const [view, setView] = useState<{ uid: string | null; tests: DauToeicPartTest[] }>({ uid: null, tests: initialTests });
+  const [view, setView] = useState<{ uid: string | null; tests: DauToeicPartTest[]; resolved: boolean }>({ uid: null, tests: initialTests, resolved: false });
   const [progressError, setProgressError] = useState(false);
   const base = skill === "listening" ? "/listen" : "/read";
 
@@ -30,7 +33,8 @@ export default function TestDashboardClient({ skill, part, initialTests, initial
       const uid = authenticated ? activeLearnerId() : null;
       const key = `${skill}:${part}:${uid}`;
       if (isLearningLevelsDirty(skill, part, uid)) progressCache.delete(key);
-      setView({ uid, tests: uid ? progressCache.get(key) ?? initialTests : initialTests });
+      const cached = uid ? progressCache.get(key) : undefined;
+      setView({ uid, tests: cached ?? initialTests, resolved: Boolean(cached) });
       setProgressError(false);
       if (!uid) return;
       const request = new AbortController();
@@ -42,7 +46,7 @@ export default function TestDashboardClient({ skill, part, initialTests, initial
         if (!response.ok || !payload.success || payload.data?.uid !== uid || !Array.isArray(payload.data.tests)) throw new Error("Progress unavailable");
         if (progressCache.size >= 32) progressCache.delete(progressCache.keys().next().value!);
         progressCache.set(key, payload.data.tests);
-        setView({ uid, tests: payload.data.tests });
+        setView({ uid, tests: payload.data.tests, resolved: true });
       } catch {
         if (!disposed && !request.signal.aborted && activeLearnerId() === uid) setProgressError(true);
       }
@@ -66,8 +70,19 @@ export default function TestDashboardClient({ skill, part, initialTests, initial
     };
   }, [authenticated, initialTests, part, skill]);
 
-  if (initialError) return <section className="premium-card p-6" role="alert"><h3>Chưa tải được danh sách test.</h3><p className="mt-2 text-sm text-muted">Vui lòng tải lại trang để thử lại.</p></section>;
   const tests = authenticated && view.uid === activeLearnerId() ? view.tests : initialTests;
+  if (skill === "listening") {
+    const partProgress: Partial<Record<number, PartProgress>> = {};
+    if (authenticated) {
+      const uid = activeLearnerId();
+      for (const number of [1, 2, 3, 4]) {
+        const cached = progressCache.get(`listening:${number}:${uid}`);
+        if (cached && !isLearningLevelsDirty("listening", number, uid)) partProgress[number] = summarizeTests(cached);
+      }
+    }
+    return <ListeningDashboard tests={tests} part={part} initialError={initialError} progressError={progressError} progressReady={!authenticated || (view.resolved && view.uid === activeLearnerId())} authenticated={authenticated} partProgress={partProgress} metadata={listeningMetadata} />;
+  }
+  if (initialError) return <section className="premium-card p-6" role="alert"><h3>Chưa tải được danh sách test.</h3><p className="mt-2 text-sm text-muted">Vui lòng tải lại trang để thử lại.</p></section>;
   if (!tests.length) return <p className="study-caption">Chưa có test cho Part này.</p>;
   const groups = [...new Set(tests.map((test) => test.setName))];
 

@@ -88,6 +88,10 @@ export interface DauToeicVocabPart {
 }
 
 export interface DauToeicVocabMeaning {
+  example_vi?: string | null;
+  antonyms?: unknown;
+  word_family?: unknown;
+  toeic_tip?: string | null;
   pos?: string | null;
   part_of_speech?: string | null;
   meaning?: string | null;

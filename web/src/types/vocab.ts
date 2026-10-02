@@ -43,7 +43,17 @@ export interface VocabSetDoc {
   deletedAtMillis?: number;
 }
 
-export interface VocabWordDoc {
+export interface VocabWordDetails {
+  imageUrl?: string;
+  exampleTranslation?: string;
+  phrases?: { text: string; meaning: string }[];
+  synonyms?: string[];
+  antonyms?: string[];
+  wordFamily?: string[];
+  toeicTip?: string;
+}
+
+export interface VocabWordDoc extends VocabWordDetails {
   id: number;
   setId: number;
   word: string;
@@ -177,7 +187,7 @@ export interface VocabStudyHistoryCard {
   wrongWords: number;
 }
 
-export interface VocabWordCard {
+export interface VocabWordCard extends VocabWordDetails {
   id: number;
   word: string;
   meaning: string;

@@ -7,6 +7,8 @@ import type { DauToeicPartTest } from "@/types/dautoeic";
 import TestDashboardClient from "./TestDashboardClient";
 
 vi.mock("@/components/IntentLink", () => ({ default: ({ children, ...props }: React.ComponentProps<"a">) => <a {...props}>{children}</a> }));
+vi.mock("../listen/_components/useListeningStreak", () => ({ default: () => null }));
+vi.mock("../listen/_components/useListeningPartProgress", () => ({ default: () => ({}) }));
 
 const tests: DauToeicPartTest[] = [
   { testId: "vol1-test1", testName: "Test 1", setName: "Vol 1", part: 1, questionCount: 6, itemCount: 6, done: 0, correct: 0, wrong: 0, nextIndex: 0 },
@@ -23,6 +25,12 @@ beforeEach(() => {
 afterEach(() => { cleanup(); vi.unstubAllGlobals(); });
 
 describe("test selection dashboard", () => {
+  it("keeps the reading dashboard presentation and routes unchanged", () => {
+    render(<AuthenticatedSessionProvider authenticated={false}><TestDashboardClient skill="reading" part={5} initialTests={tests.map((test) => ({ ...test, part: 5 }))} initialError={false} /></AuthenticatedSessionProvider>);
+    expect(screen.getByRole("link", { name: "Bắt đầu Test 1 - Vol 1" })).toHaveAttribute("href", "/read/practice?part=part5&testId=vol1-test1&mode=normal&q=0");
+    expect(screen.queryByRole("searchbox")).not.toBeInTheDocument();
+    expect(screen.queryByRole("region", { name: "Tổng quan luyện nghe" })).not.toBeInTheDocument();
+  });
   it("renders immediately and links identical test names to different source IDs without levels", () => {
     const fetcher = vi.fn();
     vi.stubGlobal("fetch", fetcher);
@@ -54,9 +62,9 @@ describe("test selection dashboard", () => {
     render(<Dashboard authenticated />);
     await waitFor(() => expect(screen.getByRole("link", { name: "Học tiếp Test 1 - Vol 1" })).toHaveAttribute("href", expect.stringContaining("q=2")));
     act(() => setActiveLearnerId("second-learner"));
-    expect(within(screen.getByRole("region", { name: "Vol 1" })).getByText("0/6 đã học")).toBeInTheDocument();
+    expect(within(screen.getByRole("region", { name: "Vol 1" })).getByRole("progressbar")).not.toHaveAttribute("aria-valuenow");
     await act(async () => resolveSecond({ ok: true, json: async () => ({ success: true, data: { uid: "first-learner", tests: [{ ...tests[0], done: 6 }, tests[1]] } }) }));
-    expect(within(screen.getByRole("region", { name: "Vol 1" })).getByText("0/6 đã học")).toBeInTheDocument();
-    expect(screen.getByRole("status")).toHaveTextContent("Chưa cập nhật");
+    expect(within(screen.getByRole("region", { name: "Vol 1" })).getByRole("progressbar")).not.toHaveAttribute("aria-valuenow");
+    expect(screen.getByRole("status", { name: "Trạng thái tiến độ" })).toHaveTextContent("Chưa cập nhật");
   });
 });

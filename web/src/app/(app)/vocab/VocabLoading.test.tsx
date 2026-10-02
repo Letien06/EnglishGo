@@ -1,5 +1,5 @@
 import React from "react";
-import { cleanup, render, screen, waitFor } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { DauToeicVocabCatalogView, DauToeicVocabPartSummary } from "@/types/dautoeic";
 import VocabLearnTabClient from "./VocabLearnTabClient";
@@ -23,12 +23,19 @@ beforeEach(() => { vi.stubGlobal("React", React); vi.stubGlobal("fetch", vi.fn((
 afterEach(() => { cleanup(); vi.restoreAllMocks(); vi.unstubAllGlobals(); });
 
 describe("vocabulary loading", () => {
-  it("renders the game menu while supplemental history and set options are pending", () => {
+  it("renders all workspace tabs while supplemental history and set options are pending", () => {
     render(<FlashcardGame session={{ set: { id: 123, title: "Test 1 - LC", topic: "2026", externalPartId: "lc" }, words: [{ id: 1, word: "office", meaning: "van phong", mastered: false }] }} initialMode="menu" practiceOptions={[]} reviewMode={false} isAuthenticated loginHref="/login" loadExtrasInBackground />);
     expect(screen.getByRole("heading", { name: "Test 1 - LC" })).toBeInTheDocument();
+    expect(screen.getByRole("tab", { name: "Xem từ" })).toHaveAttribute("aria-selected", "true");
+    expect(screen.getByRole("button", { name: "Lật thẻ xem đáp án" })).toHaveTextContent("office");
+    fireEvent.click(screen.getByRole("tab", { name: "Học" }));
     expect(screen.getByText("Flashcard", { exact: true })).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("tab", { name: "Chơi" }));
+    expect(screen.getByText("Word Blast", { exact: true })).toBeInTheDocument();
+    expect(screen.getByText("Mưa từ vựng", { exact: true })).toBeInTheDocument();
     expect(fetch).toHaveBeenCalledWith("/api/vocab/history?setId=123&externalPartId=lc", expect.anything());
     expect(fetch).toHaveBeenCalledWith("/api/vocab/sets?scope=practice", expect.anything());
+    expect(fetch).toHaveBeenCalledTimes(2);
   });
   it("renders the bundled catalog immediately while progress is still pending", () => {
     render(<VocabLearnTabClient initialCatalog={catalog} userUid="learner" />);

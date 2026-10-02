@@ -1,1 +1,1 @@
-export { default } from "../_components/StudyLoading";
+export { default } from "./_components/ListeningLoading";

@@ -8,6 +8,7 @@
  */
 import { adminDb } from "@/lib/firestore/db";
 import { cache } from "react";
+import { vocabularyDetails } from "@/lib/vocab-content";
 import { FieldValue } from "firebase-admin/firestore";
 import { randomInt } from "crypto";
 import { BadRequest, Forbidden, NotFound, Unauthorized } from "@/lib/api/response";
@@ -2017,6 +2018,7 @@ function toWordDoc(
 ): VocabWordDoc {
   const d = doc.data() ?? {};
   return {
+    ...vocabularyDetails(d),
     id: numVal(d, "id") ?? parseInt(doc.id, 10),
     setId: numVal(d, "setId") ?? 0,
     word: strVal(d, "word") || "",
@@ -2082,6 +2084,7 @@ function toProgressDoc(
 
 function toWordCard(word: VocabWordDoc, mastered: boolean): VocabWordCard {
   return {
+    ...vocabularyDetails(word as unknown as Record<string, unknown>),
     id: word.id,
     word: word.word,
     meaning: word.meaning,

@@ -42,6 +42,16 @@ beforeEach(() => {
 afterEach(() => vi.unstubAllGlobals());
 
 describe("vocabulary uses the verified Drive bundle", () => {
+  it("passes stored phrases, translations and tips to the client without upstream reads", async () => {
+    const snapshot = vocabularyFixture();
+    snapshot.words[0].phrases = [{ phrase: "at the office", meaning: "ở văn phòng" }];
+    snapshot.words[0].synonyms = ["workplace"];
+    snapshot.words[0].meanings[0] = { ...snapshot.words[0].meanings[0], example_vi: "Ví dụ.", toeic_tip: "Part 1", antonyms: ["home"], word_family: ["officer"] };
+    mocks.drive.mockResolvedValue(snapshot);
+    const session = await vocab.getFilteredSessionForPart(source.dautoeicVocabSetId("vocab-test"), null, "lc", "all", "original", "all", false);
+    expect(session.words[0]).toMatchObject({ phrases: [{ text: "at the office", meaning: "ở văn phòng" }], synonyms: ["workplace"], exampleTranslation: "Ví dụ.", toeicTip: "Part 1", antonyms: ["home"], wordFamily: ["officer"] });
+    expect(fetch).not.toHaveBeenCalled();
+  });
   it("opens catalogs, test parts and sessions with no Firestore or upstream calls", async () => {
     const catalog = await source.getVocabularyCatalogView();
     expect(catalog.cards[0]).toMatchObject({ id: "vocab-test", wordCount: 2 });
