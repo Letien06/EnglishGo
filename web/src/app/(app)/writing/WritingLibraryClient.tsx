@@ -3,7 +3,12 @@
 import Image from "next/image";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, type CSSProperties } from "react";
+import { LearningHero, LearningTip, LearningEmpty } from "../_components/LearningDashboardUI";
+import Icon from "../listen/_components/ListeningIcon";
+import { ListeningProgressRing } from "../listen/_components/ListeningTestCard";
+import { ListeningGridSkeleton } from "../listen/_components/ListeningLoading";
+import styles from "../listen/_components/listening.module.css";
 import { useAuthenticatedSession } from "@/components/AuthenticatedSessionContext";
 import {
   WRITING_PART_ONE_GRAMMAR_CATEGORIES,
@@ -97,7 +102,7 @@ function normalizeAttempts(data: unknown): WritingAttempt[] {
     if (!item || typeof item !== "object") return false;
     const attempt = item as Partial<WritingAttempt>;
     return typeof attempt.promptId === "string"
-      && attempt.promptPart === 1
+      && [1, 2, 3].includes(attempt.promptPart ?? 0)
       && typeof attempt.submittedAtMillis === "number"
       && typeof attempt.feedback?.score === "number"
       && typeof attempt.feedback.maxScore === "number";
@@ -166,6 +171,9 @@ export default function WritingLibraryClient() {
   const requestedPart = parsePart(searchParams.get("part"));
   const requestedCategory = parsePartOneCategory(searchParams.get("category"));
   const [part, setPart] = useState<WritingPart>(() => requestedPart ?? 1);
+  const [scoreStatus, setScoreStatus] = useState<"loading" | "ready" | "error">("loading");
+  const [statusFilter, setStatusFilter] = useState<"all" | "scored">("all");
+  const [sort, setSort] = useState("catalog");
   const [query, setQuery] = useState("");
   const [tag, setTag] = useState("all");
   const [partOneCategory, setPartOneCategory] = useState<ActivePartOneCategory>(() => requestedPart === 1 ? requestedCategory ?? "all" : "all");
@@ -210,22 +218,22 @@ export default function WritingLibraryClient() {
 
     // Score badges are private, so fetch them only after the shell has
     // confirmed an authenticated session.
-    fetch("/api/writing/attempts/history?part=1&limit=30", { cache: "no-store" })
+    fetch(`/api/writing/attempts/history?part=${part}&limit=30`, { cache: "no-store" })
       .then(async (response) => {
-        if (!response.ok) return [] as WritingAttempt[];
+        if (!response.ok) throw new Error("History unavailable");
         const body = await response.json() as ApiEnvelope<unknown>;
-        if (body.success === false) return [] as WritingAttempt[];
+        if (body.success === false) throw new Error("History unavailable");
         return normalizeAttempts(unwrap(body));
       })
       .then((attempts) => {
-        if (!cancelled) setLatestScores(scoreByPromptId(attempts));
+        if (!cancelled) { setLatestScores(scoreByPromptId(attempts)); setScoreStatus("ready"); }
       })
       .catch(() => {
-        if (!cancelled) setLatestScores({});
+        if (!cancelled) { setLatestScores({}); setScoreStatus("error"); }
       });
 
     return () => { cancelled = true; };
-  }, [authenticated, reloadKey]);
+  }, [authenticated, part, reloadKey]);
 
   function choosePart(nextPart: WritingPart) {
     if (nextPart === part) return;
@@ -233,6 +241,9 @@ export default function WritingLibraryClient() {
     setError(null);
     setTag("all");
     setPartOneCategory("all");
+    setLatestScores({});
+    setScoreStatus("loading");
+    setStatusFilter("all");
     setPart(nextPart);
   }
 
@@ -257,178 +268,78 @@ export default function WritingLibraryClient() {
       const haystack = [prompt.title, prompt.titleVi, prompt.summary, ...(prompt.tags ?? [])].filter(Boolean).join(" ").toLocaleLowerCase("vi-VN");
       const matchesPartOneCategory = part !== 1 || partOneCategory === "all" || grammarCategoryForPrompt(prompt) === partOneCategory;
       const matchesTag = part === 1 || tag === "all" || prompt.tags?.includes(tag);
-      return (!normalizedQuery || haystack.includes(normalizedQuery)) && matchesPartOneCategory && matchesTag;
-    });
-  }, [part, partOneCategory, prompts, query, tag]);
-  return (
-    <main className="app-canvas min-h-[calc(100dvh-4rem)] px-4 py-5 sm:px-6 lg:px-8">
-      <div className="mx-auto max-w-7xl space-y-7 pb-10">
-        <section className="premium-hero overflow-hidden p-6 sm:p-8 lg:p-10">
-          <div className="premium-hero-orbit" aria-hidden="true" />
-          <div className="relative max-w-3xl">
-            <p className="inline-flex items-center gap-2 rounded-full border border-primary/20 bg-primary/10 px-3 py-1 text-xs font-extrabold uppercase tracking-[0.16em] text-primary">
-              <span aria-hidden="true">✦</span> TOEIC Writing Lab
-            </p>
-            <h1 className="mt-4 text-3xl font-extrabold tracking-tight text-ink sm:text-4xl lg:text-5xl">
-              Luyện viết có lộ trình, nhận phản hồi bằng AI.
-            </h1>
-            <p className="mt-4 max-w-2xl text-sm leading-7 text-muted sm:text-base">
-              Từ một câu theo ảnh đến email và bài luận: mỗi đề có gợi ý theo tầng, câu mẫu và tiêu chí chấm riêng.
-            </p>
-            <div className="mt-6 flex flex-wrap gap-3">
-              <Link href="/writing/history" className="premium-secondary inline-flex items-center rounded-xl px-4 py-2.5 text-sm font-extrabold no-underline">
-                Xem lịch sử bài viết
-              </Link>
-              <span className="inline-flex items-center rounded-xl border border-primary/20 bg-primary/10 px-4 py-2.5 text-xs font-bold leading-5 text-ink2">
-                Kết quả là ước tính học tập, không phải điểm ETS chính thức.
-              </span>
-            </div>
-          </div>
-        </section>
-
-        <section aria-label="Chọn dạng bài viết" className="grid gap-3 md:grid-cols-3">
-          {PARTS.map((item) => {
-            const active = item.id === part;
-            return (
-              <button
-                key={item.id}
-                type="button"
-                onClick={() => choosePart(item.id)}
-                aria-pressed={active}
-                className={`group rounded-2xl border p-4 text-left transition-colors ${active ? "border-primary/45 bg-primary/10 shadow-[0_12px_32px_color-mix(in_srgb,var(--primary)_12%,transparent)]" : "border-line bg-surface hover:border-primary/30 hover:bg-surface-soft"}`}
-              >
-                <span className={`inline-flex h-10 w-10 items-center justify-center rounded-xl bg-gradient-to-br ${item.gradient} text-lg font-extrabold text-white shadow-sm`} aria-hidden="true">{item.icon}</span>
-                <p className={`mt-4 text-xs font-extrabold uppercase tracking-wider ${active ? "text-primary" : "text-muted"}`}>{item.eyebrow}</p>
-                <h2 className="mt-1 text-lg font-extrabold text-ink">{item.title}</h2>
-                <p className="mt-2 text-sm leading-6 text-muted">{item.description}</p>
-              </button>
-            );
-          })}
-        </section>
-
-        <section className="premium-card p-4 sm:p-5">
-          <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
-            <div>
-              <p className="text-xs font-extrabold uppercase tracking-[0.14em] text-primary">Thư viện đề</p>
-              <h2 className="mt-1 text-2xl font-extrabold text-ink">{labelForPart(part)}</h2>
-            </div>
-            <label className="relative block w-full lg:max-w-sm">
-              <span className="sr-only">Tìm đề viết</span>
-              <span className="pointer-events-none absolute inset-y-0 left-4 flex items-center text-muted" aria-hidden="true">⌕</span>
-              <input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Tìm chủ đề, tình huống, từ khóa..." className="w-full pl-10 pr-4 text-sm" />
-            </label>
-          </div>
-          {part === 1 ? (
-            <div className="mt-5">
-              <div className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1">
-                <div>
-                  <p className="text-sm font-extrabold text-ink">Luyện theo cặp từ</p>
-                  <p className="mt-1 text-xs leading-5 text-muted">Chọn một dạng để luyện nhiều câu cùng cấu trúc.</p>
-                </div>
-                <span className="text-xs font-extrabold text-primary">{prompts.length} câu trong thư viện</span>
-              </div>
-              <div className="mt-3 flex flex-wrap gap-2" aria-label="Lọc câu theo dạng từ">
-                <GrammarCategoryChip active={partOneCategory === "all"} count={prompts.length} onClick={() => setPartOneCategory("all")}>Tất cả</GrammarCategoryChip>
-                {WRITING_PART_ONE_GRAMMAR_CATEGORIES.map((category) => (
-                  <GrammarCategoryChip key={category} active={partOneCategory === category} count={partOneCounts[category]} onClick={() => setPartOneCategory(category)}>
-                    {WRITING_PART_ONE_GRAMMAR_CATEGORY_LABELS[category]}
-                  </GrammarCategoryChip>
-                ))}
-              </div>
-            </div>
-          ) : tags.length > 0 && (
-            <div className="mt-4 flex flex-wrap gap-2" aria-label="Lọc theo chủ đề">
-              <FilterChip active={tag === "all"} onClick={() => setTag("all")}>Tất cả</FilterChip>
-              {tags.map((item) => <FilterChip key={item} active={tag === item} onClick={() => setTag(item)}>{item}</FilterChip>)}
-            </div>
-          )}
-        </section>
-
-        {loading ? (
-          <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3" aria-label="Đang tải đề viết">
-            {Array.from({ length: 6 }, (_, index) => <div key={index} className="h-72 animate-pulse rounded-2xl border border-line bg-surface-soft" />)}
-          </section>
-        ) : error ? (
-          <section className="premium-card p-8 text-center">
-            <p className="text-lg font-extrabold text-ink">Chưa tải được thư viện đề</p>
-            <p className="mt-2 text-sm text-muted">{error}</p>
-            <button type="button" onClick={retryLoad} className="premium-secondary mt-5 rounded-xl px-4 py-2 text-sm font-extrabold">Thử lại</button>
-          </section>
-        ) : filteredPrompts.length === 0 ? (
-          <section className="premium-card p-10 text-center">
-            <p className="text-lg font-extrabold text-ink">Chưa có đề phù hợp</p>
-            <p className="mt-2 text-sm text-muted">Thử đổi từ khóa hoặc bỏ bộ lọc chủ đề để xem thêm đề.</p>
-          </section>
-        ) : (
-          <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3" aria-label={`Danh sách ${labelForPart(part)}`}>
-            {filteredPrompts.map((prompt) => <WritingPromptCard key={prompt.id} prompt={prompt} latestScore={latestScores[prompt.id]} />)}
-          </section>
-        )}
-
-        <p className="mx-auto max-w-3xl text-center text-xs leading-5 text-muted">
-          Đề, ảnh, từ khóa và câu mẫu trong thư viện là nội dung tự biên soạn. AI hỗ trợ phản hồi để bạn học tốt hơn; hãy dùng phản hồi như gợi ý, không phải chứng nhận điểm thi.
-        </p>
+      return (!normalizedQuery || haystack.includes(normalizedQuery)) && matchesPartOneCategory && matchesTag && (statusFilter === "all" || (authenticated && Boolean(latestScores[prompt.id])));
+    }).sort((left, right) => sort === "duration" ? left.timeLimitMinutes - right.timeLimitMinutes : 0);
+  }, [part, partOneCategory, prompts, query, tag, sort, statusFilter, latestScores, authenticated]);
+  const scoresReady = authenticated && scoreStatus === "ready";
+  const scoredPrompts = prompts.filter((prompt) => latestScores[prompt.id]);
+  const nextPrompt = prompts.find((prompt) => !latestScores[prompt.id]) ?? prompts[0];
+  const average = scoredPrompts.length ? Math.round(scoredPrompts.reduce((sum, prompt) => {
+    const score = latestScores[prompt.id];
+    return sum + (score.maxScore > 0 ? score.score / score.maxScore * 100 : 0);
+  }, 0) / scoredPrompts.length) : null;
+  function clearFilters() { setQuery(""); setTag("all"); setPartOneCategory("all"); setStatusFilter("all"); }
+  return <main className={styles.dashboard}>
+    <span className={styles.eyebrow}>KHÔNG GIAN LUYỆN TẬP</span>
+    <header className={styles.intro}><div><h1>Luyện viết<span>.</span></h1><p>Từng ý tưởng nhỏ. Từng câu viết tốt hơn.</p></div><Link className={styles.dictationLink} href="/writing/history"><Icon name="clock" />Lịch sử bài viết<Icon name="arrow" /></Link></header>
+    <LearningHero icon="pen" title="Biến ý tưởng thành câu chữ." description={loading ? "Chọn một dạng bài. Viết, nhận phản hồi và thử lại." : nextPrompt ? `Bài gợi ý · ${nextPrompt.titleVi || nextPrompt.title}` : "Khám phá đề viết theo tranh, email và bài luận."}
+      href={!loading && nextPrompt ? `/writing/practice/${encodeURIComponent(nextPrompt.id)}` : undefined} cta="Bắt đầu luyện viết" note="Một bài viết, một bước tiến"
+      stats={[
+        { label: "Đề luyện viết", value: loading || error ? "—" : prompts.length, unit: "đề", detail: `Trong Part ${part} đang chọn`, icon: "document" },
+        { label: "Đề đã chấm", value: scoresReady ? scoredPrompts.length : "—", detail: "Trong 30 lượt gần nhất của Part", icon: "check" },
+        { label: "Điểm AI TB", value: scoresReady && average !== null ? average : "—", unit: "%", detail: "Điểm mới nhất mỗi đề / điểm tối đa", icon: "target" },
+      ]} />
+    <div className={styles.sectionLabel}><span className={styles.eyebrow}>01 / CHỌN DẠNG BÀI</span><span>Viết đúng trước, viết hay sau</span></div>
+    <nav className={styles.parts} data-columns="3" aria-label="Chọn dạng bài viết">{PARTS.map((item) => <button key={item.id} type="button" className={styles.part} onClick={() => choosePart(item.id)} aria-pressed={item.id === part}>
+      <span className={styles.partIcon}><Icon name={item.id === 1 ? "image" : item.id === 2 ? "reply" : "pen"} /></span><span className={styles.partText}><span>PART {item.id}</span><strong>{item.title}</strong><small>{item.description}</small></span>
+    </button>)}</nav>
+    <section className={styles.library} aria-label="Thư viện đề viết">
+      <div className={styles.libraryHeading}><div><span className={styles.eyebrow}>02 / BÀI LUYỆN CỦA BẠN</span><h2>{labelForPart(part)}</h2></div><p className={styles.catalogTotal}><strong>{loading ? "—" : prompts.length}</strong> đề viết</p></div>
+      <div className={styles.toolbar}>
+        <div className={styles.filters} aria-label="Lọc bài đã chấm">
+          <button type="button" aria-pressed={statusFilter === "all"} onClick={() => setStatusFilter("all")}>Tất cả</button>
+          <button type="button" aria-pressed={statusFilter === "scored"} disabled={!scoresReady} onClick={() => setStatusFilter("scored")}>Đã chấm gần đây<span>{scoresReady ? scoredPrompts.length : "—"}</span></button>
+        </div>
+        <div className={styles.tools}><label className={styles.search}><Icon name="search" /><input aria-label="Tìm đề viết" value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Tìm chủ đề, từ khóa..." /></label>
+          <label className={styles.sort}><span>Sắp xếp</span><select aria-label="Sắp xếp đề viết" value={sort} onChange={(event) => setSort(event.target.value)}><option value="catalog">Theo thư viện</option><option value="duration">Thời lượng ngắn nhất</option></select></label>
+        </div>
       </div>
-    </main>
-  );
+      {part === 1 ? <div className="mt-4"><p className={styles.cardDescription}>Luyện theo cặp từ · Chọn cấu trúc bạn muốn cải thiện.</p><div className={styles.filters} aria-label="Lọc câu theo dạng từ">
+        <GrammarCategoryChip active={partOneCategory === "all"} count={prompts.length} onClick={() => setPartOneCategory("all")}>Tất cả</GrammarCategoryChip>
+        {WRITING_PART_ONE_GRAMMAR_CATEGORIES.map((category) => <GrammarCategoryChip key={category} active={partOneCategory === category} count={partOneCounts[category]} onClick={() => setPartOneCategory(category)}>{WRITING_PART_ONE_GRAMMAR_CATEGORY_LABELS[category]}</GrammarCategoryChip>)}
+      </div></div> : tags.length > 0 && <details className={styles.topicFilters}><summary>Chủ đề: {tag === "all" ? "Tất cả" : tag}</summary><div className={styles.filters} aria-label="Lọc theo chủ đề">
+        <FilterChip active={tag === "all"} onClick={() => setTag("all")}>Tất cả</FilterChip>{tags.map((item) => <FilterChip key={item} active={tag === item} onClick={() => setTag(item)}>{item}</FilterChip>)}
+      </div></details>}
+      {authenticated && scoreStatus === "error" && <p className={styles.notice} role="status">Chưa tải được điểm cá nhân. Bạn vẫn có thể mở đề và luyện viết.</p>}
+      <p className={styles.resultCount} aria-live="polite">{loading ? "Đang tải đề viết..." : `Hiển thị ${filteredPrompts.length}/${prompts.length} đề`}</p>
+      {loading ? <ListeningGridSkeleton /> : error ? <div className={styles.empty} role="alert"><Icon name="document" /><h3>Chưa tải được thư viện đề</h3><p>{error}</p><button className={styles.primaryButton} type="button" onClick={retryLoad}>Thử lại<Icon name="reset" /></button></div>
+        : !filteredPrompts.length ? <LearningEmpty title="Chưa có đề phù hợp" description="Thử đổi từ khóa hoặc bỏ bộ lọc để xem thêm đề." onReset={clearFilters} />
+        : <div className={styles.grid}>{filteredPrompts.map((prompt, index) => <WritingPromptCard key={prompt.id} index={index} prompt={prompt} latestScore={scoresReady ? latestScores[prompt.id] : undefined} />)}</div>}
+      <p className={styles.caption}>Điểm AI là ước tính học tập, không phải điểm ETS chính thức. Thống kê chỉ gồm đề trong thư viện xuất hiện ở 30 lượt nộp gần nhất của Part; không phải toàn bộ lịch sử.</p>
+    </section>
+    <LearningTip title="Mẹo luyện viết">Viết bản đầu tiên bằng ý của bạn, rồi đối chiếu phản hồi AI. Mỗi lần viết lại, tập trung sửa một điểm: ngữ pháp, từ vựng hoặc cách tổ chức ý.</LearningTip>
+    <p className={styles.caption}>Đề, ảnh, từ khóa và câu mẫu trong thư viện là nội dung tự biên soạn. Dùng phản hồi AI như gợi ý, không phải chứng nhận điểm thi.</p>
+  </main>;
 }
 
 function FilterChip({ active, onClick, children }: { active: boolean; onClick: () => void; children: React.ReactNode }) {
-  return <button type="button" onClick={onClick} className={`rounded-full border px-3 py-1.5 text-xs font-extrabold transition-colors ${active ? "border-primary bg-primary text-gold-ink" : "border-line bg-surface-soft text-ink2 hover:border-primary/35"}`}>{children}</button>;
+  return <button type="button" onClick={onClick} aria-pressed={active} className={`rounded-full border px-3 py-1.5 text-xs font-extrabold transition-colors ${active ? "border-primary bg-primary text-gold-ink" : "border-line bg-surface-soft text-ink2 hover:border-primary/35"}`}>{children}</button>;
 }
 
 function GrammarCategoryChip({ active, count, onClick, children }: { active: boolean; count: number; onClick: () => void; children: React.ReactNode }) {
-  return <button type="button" onClick={onClick} aria-pressed={active} className={`inline-flex items-center gap-2 rounded-xl border px-3 py-2 text-xs font-extrabold transition-[border-color,background-color,transform] duration-150 ease-out active:scale-[0.97] ${active ? "border-primary bg-primary text-gold-ink shadow-sm" : "border-line bg-surface-soft text-ink2 hover:border-primary/35 hover:bg-surface"}`}><span>{children}</span><span className={`rounded-md px-1.5 py-0.5 text-[10px] ${active ? "bg-white/20 text-inherit" : "bg-primary/10 text-primary"}`}>{count} câu</span></button>;
+  return <button type="button" onClick={onClick} aria-pressed={active} className={`inline-flex items-center gap-2 rounded-xl border px-3 py-2 text-xs font-extrabold transition-[border-color,background-color,transform] duration-150 ease-out active:scale-[0.97] ${active ? "border-primary bg-primary text-gold-ink shadow-sm" : "border-line bg-surface-soft text-ink2 hover:border-primary/35 hover:bg-surface"}`}><span>{children}</span>{" "}<span className={`rounded-md px-1.5 py-0.5 text-[10px] ${active ? "bg-white/20 text-inherit" : "bg-primary/10 text-primary"}`}>{count} câu</span></button>;
 }
 
-function WritingPromptCard({ prompt, latestScore }: { prompt: WritingPromptCardSummary; latestScore?: PromptScore }) {
-  const partMeta = PARTS.find((item) => item.id === prompt.part) ?? PARTS[0];
-  const hasImage = prompt.part === 1 && Boolean(prompt.thumbnailUrl);
+function WritingPromptCard({ prompt, latestScore, index }: { prompt: WritingPromptCardSummary; latestScore?: PromptScore; index: number }) {
   const grammarCategory = grammarCategoryForPrompt(prompt);
-  return (
-    <article className="premium-card premium-card--interactive group overflow-hidden">
-      <div
-        className={`relative flex min-h-32 items-end overflow-hidden p-4 ${hasImage ? "bg-surface-soft bg-cover bg-center" : `bg-gradient-to-br ${partMeta.gradient}`}`}
-      >
-        {hasImage && (
-          <>
-            <Image
-              src={prompt.thumbnailUrl!}
-              alt={prompt.imageAlt || prompt.title}
-              fill
-              sizes="(max-width: 639px) 100vw, (max-width: 1279px) 50vw, 33vw"
-              className="object-cover"
-              loading="lazy"
-              decoding="async"
-            />
-            <div aria-hidden="true" className="absolute inset-0" style={{ backgroundImage: "linear-gradient(180deg, transparent 22%, color-mix(in srgb, var(--s0) 78%, transparent))" }} />
-          </>
-        )}
-        <span className="absolute left-4 top-4 z-10 rounded-full border border-white/20 bg-black/35 px-2.5 py-1 text-[11px] font-extrabold text-white backdrop-blur-sm">Part {prompt.part}</span>
-        {latestScore && <span title="Điểm ước tính từ lần làm gần nhất" className="absolute right-4 top-4 z-10 inline-flex items-center gap-1 rounded-full border border-jade/35 bg-jade/90 px-2.5 py-1 text-[11px] font-extrabold text-white shadow-sm"><span aria-hidden="true">✓</span> Điểm {latestScore.score}/{latestScore.maxScore}</span>}
-        {!hasImage && <span className="text-4xl text-white" aria-hidden="true">{partMeta.icon}</span>}
-        {hasImage && <span className="relative z-10 text-xs font-bold text-white/90">{grammarCategory ? WRITING_PART_ONE_GRAMMAR_CATEGORY_LABELS[grammarCategory] : "Ảnh luyện viết gốc"}</span>}
-      </div>
-      <div className="p-5">
-        <div className="flex items-start justify-between gap-3">
-          <div className="min-w-0">
-            <h3 className="text-lg font-extrabold leading-6 text-ink">{prompt.title}</h3>
-            {prompt.titleVi && <p className="mt-1 text-sm text-primary">{prompt.titleVi}</p>}
-          </div>
-          <span className="shrink-0 rounded-lg bg-surface-soft px-2 py-1 text-[11px] font-extrabold text-muted">{prompt.timeLimitMinutes} phút</span>
-        </div>
-        <p className="mt-3 min-h-12 text-sm leading-6 text-muted">{prompt.summary}</p>
-        {prompt.requiredTerms?.length > 0 && (
-          <div className="mt-4 flex flex-wrap gap-1.5">
-            {prompt.requiredTerms.slice(0, 3).map((term) => <span key={term} className="rounded-md bg-azure/10 px-2 py-1 text-xs font-bold text-azure2">{term}</span>)}
-            {prompt.requiredTerms.length > 3 && <span className="rounded-md bg-surface-soft px-2 py-1 text-xs font-bold text-muted">+{prompt.requiredTerms.length - 3}</span>}
-          </div>
-        )}
-        <div className="mt-5 flex items-center justify-between gap-3 border-t border-line pt-4">
-          <div className="flex min-w-0 flex-wrap gap-1.5">{prompt.tags?.slice(0, 2).map((item) => <span key={item} className="text-xs font-bold text-muted">#{item}</span>)}</div>
-          <Link href={`/writing/practice/${encodeURIComponent(prompt.id)}`} className="premium-primary inline-flex shrink-0 items-center rounded-xl px-3.5 py-2 text-sm font-extrabold no-underline">Luyện viết <span className="ml-1" aria-hidden="true">→</span></Link>
-        </div>
-      </div>
-    </article>
-  );
+  const percent = latestScore && latestScore.maxScore > 0 ? Math.min(100, Math.max(0, Math.round(latestScore.score / latestScore.maxScore * 100))) : 0;
+  return <article className={styles.card} style={{ "--card-delay": `${Math.min(index, 5) * 35}ms` } as CSSProperties}>
+    {prompt.part === 1 && prompt.thumbnailUrl && <div className={styles.cardImage}><Image src={prompt.thumbnailUrl} alt={prompt.imageAlt || prompt.title} fill sizes="(max-width: 640px) 100vw, (max-width: 1050px) 50vw, 33vw" loading="lazy" className="object-cover" /></div>}
+    <div className={styles.cardTop}><span className={styles.cardLabel}>LUYỆN VIẾT · PART {prompt.part}</span><span className={styles.badge} data-status={latestScore ? "complete" : "new"}><span />{latestScore ? "Đã chấm gần đây" : "Đề luyện viết"}</span></div>
+    <div className={styles.cardHeading}><div><h3>{prompt.title}</h3>{prompt.titleVi && <p>{prompt.titleVi}</p>}<p>{latestScore ? `Điểm AI: ${latestScore.score}/${latestScore.maxScore}` : "Chưa có điểm gần đây"}</p></div><ListeningProgressRing percent={percent} ready={Boolean(latestScore)} label={`Điểm AI so với tối đa: ${prompt.title}`} /></div>
+    <p className={styles.cardDescription}>{prompt.summary}</p>
+    <div className={styles.answerStats}>{prompt.requiredTerms?.slice(0, 3).map((term) => <span key={term} data-tone="good"><i />{term}</span>)}</div>
+    <div className={styles.metadata}><span><Icon name="clock" />{prompt.timeLimitMinutes} phút</span><span><Icon name="bars" />{{ BEGINNER: "Cơ bản", INTERMEDIATE: "Trung cấp", ADVANCED: "Nâng cao" }[prompt.difficulty]}</span>{grammarCategory && <span>{WRITING_PART_ONE_GRAMMAR_CATEGORY_LABELS[grammarCategory]}</span>}{prompt.tags?.slice(0, 2).map((tag) => <span key={tag}>#{tag}</span>)}</div>
+    <footer className={styles.cardFooter}><Link className={styles.cardCta} href={`/writing/practice/${encodeURIComponent(prompt.id)}`}>{latestScore ? "Luyện viết lại" : "Luyện viết"}<Icon name="arrow" /></Link></footer>
+  </article>;
 }

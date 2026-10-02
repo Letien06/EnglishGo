@@ -52,11 +52,11 @@ const themeInitScript = `
     var t = localStorage.getItem("englishgo-theme");
     var manual = localStorage.getItem("englishgo-theme-manual") === "1";
     if (!manual || (t !== "dark" && t !== "light")) {
-      t = "light";
+      t = "dark";
     }
     document.documentElement.dataset.theme = t;
   } catch(e) {
-    document.documentElement.dataset.theme = "light";
+    document.documentElement.dataset.theme = "dark";
   }
 })();
 `;
@@ -65,7 +65,7 @@ export default function RootLayout({
   children,
 }: Readonly<{ children: React.ReactNode }>) {
   return (
-    <html lang="vi" data-theme="light" suppressHydrationWarning className={`${plusJakartaSans.variable} ${beVietnamPro.variable}`}>
+    <html lang="vi" data-theme="dark" suppressHydrationWarning className={`${plusJakartaSans.variable} ${beVietnamPro.variable}`}>
       <head>
         <script dangerouslySetInnerHTML={{ __html: themeInitScript }} />
       </head>

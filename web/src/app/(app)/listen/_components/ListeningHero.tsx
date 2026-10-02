@@ -1,32 +1,35 @@
 import Link from "@/components/IntentLink";
 import type { DauToeicPartTest } from "@/types/dautoeic";
 import ListeningIcon from "./ListeningIcon";
-import { practiceHref, resumePosition, summarizeTests, testProgress } from "./listening-view-model";
+import { practiceHref, resumePosition, summarizeTests, testProgress, type StudySkill } from "./listening-view-model";
 import useListeningStreak from "./useListeningStreak";
 import styles from "./listening.module.css";
 
-export default function ListeningHero({ tests, part, authenticated, progressReady }: {
+export default function ListeningHero({ tests, part, skill = "listening", authenticated, progressReady }: {
   tests: DauToeicPartTest[];
   part: number;
+  skill?: StudySkill;
   authenticated: boolean;
   progressReady: boolean;
 }) {
+  const label = skill === "listening" ? "nghe" : "đọc";
+  const icon = skill === "listening" ? "headphones" : "book";
   const summary = summarizeTests(tests);
   const resume = progressReady ? tests.find((test) => testProgress(test).status === "learning") : undefined;
   const next = resume ?? tests.find((test) => test.questionCount > 0 && testProgress(test).status === "new") ?? tests.find((test) => test.questionCount > 0);
   const streak = useListeningStreak(authenticated);
 
-  return <section className={styles.hero} aria-label="Tổng quan luyện nghe">
+  return <section className={styles.hero} aria-label={`Tổng quan luyện ${label}`}>
     <div className={styles.resume}>
-      <div className={styles.heroDecoration} aria-hidden="true"><ListeningIcon name="headphones" /><div className={styles.soundwave}>{[3, 6, 4, 9, 5, 12, 7, 10, 4, 7, 3].map((height, index) => <i key={index} style={{ height: `${height * 4}px` }} />)}</div></div>
+      <div className={styles.heroDecoration} aria-hidden="true"><ListeningIcon name={icon} />{skill === "listening" && <div className={styles.soundwave}>{[3, 6, 4, 9, 5, 12, 7, 10, 4, 7, 3].map((height, index) => <i key={index} style={{ height: `${height * 4}px` }} />)}</div>}</div>
       <span className={styles.eyebrow}><span className={styles.liveDot} /> MỖI NGÀY, TIẾN MỘT CHÚT</span>
-      <h2>{resume ? "Tiếp tục nhịp học của bạn" : "Một bài nghe, thêm tự tin."}</h2>
+      <h2>{resume ? "Tiếp tục nhịp học của bạn" : `Một bài ${label}, thêm tự tin.`}</h2>
       <p>{resume ? `${resume.testName} · Part ${part} · ${resumePosition(resume)}` : "Không cần học thật nhiều. Chỉ cần bắt đầu và đều đặn."}</p>
       {resume && <span className={styles.resumeSource}>{resume.setName} · Đã làm {resume.done}/{resume.questionCount} câu</span>}
       <div className={styles.resumeActions}>
-        {next ? <Link className={styles.primaryButton} href={practiceHref(next)} aria-label={resume ? `Tiếp tục học ${resume.testName} - ${resume.setName}` : "Bắt đầu bài nghe được gợi ý"}>
-          <ListeningIcon name="headphones" />{resume ? "Tiếp tục học" : "Bắt đầu luyện nghe"}<ListeningIcon name="arrow" />
-        </Link> : <a className={styles.primaryButton} href="#listening-library">Khám phá bài nghe<ListeningIcon name="arrow" /></a>}
+        {next ? <Link className={styles.primaryButton} href={practiceHref(next)} aria-label={resume ? `Tiếp tục học ${resume.testName} - ${resume.setName}` : `Bắt đầu bài ${label} được gợi ý`}>
+          <ListeningIcon name={icon} />{resume ? "Tiếp tục học" : `Bắt đầu luyện ${label}`}<ListeningIcon name="arrow" />
+        </Link> : <a className={styles.primaryButton} href="#listening-library">Khám phá bài {label}<ListeningIcon name="arrow" /></a>}
         <span className={styles.heroNote}><ListeningIcon name="spark" /> Từng câu nhỏ, tiến bộ lớn</span>
       </div>
     </div>

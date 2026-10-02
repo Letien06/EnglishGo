@@ -1,9 +1,14 @@
 "use client";
 
 import Link from "@/components/IntentLink";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, type CSSProperties } from "react";
 import type { DauToeicVocabCatalogView } from "@/types/dautoeic";
 import type { VocabSetCard } from "@/types/vocab";
+import { LearningHero, LearningTip, LearningEmpty } from "../_components/LearningDashboardUI";
+import Icon from "../listen/_components/ListeningIcon";
+import { ListeningProgressRing } from "../listen/_components/ListeningTestCard";
+import { ListeningGridSkeleton } from "../listen/_components/ListeningLoading";
+import styles from "../listen/_components/listening.module.css";
 import { fetchWithTimeout, recordNextPaint } from "@/lib/client-request";
 
 type ApiEnvelope<T> = {
@@ -20,6 +25,9 @@ type LearnState =
 export default function VocabLearnTabClient({ groupId, userUid, initialCatalog = null }: {
   groupId?: string; userUid?: string; initialCatalog?: DauToeicVocabCatalogView | null;
 }) {
+  const [query, setQuery] = useState("");
+  const [filter, setFilter] = useState("all");
+  const [sort, setSort] = useState("catalog");
   const [selectedGroupOverride, setSelectedGroupOverride] = useState<string | undefined>(groupId);
   const [state, setState] = useState<LearnState>(() => {
     if (initialCatalog?.cards.length) return { status: "ready", catalog: initialCatalog, fallbackSets: [] };
@@ -95,87 +103,68 @@ export default function VocabLearnTabClient({ groupId, userUid, initialCatalog =
   }
 
   if (state.catalog?.cards.length) {
-    const cards = selectedGroupId
-      ? state.catalog.cards.filter((card) => card.setId === selectedGroupId)
-      : state.catalog.cards;
-
-    return (
-      <section className="space-y-5">
-        <nav className="flex max-w-full gap-2 overflow-x-auto" aria-label="Vocabulary groups">
-          {state.catalog.groups.map((group) => {
-            const selected = group.id === selectedGroupId;
-            return (
-              <button
-                key={group.id}
-                type="button"
-                onClick={() => selectGroup(group.id)}
-                aria-pressed={selected}
-                className={`whitespace-nowrap rounded-full border px-4 py-2 text-xs font-extrabold transition-colors ${
-                  selected
-                    ? "border-primary bg-primary text-gold-ink"
-                    : "border-sky-200 bg-white text-primary hover:bg-sky-50"
-                }`}
-              >
-                {group.name} ({group.count})
-              </button>
-            );
-          })}
-        </nav>
-
-        <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
-          {cards.map((card) => {
-            const percent = card.wordCount > 0
-              ? Math.round((card.masteredWords / card.wordCount) * 100)
-              : 0;
-            return (
-              <article key={card.id} className="rounded-2xl border border-sky-100 bg-white p-5 shadow-sm">
-                <header className="flex items-start justify-between gap-3">
-                  <div>
-                    <span className="rounded-full bg-indigo-100 px-3 py-1 text-[11px] font-extrabold text-indigo-700">
-                      {card.setName}
-                    </span>
-                    <h2 className="mt-4 line-clamp-2 text-lg font-extrabold text-ink">
-                      {card.title}
-                    </h2>
-                  </div>
-                </header>
-                <p className="mt-3 text-sm text-muted">{card.wordCount} từ vựng</p>
-                <div className="mt-4 h-2 overflow-hidden rounded-full bg-slate-100">
-                  <span className="block h-full rounded-full bg-primary" style={{ width: `${percent}%` }} />
-                </div>
-                <div className="mt-2 flex flex-wrap gap-x-3 gap-y-1 text-xs font-bold text-muted">
-                  <span>{progressStatus === "loading" ? "Đang tải tiến độ..." : progressStatus === "error" ? "Chưa tải được tiến độ" : `${card.masteredWords}/${card.wordCount} từ đã thuộc`}</span>
-                  {card.dueWords > 0 ? <span className="text-red-600">{card.dueWords} cần ôn</span> : null}
-                </div>
-                <Link
-                  href={`/vocab/dautoeic/${encodeURIComponent(card.id)}`}
-                  data-overdelay="Đang mở bộ từ vựng..."
-                  className="mt-5 inline-flex w-full items-center justify-center rounded-full border border-emerald-300 px-4 py-2 text-xs font-extrabold text-emerald-700 hover:bg-emerald-50"
-                >
-                  Vào học
-                </Link>
-              </article>
-            );
-          })}
-        </section>
+    const cards = selectedGroupId ? state.catalog.cards.filter((card) => card.setId === selectedGroupId) : state.catalog.cards;
+    const ready = progressStatus === "ready";
+    const status = (card: typeof cards[number]) => card.wordCount > 0 && card.masteredWords >= card.wordCount ? "complete" : card.learnedWords > 0 || card.masteredWords > 0 ? "learning" : "new";
+    const normalize = (value: string) => value.normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/đ/gi, "d").toLowerCase();
+    const visible = cards.filter((card) => normalize(card.title + " " + card.setName).includes(normalize(query.trim())) && (!ready || filter === "all" || (filter === "due" ? card.dueWords > 0 : status(card) === filter)));
+    if (ready && sort === "progress") visible.sort((left, right) => right.masteredWords / (right.wordCount || 1) - left.masteredWords / (left.wordCount || 1));
+    if (sort === "words") visible.sort((left, right) => left.wordCount - right.wordCount);
+    const totals = cards.reduce((sum, card) => ({ words: sum.words + card.wordCount, mastered: sum.mastered + card.masteredWords, due: sum.due + card.dueWords }), { words: 0, mastered: 0, due: 0 });
+    const resume = ready ? cards.find((card) => card.dueWords > 0) ?? cards.find((card) => status(card) === "learning") : undefined;
+    const next = resume ?? cards[0];
+    const statusLabel = { new: "Mới", learning: "Đang học", complete: "Đã thuộc" };
+    const filters = [{ id: "all", label: "Tất cả" }, { id: "new", label: "Chưa học" }, { id: "learning", label: "Đang học" }, { id: "complete", label: "Đã thuộc" }, { id: "due", label: "Cần ôn" }];
+    function clearFilters() { setFilter("all"); setQuery(""); }
+    return <section>
+      <LearningHero icon="book" title={resume ? "Giữ nhịp học. Nhớ lâu hơn." : "Thêm một từ, mở thêm cơ hội."}
+        description={next ? `${next.setName} · ${next.title} · ${next.wordCount} từ vựng` : "Chọn một bộ từ và bắt đầu bằng chế độ yêu thích."}
+        href={next ? `/vocab/dautoeic/${encodeURIComponent(next.id)}` : undefined} cta={resume ? "Tiếp tục học" : "Khám phá bộ từ"} note="Xem từ · Flashcard · Trò chơi"
+        stats={[
+          { label: "Kho từ đang chọn", value: totals.words, unit: "từ", detail: `${cards.length} bộ từ để khám phá`, icon: "book" },
+          { label: "Từ đã thuộc", value: ready ? totals.mastered : "—", unit: "từ", detail: "Theo tiến độ ghi nhớ của bạn", icon: "check" },
+          { label: "Đến lúc ôn", value: ready ? totals.due : "—", unit: "từ", detail: "Ôn đúng lúc để nhớ lâu hơn", icon: "clock" },
+        ]} />
+      <div className={styles.sectionLabel}><span className={styles.eyebrow}>01 / CHỌN BỘ ĐỀ</span><span>Một ít mỗi ngày, nhớ lâu hơn</span></div>
+      <nav className={styles.filters} aria-label="Nhóm từ vựng">{state.catalog.groups.map((group) => <button key={group.id} type="button" onClick={() => selectGroup(group.id)} aria-pressed={group.id === selectedGroupId}>{group.name}<span>{group.count}</span></button>)}</nav>
+      <section className={styles.library} aria-label="Danh sách bộ từ">
+        <div className={styles.libraryHeading}><div><span className={styles.eyebrow}>02 / BỘ TỪ CỦA BẠN</span><h2>{state.catalog.groups.find((group) => group.id === selectedGroupId)?.name ?? "Thư viện từ vựng"}</h2></div><p className={styles.catalogTotal}><strong>{cards.length}</strong> bộ từ<span>·</span><strong>{totals.words}</strong> từ vựng</p></div>
+        <div className={styles.toolbar}>
+          <div className={styles.filters} aria-label="Lọc theo tiến độ">{filters.map((entry) => <button key={entry.id} type="button" aria-pressed={(ready ? filter : "all") === entry.id} disabled={entry.id !== "all" && !ready} onClick={() => setFilter(entry.id)}>{entry.label}</button>)}</div>
+          <div className={styles.tools}><label className={styles.search}><Icon name="search" /><input aria-label="Tìm bộ từ" placeholder="Tìm tên bộ từ..." value={query} onChange={(event) => setQuery(event.target.value)} /></label><label className={styles.sort}><span>Sắp xếp</span><select aria-label="Sắp xếp bộ từ" value={sort} onChange={(event) => setSort(event.target.value)}><option value="catalog">Theo thư viện</option><option value="progress" disabled={!ready}>Tiến độ cao nhất</option><option value="words">Ít từ trước</option></select></label></div>
+        </div>
+        {!ready && <p className={styles.notice} role="status">{progressStatus === "loading" ? "Đang tải tiến độ..." : "Chưa tải được tiến độ. Bạn vẫn có thể vào học ngay."}</p>}
+        <p className={styles.resultCount} aria-live="polite">Hiển thị {visible.length}/{cards.length} bộ từ</p>
+        <div className={styles.grid}>{visible.map((card, index) => {
+          const percent = card.wordCount > 0 ? Math.min(100, Math.round(card.masteredWords / card.wordCount * 100)) : 0;
+          return <article key={card.id} className={styles.card} data-status={ready ? status(card) : "unknown"} style={{ "--card-delay": `${Math.min(index, 5) * 35}ms` } as CSSProperties}>
+            <div className={styles.cardTop}><span className={styles.cardLabel}>{card.setName}</span><span className={styles.badge} data-status={ready ? status(card) : "unknown"}><span />{ready ? statusLabel[status(card)] : "Chưa có tiến độ"}</span></div>
+            <div className={styles.cardHeading}><div><h2>{card.title}</h2><p>{card.wordCount} từ vựng</p></div><ListeningProgressRing percent={percent} ready={ready} label={`Từ đã thuộc: ${card.title}`} /></div>
+            <div className={styles.answerStats}><span data-tone="good"><i /><strong>{ready ? card.masteredWords : "—"}</strong> đã thuộc</span><span data-tone="bad"><i /><strong>{ready ? card.dueWords : "—"}</strong> cần ôn</span><span><i /><strong>{ready ? Math.max(0, card.wordCount - card.masteredWords) : "—"}</strong> chưa thuộc</span></div>
+            <div className={styles.metadata}><span><Icon name="book" />{card.partCount} phần học</span><span><Icon name="spark" />Flashcard & trò chơi</span></div>
+            <footer className={styles.cardFooter}><Link href={`/vocab/dautoeic/${encodeURIComponent(card.id)}`} data-overdelay="Đang mở bộ từ vựng..." className={styles.cardCta}>Vào học<Icon name="arrow" /></Link></footer>
+          </article>;
+        })}</div>
+        {!visible.length && <LearningEmpty title="Chưa tìm thấy bộ từ phù hợp" description="Thử một tên khác hoặc bỏ bộ lọc để khám phá thư viện." onReset={clearFilters} />}
       </section>
-    );
+      <LearningTip title="Học vui hơn, nhớ lâu hơn">Xem từ và nghe phát âm trước, rồi thử flashcard hoặc trò chơi để tự kiểm tra. Ưu tiên các từ đến hạn ôn thay vì chỉ học từ mới.</LearningTip>
+    </section>;
   }
 
   if (state.fallbackSets.length > 0) {
     return (
       <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
         {state.fallbackSets.map((set) => (
-          <article key={set.id} className="rounded-2xl border border-amber-100 bg-white p-5 shadow-sm">
+          <article key={set.id} className="rounded-2xl border border-line bg-surface p-5 shadow-sm">
             <div className="flex items-start gap-3">
-              <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-amber-100 text-xl font-extrabold text-primary">
+              <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-primary-soft text-xl font-extrabold text-primary">
                 {set.icon || "*"}
               </span>
               <div className="min-w-0">
                 <p className="text-xs font-extrabold text-primary">{set.topic}</p>
                 <h2 className="mt-1 line-clamp-2 text-lg font-extrabold text-ink">{set.title}</h2>
                 <p className="mt-2 text-sm text-muted">
-                  {set.wordCount} tu{set.level ? ` · ${set.level}` : ""}
+                  {set.wordCount} từ{set.level ? ` · ${set.level}` : ""}
                 </p>
               </div>
             </div>
@@ -183,7 +172,7 @@ export default function VocabLearnTabClient({ groupId, userUid, initialCatalog =
               <Link
                 href={`/vocab/${set.id}`}
                 data-overdelay="Đang mở chi tiết bộ từ..."
-                className="rounded-full border border-amber-200 px-4 py-2 text-xs font-extrabold text-ink hover:bg-amber-50"
+                className="rounded-full border border-line px-4 py-2 text-xs font-extrabold text-ink hover:bg-surface-soft"
               >
                 Xem chi tiết
               </Link>
@@ -210,35 +199,9 @@ export default function VocabLearnTabClient({ groupId, userUid, initialCatalog =
 }
 
 function LearnSkeleton() {
-  return (
-    <section className="space-y-5">
-      <div className="flex gap-2 overflow-hidden">
-        {Array.from({ length: 5 }).map((_, index) => (
-          <span key={index} className="h-9 w-28 animate-pulse rounded-full bg-white" />
-        ))}
-      </div>
-      <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
-        {Array.from({ length: 6 }).map((_, index) => (
-          <article key={index} className="h-44 animate-pulse rounded-2xl border border-sky-100 bg-white p-5 shadow-sm">
-            <div className="h-5 w-28 rounded-full bg-slate-100" />
-            <div className="mt-5 h-5 w-3/4 rounded bg-slate-100" />
-            <div className="mt-4 h-3 w-20 rounded bg-slate-100" />
-            <div className="mt-5 h-9 rounded-full bg-slate-100" />
-          </article>
-        ))}
-      </section>
-    </section>
-  );
+  return <ListeningGridSkeleton />;
 }
 
 function EmptyPanel({ title, description }: { title: string; description: string }) {
-  return (
-    <section className="flex min-h-52 items-center justify-center rounded-xl border border-amber-100 bg-white p-8 text-center shadow-sm">
-      <div>
-        <div className="mx-auto mb-5 text-3xl text-amber-200">*</div>
-        <h2 className="text-xl font-extrabold text-ink">{title}</h2>
-        <p className="mt-3 max-w-xl text-sm text-muted">{description}</p>
-      </div>
-    </section>
-  );
+  return <LearningEmpty title={title} description={description} />;
 }

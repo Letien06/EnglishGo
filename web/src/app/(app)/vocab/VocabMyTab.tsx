@@ -142,7 +142,7 @@ export default function VocabMyTab({ uid, folderId, folderSearch }: Props) {
       <div className="flex gap-2 flex-wrap">
         <button
           onClick={() => setShowCreateSet(true)}
-          className="px-4 py-2 rounded-lg bg-accent text-white text-sm font-semibold hover:bg-accent/90 transition-colors"
+          className="px-4 py-2 rounded-lg bg-accent text-gold-ink text-sm font-semibold hover:bg-accent/90 transition-colors"
         >
           + Tạo bộ từ
         </button>
@@ -166,7 +166,7 @@ export default function VocabMyTab({ uid, folderId, folderSearch }: Props) {
       </div>
 
       {actionError ? (
-        <p role="alert" className="rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm font-semibold text-red-600">
+        <p role="alert" className="rounded-lg border border-[var(--danger-line)] bg-[var(--danger-soft)] px-4 py-3 text-sm font-semibold text-[var(--danger-ink)]">
           {actionError}
         </p>
       ) : null}
@@ -179,7 +179,7 @@ export default function VocabMyTab({ uid, folderId, folderSearch }: Props) {
             data-overdelay="Đang mở tất cả bộ từ..."
             className={`px-3 py-1.5 rounded-lg text-sm font-semibold transition-colors no-underline ${
               !folderId
-                ? "bg-accent text-white"
+                ? "bg-accent text-gold-ink"
                 : "bg-surface border border-line text-ink2 hover:bg-surface-soft"
             }`}
           >
@@ -192,7 +192,7 @@ export default function VocabMyTab({ uid, folderId, folderSearch }: Props) {
                 data-overdelay="Đang mở thư mục..."
                 className={`px-3 py-1.5 rounded-lg text-sm font-semibold transition-colors no-underline ${
                   folderId === folder.id
-                    ? "bg-accent text-white"
+                    ? "bg-accent text-gold-ink"
                     : "bg-surface border border-line text-ink2 hover:bg-surface-soft"
                 }`}
               >
@@ -290,7 +290,7 @@ export default function VocabMyTab({ uid, folderId, folderSearch }: Props) {
                     }
                   }}
                   disabled={deletingSetId === set.id}
-                  className="ml-auto rounded-full px-3 py-2 text-sm font-bold text-red-500 hover:bg-red-50"
+                  className="ml-auto rounded-full px-3 py-2 text-sm font-bold text-[var(--danger-ink)] hover:bg-[var(--danger-soft)]"
                   title="Xóa bộ từ"
                 >
                   {deletingSetId === set.id ? "Đang xóa..." : "Xóa"}
@@ -465,7 +465,7 @@ function CreateSetModal({
           </button>
         ))}
       </div>
-      {error ? <p role="alert" className="text-sm font-semibold text-red-600">{error}</p> : null}
+      {error ? <p role="alert" className="text-sm font-semibold text-[var(--danger-ink)]">{error}</p> : null}
 
       <footer className="flex justify-end gap-2 mt-4">
         <button
@@ -477,7 +477,7 @@ function CreateSetModal({
         <button
           onClick={submit}
           disabled={busy || !title.trim()}
-          className="px-4 py-2 rounded-lg bg-accent text-white text-sm font-semibold disabled:opacity-50"
+          className="px-4 py-2 rounded-lg bg-accent text-gold-ink text-sm font-semibold disabled:opacity-50"
         >
           {busy ? "Đang tạo..." : "Tạo"}
         </button>
@@ -529,7 +529,7 @@ function CreateFolderModal({
         className="w-full px-3 py-2 rounded-lg bg-surface-soft border border-line text-ink text-sm"
         autoFocus
       />
-      {error ? <p role="alert" className="text-sm font-semibold text-red-600">{error}</p> : null}
+      {error ? <p role="alert" className="text-sm font-semibold text-[var(--danger-ink)]">{error}</p> : null}
       <footer className="flex justify-end gap-2 mt-4">
         <button
           onClick={onClose}
@@ -540,7 +540,7 @@ function CreateFolderModal({
         <button
           onClick={submit}
           disabled={busy || !name.trim()}
-          className="px-4 py-2 rounded-lg bg-accent text-white text-sm font-semibold disabled:opacity-50"
+          className="px-4 py-2 rounded-lg bg-accent text-gold-ink text-sm font-semibold disabled:opacity-50"
         >
           {busy ? "Đang tạo..." : "Tạo"}
         </button>
@@ -592,7 +592,7 @@ function RenameFolderModal({
         className="w-full px-3 py-2 rounded-lg bg-surface-soft border border-line text-ink text-sm"
         autoFocus
       />
-      {error ? <p role="alert" className="text-sm font-semibold text-red-600">{error}</p> : null}
+      {error ? <p role="alert" className="text-sm font-semibold text-[var(--danger-ink)]">{error}</p> : null}
       <footer className="flex justify-end gap-2 mt-4">
         <button
           onClick={onClose}
@@ -603,7 +603,7 @@ function RenameFolderModal({
         <button
           onClick={submit}
           disabled={busy || !name.trim()}
-          className="px-4 py-2 rounded-lg bg-accent text-white text-sm font-semibold disabled:opacity-50"
+          className="px-4 py-2 rounded-lg bg-accent text-gold-ink text-sm font-semibold disabled:opacity-50"
         >
           {busy ? "Đang lưu..." : "Lưu"}
         </button>
@@ -655,7 +655,7 @@ function RenameSetModal({
         className="w-full px-3 py-2 rounded-lg bg-surface-soft border border-line text-ink text-sm"
         autoFocus
       />
-      {error ? <p role="alert" className="text-sm font-semibold text-red-600">{error}</p> : null}
+      {error ? <p role="alert" className="text-sm font-semibold text-[var(--danger-ink)]">{error}</p> : null}
       <footer className="flex justify-end gap-2 mt-4">
         <button
           onClick={onClose}
@@ -666,7 +666,7 @@ function RenameSetModal({
         <button
           onClick={submit}
           disabled={busy || !title.trim()}
-          className="px-4 py-2 rounded-lg bg-accent text-white text-sm font-semibold disabled:opacity-50"
+          className="px-4 py-2 rounded-lg bg-accent text-gold-ink text-sm font-semibold disabled:opacity-50"
         >
           {busy ? "Đang lưu..." : "Lưu"}
         </button>
@@ -902,7 +902,7 @@ function AddWordsModal({
             onClick={() => setTab(t)}
             className={`px-3 py-1.5 rounded-lg text-xs font-semibold ${t === "ai" ? "before:content-['AI'] " : ""}${
               tab === t
-                ? "bg-accent text-white"
+                ? "bg-accent text-gold-ink"
                 : "bg-surface-soft text-ink2"
             }`}
           >
@@ -914,7 +914,7 @@ function AddWordsModal({
       </nav>
 
       {error && (
-        <p className="mb-3 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-xs font-semibold text-red-600">
+        <p className="mb-3 rounded-lg border border-[var(--danger-line)] bg-[var(--danger-soft)] px-3 py-2 text-xs font-semibold text-[var(--danger-ink)]">
           {error}
         </p>
       )}
@@ -970,7 +970,7 @@ function AddWordsModal({
                   setAiStatus("");
                 }}
                 className={`rounded-lg px-3 py-2 text-xs font-semibold ${
-                  aiMode === m ? "bg-accent text-white" : "bg-surface-soft text-ink2"
+                  aiMode === m ? "bg-accent text-gold-ink" : "bg-surface-soft text-ink2"
                 }`}
               >
                 {m === "text" && "Chủ đề"}
@@ -1135,7 +1135,7 @@ function AddWordsModal({
           <button
             onClick={tab === "manual" ? submitManual : submitPaste}
             disabled={busy}
-            className="px-4 py-2 rounded-lg bg-accent text-white text-sm font-semibold disabled:opacity-50"
+            className="px-4 py-2 rounded-lg bg-accent text-gold-ink text-sm font-semibold disabled:opacity-50"
           >
             {busy ? "Đang lưu..." : "Thêm từ"}
           </button>
@@ -1158,7 +1158,7 @@ function AddWordsModal({
                 (aiMode !== "image" && !aiInput.trim()) ||
                 (aiMode === "image" && !aiImageFile)
               }
-              className="px-4 py-2 rounded-lg bg-accent text-white text-sm font-semibold disabled:opacity-50"
+              className="px-4 py-2 rounded-lg bg-accent text-gold-ink text-sm font-semibold disabled:opacity-50"
             >
               {busy ? "Đang tạo..." : "Tạo bằng AI"}
             </button>
@@ -1166,7 +1166,7 @@ function AddWordsModal({
             <button
               onClick={saveAi}
               disabled={busy || aiSelected.size === 0}
-              className="px-4 py-2 rounded-lg bg-accent text-white text-sm font-semibold disabled:opacity-50"
+              className="px-4 py-2 rounded-lg bg-accent text-gold-ink text-sm font-semibold disabled:opacity-50"
             >
               {busy ? "Đang lưu..." : `Lưu ${aiSelected.size} từ`}
             </button>

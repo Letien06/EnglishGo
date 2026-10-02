@@ -1,14 +1,11 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import Link from "@/components/IntentLink";
-import NavIcon from "@/components/NavIcon";
-import ResetLevelButton from "@/components/ResetLevelButton";
 import { useAuthenticatedSession } from "@/components/AuthenticatedSessionContext";
-import { ACTIVE_LEARNER_UPDATED_EVENT, LEARNING_LEVELS_UPDATED_EVENT, activeLearnerId, invalidateLearningLevels, isLearningLevelsDirty } from "@/lib/client-learning-progress-cache";
+import { ACTIVE_LEARNER_UPDATED_EVENT, LEARNING_LEVELS_UPDATED_EVENT, activeLearnerId, isLearningLevelsDirty } from "@/lib/client-learning-progress-cache";
 import type { DauToeicPartTest } from "@/types/dautoeic";
 import ListeningDashboard from "../listen/_components/ListeningDashboard";
-import { summarizeTests, type ListeningMetadata, type PartProgress } from "../listen/_components/listening-view-model";
+import { summarizeTests, studyParts, type ListeningMetadata, type PartProgress } from "../listen/_components/listening-view-model";
 
 const progressCache = new Map<string, DauToeicPartTest[]>();
 
@@ -22,7 +19,6 @@ export default function TestDashboardClient({ skill, part, initialTests, initial
   const authenticated = useAuthenticatedSession();
   const [view, setView] = useState<{ uid: string | null; tests: DauToeicPartTest[]; resolved: boolean }>({ uid: null, tests: initialTests, resolved: false });
   const [progressError, setProgressError] = useState(false);
-  const base = skill === "listening" ? "/listen" : "/read";
 
   useEffect(() => {
     let controller: AbortController | undefined;
@@ -71,40 +67,13 @@ export default function TestDashboardClient({ skill, part, initialTests, initial
   }, [authenticated, initialTests, part, skill]);
 
   const tests = authenticated && view.uid === activeLearnerId() ? view.tests : initialTests;
-  if (skill === "listening") {
-    const partProgress: Partial<Record<number, PartProgress>> = {};
-    if (authenticated) {
-      const uid = activeLearnerId();
-      for (const number of [1, 2, 3, 4]) {
-        const cached = progressCache.get(`listening:${number}:${uid}`);
-        if (cached && !isLearningLevelsDirty("listening", number, uid)) partProgress[number] = summarizeTests(cached);
-      }
+  const partProgress: Partial<Record<number, PartProgress>> = {};
+  if (authenticated) {
+    const uid = activeLearnerId();
+    for (const { number } of studyParts(skill)) {
+      const cached = progressCache.get(`${skill}:${number}:${uid}`);
+      if (cached && !isLearningLevelsDirty(skill, number, uid)) partProgress[number] = summarizeTests(cached);
     }
-    return <ListeningDashboard tests={tests} part={part} initialError={initialError} progressError={progressError} progressReady={!authenticated || (view.resolved && view.uid === activeLearnerId())} authenticated={authenticated} partProgress={partProgress} metadata={listeningMetadata} />;
   }
-  if (initialError) return <section className="premium-card p-6" role="alert"><h3>Chưa tải được danh sách test.</h3><p className="mt-2 text-sm text-muted">Vui lòng tải lại trang để thử lại.</p></section>;
-  if (!tests.length) return <p className="study-caption">Chưa có test cho Part này.</p>;
-  const groups = [...new Set(tests.map((test) => test.setName))];
-
-  return <>
-    {progressError && <p role="status" className="study-caption">Chưa cập nhật được tiến độ. Bạn vẫn có thể mở bài.</p>}
-    {groups.map((setName) => <section className="study-test-set" key={setName} aria-label={setName}>
-      <div className="study-test-set-heading"><h3>{setName}</h3><span>{tests.filter((test) => test.setName === setName).length} test</span></div>
-      <div className="study-level-grid study-test-grid">
-        {tests.filter((test) => test.setName === setName).map((test, index) => {
-          const percent = test.questionCount ? Math.min(100, Math.round(test.done / test.questionCount * 100)) : 0;
-          const href = `${base}/practice?part=part${part}&testId=${encodeURIComponent(test.testId)}&mode=normal&q=${test.nextIndex}`;
-          return <article className="study-level-card" key={test.testId}>
-            <header><span className="study-level-number">{String(index + 1).padStart(2, "0")}</span><div><h4>{test.testName}</h4><p>Part {part} · {test.questionCount} câu hỏi</p></div></header>
-            <div className="study-level-progress"><div><span>{test.done}/{test.questionCount} đã học</span><strong>{percent}%</strong></div><progress max={100} value={percent} aria-label={`Tiến độ ${test.testName} - ${setName}`} /></div>
-            <div className="study-level-stats"><span><strong>{test.correct}</strong> đúng</span><span><strong>{test.wrong}</strong> sai</span><span><strong>{Math.max(0, test.questionCount - test.done)}</strong> còn lại</span></div>
-            <footer>
-              {test.done > 0 && <ResetLevelButton part={part} level={1} testId={test.testId} testName={`${test.testName} - ${setName}`} endpoint={`/api/${skill}/reset`} onReset={() => invalidateLearningLevels(skill, [part])} />}
-              {test.questionCount > 0 ? <Link className="study-start-link" href={href} aria-label={`${test.done > 0 ? "Học tiếp" : "Bắt đầu"} ${test.testName} - ${setName}`}>{percent === 100 ? "Ôn lại" : test.done > 0 ? "Học tiếp" : "Bắt đầu"}<NavIcon name="arrow-right" /></Link> : <span className="study-unavailable">Chưa có câu hỏi</span>}
-            </footer>
-          </article>;
-        })}
-      </div>
-    </section>)}
-  </>;
+  return <ListeningDashboard skill={skill} tests={tests} part={part} initialError={initialError} progressError={progressError} progressReady={!authenticated || (view.resolved && view.uid === activeLearnerId())} authenticated={authenticated} partProgress={partProgress} metadata={listeningMetadata} />;
 }

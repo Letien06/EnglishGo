@@ -1,9 +1,12 @@
 import type { SVGProps } from "react";
 
-export type ListeningIconName = "image" | "reply" | "conversation" | "broadcast" | "target" | "flame" | "check" | "clock" | "search" | "spark" | "arrow" | "reset" | "headphones" | "bars";
+export type ListeningIconName = "image" | "reply" | "conversation" | "broadcast" | "target" | "flame" | "check" | "clock" | "search" | "spark" | "arrow" | "reset" | "headphones" | "bars" | "book" | "pen" | "document";
 
 export default function ListeningIcon({ name, ...props }: SVGProps<SVGSVGElement> & { name: ListeningIconName }) {
   const paths: Record<ListeningIconName, React.ReactNode> = {
+    book: <><path d="M12 5C8 3 5 3 2 4v15c3-1 6-1 10 1 4-2 7-2 10-1V4c-3-1-6-1-10 1Zm0 0v15" /></>,
+    pen: <><path d="m15 4 5 5M4 20l5-1L21 7a2 2 0 0 0-5-5L4 14v6ZM3 22h18" /></>,
+    document: <><path d="M14 3H5v18h14V8l-5-5Zm0 0v5h5M8 12h8M8 16h6" /></>,
     image: <><rect x="3" y="3" width="18" height="18" rx="4" /><circle cx="8" cy="8" r="1.5" /><path d="m3 16 5-5 4 4 3-3 6 6" /></>,
     reply: <><path d="M20 11a8 8 0 0 1-8 8H4l1-4a8 8 0 1 1 15-4Z" /><path d="M10 8a2 2 0 1 1 3 1.7c-1 .5-1 1.3-1 1.3M12 14h.01" /></>,
     conversation: <><path d="M14 4H5a2 2 0 0 0-2 2v8l4-2h7a2 2 0 0 0 2-2V6a2 2 0 0 0-2-2Z" /><path d="M9 16v1a2 2 0 0 0 2 2h6l4 2V11a2 2 0 0 0-2-2M7 8h5" /></>,

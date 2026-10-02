@@ -1,4 +1,7 @@
 import Link from "next/link";
+import styles from "../listen/_components/listening.module.css";
+import Icon from "../listen/_components/ListeningIcon";
+import { ListeningGridSkeleton } from "../listen/_components/ListeningLoading";
 import { Suspense } from "react";
 import { getCurrentUserForRead } from "@/lib/auth/session";
 import * as vocab from "@/lib/services/vocab";
@@ -8,11 +11,11 @@ import VocabProgressTabClient from "./VocabProgressTabClient";
 import { getVocabularyCatalogView } from "@/lib/services/dautoeic-vocab";
 
 const tabs = [
-  { key: "learn", label: "Học", icon: "▦" },
-  { key: "progress", label: "Tiến độ", icon: "⊙" },
-  { key: "my", label: "Từ vựng của tôi", icon: "☆" },
-  { key: "algorithm", label: "Thuật toán học từ", icon: "⚙" },
-  { key: "community", label: "Cộng đồng", icon: "⦿" },
+  { key: "learn", label: "Học", icon: "book" },
+  { key: "progress", label: "Tiến độ", icon: "target" },
+  { key: "my", label: "Từ vựng của tôi", icon: "document" },
+  { key: "algorithm", label: "Thuật toán học từ", icon: "spark" },
+  { key: "community", label: "Cộng đồng", icon: "conversation" },
 ] as const;
 
 type VocabTabKey = (typeof tabs)[number]["key"];
@@ -31,28 +34,11 @@ export default async function VocabPage({
   const groupId = typeof params.group === "string" ? params.group : undefined;
 
   return (
-    <main className="app-canvas vocab-page min-h-[calc(100dvh-4rem)] px-4 py-6 sm:px-5 sm:py-10">
-      <div className="mx-auto max-w-5xl space-y-7">
-        <section className="premium-hero premium-reveal vocab-hero flex min-h-52 items-center justify-between px-6 py-7 sm:px-9 sm:py-8">
-          <div className="premium-hero-orbit" aria-hidden="true" />
-          <div>
-            <span className="premium-metric inline-flex px-4 py-1 text-xs font-extrabold text-primary">
-              ✦ Spaced Repetition System
-            </span>
-            <h1 className="mt-5 text-3xl font-extrabold text-ink sm:text-4xl">
-              Chinh phục <span className="text-primary">Từ vựng TOEIC</span>
-            </h1>
-            <p className="mt-3 max-w-2xl text-sm leading-relaxed text-muted">
-              Học theo phương pháp lặp lại ngắt quãng, đưa đúng từ vào đúng thời điểm bạn sắp quên.
-              Nhớ lâu hơn và học gọn hơn.
-            </p>
-          </div>
-          <div className="premium-hero-icon hidden h-32 w-32 items-center justify-center rounded-3xl text-5xl font-extrabold text-white lg:flex">
-            ▦
-          </div>
-        </section>
-
-        <nav className="premium-tabs vocab-tabs inline-flex max-w-full gap-1 overflow-x-auto rounded-full p-1" aria-label="Vocabulary tabs">
+    <main className={styles.dashboard}>
+      <div>
+        <span className={styles.eyebrow}>KHÔNG GIAN LUYỆN TẬP</span>
+        <header className={styles.intro}><div><h1>Từ vựng<span>.</span></h1><p>Học qua trò chơi. Ghi nhớ bằng lặp lại ngắt quãng.</p></div></header>
+        <nav className={styles.pageTabs} aria-label="Các mục từ vựng">
           {tabs.map((tab) => {
             const selected = active === tab.key;
             return (
@@ -61,13 +47,8 @@ export default async function VocabPage({
                 href={`/vocab?tab=${tab.key}`}
                 data-overdelay={`Đang mở ${tab.label}...`}
                 aria-current={selected ? "page" : undefined}
-                className={`vocab-tab inline-flex items-center gap-2 whitespace-nowrap rounded-full px-4 py-2 text-xs font-extrabold transition-colors ${
-                  selected
-                    ? "bg-primary text-gold-ink"
-                    : "text-muted hover:bg-white hover:text-ink"
-                }`}
               >
-                <span>{tab.icon}</span>
+                <Icon name={tab.icon} />
                 {tab.label}
               </Link>
             );
@@ -75,7 +56,7 @@ export default async function VocabPage({
         </nav>
 
         {active === "learn" ? (
-          <Suspense fallback={<p className="text-sm text-muted" role="status">Đang mở kho từ vựng...</p>}>
+          <Suspense fallback={<ListeningGridSkeleton />}>
             <LearnTab groupId={groupId} userUid={user?.uid} />
           </Suspense>
         ) : active === "progress" ? (
@@ -133,20 +114,20 @@ async function CommunityTab({
 
   return (
     <section className="space-y-5">
-      <div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-amber-100 bg-white p-4 shadow-sm">
+      <div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-line bg-surface p-4 shadow-sm">
         <form action="/vocab" className="flex min-w-0 flex-1 flex-wrap gap-2">
           <input type="hidden" name="tab" value="community" />
           <input
             name="q"
             defaultValue={query}
             placeholder="Tìm kiếm thư mục cộng đồng..."
-            className="min-w-60 flex-1 rounded-full border border-amber-200 px-4 py-2 text-sm outline-none focus:border-primary"
+            className="min-w-0 flex-1 rounded-full border border-line px-4 py-2 text-sm outline-none focus:border-primary"
           />
           <button className="rounded-full bg-primary px-4 py-2 text-xs font-extrabold text-gold-ink">
             Tìm kiếm
           </button>
         </form>
-        <Link href="/vocab?tab=my" className="rounded-full border border-amber-200 px-4 py-2 text-xs font-extrabold text-ink hover:bg-amber-50">
+        <Link href="/vocab?tab=my" className="rounded-full border border-line px-4 py-2 text-xs font-extrabold text-ink hover:bg-primary-soft">
           Bộ từ của tôi
         </Link>
       </div>
@@ -159,7 +140,7 @@ async function CommunityTab({
         />
       ) : selectedFolder ? (
         <section className="space-y-4">
-          <article className="rounded-2xl border border-amber-100 bg-white p-5 shadow-sm">
+          <article className="rounded-2xl border border-line bg-surface p-5 shadow-sm">
             <Link href="/vocab?tab=community" className="text-sm font-extrabold text-primary">
               ← Quay lại
             </Link>
@@ -188,12 +169,12 @@ async function CommunityTab({
           ) : (
             <section className="grid gap-4 md:grid-cols-2">
               {communitySets.map((set) => (
-                <article key={set.id} className="rounded-2xl border border-amber-100 bg-white p-5 shadow-sm">
+                <article key={set.id} className="rounded-2xl border border-line bg-surface p-5 shadow-sm">
                   <p className="text-xs font-extrabold text-primary">{set.topic}</p>
                   <h3 className="mt-1 text-lg font-extrabold text-ink">{set.title}</h3>
                   <p className="mt-2 text-sm text-muted">{set.wordCount} từ</p>
                   <div className="mt-5 flex flex-wrap gap-2">
-                    <Link href={`/vocab/${set.id}`} className="rounded-full border border-amber-200 px-4 py-2 text-xs font-extrabold text-ink hover:bg-amber-50">
+                    <Link href={`/vocab/${set.id}`} className="rounded-full border border-line px-4 py-2 text-xs font-extrabold text-ink hover:bg-primary-soft">
                       Xem
                     </Link>
                     <Link href={`/vocab/${set.id}/flashcards?mode=menu`} className="rounded-full bg-primary px-4 py-2 text-xs font-extrabold text-gold-ink">
@@ -217,9 +198,9 @@ async function CommunityTab({
             <Link
               key={folder.id}
               href={`/vocab?tab=community&communityFolderId=${folder.id}${query ? `&q=${encodeURIComponent(query)}` : ""}`}
-              className="rounded-2xl border border-amber-100 bg-white p-5 shadow-sm hover:border-primary"
+              className="rounded-2xl border border-line bg-surface p-5 shadow-sm hover:border-primary"
             >
-              <span className="flex h-11 w-11 items-center justify-center rounded-xl bg-amber-100 text-xl font-extrabold text-primary">
+              <span className="flex h-11 w-11 items-center justify-center rounded-xl bg-primary-soft text-xl font-extrabold text-primary">
                 □
               </span>
               <strong className="mt-4 block text-lg text-ink">{folder.name}</strong>
@@ -236,7 +217,7 @@ async function CommunityTab({
 
 function AlgorithmTab() {
   return (
-    <section className="rounded-2xl border border-amber-100 bg-white p-6 shadow-sm">
+    <section className="rounded-2xl border border-line bg-surface p-6 shadow-sm">
       <div className="max-w-2xl">
         <p className="text-xs font-extrabold uppercase tracking-widest text-primary">Spaced Repetition</p>
         <h2 className="mt-2 text-2xl font-extrabold text-ink">Thuật toán học từ</h2>
@@ -252,7 +233,7 @@ function AlgorithmTab() {
           ["Good", "Tăng lịch ôn theo mức nhớ ổn định."],
           ["Easy", "Giãn lịch xa hơn cho từ đã rất chắc."],
         ].map(([label, description]) => (
-          <article key={label} className="rounded-xl border border-amber-100 bg-amber-50 p-4">
+          <article key={label} className="rounded-xl border border-line bg-primary-soft p-4">
             <strong className="text-lg text-ink">{label}</strong>
             <p className="mt-2 text-sm text-muted">{description}</p>
           </article>
@@ -276,7 +257,7 @@ function EmptyPanel({
   actionLabel?: string;
 }) {
   return (
-    <section className="flex min-h-52 items-center justify-center rounded-xl border border-amber-100 bg-white p-8 text-center shadow-sm">
+    <section className="flex min-h-52 items-center justify-center rounded-xl border border-line bg-surface p-8 text-center shadow-sm">
       <div>
         <div className="mx-auto mb-5 text-3xl text-amber-200">{icon}</div>
         <h2 className="text-xl font-extrabold text-ink">{title}</h2>

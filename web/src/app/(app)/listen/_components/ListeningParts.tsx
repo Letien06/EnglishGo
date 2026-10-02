@@ -3,10 +3,10 @@
 import { useLinkStatus } from "next/link";
 import Link from "@/components/IntentLink";
 import ListeningIcon from "./ListeningIcon";
-import { LISTENING_PARTS, type PartProgress } from "./listening-view-model";
+import { studyParts, type StudySkill, type PartProgress } from "./listening-view-model";
 import styles from "./listening.module.css";
 
-function PartContent({ entry, progress }: { entry: typeof LISTENING_PARTS[number]; progress?: PartProgress }) {
+function PartContent({ entry, progress }: { entry: ReturnType<typeof studyParts>[number]; progress?: PartProgress }) {
   const { pending } = useLinkStatus();
   return <>
     <span className={styles.partIcon}><ListeningIcon name={entry.icon} /></span>
@@ -17,9 +17,9 @@ function PartContent({ entry, progress }: { entry: typeof LISTENING_PARTS[number
   </>;
 }
 
-export default function ListeningParts({ part, progress }: { part: number; progress: Partial<Record<number, PartProgress>> }) {
-  return <nav className={styles.parts} aria-label="Các phần luyện nghe">
-    {LISTENING_PARTS.map((entry) => <Link key={entry.number} className={styles.part} href={`/listen?part=part${entry.number}`} aria-label={`Part ${entry.number}: ${entry.name}`} aria-current={part === entry.number ? "page" : undefined}>
+export default function ListeningParts({ part, progress, skill = "listening" }: { skill?: StudySkill; part: number; progress: Partial<Record<number, PartProgress>> }) {
+  return <nav className={styles.parts} data-columns={skill === "reading" ? "3" : "4"} aria-label={skill === "reading" ? "Các phần luyện đọc" : "Các phần luyện nghe"}>
+    {studyParts(skill).map((entry) => <Link key={entry.number} className={styles.part} href={`/${skill === "reading" ? "read" : "listen"}?part=part${entry.number}`} aria-label={`Part ${entry.number}: ${entry.name}`} aria-current={part === entry.number ? "page" : undefined}>
       <PartContent entry={entry} progress={progress[entry.number]} />
     </Link>)}
   </nav>;

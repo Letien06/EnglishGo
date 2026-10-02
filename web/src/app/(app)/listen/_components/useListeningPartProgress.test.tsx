@@ -7,6 +7,14 @@ beforeEach(() => { window.localStorage.clear(); });
 afterEach(() => { cleanup(); vi.unstubAllGlobals(); });
 
 describe("background listening tab progress", () => {
+  it("uses only Reading endpoints for the Reading tab overview", async () => {
+    setActiveLearnerId("reading-overview");
+    const fetcher = vi.fn(async (url: string) => ({ ok: true, json: async () => ({ success: true, data: { uid: "reading-overview", tests: [{ part: Number(url.at(-1)), questionCount: 16, done: 4, correct: 3, wrong: 1 }] } }) }));
+    vi.stubGlobal("fetch", fetcher);
+    const { result } = renderHook(() => useListeningPartProgress(5, true, "reading"));
+    await waitFor(() => expect(result.current[7]).toMatchObject({ done: 4, total: 16 }));
+    expect(fetcher.mock.calls.map(([url]) => url)).toEqual(["/api/reading/tests?part=6", "/api/reading/tests?part=7"]);
+  });
   it("does not fetch before the selected part is ready", async () => {
     vi.stubGlobal("fetch", vi.fn());
     renderHook(() => useListeningPartProgress(1, false));

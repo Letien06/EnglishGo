@@ -19,6 +19,18 @@ beforeEach(() => { vi.stubGlobal("React", React); window.localStorage.clear(); v
 afterEach(() => { cleanup(); vi.unstubAllGlobals(); });
 
 describe("listening dashboard UI", () => {
+  it("renders Reading Parts and keeps the reading reset endpoint", async () => {
+    vi.stubGlobal("confirm", vi.fn(() => true));
+    vi.mocked(fetch).mockResolvedValue({ ok: true, json: async () => ({ success: true }) } as Response);
+    render(<ListeningDashboard {...defaults} skill="reading" part={5} tests={tests.map((test) => ({ ...test, part: 5 }))} />);
+    expect(screen.getByRole("heading", { name: "Luyện đọc." })).toBeInTheDocument();
+    expect(screen.getByText("Test 1 · Part 5 · câu 3/6")).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "Tiếp tục học Test 1 - Bộ đề 1" })).toHaveAttribute("href", "/read/practice?part=part5&testId=test1&mode=normal&q=2");
+    expect(screen.getByRole("link", { name: "Part 7: Đọc hiểu" })).toHaveAttribute("href", "/read?part=part7");
+    expect(screen.queryByRole("link", { name: "Nghe - chép video" })).not.toBeInTheDocument();
+    fireEvent.click(within(screen.getByRole("article", { name: "Test 1 - Bộ đề 1" })).getByRole("button", { name: "Làm lại" }));
+    await waitFor(() => expect(fetch).toHaveBeenCalledWith("/api/reading/reset", expect.objectContaining({ method: "POST", body: JSON.stringify({ part: 5, level: 1, testId: "test1" }) })));
+  });
   it("sorts by source year and displays source difficulty without changing test data", () => {
     render(<ListeningDashboard {...defaults} metadata={{ test1: { year: 2024, difficultyLevel: 3 }, test2: { year: 2026, difficultyLevel: 2 } }} />);
     fireEvent.change(screen.getByRole("combobox", { name: "Sắp xếp test" }), { target: { value: "newest" } });

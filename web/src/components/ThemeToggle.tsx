@@ -7,7 +7,7 @@ const MANUAL_STORAGE_KEY = "englishgo-theme-manual";
 const THEME_CHANGED_EVENT = "englishgo:theme-changed";
 
 function readTheme(): "dark" | "light" {
-  if (typeof window === "undefined") return "light";
+  if (typeof window === "undefined") return "dark";
   const current = document.documentElement.dataset.theme;
   if (current === "dark" || current === "light") return current;
   try {
@@ -17,7 +17,7 @@ function readTheme(): "dark" | "light" {
   } catch {
     /* ignore */
   }
-  return "light";
+  return "dark";
 }
 
 function subscribe(onChange: () => void) {
@@ -30,7 +30,7 @@ function subscribe(onChange: () => void) {
   };
 }
 
-const serverTheme = () => "light" as const;
+const serverTheme = () => "dark" as const;
 
 export default function ThemeToggle({ className }: { className?: string }) {
   const theme = useSyncExternalStore(subscribe, readTheme, serverTheme);

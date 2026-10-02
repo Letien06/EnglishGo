@@ -91,7 +91,7 @@ export default function VocabProgressTabClient() {
 
   return (
     <section className="space-y-5">
-      <article className="rounded-2xl border border-amber-100 bg-white p-5 shadow-sm">
+      <article className="rounded-2xl border border-line bg-surface p-5 shadow-sm">
         <div className="flex flex-wrap items-center justify-between gap-4">
           <div>
             <h2 className="text-xl font-extrabold text-ink">Mục tiêu hôm nay</h2>
@@ -102,23 +102,23 @@ export default function VocabProgressTabClient() {
           <Link
             href="/vocab?tab=my"
             data-overdelay="Đang mở bộ từ của tôi..."
-            className="rounded-full border border-amber-200 px-4 py-2 text-xs font-extrabold text-ink hover:bg-amber-50"
+            className="rounded-full border border-line px-4 py-2 text-xs font-extrabold text-ink hover:bg-primary-soft"
           >
             Quản lý bộ từ
           </Link>
         </div>
         <div className="mt-5 grid gap-4 md:grid-cols-2">
-          <div className="rounded-xl bg-blue-50 p-4">
-            <p className="text-sm font-extrabold text-blue-700">On tap</p>
-            <p className="mt-2 text-3xl font-extrabold text-ink">{payload.dueWords} <span className="text-sm text-muted">tu</span></p>
+          <div className="rounded-xl bg-[var(--info-soft)] p-4">
+            <p className="text-sm font-extrabold text-[var(--info-ink)]">Ôn tập</p>
+            <p className="mt-2 text-3xl font-extrabold text-ink">{payload.dueWords} <span className="text-sm text-muted">từ</span></p>
           </div>
-          <div className="rounded-xl bg-emerald-50 p-4">
-            <p className="text-sm font-extrabold text-emerald-700">Tu moi</p>
-            <p className="mt-2 text-3xl font-extrabold text-ink">{payload.studiedWordsToday}<span className="text-sm text-muted">/{dailyGoal} tu</span></p>
-            <div className="mt-3 h-2 overflow-hidden rounded-full bg-white">
-              <span className="block h-full rounded-full bg-emerald-500" style={{ width: `${dailyPercent}%` }} />
+          <div className="rounded-xl bg-[var(--success-soft)] p-4">
+            <p className="text-sm font-extrabold text-[var(--success-ink)]">Từ mới</p>
+            <p className="mt-2 text-3xl font-extrabold text-ink">{payload.studiedWordsToday}<span className="text-sm text-muted">/{dailyGoal} từ</span></p>
+            <div className="mt-3 h-2 overflow-hidden rounded-full bg-surface">
+              <span className="block h-full rounded-full bg-[var(--success-line)]" style={{ width: `${dailyPercent}%` }} />
             </div>
-            <p className="mt-2 text-xs font-bold text-emerald-700">{dailyPercent}% hoan thanh</p>
+            <p className="mt-2 text-xs font-bold text-[var(--success-ink)]">{dailyPercent}% hoàn thành</p>
           </div>
         </div>
       </article>
@@ -145,20 +145,20 @@ export default function VocabProgressTabClient() {
               : null;
             const detailHref = dautoeicHref ?? `/vocab/${set.id}`;
             return (
-              <article key={set.id} className="rounded-2xl border border-amber-100 bg-white p-5 shadow-sm">
+              <article key={set.id} className="rounded-2xl border border-line bg-surface p-5 shadow-sm">
                 <header className="flex items-start gap-3">
-                  <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-amber-100 text-xl font-extrabold text-primary">
+                  <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-primary-soft text-xl font-extrabold text-primary">
                     {set.icon || "*"}
                   </span>
                   <div className="min-w-0 flex-1">
                     <p className="text-xs font-extrabold text-primary">{set.topic}</p>
                     <h3 className="mt-1 line-clamp-2 text-base font-extrabold text-ink">{set.title}</h3>
                   </div>
-                  <b className={set.dueWords > 0 ? "text-sm text-red-600" : "text-sm text-emerald-600"}>
-                    {set.dueWords > 0 ? `${set.dueWords} can on` : `${masteredPercent}%`}
+                  <b className={set.dueWords > 0 ? "text-sm text-[var(--danger-ink)]" : "text-sm text-[var(--success-ink)]"}>
+                    {set.dueWords > 0 ? `${set.dueWords} cần ôn` : `${masteredPercent}%`}
                   </b>
                 </header>
-                <div className="mt-4 h-2 overflow-hidden rounded-full bg-slate-100">
+                <div className="mt-4 h-2 overflow-hidden rounded-full bg-surface-soft">
                   <span className="block h-full rounded-full bg-primary" style={{ width: `${masteredPercent}%` }} />
                 </div>
                 <div className="mt-3 flex flex-wrap gap-x-4 gap-y-1 text-xs font-bold text-muted">
@@ -170,7 +170,7 @@ export default function VocabProgressTabClient() {
                   <Link
                     href={detailHref}
                     data-overdelay="Đang mở chi tiết bộ từ..."
-                    className="rounded-full border border-amber-200 px-4 py-2 text-xs font-extrabold text-ink hover:bg-amber-50"
+                    className="rounded-full border border-line px-4 py-2 text-xs font-extrabold text-ink hover:bg-primary-soft"
                   >
                     {dautoeicHref ? "Chọn Part" : "Xem chi tiết"}
                   </Link>
@@ -194,15 +194,15 @@ export default function VocabProgressTabClient() {
 function ProgressSkeleton() {
   return (
     <section className="space-y-5">
-      <article className="h-48 animate-pulse rounded-2xl border border-amber-100 bg-white p-5 shadow-sm" />
+      <article className="h-48 animate-pulse rounded-2xl border border-line bg-surface p-5 shadow-sm" />
       <section className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
         {Array.from({ length: 4 }).map((_, index) => (
-          <article key={index} className="h-24 animate-pulse rounded-2xl border border-amber-100 bg-white p-4 shadow-sm" />
+          <article key={index} className="h-24 animate-pulse rounded-2xl border border-line bg-surface p-4 shadow-sm" />
         ))}
       </section>
       <section className="grid gap-4 md:grid-cols-2">
         {Array.from({ length: 2 }).map((_, index) => (
-          <article key={index} className="h-40 animate-pulse rounded-2xl border border-amber-100 bg-white p-5 shadow-sm" />
+          <article key={index} className="h-40 animate-pulse rounded-2xl border border-line bg-surface p-5 shadow-sm" />
         ))}
       </section>
     </section>
@@ -211,7 +211,7 @@ function ProgressSkeleton() {
 
 function StatCard({ label, value }: { label: string; value: number }) {
   return (
-    <article className="rounded-2xl border border-amber-100 bg-white p-4 shadow-sm">
+    <article className="rounded-2xl border border-line bg-surface p-4 shadow-sm">
       <span className="text-lg text-primary">*</span>
       <p className="mt-2 text-xs font-extrabold text-muted">{label}</p>
       <strong className="mt-1 block text-2xl text-ink">{value}</strong>
@@ -231,7 +231,7 @@ function EmptyPanel({
   actionLabel?: string;
 }) {
   return (
-    <section className="flex min-h-52 items-center justify-center rounded-xl border border-amber-100 bg-white p-8 text-center shadow-sm">
+    <section className="flex min-h-52 items-center justify-center rounded-xl border border-line bg-surface p-8 text-center shadow-sm">
       <div>
         <div className="mx-auto mb-5 text-3xl text-amber-200">*</div>
         <h2 className="text-xl font-extrabold text-ink">{title}</h2>

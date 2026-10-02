@@ -25,13 +25,15 @@ beforeEach(() => {
 afterEach(() => { cleanup(); vi.unstubAllGlobals(); });
 
 describe("test selection dashboard", () => {
-  it("keeps the reading dashboard presentation and routes unchanged", () => {
+  it("shares the new dashboard with reading while preserving practice routes", async () => {
     render(<AuthenticatedSessionProvider authenticated={false}><TestDashboardClient skill="reading" part={5} initialTests={tests.map((test) => ({ ...test, part: 5 }))} initialError={false} /></AuthenticatedSessionProvider>);
     expect(screen.getByRole("link", { name: "Bắt đầu Test 1 - Vol 1" })).toHaveAttribute("href", "/read/practice?part=part5&testId=vol1-test1&mode=normal&q=0");
-    expect(screen.queryByRole("searchbox")).not.toBeInTheDocument();
+    expect(screen.getByRole("searchbox")).toBeInTheDocument();
+    expect(screen.getByRole("region", { name: "Tổng quan luyện đọc" })).toBeInTheDocument();
     expect(screen.queryByRole("region", { name: "Tổng quan luyện nghe" })).not.toBeInTheDocument();
+    await act(async () => undefined);
   });
-  it("renders immediately and links identical test names to different source IDs without levels", () => {
+  it("renders immediately and links identical test names to different source IDs without levels", async () => {
     const fetcher = vi.fn();
     vi.stubGlobal("fetch", fetcher);
     render(<Dashboard />);
@@ -41,6 +43,7 @@ describe("test selection dashboard", () => {
     expect(screen.getByRole("link", { name: "Bắt đầu Test 1 - Vol 2" })).toHaveAttribute("href", "/listen/practice?part=part1&testId=vol2-test1&mode=normal&q=0");
     expect(screen.queryByText(/Cấp|Nhóm/)).not.toBeInTheDocument();
     expect(fetcher).not.toHaveBeenCalled();
+    await act(async () => undefined);
   });
 
   it("does not block opening a test while private history is loading", async () => {

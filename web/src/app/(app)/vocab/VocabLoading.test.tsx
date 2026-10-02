@@ -23,6 +23,27 @@ beforeEach(() => { vi.stubGlobal("React", React); vi.stubGlobal("fetch", vi.fn((
 afterEach(() => { cleanup(); vi.restoreAllMocks(); vi.unstubAllGlobals(); });
 
 describe("vocabulary loading", () => {
+  it("filters mastery, searches and sorts locally without extra requests", () => {
+    const progressed = { ...catalog, cards: [
+      { ...catalog.cards[0], id: "new", title: "Test A" },
+      { ...catalog.cards[0], id: "learning", title: "Test B", learnedWords: 160, masteredWords: 40, dueWords: 4 },
+      { ...catalog.cards[0], id: "complete", title: "Test C", learnedWords: 160, masteredWords: 160 },
+    ] };
+    render(<VocabLearnTabClient initialCatalog={progressed} />);
+    fireEvent.click(screen.getByRole("button", { name: "Đã thuộc" }));
+    expect(screen.getAllByRole("article")).toHaveLength(1);
+    expect(screen.getByRole("heading", { name: "Test C" })).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Cần ôn" }));
+    expect(screen.getByRole("link", { name: "Vào học" })).toHaveAttribute("href", "/vocab/dautoeic/learning");
+    fireEvent.click(screen.getByRole("button", { name: "Tất cả" }));
+    fireEvent.change(screen.getByRole("combobox"), { target: { value: "progress" } });
+    expect(screen.getAllByRole("article")[0]).toHaveTextContent("Test C");
+    fireEvent.change(screen.getByRole("textbox", { name: "Tìm bộ từ" }), { target: { value: "not found" } });
+    expect(screen.getByText("Chưa tìm thấy bộ từ phù hợp")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Xóa bộ lọc" }));
+    expect(screen.getAllByRole("article")).toHaveLength(3);
+    expect(fetch).not.toHaveBeenCalled();
+  });
   it("renders all workspace tabs while supplemental history and set options are pending", () => {
     render(<FlashcardGame session={{ set: { id: 123, title: "Test 1 - LC", topic: "2026", externalPartId: "lc" }, words: [{ id: 1, word: "office", meaning: "van phong", mastered: false }] }} initialMode="menu" practiceOptions={[]} reviewMode={false} isAuthenticated loginHref="/login" loadExtrasInBackground />);
     expect(screen.getByRole("heading", { name: "Test 1 - LC" })).toBeInTheDocument();
@@ -73,11 +94,11 @@ describe("vocabulary loading", () => {
   it("does not delay a successful catalog behind a fallback request or retain another learner's progress", async () => {
     vi.mocked(fetch).mockResolvedValueOnce(new Response(JSON.stringify({ success: true, data: { ...catalog, cards: [{ ...catalog.cards[0], masteredWords: 40 }] } })));
     const first = render(<VocabLearnTabClient userUid="first" />);
-    await waitFor(() => expect(screen.getByText("40/160 từ đã thuộc")).toBeInTheDocument());
+    await waitFor(() => expect(screen.getByRole("progressbar", { name: "Từ đã thuộc: Test 1" })).toHaveAttribute("aria-valuenow", "25"));
     expect(fetch).toHaveBeenCalledTimes(1);
     first.unmount();
     render(<VocabLearnTabClient initialCatalog={catalog} userUid="second" />);
-    expect(screen.queryByText("40/160 từ đã thuộc")).not.toBeInTheDocument();
+    expect(screen.getByRole("progressbar", { name: "Từ đã thuộc: Test 1" })).not.toHaveAttribute("aria-valuenow");
     expect(screen.getByText("Đang tải tiến độ...")).toBeInTheDocument();
   });
 });

@@ -8,6 +8,13 @@ export const LISTENING_PARTS = [
 ] as const;
 
 export type TestStatus = "new" | "learning" | "complete";
+export type StudySkill = "listening" | "reading";
+export const READING_PARTS = [
+  { number: 5, name: "Hoàn thành câu", description: "Vững từ vựng & ngữ pháp", icon: "pen", tip: "Xác định từ loại cần điền trước khi đọc đáp án. Với câu hỏi ngữ pháp, chú ý chủ ngữ, thì và cấu trúc của cả câu." },
+  { number: 6, name: "Hoàn thành đoạn", description: "Nối ý, hiểu ngữ cảnh", icon: "document", tip: "Đọc cả câu trước và sau chỗ trống. Đáp án cần đúng ngữ pháp và nối mạch ý của đoạn văn." },
+  { number: 7, name: "Đọc hiểu", description: "Đọc có mục tiêu", icon: "book", tip: "Đọc câu hỏi trước, tìm từ khóa rồi đối chiếu thông tin trong bài. Với nhiều văn bản, chú ý mối liên hệ giữa chúng." },
+] as const;
+export const studyParts = (skill: StudySkill) => skill === "reading" ? READING_PARTS : LISTENING_PARTS;
 export type TestFilter = "all" | TestStatus;
 export type TestSort = "catalog" | "newest" | "progress-desc" | "progress-asc";
 export type PartProgress = { done: number; total: number };
@@ -43,18 +50,18 @@ export function summarizeTests(tests: DauToeicPartTest[]) {
 }
 
 export function practiceHref(test: DauToeicPartTest) {
-  return `/listen/practice?part=part${test.part}&testId=${encodeURIComponent(test.testId)}&mode=normal&q=${test.nextIndex}`;
+  return `/${test.part >= 5 ? "read" : "listen"}/practice?part=part${test.part}&testId=${encodeURIComponent(test.testId)}&mode=normal&q=${test.nextIndex}`;
 }
 
 export function resumePosition(test: DauToeicPartTest) {
-  const grouped = test.part >= 3;
+  const grouped = [3, 4, 6, 7].includes(test.part);
   const total = grouped ? test.itemCount : test.questionCount;
   const position = Math.min(Math.max(0, test.nextIndex) + 1, total);
   return `${grouped ? "cụm" : "câu"} ${position}/${total}`;
 }
 
 export function estimatedMinutes(test: DauToeicPartTest) {
-  return Math.max(1, Math.ceil(test.questionCount * (test.part === 1 ? 40 : test.part === 2 ? 25 : 35) / 60));
+  return Math.max(1, Math.ceil(test.questionCount * (test.part === 1 ? 40 : test.part === 2 ? 25 : test.part === 5 ? 30 : test.part >= 6 ? 60 : 35) / 60));
 }
 
 export function filterTests(tests: DauToeicPartTest[], filter: TestFilter, query: string, sort: TestSort, metadata: ListeningMetadata = {}) {

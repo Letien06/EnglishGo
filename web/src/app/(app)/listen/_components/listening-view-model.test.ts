@@ -5,6 +5,13 @@ import { estimatedMinutes, filterTests, listeningMetadata, practiceHref, resumeP
 const test: DauToeicPartTest = { testId: "vol1-test1", testName: "Test 1", setName: "Bộ đề 1", part: 1, questionCount: 6, itemCount: 6, done: 2, correct: 1, wrong: 1, nextIndex: 2 };
 
 describe("listening presentation model", () => {
+  it("keeps Reading Part 5 question-based and Parts 6/7 group-based", () => {
+    const reading = { ...test, part: 5, questionCount: 30, itemCount: 30, nextIndex: 4 };
+    expect(practiceHref(reading)).toBe("/read/practice?part=part5&testId=vol1-test1&mode=normal&q=4");
+    expect(resumePosition(reading)).toBe("câu 5/30");
+    expect(estimatedMinutes(reading)).toBe(15);
+    for (const part of [6, 7]) expect(resumePosition({ ...reading, part, itemCount: 6 })).toBe("cụm 5/6");
+  });
   it("uses source years and difficulty only in the view model", () => {
     const source = [{ id: "vol1-test1", year: 2024, difficultyLevel: 3, isHidden: false }, { id: "test2", year: 2026, difficultyLevel: 2, isHidden: false }, { id: "hidden", year: 2027, difficultyLevel: null, isHidden: true }];
     const metadata = listeningMetadata(source);

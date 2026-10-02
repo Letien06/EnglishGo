@@ -1,7 +1,7 @@
 import styles from "./listening.module.css";
 
 export function ListeningGridSkeleton() {
-  return <div className={styles.grid} role="status" aria-label="Đang tải các bài nghe" aria-busy="true">
+  return <div className={styles.grid} role="status" aria-label="Đang tải bài luyện tập" aria-busy="true">
     {Array.from({ length: 6 }, (_, index) => <div className={styles.skeletonCard} key={index} aria-hidden="true"><div className={styles.skeletonLine} /><div className={styles.skeletonCircle} /><div className={styles.skeletonLine} /><div className={styles.skeletonLine} /></div>)}
   </div>;
 }
