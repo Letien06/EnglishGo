@@ -42,6 +42,7 @@ import { enrichCandidatePronunciation, enrichWithDictionary } from "./dictionary
 import { parseImportFile, parseDelimitedWords } from "@/lib/parsers/vocab-import";
 import { getStoredStudyStreakSummary, getStudyStreak, recordStudyActivity } from "./study-activity";
 import { enforceDailyActionLimit } from "./rate-limit";
+import { findDriveVocabSet, findDriveVocabWords, findDriveVocabWordsByIds, listDriveVocabSets } from "./dautoeic-vocab";
 
 /* ------------------------------------------------------------------ */
 /*  Collection constants                                               */
@@ -67,9 +68,12 @@ const publishedSets = cache(async (): Promise<VocabSetDoc[]> => {
     .collection(SETS)
     .where("status", "==", "PUBLISHED")
     .get();
-  return snap.docs
+  const sets = snap.docs
     .map(toSetDoc)
     .filter((s) => s.status === "PUBLISHED" && !s.deletedAtMillis);
+  const driveSets = await listDriveVocabSets();
+  const driveIds = new Set(driveSets.map((set) => set.id));
+  return [...sets.filter((set) => !driveIds.has(set.id)), ...driveSets];
 });
 
 async function liveFolders(): Promise<VocabFolderDoc[]> {
@@ -105,15 +109,19 @@ async function liveSetsByIds(setIds: number[]): Promise<VocabSetDoc[]> {
   const uniqueIds = [...new Set(setIds)].filter((id) => Number.isFinite(id));
   if (!uniqueIds.length) return [];
 
-  const refs = uniqueIds.map((id) => adminDb.collection(SETS).doc(String(id)));
-  const snaps = await adminDb.getAll(...refs);
-  return snaps
+  const driveSets = (await Promise.all(uniqueIds.map(findDriveVocabSet))).filter((set): set is VocabSetDoc => set !== null);
+  const driveIds = new Set(driveSets.map((set) => set.id));
+  const refs = uniqueIds.filter((id) => !driveIds.has(id)).map((id) => adminDb.collection(SETS).doc(String(id)));
+  const snaps = refs.length ? await adminDb.getAll(...refs) : [];
+  return [...driveSets, ...snaps
     .filter((snap) => snap.exists)
     .map(toSetDoc)
-    .filter((s) => s.status === "PUBLISHED" && !s.deletedAtMillis);
+    .filter((s) => s.status === "PUBLISHED" && !s.deletedAtMillis)];
 }
 
 async function findPublishedSet(setId: number): Promise<VocabSetDoc | null> {
+  const driveSet = await findDriveVocabSet(setId);
+  if (driveSet) return driveSet;
   const doc = await adminDb.collection(SETS).doc(String(setId)).get();
   if (!doc.exists) return null;
   const set = toSetDoc(doc);
@@ -122,6 +130,8 @@ async function findPublishedSet(setId: number): Promise<VocabSetDoc | null> {
 }
 
 async function wordsForSet(setId: number): Promise<VocabWordDoc[]> {
+  const driveWords = await findDriveVocabWords(setId);
+  if (driveWords) return driveWords;
   const snap = await adminDb
     .collection(WORDS)
     .where("setId", "==", setId)
@@ -136,10 +146,26 @@ async function wordsForSetPart(
   setId: number,
   externalPartId?: string | null,
 ): Promise<VocabWordDoc[]> {
+  const driveWords = await findDriveVocabWords(setId, externalPartId);
+  if (driveWords) return driveWords;
   const words = await wordsForSet(setId);
   const cleanPartId = externalPartId?.trim();
   if (!cleanPartId) return words;
   return words.filter((word) => word.externalPartId === cleanPartId);
+}
+
+async function wordsByIds(wordIds: number[]): Promise<Map<number, VocabWordDoc>> {
+  const words = await findDriveVocabWordsByIds(wordIds);
+  const missing = [...new Set(wordIds)].filter((id) => !words.has(id));
+  if (missing.length) {
+    const snapshots = await adminDb.getAll(...missing.map((id) => adminDb.collection(WORDS).doc(String(id))));
+    for (const snapshot of snapshots) {
+      if (!snapshot.exists) continue;
+      const word = toWordDoc(snapshot);
+      if (word.status === "PUBLISHED" && !word.deletedAtMillis) words.set(word.id, word);
+    }
+  }
+  return words;
 }
 
 async function wordKeysForSet(setId: number): Promise<string[]> {
@@ -753,11 +779,15 @@ export async function getFilteredSession(
   mastery: string,
   order: string,
   amount: string,
+  includeHistory = true,
 ): Promise<VocabSetSession> {
   const set = await findPublishedSet(setId);
   if (!set) throw NotFound("Set not found");
-  const words = await wordsForSet(setId);
-  const progress = uid ? await progressForSet(uid, setId) : [];
+  const [words, progress, history] = await Promise.all([
+    wordsForSet(setId),
+    uid ? progressForSet(uid, setId) : [],
+    uid && includeHistory ? findStudyHistory(uid, setId) : [],
+  ]);
   const progressByWordId = new Map(progress.map((p) => [p.wordId, p]));
   const now = Date.now();
   const normalizedMastery = normalizeMastery(mastery);
@@ -789,7 +819,7 @@ export async function getFilteredSession(
       const prog = progressByWordId.get(w.id);
       return toWordCard(w, prog?.status === "MASTERED");
     }),
-    history: uid ? await findStudyHistory(uid, setId) : [],
+    history,
     masteredWords: words.filter((word) => progressByWordId.get(word.id)?.status === "MASTERED").length,
     totalWords: words.length,
   };
@@ -802,11 +832,15 @@ export async function getFilteredSessionForPart(
   mastery: string,
   order: string,
   amount: string,
+  includeHistory = true,
 ): Promise<VocabSetSession> {
   const set = await findPublishedSet(setId);
   if (!set) throw NotFound("Set not found");
-  const words = await wordsForSetPart(setId, externalPartId);
-  const progress = uid ? await progressForSet(uid, setId) : [];
+  const [words, progress, history] = await Promise.all([
+    wordsForSetPart(setId, externalPartId),
+    uid ? progressForSet(uid, setId) : [],
+    uid && includeHistory ? findStudyHistory(uid, setId, externalPartId) : [],
+  ]);
   const progressByWordId = new Map(progress.map((p) => [p.wordId, p]));
   const now = Date.now();
   const normalizedMastery = normalizeMastery(mastery);
@@ -841,7 +875,7 @@ export async function getFilteredSessionForPart(
       const prog = progressByWordId.get(w.id);
       return toWordCard(w, prog?.status === "MASTERED");
     }),
-    history: uid ? await findStudyHistory(uid, setId, externalPartId) : [],
+    history,
     masteredWords,
     totalWords: words.length,
   };
@@ -866,19 +900,7 @@ export async function getReviewSession(
   );
 
   const selected = due.slice(0, size);
-  const wordRefs = selected.map((p) =>
-    adminDb.collection(WORDS).doc(String(p.wordId)),
-  );
-  const wordSnaps = wordRefs.length > 0 ? await adminDb.getAll(...wordRefs) : [];
-  const wordMap = new Map(
-    wordSnaps
-      .filter((snap) => snap.exists)
-      .map((snap) => {
-        const word = toWordDoc(snap);
-        return [word.id, word] as const;
-      })
-      .filter(([, word]) => word.status === "PUBLISHED" && !word.deletedAtMillis),
-  );
+  const wordMap = await wordsByIds(selected.map((progress) => progress.wordId));
 
   const cards: VocabWordCard[] = [];
   for (const p of selected) {
@@ -1326,8 +1348,7 @@ export async function review(
   requireUid(uid);
   if (quality < 0 || quality > 5) throw BadRequest("Quality must be 0-5");
 
-  const wordSnap = await adminDb.collection(WORDS).doc(String(wordId)).get();
-  const word = wordSnap.exists ? toWordDoc(wordSnap) : null;
+  const word = (await wordsByIds([wordId])).get(wordId);
   if (!word || word.status !== "PUBLISHED" || word.deletedAtMillis) {
     throw NotFound("Word not found");
   }
@@ -1394,15 +1415,11 @@ export async function reviewBatch(
   if (!requested.length) return [];
   if (requested.length > 100) throw BadRequest("Too many words in one review session");
 
-  const wordRefs = requested.map((reviewInput) => adminDb.collection(WORDS).doc(String(reviewInput.wordId)));
-  const wordSnaps = await adminDb.getAll(...wordRefs);
-  const wordsById = new Map<number, VocabWordDoc>();
-  for (const [index, wordSnap] of wordSnaps.entries()) {
-    const word = wordSnap.exists ? toWordDoc(wordSnap) : null;
-    if (!word || word.status !== "PUBLISHED" || word.deletedAtMillis) {
+  const wordsById = await wordsByIds(requested.map((reviewInput) => reviewInput.wordId));
+  for (const reviewInput of requested) {
+    if (!wordsById.has(reviewInput.wordId)) {
       throw NotFound("Word not found");
     }
-    wordsById.set(requested[index].wordId, word);
   }
 
   const now = Date.now();
@@ -1633,8 +1650,7 @@ export async function markMastered(
   wordId: number,
 ): Promise<VocabReviewResponse> {
   requireUid(uid);
-  const wordSnap = await adminDb.collection(WORDS).doc(String(wordId)).get();
-  const word = wordSnap.exists ? toWordDoc(wordSnap) : null;
+  const word = (await wordsByIds([wordId])).get(wordId);
   if (!word || word.status !== "PUBLISHED" || word.deletedAtMillis) {
     throw NotFound("Word not found");
   }

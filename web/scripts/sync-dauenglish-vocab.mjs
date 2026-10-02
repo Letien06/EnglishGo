@@ -1,0 +1,23 @@
+import { readFile, writeFile, mkdir } from "node:fs/promises";
+import path from "node:path";
+import { fileURLToPath } from "node:url";
+import { createJiti } from "jiti";
+import { buildDrivePackage } from "./lib/drive-package.mjs";
+
+const [baseFile, outputFile] = process.argv.slice(2);
+if (!baseFile || !outputFile) throw new Error("Usage: sync-dauenglish-vocab.mjs <existing-materials.json> <output-materials.json>");
+if (path.resolve(baseFile) === path.resolve(outputFile)) throw new Error("Keep the existing snapshot unchanged; choose a new output file.");
+if (process.env.DAUTOEIC_SUPABASE_URL !== "https://odlnhfaygiotcyehuysw.supabase.co") throw new Error("The current Dau English source is required.");
+const snapshot = JSON.parse(await readFile(baseFile, "utf8"));
+buildDrivePackage(JSON.stringify(snapshot));
+const jiti = createJiti(import.meta.url, { alias: { "@": fileURLToPath(new URL("../src", import.meta.url)) }, fsCache: false });
+const { fetchVocabularySnapshotFromSource } = await jiti.import("../src/lib/services/dautoeic-vocab.ts");
+const vocabulary = await fetchVocabularySnapshotFromSource();
+snapshot.syncedAt = new Date().toISOString();
+snapshot.materials = snapshot.materials.filter((material) => material.kind !== "vocabulary");
+snapshot.materials.push({ key: "dauenglish-v2__vocabulary__all", kind: "vocabulary", syncedAt: snapshot.syncedAt, payload: vocabulary });
+const json = JSON.stringify(snapshot);
+const prepared = buildDrivePackage(json);
+await mkdir(path.dirname(path.resolve(outputFile)), { recursive: true });
+await writeFile(outputFile, json, { encoding: "utf8", flag: "wx" });
+console.log(JSON.stringify({ outputFile: path.resolve(outputFile), snapshotSha256: prepared.manifest.snapshotSha256, vocabularyTests: vocabulary.catalog.tests.length, vocabularyParts: vocabulary.parts.length, vocabularyWords: vocabulary.words.length, firestoreWrites: 0, ...prepared.counts }, null, 2));

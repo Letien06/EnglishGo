@@ -9,7 +9,7 @@ import { z } from "zod";
 import { withErrorHandling } from "@/lib/api/handler";
 import { ok } from "@/lib/api/response";
 import { parseBody } from "@/lib/api/validate";
-import { requireUser } from "@/lib/auth/session";
+import { requireUser, requireUserForRead } from "@/lib/auth/session";
 import * as vocab from "@/lib/services/vocab";
 
 const createSetSchema = z.object({
@@ -20,6 +20,10 @@ const createSetSchema = z.object({
 
 export const GET = withErrorHandling(async (req: NextRequest) => {
   const url = new URL(req.url);
+  if (url.searchParams.get("scope") === "practice") {
+    const user = await requireUserForRead();
+    return ok(await vocab.findPracticeSetOptions(user.uid), { headers: { "Cache-Control": "private, no-store" } });
+  }
   const topic = url.searchParams.get("topic") ?? undefined;
   const sets = await vocab.findSetCards(topic);
   return ok(sets);

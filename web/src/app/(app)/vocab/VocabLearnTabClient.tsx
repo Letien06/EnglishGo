@@ -1,10 +1,10 @@
 "use client";
 
-import Link from "next/link";
+import Link from "@/components/IntentLink";
 import { useEffect, useMemo, useState } from "react";
 import type { DauToeicVocabCatalogView } from "@/types/dautoeic";
 import type { VocabSetCard } from "@/types/vocab";
-import { recordNextPaint } from "@/lib/client-request";
+import { fetchWithTimeout, recordNextPaint } from "@/lib/client-request";
 
 type ApiEnvelope<T> = {
   success: boolean;
@@ -17,49 +17,38 @@ type LearnState =
   | { status: "ready"; catalog: DauToeicVocabCatalogView | null; fallbackSets: VocabSetCard[] }
   | { status: "error"; catalog: null; fallbackSets: VocabSetCard[] };
 
-const catalogCache: { value: DauToeicVocabCatalogView | null } = { value: null };
-const fallbackSetCache: { value: VocabSetCard[] | null } = { value: null };
-
-export default function VocabLearnTabClient({ groupId }: { groupId?: string }) {
+export default function VocabLearnTabClient({ groupId, userUid, initialCatalog = null }: {
+  groupId?: string; userUid?: string; initialCatalog?: DauToeicVocabCatalogView | null;
+}) {
   const [selectedGroupOverride, setSelectedGroupOverride] = useState<string | undefined>(groupId);
   const [state, setState] = useState<LearnState>(() => {
-    if (catalogCache.value) {
-      return { status: "ready", catalog: catalogCache.value, fallbackSets: fallbackSetCache.value ?? [] };
-    }
-    if (fallbackSetCache.value) {
-      return { status: "ready", catalog: null, fallbackSets: fallbackSetCache.value };
-    }
+    if (initialCatalog?.cards.length) return { status: "ready", catalog: initialCatalog, fallbackSets: [] };
     return { status: "loading", catalog: null, fallbackSets: [] };
   });
+  const [progressStatus, setProgressStatus] = useState(userUid ? "loading" : "ready");
 
   useEffect(() => {
     let cancelled = false;
+    const controller = new AbortController();
 
     async function load() {
-      if (catalogCache.value || fallbackSetCache.value) return;
-      setState({ status: "loading", catalog: null, fallbackSets: [] });
+      if (initialCatalog?.cards.length && !userUid) return;
       try {
-        // Load the local fallback alongside the external catalog. Previously a
-        // slow/unavailable DauToeic API delayed the fallback by another full
-        // request, making the Learn tab wait several seconds before rendering.
-        const [catalogJson, setsJson] = await Promise.all([
-          fetch("/api/dautoeic/vocab/catalog", { cache: "no-store" })
+        const catalogJson = await fetchWithTimeout("/api/dautoeic/vocab/catalog", { cache: "no-store", signal: controller.signal }, 8_000)
             .then((response) => response.json() as Promise<ApiEnvelope<DauToeicVocabCatalogView>>)
-            .catch(() => null),
-          fetch("/api/vocab/sets", { cache: "force-cache" })
-            .then((response) => response.json() as Promise<ApiEnvelope<VocabSetCard[]>>)
-            .catch(() => null),
-        ]);
+            .catch(() => null);
+        if (cancelled) return;
         if (catalogJson?.success && catalogJson.data?.cards.length) {
-          catalogCache.value = catalogJson.data;
           if (!cancelled) {
             setState({ status: "ready", catalog: catalogJson.data, fallbackSets: [] });
+            setProgressStatus("ready");
           }
           return;
         }
-
+        if (initialCatalog?.cards.length) { setProgressStatus("error"); return; }
+        const setsJson = await fetchWithTimeout("/api/vocab/sets", { cache: "no-store", signal: controller.signal }, 8_000)
+          .then((response) => response.json() as Promise<ApiEnvelope<VocabSetCard[]>>);
         const sets = setsJson?.success && Array.isArray(setsJson.data) ? setsJson.data : [];
-        fallbackSetCache.value = sets;
         if (!cancelled) {
           setState({ status: "ready", catalog: null, fallbackSets: sets });
         }
@@ -71,8 +60,9 @@ export default function VocabLearnTabClient({ groupId }: { groupId?: string }) {
     void load();
     return () => {
       cancelled = true;
+      controller.abort();
     };
-  }, []);
+  }, [initialCatalog, userUid]);
 
   useEffect(() => {
     function syncFromHistory() {
@@ -154,7 +144,7 @@ export default function VocabLearnTabClient({ groupId }: { groupId?: string }) {
                   <span className="block h-full rounded-full bg-primary" style={{ width: `${percent}%` }} />
                 </div>
                 <div className="mt-2 flex flex-wrap gap-x-3 gap-y-1 text-xs font-bold text-muted">
-                  <span>{card.masteredWords}/{card.wordCount} từ đã thuộc</span>
+                  <span>{progressStatus === "loading" ? "Đang tải tiến độ..." : progressStatus === "error" ? "Chưa tải được tiến độ" : `${card.masteredWords}/${card.wordCount} từ đã thuộc`}</span>
                   {card.dueWords > 0 ? <span className="text-red-600">{card.dueWords} cần ôn</span> : null}
                 </div>
                 <Link

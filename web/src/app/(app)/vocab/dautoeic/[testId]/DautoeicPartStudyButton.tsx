@@ -3,11 +3,13 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { ClientRequestTimeoutError, fetchWithTimeout } from "@/lib/client-request";
+import Link from "@/components/IntentLink";
 
 interface Props {
   testId: string;
   partId: string;
   setId: number;
+  ready?: boolean;
 }
 
 interface SyncResponse {
@@ -18,11 +20,12 @@ interface SyncResponse {
 
 type StudyState = "idle" | "syncing" | "navigating";
 
-export default function DautoeicPartStudyButton({ testId, partId, setId }: Props) {
+export default function DautoeicPartStudyButton({ testId, partId, setId, ready = false }: Props) {
   const router = useRouter();
   const [state, setState] = useState<StudyState>("idle");
   const [error, setError] = useState<string | null>(null);
   const loading = state !== "idle";
+  const destination = `/vocab/${setId}/flashcards?mode=menu&partId=${encodeURIComponent(partId)}&mastery=all&order=random&amount=all`;
 
   async function startStudy() {
     if (loading) return;
@@ -59,6 +62,12 @@ export default function DautoeicPartStudyButton({ testId, partId, setId }: Props
       );
     }
   }
+
+  if (ready) return (
+    <Link href={destination} className="mt-5 inline-flex w-full items-center justify-center rounded-full border border-success-line bg-success-soft px-4 py-2 text-xs font-extrabold text-success-ink">
+      Vào học
+    </Link>
+  );
 
   return (
     <div className="mt-5 space-y-2">

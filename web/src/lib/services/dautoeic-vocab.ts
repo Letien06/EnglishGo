@@ -3,6 +3,8 @@ import { DAUTOEIC_SOURCE_VERSION, dauToeicApiHeaders } from "./dautoeic-source";
 import { adminDb } from "@/lib/firestore/db";
 import { ApiError, NotFound } from "@/lib/api/response";
 import { serverEnv } from "@/lib/env";
+import { vocabularySnapshotSchema, type VocabularySnapshot } from "../storage/vocab-snapshot";
+import { contentCacheKey, isDriveContentEnabled, readDriveMaterial } from "./dautoeic-drive";
 import type {
   DauToeicVocabCatalog,
   DauToeicVocabCatalogView,
@@ -12,7 +14,7 @@ import type {
   DauToeicVocabTest,
   DauToeicVocabWord,
 } from "@/types/dautoeic";
-import type { ContentStatus, SourceType, VocabProgressStatus } from "@/types/vocab";
+import type { ContentStatus, SourceType, VocabProgressStatus, VocabSetDoc, VocabWordDoc } from "@/types/vocab";
 
 const SETS = "vocabSets";
 const WORDS = "vocabWords";
@@ -29,7 +31,84 @@ export function dautoeicVocabWordId(wordId: string): number {
 }
 
 export function isDauToeicVocabConfigured(): boolean {
-  return Boolean(serverEnv.dauToeicSupabaseUrl && serverEnv.dauToeicAnonKey);
+  return isDriveContentEnabled() || Boolean(serverEnv.dauToeicSupabaseUrl && serverEnv.dauToeicAnonKey);
+}
+
+function buildVocabularyIndex(snapshot: VocabularySnapshot) {
+  const sets = new Map<number, VocabSetDoc>();
+  const words = new Map<number, VocabWordDoc>();
+  const partsByTest = new Map<string, DauToeicVocabPart[]>();
+  const wordsByPart = new Map<string, DauToeicVocabWord[]>();
+  const docsBySet = new Map<number, VocabWordDoc[]>();
+  const parts = new Map(snapshot.parts.map((part) => [part.id, part]));
+  for (const test of snapshot.catalog.tests) {
+    const id = dautoeicVocabSetId(test.testId);
+    if (sets.has(id)) throw new Error("Vocabulary set ID collision.");
+    sets.set(id, { id, title: cleanName(test.name), topic: cleanName(snapshot.catalog.sets.find((set) => set.id === test.setId)?.name),
+      status: "PUBLISHED", sourceType: SOURCE, externalSource: SOURCE, externalTestId: test.testId,
+      externalSetId: test.setId, wordCount: test.wordCount, icon: "book" });
+    docsBySet.set(id, []);
+  }
+  for (const part of snapshot.parts) {
+    const group = partsByTest.get(part.testId) ?? [];
+    group.push(part);
+    partsByTest.set(part.testId, group);
+    wordsByPart.set(part.id, []);
+  }
+  for (const word of snapshot.words) {
+    const part = parts.get(word.partId)!;
+    const setId = dautoeicVocabSetId(part.testId);
+    const doc = Object.fromEntries(Object.entries(mapWordToDoc(word, part, setId, 0)).filter(([, value]) => value != null)) as unknown as VocabWordDoc;
+    if (words.has(doc.id)) throw new Error("Vocabulary word ID collision.");
+    words.set(doc.id, doc);
+    docsBySet.get(setId)!.push(doc);
+    wordsByPart.get(part.id)!.push(word);
+  }
+  for (const group of partsByTest.values()) group.sort((left, right) => (left.orderIndex ?? 0) - (right.orderIndex ?? 0));
+  for (const group of wordsByPart.values()) group.sort((left, right) => (left.orderIndex ?? 0) - (right.orderIndex ?? 0));
+  for (const group of docsBySet.values()) group.sort((left, right) =>
+    (parts.get(left.externalPartId!)?.orderIndex ?? 0) - (parts.get(right.externalPartId!)?.orderIndex ?? 0) ||
+    (left.externalOrderIndex ?? 0) - (right.externalOrderIndex ?? 0));
+  return { catalog: snapshot.catalog, sets, words, partsByTest, wordsByPart, docsBySet };
+}
+
+let vocabularyIndex: { key: string; promise: Promise<ReturnType<typeof buildVocabularyIndex>> } | undefined;
+
+async function driveVocabularyIndex() {
+  const key = contentCacheKey();
+  if (vocabularyIndex?.key !== key) {
+    const promise = readDriveMaterial<VocabularySnapshot>(`${DAUTOEIC_SOURCE_VERSION}__vocabulary__all`)
+      .then((snapshot) => buildVocabularyIndex(vocabularySnapshotSchema.parse(snapshot)));
+    vocabularyIndex = { key, promise };
+    void promise.catch(() => { if (vocabularyIndex?.promise === promise) vocabularyIndex = undefined; });
+  }
+  return vocabularyIndex.promise;
+}
+
+export async function listDriveVocabSets(): Promise<VocabSetDoc[]> {
+  return isDriveContentEnabled() ? [...(await driveVocabularyIndex()).sets.values()] : [];
+}
+
+export async function findDriveVocabSet(setId: number): Promise<VocabSetDoc | null> {
+  return isDriveContentEnabled() ? (await driveVocabularyIndex()).sets.get(setId) ?? null : null;
+}
+
+export async function findDriveVocabWords(setId: number, partId?: string | null): Promise<VocabWordDoc[] | null> {
+  if (!isDriveContentEnabled()) return null;
+  const index = await driveVocabularyIndex();
+  const words = index.docsBySet.get(setId);
+  if (!words) return null;
+  const selected = partId?.trim();
+  if (!selected) return [...words];
+  const test = index.sets.get(setId)!;
+  if (!index.partsByTest.get(test.externalTestId!)?.some((part) => part.id === selected)) throw NotFound("Không tìm thấy phần từ vựng");
+  return words.filter((word) => word.externalPartId === selected);
+}
+
+export async function findDriveVocabWordsByIds(wordIds: number[]): Promise<Map<number, VocabWordDoc>> {
+  if (!isDriveContentEnabled() || !wordIds.length) return new Map();
+  const index = await driveVocabularyIndex();
+  return new Map(wordIds.flatMap((id) => { const word = index.words.get(id); return word ? [[id, word] as const] : []; }));
 }
 
 export async function getVocabularyCatalogView(
@@ -161,6 +240,10 @@ export async function syncDautoeicVocabTest(
 
   const setId = dautoeicVocabSetId(test.testId);
   const expectedCounts = await wordCountsByPart(selectedParts.map((part) => part.id));
+  if (isDriveContentEnabled()) {
+    return { setId, test, setName, syncedPartIds: selectedParts.map((part) => part.id),
+      wordCount: selectedParts.reduce((total, part) => total + (expectedCounts.get(part.id) ?? 0), 0) };
+  }
   const now = Date.now();
   await adminDb.collection(SETS).doc(String(setId)).set(
     {
@@ -227,12 +310,14 @@ export async function syncDautoeicVocabTest(
 }
 
 export async function getVocabularyCatalog(): Promise<DauToeicVocabCatalog> {
+  if (isDriveContentEnabled()) return (await driveVocabularyIndex()).catalog;
   return cachedVocabularyCatalog();
 }
 
 export async function listVocabularyParts(testId: string): Promise<DauToeicVocabPart[]> {
   const cleanTestId = testId.trim();
   if (!cleanTestId) throw new ApiError("testId is required", 400);
+  if (isDriveContentEnabled()) return (await driveVocabularyIndex()).partsByTest.get(cleanTestId) ?? [];
   return cachedVocabularyParts(cleanTestId);
 }
 
@@ -249,6 +334,7 @@ async function uncachedVocabularyParts(testId: string): Promise<DauToeicVocabPar
 export async function getWordsForPart(partId: string): Promise<DauToeicVocabWord[]> {
   const cleanPartId = partId.trim();
   if (!cleanPartId) throw new ApiError("partId is required", 400);
+  if (isDriveContentEnabled()) return (await driveVocabularyIndex()).wordsByPart.get(cleanPartId) ?? [];
   return cachedWordsForPart(cleanPartId);
 }
 
@@ -261,6 +347,11 @@ async function uncachedWordsForPart(partId: string): Promise<DauToeicVocabWord[]
 }
 
 export async function getWordsForParts(partIds: string[]): Promise<DauToeicVocabWord[]> {
+  if (isDriveContentEnabled()) return (await Promise.all(partIds.map(getWordsForPart))).flat();
+  return uncachedWordsForParts(partIds);
+}
+
+async function uncachedWordsForParts(partIds: string[]): Promise<DauToeicVocabWord[]> {
   const cleanPartIds = partIds.map((id) => id.trim()).filter(Boolean);
   if (!cleanPartIds.length) return [];
   const rows = await supabasePost("/rest/v1/rpc/get_vocab_words_for_parts_fast", {
@@ -268,6 +359,20 @@ export async function getWordsForParts(partIds: string[]): Promise<DauToeicVocab
   });
   if (!Array.isArray(rows)) return [];
   return rows.map(mapWord);
+}
+
+export async function fetchVocabularySnapshotFromSource(): Promise<VocabularySnapshot> {
+  const catalog = await uncachedVocabularyCatalog();
+  catalog.tests = catalog.tests.filter(isPlayableTest);
+  const parts: DauToeicVocabPart[] = [];
+  for (let offset = 0; offset < catalog.tests.length; offset += 4) {
+    parts.push(...(await Promise.all(catalog.tests.slice(offset, offset + 4).map((test) => uncachedVocabularyParts(test.testId)))).flat());
+  }
+  const words: DauToeicVocabWord[] = [];
+  for (let offset = 0; offset < parts.length; offset += 10) {
+    words.push(...await uncachedWordsForParts(parts.slice(offset, offset + 10).map((part) => part.id)));
+  }
+  return vocabularySnapshotSchema.parse({ catalog, parts, words });
 }
 
 async function findCatalogTest(testId: string): Promise<DauToeicVocabTest> {
@@ -334,6 +439,10 @@ async function uncachedVocabularyCatalog(): Promise<DauToeicVocabCatalog> {
 async function wordCountsByPart(partIds: string[]): Promise<Map<string, number>> {
   const cleanPartIds = partIds.map((id) => id.trim()).filter(Boolean);
   if (!cleanPartIds.length) return new Map();
+  if (isDriveContentEnabled()) {
+    const index = await driveVocabularyIndex();
+    return new Map(cleanPartIds.map((id) => [id, index.wordsByPart.get(id)?.length ?? 0]));
+  }
   return new Map(await cachedWordCountEntriesByPart(cleanPartIds));
 }
 
@@ -397,8 +506,10 @@ async function progressStatsForParts(
   uid: string,
   setId: number,
 ): Promise<Map<string, ProgressStats>> {
-  const [wordsSnap, progressSnap] = await Promise.all([
-    adminDb.collection(WORDS).where("setId", "==", setId).get(),
+  const [wordParts, progressSnap] = await Promise.all([
+    isDriveContentEnabled()
+      ? findDriveVocabWords(setId).then((words) => (words ?? []).map((word) => [word.id, word.externalPartId ?? ""] as const))
+      : adminDb.collection(WORDS).where("setId", "==", setId).get().then((snapshot) => snapshot.docs.map((doc) => [numVal(doc.data(), "id") ?? Number(doc.id), text(doc.data(), "externalPartId") ?? ""] as const)),
     adminDb
       .collection("users")
       .doc(uid)
@@ -406,13 +517,7 @@ async function progressStatsForParts(
       .where("setId", "==", setId)
       .get(),
   ]);
-  const partByWordId = new Map<number, string>();
-  for (const doc of wordsSnap.docs) {
-    const data = doc.data() ?? {};
-    const wordId = numVal(data, "id") ?? Number(doc.id);
-    const partId = text(data, "externalPartId");
-    if (partId) partByWordId.set(wordId, partId);
-  }
+  const partByWordId = new Map(wordParts);
 
   const now = Date.now();
   const stats = new Map<string, ProgressStats>();

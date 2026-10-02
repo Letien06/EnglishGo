@@ -1,9 +1,14 @@
 import type { NextConfig } from "next";
 
+const manifestId = process.env.GOOGLE_DRIVE_MANIFEST_ID ?? "";
+const materialBundle = /^[a-zA-Z0-9_-]{10,200}$/.test(manifestId)
+  ? `./.content/dauenglish/${manifestId}/*.json`
+  : "./.content/dauenglish/**/*.json";
+
 const nextConfig: NextConfig = {
   poweredByHeader: false,
   outputFileTracingIncludes: {
-    "/*": ["./.content/dauenglish/**/*.json"],
+    "/*": [materialBundle],
   },
   allowedDevOrigins: ["127.0.0.1"],
   images: {

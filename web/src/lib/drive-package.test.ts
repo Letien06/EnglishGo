@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { buildDrivePackage, sha256 } from "../../scripts/lib/drive-package.mjs";
+import { vocabularyFixture } from "../test/vocabulary-fixture";
 
 function fixture() {
   const materials: Array<{ key: string; kind: string; payload: unknown }> = [];
@@ -18,6 +19,24 @@ function fixture() {
 }
 
 describe("offline Drive material package", () => {
+  it("preserves a complete vocabulary snapshot alongside the existing exams", () => {
+    const snapshot = fixture();
+    snapshot.materials.push({ key: "dauenglish-v2__vocabulary__all", kind: "vocabulary", payload: vocabularyFixture() });
+    const result = buildDrivePackage(JSON.stringify(snapshot));
+    expect(result.counts).toMatchObject({ tests: 1, questions: 7, materials: 46 });
+    expect(result.manifest.entries["dauenglish-v2__vocabulary__all"].kind).toBe("vocabulary");
+  });
+
+  it.each(["missing", "duplicate", "wrong-part", "pro"])("rejects %s vocabulary before upload", (issue) => {
+    const snapshot = fixture();
+    const vocabulary = vocabularyFixture();
+    if (issue === "missing") vocabulary.words.pop();
+    if (issue === "duplicate") vocabulary.words[1].id = vocabulary.words[0].id;
+    if (issue === "wrong-part") vocabulary.words[0].partId = "missing";
+    if (issue === "pro") vocabulary.catalog.tests[0].accessLevel = "pro";
+    snapshot.materials.push({ key: "dauenglish-v2__vocabulary__all", kind: "vocabulary", payload: vocabulary });
+    expect(() => buildDrivePackage(JSON.stringify(snapshot))).toThrow();
+  });
   it("deduplicates chunks and reconstructs every payload without losing Unicode", () => {
     const snapshot = fixture();
     const json = JSON.stringify(snapshot);

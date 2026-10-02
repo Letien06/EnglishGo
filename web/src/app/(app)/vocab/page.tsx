@@ -1,9 +1,11 @@
 import Link from "next/link";
+import { Suspense } from "react";
 import { getCurrentUserForRead } from "@/lib/auth/session";
 import * as vocab from "@/lib/services/vocab";
 import VocabLearnTabClient from "./VocabLearnTabClient";
 import VocabMyTab from "./VocabMyTab";
 import VocabProgressTabClient from "./VocabProgressTabClient";
+import { getVocabularyCatalogView } from "@/lib/services/dautoeic-vocab";
 
 const tabs = [
   { key: "learn", label: "Học", icon: "▦" },
@@ -73,7 +75,9 @@ export default async function VocabPage({
         </nav>
 
         {active === "learn" ? (
-          <VocabLearnTabClient key={groupId ?? "default"} groupId={groupId} />
+          <Suspense fallback={<p className="text-sm text-muted" role="status">Đang mở kho từ vựng...</p>}>
+            <LearnTab groupId={groupId} userUid={user?.uid} />
+          </Suspense>
         ) : active === "progress" ? (
           <VocabProgressTabClient />
         ) : active === "my" ? (
@@ -93,6 +97,11 @@ export default async function VocabPage({
       </div>
     </main>
   );
+}
+
+async function LearnTab({ groupId, userUid }: { groupId?: string; userUid?: string }) {
+  const catalog = await getVocabularyCatalogView().catch(() => null);
+  return <VocabLearnTabClient key={`${userUid ?? "guest"}:${groupId ?? "default"}`} groupId={groupId} userUid={userUid} initialCatalog={catalog} />;
 }
 
 function normalizeTab(value: string): VocabTabKey {

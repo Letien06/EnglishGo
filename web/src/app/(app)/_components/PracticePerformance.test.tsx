@@ -76,7 +76,7 @@ it("uses themed fill feedback and hidden word controls without submitting an ans
   fireEvent.change(input, { target: { value: "apple" } });
   expect(input).toHaveAttribute("data-feedback", "correct");
   fireEvent.click(screen.getByRole("button", { name: "Lật từ" }));
-  const hidden = screen.getAllByRole("button", { name: "Lật từ", exact: true }).find((button) => button.classList.contains("practice-hidden-word"))!;
+  const hidden = screen.getAllByRole("button", { name: "Lật từ" }).find((button) => button.classList.contains("practice-hidden-word"))!;
   expect(hidden).toHaveClass("bg-teal-soft", "text-teal-ink");
   fireEvent.click(hidden);
   expect(fetch).not.toHaveBeenCalled();

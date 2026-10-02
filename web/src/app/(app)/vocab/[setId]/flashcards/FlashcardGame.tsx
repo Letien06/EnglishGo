@@ -33,6 +33,7 @@ interface Props {
   session: VocabSetSession;
   initialMode: string;
   practiceOptions: VocabSetCard[];
+  loadExtrasInBackground?: boolean;
   reviewMode: boolean;
   isAuthenticated: boolean;
   loginHref: string;
@@ -265,6 +266,7 @@ export default function FlashcardGame({
   session,
   initialMode,
   practiceOptions,
+  loadExtrasInBackground = false,
   reviewMode,
   isAuthenticated,
   loginHref,
@@ -285,6 +287,8 @@ export default function FlashcardGame({
   const [quizChooser, setQuizChooser] = useState(initialMode === "quiz");
   const [muted, setMuted] = useState(false);
   const [history, setHistory] = useState<HistoryEntry[]>(() => session.history ?? []);
+  const [availableSets, setAvailableSets] = useState(practiceOptions);
+  const historyChanged = useRef(false);
   const [filterPending, setFilterPending] = useState(false);
   const [completionNotice, setCompletionNotice] = useState<string | null>(null);
   const completionTimerRef = useRef<number | null>(null);
@@ -307,8 +311,27 @@ export default function FlashcardGame({
     return () => window.clearTimeout(timer);
   }, [setId, session.history]);
 
+  useEffect(() => {
+    if (!loadExtrasInBackground || !isAuthenticated) return;
+    const controller = new AbortController();
+    const params = new URLSearchParams({ setId: String(setId) });
+    if (session.set.externalPartId) params.set("externalPartId", session.set.externalPartId);
+    void fetchWithTimeout(`/api/vocab/history?${params}`, { cache: "no-store", signal: controller.signal }, 8_000)
+      .then(async (response) => {
+        const payload = await response.json();
+        if (response.ok && payload.success && Array.isArray(payload.data) && payload.data.length && !controller.signal.aborted && !historyChanged.current) setHistory(payload.data);
+      }).catch(() => undefined);
+    void fetchWithTimeout("/api/vocab/sets?scope=practice", { cache: "no-store", signal: controller.signal }, 8_000)
+      .then(async (response) => {
+        const payload = await response.json();
+        if (response.ok && payload.success && Array.isArray(payload.data) && !controller.signal.aborted) setAvailableSets(payload.data);
+      }).catch(() => undefined);
+    return () => controller.abort();
+  }, [isAuthenticated, loadExtrasInBackground, session.set.externalPartId, setId]);
+
   const persistHistory = useCallback(
     (next: HistoryEntry[]) => {
+      historyChanged.current = true;
       const trimmed = next.slice(0, 8);
       setHistory(trimmed);
       try {
@@ -411,7 +434,7 @@ export default function FlashcardGame({
         <Hub
           words={words}
           setId={setId}
-          practiceOptions={practiceOptions}
+          practiceOptions={availableSets}
           selectedMastery={selectedMastery}
           selectedOrder={selectedOrder}
           selectedAmount={selectedAmount}

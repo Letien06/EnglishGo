@@ -51,6 +51,30 @@ Firestore profile read. Private answer history loads after the lesson renders;
 late responses never replace new answers or interrupt an active learner.
 Answer saving retains the existing authenticated POST checks and scoring rules.
 
+Vocabulary has a separate `dauenglish-v2__vocabulary__all` entry in the same
+immutable Drive snapshot. It contains the available vocabulary catalog, Parts,
+and complete word JSON. Deploy a snapshot containing this entry before using
+the Drive vocabulary reader. The build bundles it alongside the exam material.
+Opening a Part now follows a direct link; it does not import words into
+Firestore or call the source API. Vocabulary IDs are unchanged, so existing
+mastery, SM-2 reviews, history, and saved games remain linked to the same words.
+Catalogs and Part counts render before personalized progress, which loads
+separately and is never stored in a cross-user/shared cache.
+Game history and alternative set options load after the flashcard menu, without
+blocking the word session or replacing game answers when responses arrive late.
+
+To add or refresh vocabulary without changing existing exam material:
+
+```bash
+node --env-file=.env.local scripts/sync-dauenglish-vocab.mjs <existing-materials.json> <new-materials.json>
+node scripts/sync-dauenglish-drive.mjs upload <new-materials.json>
+```
+
+The exporter validates catalog counts and membership, excludes Pro tests, and
+does not write to Firestore. After read-back verification, update the production
+`GOOGLE_DRIVE_MANIFEST_ID` and redeploy. Audio/image URLs remain source URLs;
+the JSON backup is not a backup of the media files themselves.
+
 ### Practice by exam test
 
 Listening Parts 1-4 and reading Parts 5-7 now show exam tests grouped by book,

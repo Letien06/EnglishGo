@@ -354,7 +354,15 @@ so existing quota exhaustion can still block saving an attempt until quota is
 available again. A Drive failure returns a controlled error rather than quietly
 switching to stale Firestore data or a missing upstream source.
 
-Verify Part 1–7 levels, one listening session, one reading session, the test
+Vocabulary snapshots additionally contain `dauenglish-v2__vocabulary__all`.
+See `web/README.md` for the vocabulary exporter. The vocabulary reader requires
+this entry; rolling back to a manifest from before the vocabulary migration also
+requires rolling back the application version. Never remove the existing exam
+entries when publishing a vocabulary update. Word IDs and learner progress do
+not change, and opening a vocabulary Part no longer imports words into Firestore.
+
+Verify Part 1–7 levels, one listening session, one reading session, vocabulary
+LC/RC Parts and flashcards, the test
 catalog, and one practice exam after deployment. Do not switch production before
 the upload's read-back verification succeeds. To roll back, restore
 `DAUTOEIC_CONTENT_STORAGE=firestore` (or the previous Drive manifest ID) and

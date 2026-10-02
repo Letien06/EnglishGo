@@ -1,6 +1,7 @@
 import { createHash } from "node:crypto";
 import { splitJsonText } from "./firestore-json.mjs";
 import { DAUTOEIC_DIFFICULTY_BANDS, DAUTOEIC_SOURCE_VERSION } from "../../src/lib/services/dautoeic-source.ts";
+import { vocabularySnapshotSchema } from "../../src/lib/storage/vocab-snapshot.ts";
 
 export function sha256(text) {
   return createHash("sha256").update(text).digest("hex");
@@ -14,6 +15,11 @@ export function buildDrivePackage(json) {
   const tests = materials.get(key("tests", "all"))?.payload;
   if (!Array.isArray(tests) || tests.length === 0 || new Set(tests.map((test) => test.id)).size !== tests.length) throw new Error("Missing or duplicate tests in the snapshot.");
   const expected = new Map([[key("tests", "all"), "tests"], [key("sets", "all"), "sets"]]);
+  const vocabulary = materials.get(key("vocabulary", "all"));
+  if (vocabulary) {
+    vocabularySnapshotSchema.parse(vocabulary.payload);
+    expected.set(key("vocabulary", "all"), "vocabulary");
+  }
   for (const test of tests) {
     expected.set(key("test", test.id), "test");
     for (let part = 1; part <= 7; part++) expected.set(key("test-part", test.id, part), "test-part");

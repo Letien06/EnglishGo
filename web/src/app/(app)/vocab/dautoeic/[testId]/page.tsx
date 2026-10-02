@@ -1,9 +1,10 @@
-import Link from "next/link";
+import Link from "@/components/IntentLink";
 import { redirect } from "next/navigation";
 import AppTopbar from "@/components/AppTopbar";
 import { getCurrentUserForRead } from "@/lib/auth/session";
 import * as dautoeicVocab from "@/lib/services/dautoeic-vocab";
-import DautoeicPartStudyButton from "./DautoeicPartStudyButton";
+import DautoeicPartsClient from "./DautoeicPartsClient";
+import { isDriveContentEnabled } from "@/lib/services/dautoeic-drive";
 
 interface Props {
   params: Promise<{ testId: string }>;
@@ -18,7 +19,7 @@ export default async function DautoeicVocabTestPage({ params }: Props) {
     redirect(`/login?redirect=${encodeURIComponent(currentPath)}`);
   }
 
-  const view = await dautoeicVocab.getDautoeicVocabTestView(testId, user.uid);
+  const view = await dautoeicVocab.getDautoeicVocabTestView(testId);
 
   return (
     <>
@@ -46,31 +47,7 @@ export default async function DautoeicVocabTestPage({ params }: Props) {
             </p>
           </section>
 
-          <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
-            {view.parts.map((part) => {
-              const percent = part.wordCount > 0
-                ? Math.round((part.masteredWords / part.wordCount) * 100)
-                : 0;
-              return (
-                <article key={part.id} className="rounded-2xl border border-sky-100 bg-white p-5 shadow-sm">
-                  <h2 className="text-lg font-extrabold text-ink">{part.name}</h2>
-                  <p className="mt-2 text-sm text-muted">{part.wordCount} từ vựng</p>
-                  <div className="mt-4 h-2 overflow-hidden rounded-full bg-slate-100">
-                    <span className="block h-full rounded-full bg-primary" style={{ width: `${percent}%` }} />
-                  </div>
-                  <div className="mt-2 flex flex-wrap gap-x-3 gap-y-1 text-xs font-bold text-muted">
-                    <span>{part.masteredWords}/{part.wordCount} từ đã thuộc</span>
-                    {part.dueWords > 0 ? <span className="text-red-600">{part.dueWords} cần ôn</span> : null}
-                  </div>
-                  <DautoeicPartStudyButton
-                    testId={testId}
-                    partId={part.id}
-                    setId={part.internalSetId}
-                  />
-                </article>
-              );
-            })}
-          </section>
+          <DautoeicPartsClient key={`${user.uid}:${testId}`} testId={testId} parts={view.parts} ready={isDriveContentEnabled()} />
         </div>
       </main>
     </>
