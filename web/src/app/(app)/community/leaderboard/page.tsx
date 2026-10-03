@@ -20,10 +20,10 @@ export default async function LeaderboardPage({ searchParams }: Props) {
       <AppTopbar pageTitle="Leaderboard" pageSubtitle="Top learners by practice score" userName={user?.displayName} userEmail={user?.email} />
       <main className="flex-1 overflow-y-auto px-4 py-6 lg:px-8 space-y-4">
         <nav className="flex gap-2">
-          <Link href="/community/leaderboard?period=all-time" className={`px-4 py-2 rounded-lg text-sm font-semibold ${period === "ALL_TIME" ? "bg-accent text-white" : "bg-surface text-ink"}`}>
+          <Link href="/community/leaderboard?period=all-time" className={`px-4 py-2 rounded-xl text-sm font-extrabold transition-colors ${period === "ALL_TIME" ? "bg-primary text-gold-ink shadow-sm" : "bg-surface border border-line text-ink2 hover:bg-surface-soft"}`}>
             All time
           </Link>
-          <Link href="/community/leaderboard?period=weekly" className={`px-4 py-2 rounded-lg text-sm font-semibold ${period === "WEEKLY" ? "bg-accent text-white" : "bg-surface text-ink"}`}>
+          <Link href="/community/leaderboard?period=weekly" className={`px-4 py-2 rounded-xl text-sm font-extrabold transition-colors ${period === "WEEKLY" ? "bg-primary text-gold-ink shadow-sm" : "bg-surface border border-line text-ink2 hover:bg-surface-soft"}`}>
             Weekly
           </Link>
         </nav>
