@@ -255,8 +255,9 @@ export const submitAnswer = async (
     const questionAnswers: Record<string, { uid: string; correct: boolean; time: number }> =
       room.questionAnswers || {};
 
-    if (questionAnswers[user.uid]) {
-      return { skipped: true, reason: "Already answered this question" };
+    // Only skip if this user already answered correctly for this question
+    if (questionAnswers[user.uid]?.correct) {
+      return { skipped: true, reason: "Already answered this question correctly" };
     }
 
     // Determine points and lives
@@ -347,46 +348,19 @@ export const submitAnswer = async (
       };
     }
 
-    // 3. If there are still alive players, check if all of them have answered this question
-    const alivePlayers = playersSnapshot.docs.filter((d) => {
-      if (d.id === user.uid) return newLives > 0;
-      return (d.data().lives ?? 3) > 0;
+    // Do NOT advance question on wrong answer!
+    // Players can keep trying remaining options until correct, out of hearts, or timeout.
+    transaction.update(roomRef, {
+      questionAnswers,
     });
-
-    const allAliveAnswered = alivePlayers.every((d) => {
-      if (d.id === user.uid) return true;
-      return questionAnswers[d.id] !== undefined;
-    });
-
-    let nextIndex = room.currentIndex;
-    let newStatus = room.status;
-
-    if (allAliveAnswered) {
-      if (room.currentIndex + 1 >= room.words.length) {
-        newStatus = "finished";
-      } else {
-        nextIndex = room.currentIndex + 1;
-      }
-      transaction.update(roomRef, {
-        currentIndex: nextIndex,
-        status: newStatus,
-        roundStartedAt: Date.now(),
-        questionAnswers: {},
-        lastWinner: null,
-      });
-    } else {
-      transaction.update(roomRef, {
-        questionAnswers,
-      });
-    }
 
     return {
-      points,
+      points: 0,
       lives: newLives,
-      combo: newCombo,
-      allAnswered: allAliveAnswered,
-      nextIndex,
-      status: newStatus,
+      combo: 0,
+      advanced: false,
+      nextIndex: room.currentIndex,
+      status: room.status,
     };
   });
 };

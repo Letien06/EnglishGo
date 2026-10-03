@@ -187,4 +187,64 @@
 @media (max-width: 540px) { .workspaceHeader { flex-wrap: nowrap; } .workspaceMenuLabel { display: none; } .workspaceHeader > button { min-height: 44px; min-width: 44px; font-size: 20px; padding: 8px; } .workspaceHeader .tabs { width: auto; flex: 1; } .workspaceHeader .tabs button { padding-inline: 8px; font-size: 13px; } .rainField { height: clamp(180px, 34svh, 280px); } .arcadeRound { gap: 12px; } }
 @media (min-width: 360px) and (max-width: 540px) { .matchGrid { grid-template-columns: repeat(3, minmax(0, 1fr)); } .matchTile { min-height: 88px; font-size: 12px; padding: 10px 6px; } }
 @media (max-width: 540px) { .floatingTarget { width: min(40%, 160px); min-height: 44px; padding: 8px 6px; font-size: 12px; border-radius: 12px; } .floatingTarget kbd { display: none; } }
-@media (prefers-reduced-motion: reduce) { .targets, .drop { transform: translateY(45px) !important; transition: none; } .target { transform: none !important; transition: none; } .floatingTarget { transform: translate(-50%, -50%) !important; } .hitBurst, .shotBeam { animation: none; display: none; } .rainTrack { transform: translateY(30%) !important; transition: none; } .cannon g { transform: none !important; } }
+@media (prefers-reduced-motion: reduce) { .targets, .drop { transform: translateY(45px) !important; transition: none; } .target { transform: none !important; transition: none; } .floatingTarget { transform: translate(-50%, -50%) !important; } .hitBurst, .shotBeam { animation: none; display: none; } .rainTrack { transform: translateY(30%) !important; transition: none; } .cannon g { transform: none !important; } .questionEntrance, .targetsEntrance, .podiumEntrance { animation: none !important; } }
+
+/* ---- Multiplayer smooth transitions & polish ---- */
+.questionEntrance {
+  animation: questionEntrance 240ms cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+@keyframes questionEntrance {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.targetsEntrance {
+  animation: targetsEntrance 260ms cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+@keyframes targetsEntrance {
+  from {
+    opacity: 0;
+    transform: scale(0.96);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+.floatingTargetWrong {
+  border-color: var(--arcade-pink) !important;
+  background: color-mix(in srgb, var(--arcade-pink) 20%, var(--arcade-panel)) !important;
+  animation: target-shake 320ms cubic-bezier(0.36, 0.07, 0.19, 0.97) both !important;
+}
+
+.floatingTargetCorrect {
+  border-color: var(--arcade-teal) !important;
+  background: color-mix(in srgb, var(--arcade-teal) 35%, var(--arcade-panel)) !important;
+  animation: target-pulse-correct 450ms ease-out both !important;
+  box-shadow: 0 0 30px color-mix(in srgb, var(--arcade-teal) 50%, transparent) !important;
+}
+
+.podiumEntrance {
+  animation: podiumEntrance 350ms cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+@keyframes podiumEntrance {
+  from {
+    opacity: 0;
+    transform: scale(0.97) translateY(12px);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1) translateY(0);
+  }
+}
+

@@ -220,6 +220,14 @@ export default function VocabularyArcade({
         alert(json.error || "Không thể bắt đầu game");
         return;
       }
+      setLobbyRoom((prev: any) => ({
+        ...prev,
+        status: "playing",
+        currentIndex: 0,
+      }));
+      setLobbyPlayers((prev) =>
+        prev.map((p) => ({ ...p, status: "playing", lives: 3, score: 0 }))
+      );
       setView("multiplayer");
     } catch {
       alert("Lỗi khi bắt đầu game");
