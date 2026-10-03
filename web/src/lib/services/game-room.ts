@@ -249,16 +249,14 @@ export const submitAnswer = async (
       return { skipped: true, reason: "Already answered this question" };
     }
 
-    // Determine points
+    // Determine points and lives
     let points = 0;
     let newCombo = 0;
     let newLives = player.lives;
 
     if (correct) {
-      const correctCount = Object.values(questionAnswers).filter((a) => a.correct).length;
-      points = correctCount === 0 ? 15 : correctCount === 1 ? 12 : 10;
       newCombo = (player.combo || 0) + 1;
-      points += Math.min(newCombo * 2, 10);
+      points = 15 + Math.min(newCombo * 2, 10);
     } else {
       newLives = Math.max(0, player.lives - 1);
       newCombo = 0;
@@ -280,15 +278,77 @@ export const submitAnswer = async (
       }),
     });
 
-    // Check if all players with lives remaining have answered
     const playersSnapshot = await transaction.get(roomRef.collection("players"));
-    const alivePlayers = playersSnapshot.docs.filter((d) => (d.data().lives ?? 3) > 0);
-    const allAnswered = alivePlayers.every((d) => questionAnswers[d.id] !== undefined);
+
+    // 1. If correct: IMMEDIATELY advance to next question (first to answer snatches the point!)
+    if (correct) {
+      let nextIndex = room.currentIndex;
+      let newStatus = room.status;
+
+      if (room.currentIndex + 1 >= room.words.length) {
+        newStatus = "finished";
+      } else {
+        nextIndex = room.currentIndex + 1;
+      }
+
+      transaction.update(roomRef, {
+        currentIndex: nextIndex,
+        status: newStatus,
+        roundStartedAt: Date.now(),
+        questionAnswers: {},
+        lastWinner: {
+          uid: user.uid,
+          displayName: player.displayName,
+          word: selected,
+          points,
+        },
+      });
+
+      return {
+        points,
+        lives: newLives,
+        combo: newCombo,
+        advanced: true,
+        nextIndex,
+        status: newStatus,
+      };
+    }
+
+    // 2. If incorrect: Check if ALL players are out of hearts
+    const anyAlive = playersSnapshot.docs.some((d) => {
+      if (d.id === user.uid) return newLives > 0;
+      return (d.data().lives ?? 3) > 0;
+    });
+
+    if (!anyAlive) {
+      // Hết tim của toàn bộ người chơi -> Tổng kết game ngay lập tức
+      transaction.update(roomRef, {
+        status: "finished",
+      });
+      return {
+        points: 0,
+        lives: newLives,
+        combo: 0,
+        allEliminated: true,
+        status: "finished",
+      };
+    }
+
+    // 3. If there are still alive players, check if all of them have answered this question
+    const alivePlayers = playersSnapshot.docs.filter((d) => {
+      if (d.id === user.uid) return newLives > 0;
+      return (d.data().lives ?? 3) > 0;
+    });
+
+    const allAliveAnswered = alivePlayers.every((d) => {
+      if (d.id === user.uid) return true;
+      return questionAnswers[d.id] !== undefined;
+    });
 
     let nextIndex = room.currentIndex;
     let newStatus = room.status;
 
-    if (allAnswered) {
+    if (allAliveAnswered) {
       if (room.currentIndex + 1 >= room.words.length) {
         newStatus = "finished";
       } else {
@@ -310,7 +370,7 @@ export const submitAnswer = async (
       points,
       lives: newLives,
       combo: newCombo,
-      allAnswered,
+      allAnswered: allAliveAnswered,
       nextIndex,
       status: newStatus,
     };
@@ -330,10 +390,13 @@ export const advanceQuestion = async (user: AppUser, code: string, questionIndex
       return { currentIndex: room.currentIndex, status: room.status };
     }
 
+    const playersSnapshot = await transaction.get(roomRef.collection("players"));
+    const anyAlive = playersSnapshot.docs.some((d) => (d.data().lives ?? 3) > 0);
+
     let nextIndex = room.currentIndex + 1;
     let newStatus = room.status;
 
-    if (nextIndex >= room.words.length) {
+    if (!anyAlive || nextIndex >= room.words.length) {
       newStatus = "finished";
     }
 

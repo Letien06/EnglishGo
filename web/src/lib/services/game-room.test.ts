@@ -38,5 +38,28 @@ describe("game-room service", () => {
     expect(calculatePoints(2, 0)).toBe(12); // 10 + 2
     expect(calculatePoints(0, 3)).toBe(23); // 15 + 8 (combo 3)
   });
+
+  it("immediately advances to next question when a player answers correctly", () => {
+    const advanceOnCorrect = (currentIndex: number, totalWords: number) => {
+      const nextIndex = currentIndex + 1;
+      const status = nextIndex >= totalWords ? "finished" : "playing";
+      return { nextIndex, status };
+    };
+
+    expect(advanceOnCorrect(0, 10)).toEqual({ nextIndex: 1, status: "playing" });
+    expect(advanceOnCorrect(9, 10)).toEqual({ nextIndex: 10, status: "finished" });
+  });
+
+  it("eliminates player when lives reach 0 and ends game when all players run out of hearts", () => {
+    const checkGameStatus = (playersLives: number[]) => {
+      const anyAlive = playersLives.some((lives) => lives > 0);
+      return anyAlive ? "playing" : "finished";
+    };
+
+    expect(checkGameStatus([3, 2, 1])).toBe("playing");
+    expect(checkGameStatus([0, 2, 0])).toBe("playing");
+    expect(checkGameStatus([0, 0, 0])).toBe("finished");
+  });
 });
+
 

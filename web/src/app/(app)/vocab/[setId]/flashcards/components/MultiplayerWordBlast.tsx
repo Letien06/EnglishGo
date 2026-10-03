@@ -34,6 +34,12 @@ interface GameRoomData {
   words: VocabWordCard[];
   currentIndex: number;
   roundStartedAt?: number;
+  lastWinner?: {
+    uid: string;
+    displayName: string;
+    word: string;
+    points: number;
+  };
 }
 
 interface MultiplayerWordBlastProps {
@@ -255,19 +261,23 @@ export function MultiplayerWordBlast({
 
     if (isCorrect) {
       setHasAnswered(true);
-      setFeedback({ message: "CHÍNH XÁC! 🎯", tone: "correct" });
+      setFeedback({ message: "CHÍNH XÁC! 🎯 CƯỚP ĐIỂM THÀNH CÔNG!", tone: "correct" });
       if (!soundQuiet) {
         playSuccessSound();
         window.setTimeout(() => speakWord(currentWord), 200);
       }
     } else {
-      setDisabledOptions((prev) => [...prev, option.id]);
-      setFeedback({ message: "CHƯA ĐÚNG! -1 MẠNG 💀", tone: "wrong" });
+      // Trả lời sai: trừ tim và không cho chơi tiếp câu này
+      setHasAnswered(true);
+      setDisabledOptions(currentOptions.map((o) => o.id));
+      const newLives = Math.max(0, me.lives - 1);
+      if (newLives <= 0) {
+        setFeedback({ message: "💀 BẠN ĐÃ HẾT TIM! Bạn đã bị loại khỏi trận đấu...", tone: "wrong" });
+      } else {
+        setFeedback({ message: `❌ TRẢ LỜI SAI! -1 TIM (Còn ${newLives}❤️). Bạn phải đợi câu tiếp theo!`, tone: "wrong" });
+      }
       if (!soundQuiet) {
         playFailSound();
-      }
-      if (me.lives <= 1) {
-        setHasAnswered(true);
       }
     }
 
@@ -288,19 +298,23 @@ export function MultiplayerWordBlast({
   };
 
   const currentPlayer = players.find((p) => p.uid === currentUserId);
+  const isEliminated = (currentPlayer?.lives ?? 3) <= 0;
 
   // ---- PODIUM / VICTORY SCREEN ----
   if (room.status === "finished") {
     const sorted = [...players].sort((a, b) => b.score - a.score);
     const winner = sorted[0];
+    const allEliminated = players.every((p) => (p.lives ?? 3) <= 0);
 
     return (
       <div className="flex flex-col items-center justify-center min-h-[70vh] p-6 text-[var(--ink)]">
         <div className="bg-[var(--surface)] border border-[var(--line)] rounded-3xl p-8 max-w-xl w-full shadow-2xl text-center">
           <div className="text-6xl mb-3">🏆</div>
-          <h1 className="text-3xl font-extrabold tracking-tight mb-2">KẾT QUẢ ĐỐI KHÁNG</h1>
+          <h1 className="text-3xl font-extrabold tracking-tight mb-2">TỔNG KẾT ĐỐI KHÁNG</h1>
           <p className="text-[var(--muted)] mb-8 font-medium">
-            Phòng: <span className="font-mono font-bold">{roomCode}</span> · {room.words.length} câu hỏi
+            {allEliminated
+              ? "Toàn bộ người chơi đã hết tim — Trận đấu kết thúc!"
+              : `Phòng: ${roomCode} · Hoàn thành ${room.words.length} câu hỏi`}
           </p>
 
           {/* Winner banner */}
@@ -406,6 +420,22 @@ export function MultiplayerWordBlast({
       <div className={styles.blastArena} style={{ minHeight: "440px" }}>
         {/* Vietnamese Meaning Prompt */}
         <div className="flex flex-col items-center justify-center p-6 text-center select-none">
+          {room.lastWinner && (
+            <div className="mb-3 bg-amber-50 border border-amber-300 text-amber-900 px-4 py-1.5 rounded-full text-xs font-bold shadow-sm flex items-center gap-1.5 animate-pulse">
+              <span>⚡</span>
+              <span>
+                {room.lastWinner.displayName} vừa cướp điểm thành công (+{room.lastWinner.points}đ)! Đang ở câu tiếp theo.
+              </span>
+            </div>
+          )}
+
+          {isEliminated && (
+            <div className="mb-3 bg-red-50 border border-red-300 text-red-700 px-4 py-1.5 rounded-full text-xs font-bold shadow-sm flex items-center gap-1.5">
+              <span>💀</span>
+              <span>Bạn đã hết tim! Hãy quan sát các người chơi còn lại thi đấu...</span>
+            </div>
+          )}
+
           <span className="text-xs uppercase tracking-widest text-[var(--muted)] font-bold mb-2">
             Tìm từ tiếng Anh có nghĩa:
           </span>
@@ -429,7 +459,8 @@ export function MultiplayerWordBlast({
         <div className="relative w-full h-[320px] overflow-hidden">
           {currentOptions.map((opt, i) => {
             const pos = floats[i] || { x: 25 * i, y: 30 };
-            const isDisabled = disabledOptions.includes(opt.id) || (hasAnswered && opt.id !== currentWord?.id);
+            const isDisabled =
+              isEliminated || disabledOptions.includes(opt.id) || (hasAnswered && opt.id !== currentWord?.id);
             const isCorrectAnswer = hasAnswered && opt.id === currentWord?.id;
 
             return (
