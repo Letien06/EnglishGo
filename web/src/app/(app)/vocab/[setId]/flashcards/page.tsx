@@ -69,6 +69,7 @@ export default async function FlashcardsPage({ params, searchParams }: Props) {
       loadExtrasInBackground
       reviewMode={false}
       isAuthenticated={Boolean(user)}
+      currentUserId={uid}
       loginHref={`/login?redirect=${encodeURIComponent(returnPath)}`}
       selectedMastery={mastery ?? "learning"}
       selectedOrder={order ?? "random"}

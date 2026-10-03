@@ -43,6 +43,7 @@ interface Props {
   loadExtrasInBackground?: boolean;
   reviewMode: boolean;
   isAuthenticated: boolean;
+  currentUserId?: string;
   loginHref: string;
   selectedMastery?: string;
   selectedOrder?: string;
@@ -299,6 +300,7 @@ export default function FlashcardGame({
   practiceOptions,
   loadExtrasInBackground = false,
   isAuthenticated,
+  currentUserId = "",
   loginHref,
   selectedMastery = "learning",
   selectedOrder = "random",
@@ -514,6 +516,7 @@ export default function FlashcardGame({
           quizMode={quizMode}
           muted={muted}
           isAuthenticated={isAuthenticated}
+          currentUserId={currentUserId}
           loginHref={loginHref}
           onExit={goHub}
           onFinish={(record) => {
@@ -920,6 +923,7 @@ function PlaySurface({
   quizMode,
   muted,
   isAuthenticated,
+  currentUserId = "",
   loginHref,
   onExit,
   onFinish,
@@ -934,6 +938,7 @@ function PlaySurface({
   quizMode: QuizMode;
   muted: boolean;
   isAuthenticated: boolean;
+  currentUserId?: string;
   loginHref: string;
   onExit: () => void;
   onFinish: (record: {
@@ -1626,6 +1631,7 @@ function PlaySurface({
         suspended={suspended}
         setId={setId}
         isAuthenticated={isAuthenticated}
+        currentUserId={currentUserId}
         loginHref={loginHref}
         enableMultiplayer={true}
         onComplete={completeLocalRound}

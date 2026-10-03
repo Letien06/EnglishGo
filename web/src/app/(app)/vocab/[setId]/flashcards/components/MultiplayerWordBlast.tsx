@@ -120,6 +120,14 @@ export function MultiplayerWordBlast({
   const [hasAnswered, setHasAnswered] = useState(false);
   const [feedback, setFeedback] = useState<{ message: string; tone: "correct" | "wrong" } | null>(null);
 
+  const [myUid, setMyUid] = useState<string>(currentUserId);
+
+  useEffect(() => {
+    if (currentUserId && currentUserId !== myUid) {
+      setMyUid(currentUserId);
+    }
+  }, [currentUserId]);
+
   const { speakWord } = useVocabularyAudio();
   const QUESTION_DURATION = 14; // 14 seconds per question
   const [timeLeft, setTimeLeft] = useState(QUESTION_DURATION);
@@ -170,6 +178,7 @@ export function MultiplayerWordBlast({
         if (json.success && json.data) {
           if (json.data.room) setRoom(json.data.room);
           if (json.data.players) setPlayers(json.data.players);
+          if (json.data.currentUserId && !myUid) setMyUid(json.data.currentUserId);
         }
       } catch {
         /* Ignore transient poll errors */
@@ -181,7 +190,7 @@ export function MultiplayerWordBlast({
       if (unsubPlayers) unsubPlayers();
       window.clearInterval(pollTimer);
     };
-  }, [roomCode]);
+  }, [roomCode, myUid]);
 
   // Current question data
   const currentIndex = room.currentIndex ?? 0;
@@ -216,7 +225,7 @@ export function MultiplayerWordBlast({
       setTimeLeft((prev) => {
         if (prev <= 1) {
           // Question expired: auto advance if host
-          if (players.find((p) => p.uid === currentUserId)?.isHost) {
+          if (players.find((p) => p.uid === myUid)?.isHost) {
             fetch("/api/vocab/game-room/next", {
               method: "POST",
               headers: { "Content-Type": "application/json" },
@@ -230,7 +239,7 @@ export function MultiplayerWordBlast({
     }, 1000);
 
     return () => window.clearInterval(interval);
-  }, [currentIndex, room.status, roomCode, currentUserId, players]);
+  }, [currentIndex, room.status, roomCode, myUid, players]);
 
   // Floating animation loop
   useEffect(() => {
@@ -250,12 +259,15 @@ export function MultiplayerWordBlast({
     return () => cancelAnimationFrame(rafId);
   }, [currentIndex, room.status]);
 
+  const currentPlayer = players.find((p) => p.uid === myUid) || players.find((p) => p.uid === currentUserId) || players[0];
+  const isEliminated = (currentPlayer?.lives ?? 3) <= 0;
+
   // Handle answering
   const handleSelectOption = async (option: VocabWordCard) => {
     if (hasAnswered || room.status !== "playing") return;
 
-    const me = players.find((p) => p.uid === currentUserId);
-    if (!me || me.lives <= 0) return;
+    const me = currentPlayer;
+    if (me && me.lives <= 0) return;
 
     const isCorrect = option.id === currentWord.id;
 
@@ -270,7 +282,11 @@ export function MultiplayerWordBlast({
       // Trả lời sai: trừ tim và không cho chơi tiếp câu này
       setHasAnswered(true);
       setDisabledOptions(currentOptions.map((o) => o.id));
-      const newLives = Math.max(0, me.lives - 1);
+      const targetUid = me?.uid || myUid;
+      setPlayers((prev) =>
+        prev.map((p) => (p.uid === targetUid ? { ...p, lives: Math.max(0, p.lives - 1) } : p))
+      );
+      const newLives = Math.max(0, (me?.lives ?? 3) - 1);
       if (newLives <= 0) {
         setFeedback({ message: "💀 BẠN ĐÃ HẾT TIM! Bạn đã bị loại khỏi trận đấu...", tone: "wrong" });
       } else {
@@ -282,7 +298,7 @@ export function MultiplayerWordBlast({
     }
 
     try {
-      await fetch("/api/vocab/game-room/answer", {
+      const res = await fetch("/api/vocab/game-room/answer", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -292,13 +308,36 @@ export function MultiplayerWordBlast({
           selected: option.word,
         }),
       });
+      const json = await res.json();
+      if (json.success && json.data) {
+        if (json.data.advanced || json.data.nextIndex !== undefined) {
+          setRoom((prev) => ({
+            ...prev,
+            currentIndex: json.data.nextIndex,
+            status: json.data.status,
+          }));
+        }
+        if (json.data.status === "finished") {
+          setRoom((prev) => ({ ...prev, status: "finished" }));
+        }
+      }
     } catch (err) {
       console.error("Failed to submit answer", err);
     }
   };
 
-  const currentPlayer = players.find((p) => p.uid === currentUserId);
-  const isEliminated = (currentPlayer?.lives ?? 3) <= 0;
+  // Keyboard 1-4 shortcuts
+  useEffect(() => {
+    function handleKeyDown(e: KeyboardEvent) {
+      if (hasAnswered || isEliminated || room.status !== "playing") return;
+      const key = parseInt(e.key, 10);
+      if (key >= 1 && key <= currentOptions.length) {
+        handleSelectOption(currentOptions[key - 1]);
+      }
+    }
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [hasAnswered, isEliminated, room.status, currentOptions]);
 
   // ---- PODIUM / VICTORY SCREEN ----
   if (room.status === "finished") {
@@ -378,7 +417,7 @@ export function MultiplayerWordBlast({
   return (
     <section className={`${styles.arcadeRound} relative min-h-[640px]`} aria-label="Word Blast Đối Kháng">
       {/* Realtime Scoreboard in corner */}
-      <MultiplayerScoreboard players={players} currentUserId={currentUserId} />
+      <MultiplayerScoreboard players={players} currentUserId={myUid || currentUserId} />
 
       {/* Top Header */}
       <header className={styles.toolbar}>

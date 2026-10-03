@@ -15,5 +15,5 @@ export const POST = withErrorHandling(async (req) => {
   
   await joinRoom(user, body.code);
   
-  return ok({ success: true });
+  return ok({ success: true, currentUserId: user.uid });
 });

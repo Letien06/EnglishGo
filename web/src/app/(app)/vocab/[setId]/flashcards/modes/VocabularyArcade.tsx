@@ -21,6 +21,7 @@ export default function VocabularyArcade({
   suspended = false,
   setId,
   isAuthenticated = false,
+  currentUserId: initialCurrentUserId = "",
   loginHref,
   enableMultiplayer = false,
   onComplete,
@@ -32,6 +33,7 @@ export default function VocabularyArcade({
   suspended?: boolean;
   setId?: number;
   isAuthenticated?: boolean;
+  currentUserId?: string;
   loginHref?: string;
   enableMultiplayer?: boolean;
   onComplete: (result: VocabularyRoundResult) => void;
@@ -42,12 +44,17 @@ export default function VocabularyArcade({
   );
   const [roomCode, setRoomCode] = useState<string>("");
   const [currentUserId, setCurrentUserId] = useState<string>(() => {
+    if (initialCurrentUserId) return initialCurrentUserId;
     try {
       return getClientAuth().currentUser?.uid || "";
     } catch {
       return "";
     }
   });
+
+  useEffect(() => {
+    if (initialCurrentUserId) setCurrentUserId(initialCurrentUserId);
+  }, [initialCurrentUserId]);
   const [lobbyRoom, setLobbyRoom] = useState<any>(null);
   const [lobbyPlayers, setLobbyPlayers] = useState<any[]>([]);
   const [loadingRoom, setLoadingRoom] = useState(false);
@@ -124,6 +131,7 @@ export default function VocabularyArcade({
             }
           }
           if (json.data.players) setLobbyPlayers(json.data.players);
+          if (json.data.currentUserId) setCurrentUserId(json.data.currentUserId);
         }
       } catch {}
     }, 1200);
@@ -157,6 +165,7 @@ export default function VocabularyArcade({
         alert(json.error || "Không thể tạo phòng lúc này");
         return;
       }
+      if (json.data?.currentUserId) setCurrentUserId(json.data.currentUserId);
       setRoomCode(json.data.code);
       setView("lobby");
     } catch {
@@ -184,6 +193,7 @@ export default function VocabularyArcade({
         alert(json.error || "Mã phòng không tồn tại hoặc phòng đã đầy");
         return;
       }
+      if (json.data?.currentUserId) setCurrentUserId(json.data.currentUserId);
       setRoomCode(code);
       setView("lobby");
     } catch {

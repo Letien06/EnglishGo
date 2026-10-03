@@ -24,11 +24,11 @@ export const POST = withErrorHandling(async (req) => {
   
   const result = await createRoom(user, body.vocabSetId, body.gameMode, body.words);
   
-  return ok(result);
+  return ok({ ...result, currentUserId: user.uid });
 });
 
 export const GET = withErrorHandling(async (req) => {
-  await requireUser();
+  const user = await requireUser();
   const { searchParams } = new URL(req.url);
   const code = searchParams.get("code")?.trim().toUpperCase();
   if (!code || code.length !== 6) {
@@ -37,6 +37,6 @@ export const GET = withErrorHandling(async (req) => {
 
   const { getRoomWithPlayers } = await import("@/lib/services/game-room");
   const data = await getRoomWithPlayers(code);
-  return ok(data);
+  return ok({ ...data, currentUserId: user.uid });
 });
 
