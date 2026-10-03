@@ -471,9 +471,31 @@ export default function FlashcardGame({
         const next = event.key === "Home" ? 0 : event.key === "End" ? tabs.length - 1 : (current + (event.key === "ArrowRight" ? 1 : tabs.length - 1)) % tabs.length;
         tabs[next]?.focus();
       }}>
-        {([{ key: "view", label: "Xem từ" }, { key: "learn", label: "Học" }, { key: "play", label: "Chơi" }] as const).map((tab) => <button key={tab.key} id={`vocab-tab-${tab.key}`} role="tab" aria-selected={workspaceTab === tab.key} aria-controls="vocab-workspace-panel" onClick={() => selectWorkspaceTab(tab.key)}>{tab.label}</button>)}
+        {([
+          { key: "view", label: "Xem từ", icon: "👁" },
+          { key: "learn", label: "Học", icon: "📖" },
+          { key: "play", label: "Chơi", icon: "🎮" },
+        ] as const).map((tab) => (
+          <button
+            key={tab.key}
+            id={`vocab-tab-${tab.key}`}
+            role="tab"
+            aria-selected={workspaceTab === tab.key}
+            aria-controls="vocab-workspace-panel"
+            onClick={() => selectWorkspaceTab(tab.key)}
+          >
+            <span>{tab.icon}</span> <span>{tab.label}</span>
+          </button>
+        ))}
       </nav>
-      <span className={styles.workspaceCount}>{words.length} từ · {session.set.topic}</span>
+      <div className="flex items-center gap-3">
+        <span className="text-amber-500 font-extrabold flex items-center gap-1 text-xs sm:text-sm">
+          ⚡ +0
+        </span>
+        <span className={styles.workspaceCount}>
+          {words.length} từ · {session.set.topic}
+        </span>
+      </div>
       </header>
       <div className={styles.workspaceBody} data-sidebar={sidebarOpen}>
       {sidebarOpen && <div id="vocab-part-sidebar"><VocabularySidebar key={session.set.externalTestId ?? setId} testId={isAuthenticated ? session.set.externalTestId : undefined} partId={session.set.externalPartId} title={session.set.title} count={words.length} tab={workspaceTab} ready={partsReady} onNavigate={(href) => { if (screen === "play") setPendingHref(href); else router.push(href); }} /></div>}
@@ -500,6 +522,8 @@ export default function FlashcardGame({
           onStartQuiz={startQuiz}
           onClearHistory={() => persistHistory([])}
           onApplyFilters={applyFilters}
+          onSelectTab={selectWorkspaceTab}
+          onRecordRound={recordHistory}
         />
       )}
 
@@ -588,8 +612,12 @@ function Hub({
   onStartQuiz,
   onClearHistory,
   onApplyFilters,
+  onSelectTab,
+  onRecordRound,
 }: {
   tab: WorkspaceTab;
+  onSelectTab?: (tab: WorkspaceTab) => void;
+  onRecordRound?: (record: any) => void;
   words: VocabWordCard[];
   setId: number;
   practiceOptions: VocabSetCard[];
@@ -676,76 +704,86 @@ function Hub({
       </section>
       </details>
 
-      {tab === "view" ? <WordExplorer words={words} onLearn={() => onStartMode("learn")} /> : <>
-      {tab === "learn" && <section className={styles.hero}>
-        <span className={styles.eyebrow}>Một từ, nhiều cách ghi nhớ</span>
-        <h2>Hiểu trong câu.<br />Nhớ khi cần.</h2>
-        <p>Từ đơn → cụm từ → câu ví dụ → tự gõ lại. Mỗi lượt tối đa 20 từ; chỉ hiện những bước có dữ liệu trong bộ từ của bạn.</p>
-        <button className={`${styles.button} ${styles.primary} mt-5`} disabled={!words.length} onClick={() => onStartMode("learn")}>Bắt đầu học theo ngữ cảnh →</button>
-      </section>}
+      {tab === "view" ? (
+        <WordExplorer
+          words={words}
+          onLearn={() => (onSelectTab ? onSelectTab("learn") : onStartMode("learn"))}
+        />
+      ) : tab === "learn" ? (
+        <ContextLearning
+          words={words}
+          onComplete={(result) => {
+            const correctCount = result.answers.filter((a) => a.correct).length;
+            const accuracy =
+              result.answers.length > 0
+                ? Math.round((correctCount / result.answers.length) * 100)
+                : 100;
+            onRecordRound?.({
+              id: Date.now(),
+              mode: "learn",
+              time: new Date().toLocaleTimeString("vi-VN", {
+                hour: "2-digit",
+                minute: "2-digit",
+              }),
+              accuracy,
+              score: result.score,
+              totalWords: result.answers.length,
+              correctWords: correctCount,
+              wrongWords: result.answers.length - correctCount,
+            });
+          }}
+          onExit={() => (onSelectTab ? onSelectTab("view") : undefined)}
+          onNavigateTab={onSelectTab}
+          activeTab={tab}
+        />
+      ) : (
+        <>
+          {/* Topline for Play tab */}
+          <div className="flex items-center justify-between gap-3">
+            <h2 className="text-lg font-bold text-ink">Chọn trò chơi</h2>
+            <div className="flex items-center gap-3">
+              <button
+                type="button"
+                onClick={onToggleMute}
+                className="px-3 py-1.5 rounded-lg bg-surface border border-line text-xs font-semibold text-ink2 hover:bg-surface-soft"
+              >
+                {muted ? "🔇 Bật tiếng" : "🔊 Tắt tiếng"}
+              </button>
+              <span className="text-sm text-muted">
+                <b className="text-ink">{words.length}</b> từ sẵn sàng
+              </span>
+            </div>
+          </div>
 
-      {/* Topline */}
-      <div className="flex items-center justify-between gap-3">
-        <h2 className="text-lg font-bold text-ink">{tab === "play" ? "Chọn trò chơi" : "Luyện riêng từng kỹ năng"}</h2>
-        <div className="flex items-center gap-3">
-          <button
-            type="button"
-            onClick={onToggleMute}
-            className="px-3 py-1.5 rounded-lg bg-surface border border-line text-xs font-semibold text-ink2 hover:bg-surface-soft"
-          >
-            {muted ? "🔇 Bật tiếng" : "🔊 Tắt tiếng"}
-          </button>
-          <span className="text-sm text-muted">
-            <b className="text-ink">{words.length}</b> từ sẵn sàng
-          </span>
-        </div>
-      </div>
-
-      {/* Game cards */}
-      <section className="grid gap-3 sm:grid-cols-2">
-        {MODE_CARDS.filter((card) => tab === "play" ? ["blast", "rain", "matching", "quiz"].includes(card.key) : ["flashcard", "typing", "listening", "mixed"].includes(card.key)).map((card) => {
-          const tone = MODE_TONES[card.key];
-          return (
-            <button
-              key={card.key}
-              type="button"
-              disabled={!words.length}
-              onClick={() =>
-                card.quiz ? onOpenQuizChooser() : onStartMode(card.key)
-              }
-              data-game={card.key}
-              className={`${styles.gameCard} relative flex min-h-[190px] flex-col items-start justify-center gap-2 overflow-hidden p-6 text-left`}
-            >
-              {card.hot && (
-                <em className="absolute right-3 top-3 rounded bg-red-500 px-2 py-0.5 text-[10px] font-bold not-italic text-white">
-                  HOT
-                </em>
-              )}
-              <span className={`rounded-full px-4 py-3 text-2xl ${tone.icon}`}>{card.icon}</span>
-              <strong className="text-lg font-extrabold text-ink">{card.title}</strong>
-              <small className="text-sm font-medium text-ink2">{card.desc}</small>
-              <b className={`mt-1 rounded-full px-3 py-1 text-xs font-bold ${tone.badge}`}>{card.points}</b><span className={styles.gameArrow} aria-hidden="true">↗</span>
-            </button>
-          );
-        })}
-      </section>
-
-      {/* SRS banner */}
-      {tab === "learn" && <section className="flex flex-col items-start gap-3 rounded-2xl border border-success-line bg-success-soft p-5 sm:flex-row sm:items-center sm:justify-between">
-        <div>
-          <strong className="block text-ink">Ôn tập ngắt quãng (SRS)</strong>
-          <span className="text-sm text-muted">
-            Hệ thống tự động nhắc lại các từ bạn sắp quên. Học ít, nhớ lâu.
-          </span>
-        </div>
-        <button
-          type="button"
-          onClick={() => onApplyFilters({ mastery: "due" })}
-          className="game-utility-button shrink-0 rounded-xl bg-violet-600 px-5 py-2.5 text-sm font-semibold text-white hover:bg-violet-700"
-        >
-          Bắt đầu ôn tập
-        </button>
-      </section>}
+          {/* Game cards */}
+          <section className="grid gap-3 sm:grid-cols-2">
+            {MODE_CARDS.map((card) => {
+              const tone = MODE_TONES[card.key];
+              return (
+                <button
+                  key={card.key}
+                  type="button"
+                  disabled={!words.length}
+                  onClick={() =>
+                    card.quiz ? onOpenQuizChooser() : onStartMode(card.key)
+                  }
+                  data-game={card.key}
+                  className={`${styles.gameCard} relative flex min-h-[190px] flex-col items-start justify-center gap-2 overflow-hidden p-6 text-left`}
+                >
+                  {card.hot && (
+                    <em className="absolute right-3 top-3 rounded bg-red-500 px-2 py-0.5 text-[10px] font-bold not-italic text-white">
+                      HOT
+                    </em>
+                  )}
+                  <span className={`rounded-full px-4 py-3 text-2xl ${tone.icon}`}>{card.icon}</span>
+                  <strong className="text-lg font-extrabold text-ink">{card.title}</strong>
+                  <small className="text-sm font-medium text-ink2">{card.desc}</small>
+                  <b className={`mt-1 rounded-full px-3 py-1 text-xs font-bold ${tone.badge}`}>{card.points}</b>
+                  <span className={styles.gameArrow} aria-hidden="true">↗</span>
+                </button>
+              );
+            })}
+          </section>
 
       {/* History */}
       <section className="space-y-3">
@@ -797,7 +835,8 @@ function Hub({
       {quizChooser && (
         <QuizChooser onClose={onCloseQuizChooser} onSelect={onStartQuiz} />
       )}
-      </>}
+    </>
+  )}
     </div>
   );
 }
