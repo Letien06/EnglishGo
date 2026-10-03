@@ -15,9 +15,9 @@ export function MultiplayerScoreboard({
   const sortedPlayers = [...players].sort((a, b) => b.score - a.score);
 
   return (
-    <div className="fixed top-4 right-4 bg-white/90 backdrop-blur shadow-lg border border-[var(--line)] rounded-xl overflow-hidden min-w-[240px] z-50 text-[var(--ink)]">
-      <div className="bg-gray-50 border-b border-[var(--line)] px-4 py-2 font-bold text-sm flex items-center gap-2">
-        🏆 Bảng điểm
+    <div className="fixed top-4 right-4 bg-[var(--surface)]/95 backdrop-blur-md shadow-2xl border border-[var(--line)] rounded-xl overflow-hidden min-w-[240px] z-50 text-[var(--ink)]">
+      <div className="bg-[var(--surface-soft)] border-b border-[var(--line)] px-4 py-2.5 font-black text-sm flex items-center gap-2 text-amber-400">
+        🏆 Bảng xếp hạng trực tiếp
       </div>
       <div className="flex flex-col">
         {sortedPlayers.map((player, index) => {
@@ -26,21 +26,21 @@ export function MultiplayerScoreboard({
             <div 
               key={player.uid}
               className={`flex items-center px-4 py-2 border-b border-[var(--line)] last:border-0 ${
-                isCurrentUser ? 'bg-amber-100/70 border-l-4 border-l-amber-500 font-bold text-amber-950' : ''
+                isCurrentUser ? 'bg-amber-400/15 border-l-4 border-l-amber-400 font-bold text-[var(--ink)]' : 'text-[var(--ink2)]'
               }`}
             >
-              <div className={`w-6 text-center font-bold mr-2 ${index === 0 ? 'text-amber-500' : 'text-[var(--muted)]'}`}>
+              <div className={`w-6 text-center font-black mr-2 ${index === 0 ? 'text-amber-400' : 'text-[var(--muted)]'}`}>
                 #{index + 1}
               </div>
-              <div className="flex-1 truncate mr-2 flex items-center gap-1.5">
-                <span className="truncate">{player.displayName}</span>
+              <div className="flex-1 truncate mr-2 flex items-center gap-1.5 min-w-0">
+                <span className="truncate font-semibold text-sm text-[var(--ink)]">{player.displayName}</span>
                 {isCurrentUser && (
-                  <span className="shrink-0 text-[10px] px-1.5 py-0.5 rounded bg-amber-500 text-white font-black uppercase tracking-wider">
+                  <span className="shrink-0 text-[10px] px-1.5 py-0.2 rounded bg-amber-400 text-slate-950 font-black uppercase tracking-wider">
                     Bạn
                   </span>
                 )}
               </div>
-              <div className="font-mono font-bold mr-4">
+              <div className="font-mono font-bold mr-4 text-amber-400">
                 {player.score}
               </div>
               <div className="flex gap-0.5">

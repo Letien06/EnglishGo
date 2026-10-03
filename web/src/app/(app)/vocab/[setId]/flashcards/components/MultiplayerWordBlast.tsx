@@ -601,11 +601,11 @@ export function MultiplayerWordBlast({
             <p className="text-sm font-semibold text-[var(--muted)] max-w-lg mb-4">
               Màn chọn của bạn đã bị khóa. Hãy quan sát các đối thủ còn lại tiếp tục đấu trí đến khi kết thúc trận nhé!
             </p>
-            <div className="flex flex-wrap items-center justify-center gap-2 px-4 py-2 bg-white/90 border border-[var(--line)] rounded-full text-xs font-bold text-[var(--ink)] shadow-sm">
+            <div className="flex flex-wrap items-center justify-center gap-2 px-4 py-2 bg-[var(--surface)] border border-[var(--line)] rounded-full text-xs font-bold text-[var(--ink)] shadow-md">
               <span className="inline-block w-2.5 h-2.5 rounded-full bg-emerald-500 animate-ping" />
-              <span>Đang thi đấu:</span>
+              <span className="text-[var(--ink2)]">Đang thi đấu:</span>
               {players.filter((p) => (p.lives ?? 3) > 0).map((p) => (
-                <span key={p.uid} className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-blue-50 text-blue-700 border border-blue-200">
+                <span key={p.uid} className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-blue-500/20 text-blue-300 border border-blue-500/30 font-semibold">
                   {p.displayName} ({p.lives}❤️ · {p.score}đ)
                 </span>
               ))}
