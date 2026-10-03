@@ -28,7 +28,7 @@ import type {
 import useDialogFocus from "@/components/useDialogFocus";
 import { ClientRequestTimeoutError, fetchWithTimeout } from "@/lib/client-request";
 import { consolidateVocabGameAnswers } from "@/lib/vocab-game-results";
-import { englishExampleForSpeech } from "@/lib/vocab-speech";
+import { englishExampleForSpeech, findBestEnglishVoice } from "@/lib/vocab-speech";
 import type { VocabularyRoundResult } from "@/lib/vocab-arcade";
 import WordExplorer from "./WordExplorer";
 import VocabularySidebar from "./VocabularySidebar";
@@ -211,7 +211,15 @@ function speak(text: string) {
   if (typeof window === "undefined" || !("speechSynthesis" in window)) return;
   window.speechSynthesis.cancel();
   const u = new SpeechSynthesisUtterance(cleanSpeechText(text));
-  u.lang = "en-US";
+  const voice = findBestEnglishVoice("us");
+  if (voice) {
+    u.voice = voice;
+    u.lang = voice.lang;
+  } else {
+    u.lang = "en-US";
+  }
+  u.rate = 0.92;
+  u.pitch = 1.0;
   window.speechSynthesis.speak(u);
 }
 

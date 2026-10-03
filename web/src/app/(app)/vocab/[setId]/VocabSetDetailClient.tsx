@@ -1,5 +1,7 @@
 "use client";
 
+import { findBestEnglishVoice } from "@/lib/vocab-speech";
+
 import { useMemo, useRef, useState } from "react";
 import dynamic from "next/dynamic";
 import type { AiVocabCandidate, VocabWordCard } from "@/types/vocab";
@@ -31,7 +33,20 @@ export default function VocabSetDetailClient({ setId, words: initialWords, isOwn
   const mastered = words.filter((word) => word.mastered).length;
   const progress = words.length ? Math.round(mastered / words.length * 100) : 0;
 
-  function speak(word: VocabWordCard) { const url = word.audioUsUrl || word.audioUrl || word.audioUkUrl; if (url) new Audio(url).play().catch(() => window.speechSynthesis.speak(new SpeechSynthesisUtterance(word.word))); else window.speechSynthesis.speak(new SpeechSynthesisUtterance(word.word)); }
+  function speak(word: VocabWordCard) {
+    const url = word.audioUsUrl || word.audioUrl || word.audioUkUrl;
+    const speakTts = () => {
+      if (typeof window === "undefined" || !("speechSynthesis" in window)) return;
+      window.speechSynthesis.cancel();
+      const u = new SpeechSynthesisUtterance(word.word);
+      const voice = findBestEnglishVoice("us");
+      if (voice) { u.voice = voice; u.lang = voice.lang; } else { u.lang = 'en-US'; }
+      u.rate = 0.92;
+      window.speechSynthesis.speak(u);
+    };
+    if (url) new Audio(url).play().catch(speakTts);
+    else speakTts();
+  }
   async function markKnown(id: number) { const res = await fetch(`/api/vocab/words/${id}/review`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ mastered: true }) }); if (res.status === 401) { window.location.href = `/login?redirect=${encodeURIComponent(window.location.pathname)}`; return; } const json = await res.json(); if (json.success && json.data?.newStatus === "MASTERED") setWords((old) => old.map((word) => word.id === id ? { ...word, mastered: true } : word)); else setNotice(json.error || "Không thể cập nhật từ vựng."); }
   async function refreshWords() { const res = await fetch(`/api/vocab/sets/${setId}`, { cache: "no-store" }); const json = await res.json(); if (json.success && Array.isArray(json.data?.words)) setWords(json.data.words); }
   async function importFile(file: File) { setUploading(true); const data = new FormData(); data.append("file", file); try { const res = await fetch(`/api/vocab/my-sets/${setId}`, { method: "POST", body: data }); const json = await res.json(); if (!json.success) throw new Error(json.error); await refreshWords(); setNotice(`Đã thêm ${json.data.count} từ từ ${file.name}.`); } catch (error) { setNotice(error instanceof Error ? error.message : "Không thể nhập tệp."); } finally { setUploading(false); if (inputFile.current) inputFile.current.value = ""; } }
