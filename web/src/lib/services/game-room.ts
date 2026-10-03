@@ -240,10 +240,17 @@ export const submitAnswer = async (
     if (!playerDoc.exists) throw NotFound("Player not in room");
 
     const player = playerDoc.data()!;
-    if (player.lives <= 0) return { skipped: true, reason: "Player has no lives left" };
-
     // READ 3: All reads must be executed before ANY writes in a Firestore transaction!
     const playersSnapshot = await transaction.get(roomRef.collection("players"));
+
+    if (player.lives <= 0) {
+      const anyAlive = playersSnapshot.docs.some((d) => (d.data().lives ?? 3) > 0);
+      if (!anyAlive && room.status === "playing") {
+        transaction.update(roomRef, { status: "finished" });
+        return { skipped: true, isEliminated: true, allEliminated: true, status: "finished" };
+      }
+      return { skipped: true, isEliminated: true, reason: "Player has no lives left" };
+    }
 
     const questionAnswers: Record<string, { uid: string; correct: boolean; time: number }> =
       room.questionAnswers || {};

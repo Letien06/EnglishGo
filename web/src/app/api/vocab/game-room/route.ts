@@ -37,6 +37,20 @@ export const GET = withErrorHandling(async (req) => {
 
   const { getRoomWithPlayers } = await import("@/lib/services/game-room");
   const data = await getRoomWithPlayers(code);
+
+  // If all players are eliminated, auto-finalize room to finished
+  if (
+    data.room &&
+    data.room.status === "playing" &&
+    data.players.length >= 1 &&
+    data.players.every((p: any) => (p.lives ?? 3) <= 0)
+  ) {
+    const { adminDb } = await import("@/lib/firebase/admin");
+    const { COLLECTIONS } = await import("@/lib/firestore/collections");
+    await adminDb.collection(COLLECTIONS.gameRooms).doc(code).update({ status: "finished" });
+    data.room.status = "finished";
+  }
+
   return ok({ ...data, currentUserId: user.uid });
 });
 

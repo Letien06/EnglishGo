@@ -25,13 +25,20 @@ export function MultiplayerScoreboard({
           return (
             <div 
               key={player.uid}
-              className={`flex items-center px-4 py-2 border-b border-[var(--line)] last:border-0 ${isCurrentUser ? 'bg-blue-50/50 font-medium' : ''}`}
+              className={`flex items-center px-4 py-2 border-b border-[var(--line)] last:border-0 ${
+                isCurrentUser ? 'bg-amber-100/70 border-l-4 border-l-amber-500 font-bold text-amber-950' : ''
+              }`}
             >
               <div className={`w-6 text-center font-bold mr-2 ${index === 0 ? 'text-amber-500' : 'text-[var(--muted)]'}`}>
                 #{index + 1}
               </div>
-              <div className="flex-1 truncate mr-2">
-                {player.displayName}
+              <div className="flex-1 truncate mr-2 flex items-center gap-1.5">
+                <span className="truncate">{player.displayName}</span>
+                {isCurrentUser && (
+                  <span className="shrink-0 text-[10px] px-1.5 py-0.5 rounded bg-amber-500 text-white font-black uppercase tracking-wider">
+                    Bạn
+                  </span>
+                )}
               </div>
               <div className="font-mono font-bold mr-4">
                 {player.score}

@@ -69,14 +69,19 @@ export default function VocabularyArcade({
   useEffect(() => {
     if (!enableMultiplayer) return;
     try {
-      const p = fetch("/api/auth/session");
-      if (p && typeof p.then === "function") {
-        p.then((r) => r.json())
-          .then((res) => {
-            if (res?.data?.uid) setCurrentUserId(res.data.uid);
-          })
-          .catch(() => {});
-      }
+      fetch("/api/auth/session")
+        .then((r) => r.json())
+        .then((res) => {
+          if (res?.data?.uid) setCurrentUserId(res.data.uid);
+        })
+        .catch(() => {});
+
+      fetch("/api/app/session")
+        .then((r) => r.json())
+        .then((res) => {
+          if (res?.data?.user?.uid) setCurrentUserId(res.data.user.uid);
+        })
+        .catch(() => {});
     } catch {}
   }, [enableMultiplayer]);
 

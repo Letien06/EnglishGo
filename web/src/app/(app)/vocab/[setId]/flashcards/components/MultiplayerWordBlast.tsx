@@ -129,6 +129,26 @@ export function MultiplayerWordBlast({
     }
   }, [currentUserId]);
 
+  // Ensure myUid is accurately loaded from authenticated session
+  useEffect(() => {
+    fetch("/api/app/session")
+      .then((r) => r.json())
+      .then((d) => {
+        if (d?.data?.user?.uid) {
+          setMyUid(d.data.user.uid);
+        }
+      })
+      .catch(() => {});
+  }, []);
+
+  // When all players run out of hearts, automatically finalize and show results
+  const allEliminated = players.length > 0 && players.every((p) => (p.lives ?? 3) <= 0);
+  useEffect(() => {
+    if (allEliminated && room.status === "playing") {
+      setRoom((prev) => ({ ...prev, status: "finished" }));
+    }
+  }, [allEliminated, room.status]);
+
   useEffect(() => {
     if (room.lastWinner) {
       setWinnerNotice({
@@ -162,6 +182,7 @@ export function MultiplayerWordBlast({
           if (snap.exists()) {
             const data = snap.data() as GameRoomData;
             setRoom((prev) => {
+              if (data.status === "finished") return data;
               // Never revert back to an older question index
               if ((data.currentIndex ?? 0) < (prev.currentIndex ?? 0)) return prev;
               return data;
@@ -197,12 +218,13 @@ export function MultiplayerWordBlast({
         if (json.success && json.data) {
           if (json.data.room) {
             setRoom((prev) => {
+              if (json.data.room.status === "finished") return json.data.room;
               if ((json.data.room.currentIndex ?? 0) < (prev.currentIndex ?? 0)) return prev;
               return json.data.room;
             });
           }
           if (json.data.players) setPlayers(json.data.players);
-          if (json.data.currentUserId && !myUid) setMyUid(json.data.currentUserId);
+          if (json.data.currentUserId) setMyUid(json.data.currentUserId);
         }
       } catch {
         /* Ignore transient poll errors */
@@ -421,13 +443,13 @@ export function MultiplayerWordBlast({
           <div className="flex flex-col gap-3 mb-8">
             {sorted.map((p, idx) => {
               const medals = ["🥇", "🥈", "🥉"];
-              const isMe = p.uid === currentUserId;
+              const isMe = p.uid === (myUid || currentUserId);
               return (
                 <div
                   key={p.uid}
                   className={`flex items-center justify-between p-4 rounded-xl border ${
                     isMe
-                      ? "border-[var(--primary)] bg-blue-50/40 font-semibold"
+                      ? "border-[var(--primary)] bg-blue-50/40 font-semibold ring-2 ring-[var(--primary)]/30"
                       : "border-[var(--line)] bg-[var(--surface-soft)]"
                   }`}
                 >
@@ -516,13 +538,6 @@ export function MultiplayerWordBlast({
             </div>
           )}
 
-          {isEliminated && (
-            <div className="mb-3 bg-red-50 border border-red-300 text-red-700 px-4 py-1.5 rounded-full text-xs font-bold shadow-sm flex items-center gap-1.5">
-              <span>💀</span>
-              <span>Bạn đã hết tim! Hãy quan sát các người chơi còn lại thi đấu...</span>
-            </div>
-          )}
-
           <span className="text-xs uppercase tracking-widest text-[var(--muted)] font-bold mb-2">
             Tìm từ tiếng Anh có nghĩa:
           </span>
@@ -542,38 +557,59 @@ export function MultiplayerWordBlast({
           )}
         </div>
 
-        {/* Floating Target Buttons */}
-        <div className="relative w-full h-[320px] overflow-hidden">
-          {currentOptions.map((opt, i) => {
-            const pos = floats[i] || { x: 25 * i, y: 30 };
-            const isDisabled =
-              isEliminated || disabledOptions.includes(opt.id) || (hasAnswered && opt.id !== currentWord?.id);
-            const isCorrectAnswer = hasAnswered && opt.id === currentWord?.id;
+        {/* Floating Target Buttons OR Spectator Locked Screen */}
+        {isEliminated ? (
+          <div className="relative w-full h-[320px] flex flex-col items-center justify-center p-6 text-center select-none bg-red-950/10 rounded-2xl border-2 border-dashed border-red-400/50 backdrop-blur-sm mx-auto max-w-2xl my-2">
+            <div className="text-6xl mb-2 animate-bounce">💀</div>
+            <h3 className="text-2xl font-black text-red-600 mb-1 uppercase tracking-wide">
+              BẠN ĐÃ HẾT TIM & BỊ LOẠI!
+            </h3>
+            <p className="text-sm font-semibold text-[var(--muted)] max-w-lg mb-4">
+              Màn chọn của bạn đã bị khóa. Hãy quan sát các đối thủ còn lại tiếp tục đấu trí đến khi kết thúc trận nhé!
+            </p>
+            <div className="flex flex-wrap items-center justify-center gap-2 px-4 py-2 bg-white/90 border border-[var(--line)] rounded-full text-xs font-bold text-[var(--ink)] shadow-sm">
+              <span className="inline-block w-2.5 h-2.5 rounded-full bg-emerald-500 animate-ping" />
+              <span>Đang thi đấu:</span>
+              {players.filter((p) => (p.lives ?? 3) > 0).map((p) => (
+                <span key={p.uid} className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-blue-50 text-blue-700 border border-blue-200">
+                  {p.displayName} ({p.lives}❤️ · {p.score}đ)
+                </span>
+              ))}
+            </div>
+          </div>
+        ) : (
+          <div className="relative w-full h-[320px] overflow-hidden">
+            {currentOptions.map((opt, i) => {
+              const pos = floats[i] || { x: 25 * i, y: 30 };
+              const isDisabled =
+                disabledOptions.includes(opt.id) || (hasAnswered && opt.id !== currentWord?.id);
+              const isCorrectAnswer = hasAnswered && opt.id === currentWord?.id;
 
-            return (
-              <button
-                key={opt.id}
-                type="button"
-                data-nth={i % 4}
-                className={`${styles.floatingTarget} ${
-                  isCorrectAnswer ? styles.targetPulseCorrect : ""
-                }`}
-                style={{
-                  left: `${pos.x}%`,
-                  top: `${pos.y}%`,
-                  opacity: isDisabled && !isCorrectAnswer ? 0.35 : 1,
-                  transform: "translate(-50%, -50%)",
-                  cursor: isDisabled ? "not-allowed" : "pointer",
-                }}
-                disabled={isDisabled}
-                onClick={() => handleSelectOption(opt)}
-              >
-                <kbd className="opacity-60 text-[10px] mr-1.5 font-mono">{i + 1}</kbd>
-                <span className="font-bold">{opt.word}</span>
-              </button>
-            );
-          })}
-        </div>
+              return (
+                <button
+                  key={opt.id}
+                  type="button"
+                  data-nth={i % 4}
+                  className={`${styles.floatingTarget} ${
+                    isCorrectAnswer ? styles.targetPulseCorrect : ""
+                  }`}
+                  style={{
+                    left: `${pos.x}%`,
+                    top: `${pos.y}%`,
+                    opacity: isDisabled && !isCorrectAnswer ? 0.35 : 1,
+                    transform: "translate(-50%, -50%)",
+                    cursor: isDisabled ? "not-allowed" : "pointer",
+                  }}
+                  disabled={isDisabled}
+                  onClick={() => handleSelectOption(opt)}
+                >
+                  <kbd className="opacity-60 text-[10px] mr-1.5 font-mono">{i + 1}</kbd>
+                  <span className="font-bold">{opt.word}</span>
+                </button>
+              );
+            })}
+          </div>
+        )}
 
         {/* Status bar */}
         <div className={styles.blastStatus}>
