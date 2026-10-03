@@ -27,7 +27,16 @@ function FlashcardFace({
   showExample,
 }: FlashcardFaceProps) {
   return (
-    <section className={`flashcard-face ${className}`} aria-hidden={!active}>
+    <section
+      className={`flashcard-face ${className} ${active ? "is-active" : "is-inactive"}`}
+      aria-hidden={!active}
+      style={{
+        WebkitBackfaceVisibility: "hidden",
+        backfaceVisibility: "hidden",
+        WebkitTransformStyle: "preserve-3d",
+        transformStyle: "preserve-3d",
+      }}
+    >
       <div className="flashcard-face-glow" aria-hidden="true" />
       <div className="flashcard-face-content">
         <span className="flashcard-side-label">{label}</span>

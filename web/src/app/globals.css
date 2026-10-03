@@ -1365,12 +1365,16 @@ h1, h2, h3, h4, h5 {
 }
 
 /* Flashcard motion: the learning card is the one place allowed to feel physical. */
-.flashcard-experience { perspective: 1400px; }
+.flashcard-experience {
+  perspective: 1400px;
+  -webkit-perspective: 1400px;
+}
 
 .flashcard-scene {
   min-height: 23rem;
   cursor: pointer;
   transform-style: preserve-3d;
+  -webkit-transform-style: preserve-3d;
   transition: transform 180ms var(--ease-out);
   will-change: transform;
 }
@@ -1379,11 +1383,15 @@ h1, h2, h3, h4, h5 {
   position: relative;
   min-height: 23rem;
   transform-style: preserve-3d;
+  -webkit-transform-style: preserve-3d;
   transition: transform 280ms var(--ease-out);
   will-change: transform;
 }
 
-.flashcard-scene.is-flipped .flashcard-card { transform: rotateY(180deg); }
+.flashcard-scene.is-flipped .flashcard-card {
+  transform: rotateY(180deg);
+  -webkit-transform: rotateY(180deg);
+}
 
 .flashcard-face {
   position: absolute;
@@ -1391,21 +1399,54 @@ h1, h2, h3, h4, h5 {
   display: flex;
   align-items: stretch;
   justify-content: center;
-  overflow: hidden;
   border: 1px solid color-mix(in srgb, var(--primary) 20%, var(--line));
   border-radius: 1.75rem;
-  backface-visibility: hidden;
+  backface-visibility: hidden !important;
+  -webkit-backface-visibility: hidden !important;
+  transform-style: preserve-3d;
+  -webkit-transform-style: preserve-3d;
   background:
     radial-gradient(circle at 8% 2%, color-mix(in srgb, var(--azure) 16%, transparent), transparent 18rem),
     linear-gradient(145deg, color-mix(in srgb, var(--surface) 97%, var(--azure) 3%), color-mix(in srgb, var(--surface-soft) 90%, var(--primary) 10%));
   box-shadow: 0 26px 52px rgba(15, 23, 42, 0.17), inset 0 1px 0 color-mix(in srgb, white 34%, transparent);
 }
 
+.flashcard-face--front {
+  z-index: 2;
+  transform: rotateY(0deg) translateZ(1px);
+  -webkit-transform: rotateY(0deg) translateZ(1px);
+}
+
 .flashcard-face--back {
-  transform: rotateY(180deg);
+  z-index: 1;
+  transform: rotateY(180deg) translateZ(1px);
+  -webkit-transform: rotateY(180deg) translateZ(1px);
   background:
     radial-gradient(circle at 92% 8%, color-mix(in srgb, var(--primary) 24%, transparent), transparent 19rem),
     linear-gradient(145deg, color-mix(in srgb, var(--surface) 97%, var(--primary) 3%), color-mix(in srgb, var(--surface-soft) 86%, var(--azure) 14%));
+}
+
+.flashcard-scene.is-flipped .flashcard-face--front {
+  z-index: 1;
+}
+
+.flashcard-scene.is-flipped .flashcard-face--back {
+  z-index: 2;
+}
+
+/* Fail-safe visibility transition for Safari / iPadOS / WebKit */
+.flashcard-face.is-inactive {
+  opacity: 0;
+  pointer-events: none;
+  visibility: hidden;
+  transition: opacity 0s 140ms, visibility 0s 140ms;
+}
+
+.flashcard-face.is-active {
+  opacity: 1;
+  pointer-events: auto;
+  visibility: visible;
+  transition: opacity 0s 140ms, visibility 0s 140ms;
 }
 
 .flashcard-face::before {
