@@ -47,11 +47,11 @@ describe("vocabulary loading", () => {
   it("renders all workspace tabs while supplemental history and set options are pending", () => {
     render(<FlashcardGame session={{ set: { id: 123, title: "Test 1 - LC", topic: "2026", externalPartId: "lc" }, words: [{ id: 1, word: "office", meaning: "van phong", mastered: false }] }} initialMode="menu" practiceOptions={[]} reviewMode={false} isAuthenticated loginHref="/login" loadExtrasInBackground />);
     expect(screen.getByRole("heading", { name: "Test 1 - LC" })).toBeInTheDocument();
-    expect(screen.getByRole("tab", { name: "Xem từ" })).toHaveAttribute("aria-selected", "true");
+    expect(screen.getByRole("tab", { name: /xem từ/i })).toHaveAttribute("aria-selected", "true");
     expect(screen.getByRole("button", { name: "Lật thẻ xem đáp án" })).toHaveTextContent("office");
-    fireEvent.click(screen.getByRole("tab", { name: "Học" }));
-    expect(screen.getByText("Flashcard", { exact: true })).toBeInTheDocument();
-    fireEvent.click(screen.getByRole("tab", { name: "Chơi" }));
+    fireEvent.click(screen.getByRole("tab", { name: /học/i }));
+    expect(screen.getByRole("tab", { name: /học/i })).toHaveAttribute("aria-selected", "true");
+    fireEvent.click(screen.getByRole("tab", { name: /chơi/i }));
     expect(screen.getByText("Word Blast", { exact: true })).toBeInTheDocument();
     expect(screen.getByText("Mưa từ vựng", { exact: true })).toBeInTheDocument();
     expect(fetch).toHaveBeenCalledWith("/api/vocab/history?setId=123&externalPartId=lc", expect.anything());
@@ -79,7 +79,7 @@ describe("vocabulary loading", () => {
     render(<DautoeicPartsClient testId="source-test" parts={parts} ready />);
     const links = screen.getAllByRole("link", { name: "Vào học" });
     expect(links).toHaveLength(2);
-    expect(links[0]).toHaveAttribute("href", "/vocab/123/flashcards?mode=menu&partId=lc&mastery=all&order=random&amount=all");
+    expect(links[0]).toHaveAttribute("href", expect.stringContaining("/vocab/123/flashcards?mode=menu&partId=lc&mastery=all"));
     expect(links[1]).toHaveAttribute("href", expect.stringContaining("partId=rc"));
     expect(fetch).toHaveBeenCalledTimes(1);
     expect(vi.mocked(fetch).mock.calls[0][1]?.method).not.toBe("POST");

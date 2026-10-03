@@ -117,13 +117,50 @@ export default function VocabLearnTabClient({ groupId, userUid, initialCatalog =
     const filters = [{ id: "all", label: "Tất cả" }, { id: "new", label: "Chưa học" }, { id: "learning", label: "Đang học" }, { id: "complete", label: "Đã thuộc" }, { id: "due", label: "Cần ôn" }];
     function clearFilters() { setFilter("all"); setQuery(""); }
     return <section>
-      <div className={vocabStyles.catalogIntro}><div><span className={vocabStyles.eyebrow}>HỌC ÍT MỖI NGÀY · NHỚ LÂU HƠN</span><h2>Kho từ vựng của bạn</h2><p>Xem từ, học trong ngữ cảnh, rồi thử sức với trò chơi.</p></div><div className={vocabStyles.catalogSummary}><span><strong>{ready ? totals.mastered : "—"}</strong> từ đã thuộc</span><span><strong>{ready ? totals.due : "—"}</strong> cần ôn</span>{next && <Link className={`${vocabStyles.button} ${vocabStyles.primary}`} href={`/vocab/dautoeic/${encodeURIComponent(next.id)}?tab=learn`}>{resume ? "Tiếp tục học" : "Bắt đầu học"} →</Link>}</div></div>
+      <div className={vocabStyles.catalogIntro}>
+        <div>
+          <span className={vocabStyles.eyebrow}>HỌC ÍT MỖI NGÀY · NHỚ LÂU HƠN</span>
+          <h2>Kho từ vựng của bạn</h2>
+          <p>Xem từ, học trong ngữ cảnh, rồi thử sức với trò chơi.</p>
+        </div>
+        <div className={vocabStyles.catalogSummary}>
+          <button
+            type="button"
+            onClick={() => setFilter("learning")}
+            className="text-left hover:opacity-80 transition-opacity cursor-pointer bg-transparent border-none p-0 text-inherit"
+            title="Xem các bộ đang học có từ đã thuộc"
+          >
+            <span><strong>{ready ? totals.mastered : "—"}</strong> từ đã thuộc</span>
+          </button>
+          <button
+            type="button"
+            onClick={() => setFilter("due")}
+            className="text-left hover:opacity-80 transition-opacity cursor-pointer bg-transparent border-none p-0 text-inherit"
+            title="Lọc các bộ có từ cần ôn"
+          >
+            <span><strong>{ready ? totals.due : "—"}</strong> cần ôn</span>
+          </button>
+          {next && <Link className={`${vocabStyles.button} ${vocabStyles.primary}`} href={`/vocab/dautoeic/${encodeURIComponent(next.id)}?tab=learn`}>{resume ? "Tiếp tục học" : "Bắt đầu học"} →</Link>}
+        </div>
+      </div>
       <div className={styles.sectionLabel}><span className={styles.eyebrow}>01 / CHỌN BỘ ĐỀ</span><span>Một ít mỗi ngày, nhớ lâu hơn</span></div>
       <nav className={styles.filters} aria-label="Nhóm từ vựng">{state.catalog.groups.map((group) => <button key={group.id} type="button" onClick={() => selectGroup(group.id)} aria-pressed={group.id === selectedGroupId}>{group.name}<span>{group.count}</span></button>)}</nav>
       <section className={styles.library} aria-label="Danh sách bộ từ">
         <div className={styles.libraryHeading}><div><span className={styles.eyebrow}>02 / BỘ TỪ CỦA BẠN</span><h2>{state.catalog.groups.find((group) => group.id === selectedGroupId)?.name ?? "Thư viện từ vựng"}</h2></div><p className={styles.catalogTotal}><strong>{cards.length}</strong> bộ từ<span>·</span><strong>{totals.words}</strong> từ vựng</p></div>
         <div className={styles.toolbar}>
-          <div className={styles.filters} aria-label="Lọc theo tiến độ">{filters.map((entry) => <button key={entry.id} type="button" aria-pressed={(ready ? filter : "all") === entry.id} disabled={entry.id !== "all" && !ready} onClick={() => setFilter(entry.id)}>{entry.label}</button>)}</div>
+          <div className={styles.filters} aria-label="Lọc theo tiến độ">
+            {filters.map((entry) => (
+              <button
+                key={entry.id}
+                type="button"
+                aria-pressed={(ready ? filter : "all") === entry.id}
+                disabled={entry.id !== "all" && !ready}
+                onClick={() => setFilter(entry.id)}
+              >
+                {entry.label}
+              </button>
+            ))}
+          </div>
           <div className={styles.tools}><label className={styles.search}><Icon name="search" /><input aria-label="Tìm bộ từ" placeholder="Tìm tên bộ từ..." value={query} onChange={(event) => setQuery(event.target.value)} /></label><label className={styles.sort}><span>Sắp xếp</span><select aria-label="Sắp xếp bộ từ" value={sort} onChange={(event) => setSort(event.target.value)}><option value="catalog">Theo thư viện</option><option value="progress" disabled={!ready}>Tiến độ cao nhất</option><option value="words">Ít từ trước</option></select></label></div>
         </div>
         {!ready && <p className={styles.notice} role="status">{progressStatus === "loading" ? "Đang tải tiến độ..." : "Chưa tải được tiến độ. Bạn vẫn có thể vào học ngay."}</p>}
@@ -138,7 +175,17 @@ export default function VocabLearnTabClient({ groupId, userUid, initialCatalog =
             <footer className={vocabStyles.catalogActions}>{([{ tab: "view", label: "Xem từ", icon: "book" }, { tab: "learn", label: "Học", icon: "spark" }, { tab: "play", label: "Chơi", icon: "arrow" }] as const).map((action) => <Link key={action.tab} href={`/vocab/dautoeic/${encodeURIComponent(card.id)}?tab=${action.tab}`} data-overdelay="Đang mở bộ từ vựng..." data-action={action.tab}><Icon name={action.icon} />{action.label}</Link>)}</footer>
           </article>;
         })}</div>
-        {!visible.length && <LearningEmpty title="Chưa tìm thấy bộ từ phù hợp" description="Thử một tên khác hoặc bỏ bộ lọc để khám phá thư viện." onReset={clearFilters} />}
+        {!visible.length && (
+          <LearningEmpty
+            title={filter === "complete" ? "Chưa có bộ từ hoàn thành 100%" : filter === "due" ? "Chưa có từ nào cần ôn" : "Chưa tìm thấy bộ từ phù hợp"}
+            description={
+              filter === "complete" && totals.mastered > 0
+                ? `Bạn đã thuộc ${totals.mastered} từ trong các bộ đang học (xem trong mục 'Đang học'). Bộ từ sẽ hiển thị tại đây khi bạn hoàn thành 100% toàn bộ từ vựng.`
+                : "Thử một tên khác hoặc bỏ bộ lọc để khám phá thư viện."
+            }
+            onReset={clearFilters}
+          />
+        )}
       </section>
       <LearningTip title="Học vui hơn, nhớ lâu hơn">Xem từ và nghe phát âm trước, rồi thử flashcard hoặc trò chơi để tự kiểm tra. Ưu tiên các từ đến hạn ôn thay vì chỉ học từ mới.</LearningTip>
     </section>;

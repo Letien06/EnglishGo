@@ -30,4 +30,52 @@ describe("context learning", () => {
     expect(onExit).toHaveBeenCalledOnce();
     expect(onComplete).not.toHaveBeenCalled();
   });
+
+  it("auto-resumes from first unmastered word and shows resume notice", () => {
+    const words = [
+      { id: 1, word: "apple", meaning: "quả táo", mastered: true },
+      { id: 2, word: "banana", meaning: "quả chuối", mastered: true },
+      { id: 3, word: "cherry", meaning: "quả anh đào", mastered: false },
+    ];
+    render(<ContextLearning words={words} onComplete={vi.fn()} onExit={vi.fn()} />);
+    expect(screen.getByText(/Đang tiếp tục từ từ chưa học/)).toBeInTheDocument();
+    expect(screen.getByText("cherry")).toBeInTheDocument();
+    expect(screen.getByText("CHƯA THUỘC")).toBeInTheDocument();
+  });
+
+  it("opens word drawer and allows jumping to any word", () => {
+    const words = [
+      { id: 1, word: "apple", meaning: "quả táo", mastered: true },
+      { id: 2, word: "banana", meaning: "quả chuối", mastered: false },
+    ];
+    render(<ContextLearning words={words} onComplete={vi.fn()} onExit={vi.fn()} />);
+    fireEvent.click(screen.getByTitle("Mở danh sách toàn bộ từ và kiểm soát tiến độ"));
+    expect(screen.getByRole("dialog", { name: "Danh sách từ vựng" })).toBeInTheDocument();
+    expect(screen.getByText("#1")).toBeInTheDocument();
+    expect(screen.getByText("#2")).toBeInTheDocument();
+
+    // Click on apple (#1) to jump to it
+    fireEvent.click(screen.getByText("quả táo"));
+    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+    expect(screen.getByText("apple")).toBeInTheDocument();
+    expect(screen.getByText("ĐÃ THUỘC")).toBeInTheDocument();
+  });
+
+  it("allows in-study filtering by unmastered and mastered words", () => {
+    const words = [
+      { id: 1, word: "apple", meaning: "quả táo", mastered: true },
+      { id: 2, word: "banana", meaning: "quả chuối", mastered: false },
+    ];
+    render(<ContextLearning words={words} onComplete={vi.fn()} onExit={vi.fn()} />);
+
+    // Filter by 'Đã thuộc (1)'
+    fireEvent.click(screen.getByRole("button", { name: /Đã thuộc \(1\)/ }));
+    expect(screen.getByText("apple")).toBeInTheDocument();
+    expect(screen.getByText("ĐÃ THUỘC")).toBeInTheDocument();
+
+    // Filter by 'Chưa thuộc (1)'
+    fireEvent.click(screen.getByRole("button", { name: /Chưa thuộc \(1\)/ }));
+    expect(screen.getByText("banana")).toBeInTheDocument();
+    expect(screen.getByText("CHƯA THUỘC")).toBeInTheDocument();
+  });
 });

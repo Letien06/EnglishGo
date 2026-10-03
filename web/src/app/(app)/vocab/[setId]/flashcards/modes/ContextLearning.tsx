@@ -50,6 +50,8 @@ function renderHighlightedSentence(sentence: string, targetWord: string) {
   );
 }
 
+type FilterMode = "all" | "unmastered" | "mastered";
+
 export default function ContextLearning({
   words,
   onComplete,
@@ -57,7 +59,42 @@ export default function ContextLearning({
   onNavigateTab,
   activeTab = "learn",
 }: ContextLearningProps) {
-  const [index, setIndex] = useState(0);
+  const [masteredSet, setMasteredSet] = useState<Set<number>>(() => new Set());
+  const [filterMode, setFilterMode] = useState<FilterMode>("all");
+  const [showWordDrawer, setShowWordDrawer] = useState(false);
+  const [drawerQuery, setDrawerQuery] = useState("");
+  const [drawerFilter, setDrawerFilter] = useState<FilterMode>("all");
+
+  const isWordMastered = useCallback(
+    (w: VocabWordCard) => Boolean(w.mastered || masteredSet.has(w.id)),
+    [masteredSet]
+  );
+
+  const activeWords = useMemo(() => {
+    if (filterMode === "unmastered") {
+      const list = words.filter((w) => !isWordMastered(w));
+      return list.length > 0 ? list : words;
+    }
+    if (filterMode === "mastered") {
+      const list = words.filter((w) => isWordMastered(w));
+      return list.length > 0 ? list : words;
+    }
+    return words;
+  }, [words, filterMode, isWordMastered]);
+
+  const [index, setIndex] = useState(() => {
+    const firstUnmastered = words.findIndex((w) => !w.mastered);
+    return firstUnmastered >= 0 ? firstUnmastered : 0;
+  });
+
+  const [resumeNotice, setResumeNotice] = useState<string | null>(() => {
+    const firstUnmastered = words.findIndex((w) => !w.mastered);
+    if (firstUnmastered > 0 && firstUnmastered < words.length) {
+      return `Đang tiếp tục từ từ chưa học (#${firstUnmastered + 1}: ${words[firstUnmastered].word})`;
+    }
+    return null;
+  });
+
   const [stepIndex, setStepIndex] = useState(0);
   const [flipped, setFlipped] = useState(false);
   const [typed, setTyped] = useState("");
@@ -67,7 +104,6 @@ export default function ContextLearning({
   const [direction, setDirection] = useState<"en-vi" | "vi-en">("en-vi");
   const [showDetails, setShowDetails] = useState(true);
   const [skipTyping, setSkipTyping] = useState(false);
-  const [masteredSet, setMasteredSet] = useState<Set<number>>(() => new Set());
   const [points, setPoints] = useState(0);
   const [reported, setReported] = useState<Set<number>>(() => new Set());
   const [reportNotice, setReportNotice] = useState<string | null>(null);
@@ -76,13 +112,99 @@ export default function ContextLearning({
   const inputRef = useRef<HTMLInputElement>(null);
   const { speak, speakWord, stop } = useVocabularyAudio();
 
-  const word = words[index];
+  const safeIndex = Math.min(index, Math.max(0, activeWords.length - 1));
+  const word = activeWords[safeIndex];
+  const isCurrentMastered = word ? isWordMastered(word) : false;
 
   const steps = useMemo(() => {
     return word ? vocabularyStudySteps(word) : [];
   }, [word]);
 
   const step: VocabularyStudyStep | undefined = steps[stepIndex] || steps[0];
+
+  const handleSelectFilterMode = (mode: FilterMode) => {
+    stop();
+    setFilterMode(mode);
+    setIndex(0);
+    setStepIndex(0);
+    setFlipped(false);
+    setTyped("");
+    setFeedback(null);
+    setSkipTyping(false);
+  };
+
+  const handlePrevWord = useCallback(() => {
+    if (safeIndex > 0) {
+      stop();
+      setIndex(safeIndex - 1);
+      setForgotten(false);
+      setStepIndex(0);
+      setFlipped(false);
+      setTyped("");
+      setFeedback(null);
+      setSkipTyping(false);
+    }
+  }, [safeIndex, stop]);
+
+  const handleNextWord = useCallback(() => {
+    if (safeIndex + 1 < activeWords.length) {
+      stop();
+      setIndex(safeIndex + 1);
+      setForgotten(false);
+      setStepIndex(0);
+      setFlipped(false);
+      setTyped("");
+      setFeedback(null);
+      setSkipTyping(false);
+    }
+  }, [safeIndex, activeWords.length, stop]);
+
+  const handleJumpToWord = useCallback(
+    (targetWordId: number) => {
+      stop();
+      let targetIdx = activeWords.findIndex((w) => w.id === targetWordId);
+      if (targetIdx === -1) {
+        setFilterMode("all");
+        targetIdx = words.findIndex((w) => w.id === targetWordId);
+      }
+      if (targetIdx >= 0) {
+        setIndex(targetIdx);
+        setForgotten(false);
+        setStepIndex(0);
+        setFlipped(false);
+        setTyped("");
+        setFeedback(null);
+        setSkipTyping(false);
+        setShowWordDrawer(false);
+      }
+    },
+    [activeWords, words, stop]
+  );
+
+  const handleToggleMasteredInList = useCallback(
+    (targetWord: VocabWordCard, e: React.MouseEvent) => {
+      e.stopPropagation();
+      const currentlyMastered = isWordMastered(targetWord);
+      const nextMastered = !currentlyMastered;
+      if (nextMastered) {
+        setMasteredSet((prev) => new Set(prev).add(targetWord.id));
+      } else {
+        setMasteredSet((prev) => {
+          const next = new Set(prev);
+          next.delete(targetWord.id);
+          return next;
+        });
+      }
+      fetch("/api/vocab/reviews/batch", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          reviews: [{ wordId: targetWord.id, mastered: nextMastered }],
+        }),
+      }).catch(() => {});
+    },
+    [isWordMastered]
+  );
 
   // Auto-pronounce word or phrase when entering step or on demand
   const handleNextStep = useCallback(
@@ -126,16 +248,14 @@ export default function ContextLearning({
         setMasteredSet((prev) => new Set(prev).add(word.id));
       }
 
-      // Persist review to server in background if quality or mastered is specified
-      if (quality !== undefined || markMastered) {
+      // Persist review to server in background if markMastered is specified
+      if (markMastered) {
         fetch("/api/vocab/reviews/batch", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
             reviews: [
-              markMastered
-                ? { wordId: word.id, mastered: true }
-                : { wordId: word.id, quality: quality ?? 4 },
+              { wordId: word.id, mastered: true },
             ],
           }),
         }).catch(() => {});
@@ -143,7 +263,7 @@ export default function ContextLearning({
 
       setPoints((prev) => prev + (isCorrect ? 10 : 2));
 
-      if (index + 1 >= words.length) {
+      if (safeIndex + 1 >= activeWords.length) {
         finished.current = true;
         onComplete({
           answers: nextAnswers,
@@ -151,7 +271,7 @@ export default function ContextLearning({
         });
       } else {
         setAnswers(nextAnswers);
-        setIndex((prev) => prev + 1);
+        setIndex(safeIndex + 1);
         setForgotten(false);
         setStepIndex(0);
         setFlipped(false);
@@ -160,7 +280,7 @@ export default function ContextLearning({
         setSkipTyping(false);
       }
     },
-    [word, answers, forgotten, typed, index, words.length, onComplete, stop]
+    [word, answers, forgotten, typed, safeIndex, activeWords.length, onComplete, stop]
   );
 
   // Keyboard controls
@@ -172,6 +292,12 @@ export default function ContextLearning({
       if (event.code === "Space" && !isInput) {
         event.preventDefault();
         setFlipped((f) => !f);
+      } else if (event.code === "ArrowLeft" && !isInput) {
+        event.preventDefault();
+        handlePrevWord();
+      } else if (event.code === "ArrowRight" && !isInput) {
+        event.preventDefault();
+        handleNextWord();
       } else if (step?.kind === "typing" && (skipTyping || feedback !== null) && !isInput) {
         if (event.key === "1") handleAdvanceWord(1);
         else if (event.key === "2") handleAdvanceWord(2);
@@ -182,7 +308,26 @@ export default function ContextLearning({
 
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [step?.kind, skipTyping, feedback, handleAdvanceWord]);
+  }, [step?.kind, skipTyping, feedback, handleAdvanceWord, handlePrevWord, handleNextWord]);
+
+  // Drawer filtered words
+  const drawerWords = useMemo(() => {
+    let list = words;
+    if (drawerFilter === "unmastered") {
+      list = list.filter((w) => !isWordMastered(w));
+    } else if (drawerFilter === "mastered") {
+      list = list.filter((w) => isWordMastered(w));
+    }
+    if (drawerQuery.trim()) {
+      const q = drawerQuery.toLowerCase().trim();
+      list = list.filter(
+        (w) =>
+          w.word.toLowerCase().includes(q) ||
+          w.meaning.toLowerCase().includes(q)
+      );
+    }
+    return list;
+  }, [words, drawerFilter, drawerQuery, isWordMastered]);
 
   if (!word || !step) {
     return (
@@ -197,9 +342,9 @@ export default function ContextLearning({
 
   // Calculate deck progress counts
   const totalCount = words.length;
-  const masteredCount = words.filter((w) => w.mastered || masteredSet.has(w.id)).length;
+  const masteredCount = words.filter(isWordMastered).length;
   const newCount = Math.max(0, totalCount - masteredCount);
-  const dueCount = words.filter((w) => !w.mastered && !masteredSet.has(w.id)).length;
+  const dueCount = newCount;
 
   const nextStep = steps[stepIndex + 1];
   const nextStepLabel = nextStep ? nextStep.label : "Hoàn thành từ";
@@ -255,12 +400,19 @@ export default function ContextLearning({
         </div>
 
         <div className={styles.dauHeaderStats}>
+          <button
+            type="button"
+            onClick={() => setShowWordDrawer(true)}
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-[#142134] border border-[#1e3048] hover:border-cyan-500/50 hover:bg-[#1a2c44] text-slate-200 transition-all font-bold text-xs"
+            title="Mở danh sách toàn bộ từ và kiểm soát tiến độ"
+          >
+            <span>📋</span>
+            <span>{safeIndex + 1}/{activeWords.length} từ</span>
+            <span className="text-[10px] text-cyan-400 bg-cyan-950/80 border border-cyan-800/60 px-1 py-0.2 rounded hidden sm:inline">DS từ</span>
+          </button>
           <span className={styles.dauStreakBadge}>
             <span>⚡</span>
             <span>+{points}</span>
-          </span>
-          <span className="font-mono font-bold text-slate-300">
-            {index + 1}/{words.length} từ
           </span>
           <button
             onClick={onExit}
@@ -271,18 +423,108 @@ export default function ContextLearning({
         </div>
       </div>
 
+      {/* In-Study Filter Mode & Quick Nav */}
+      <div className="flex flex-wrap items-center justify-between gap-2 px-1 py-0.5">
+        <div className="flex items-center gap-1.5 text-xs font-bold">
+          <span className="text-slate-400 text-[11px] hidden sm:inline">Lọc học:</span>
+          <button
+            type="button"
+            onClick={() => handleSelectFilterMode("all")}
+            className={`px-2.5 py-1 rounded-lg border transition-all text-xs font-semibold ${
+              filterMode === "all"
+                ? "bg-blue-600 border-blue-400 text-white shadow-sm"
+                : "bg-[#142134] border-[#1e3048] text-slate-300 hover:text-white"
+            }`}
+          >
+            Tất cả ({totalCount})
+          </button>
+          <button
+            type="button"
+            onClick={() => handleSelectFilterMode("unmastered")}
+            className={`px-2.5 py-1 rounded-lg border transition-all text-xs font-semibold ${
+              filterMode === "unmastered"
+                ? "bg-amber-600 border-amber-400 text-white shadow-sm"
+                : "bg-[#142134] border-[#1e3048] text-slate-300 hover:text-white"
+            }`}
+          >
+            Chưa thuộc ({dueCount})
+          </button>
+          <button
+            type="button"
+            onClick={() => handleSelectFilterMode("mastered")}
+            className={`px-2.5 py-1 rounded-lg border transition-all text-xs font-semibold ${
+              filterMode === "mastered"
+                ? "bg-emerald-600 border-emerald-400 text-white shadow-sm"
+                : "bg-[#142134] border-[#1e3048] text-slate-300 hover:text-white"
+            }`}
+          >
+            Đã thuộc ({masteredCount})
+          </button>
+        </div>
+
+        <div className="flex items-center gap-1.5 ml-auto">
+          <button
+            type="button"
+            disabled={safeIndex <= 0}
+            onClick={handlePrevWord}
+            className="px-2.5 py-1 rounded-lg bg-[#142134] border border-[#1e3048] hover:bg-[#1e3048] disabled:opacity-40 disabled:pointer-events-none text-slate-300 text-xs font-bold transition-all"
+            title="Từ trước đó (Phím Mũi tên trái)"
+          >
+            ← Từ trước
+          </button>
+          <button
+            type="button"
+            disabled={safeIndex >= activeWords.length - 1}
+            onClick={handleNextWord}
+            className="px-2.5 py-1 rounded-lg bg-[#142134] border border-[#1e3048] hover:bg-[#1e3048] disabled:opacity-40 disabled:pointer-events-none text-slate-300 text-xs font-bold transition-all"
+            title="Từ tiếp theo (Phím Mũi tên phải)"
+          >
+            Từ tiếp →
+          </button>
+        </div>
+      </div>
+
+      {/* Auto-Resume Toast Banner */}
+      {resumeNotice && (
+        <div className="flex items-center justify-between gap-3 px-3 py-1.5 rounded-xl bg-blue-950/60 border border-blue-800/60 text-blue-200 text-xs font-medium">
+          <div className="flex items-center gap-2">
+            <span>ℹ️</span>
+            <span>{resumeNotice}</span>
+          </div>
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={() => {
+                setIndex(0);
+                setResumeNotice(null);
+              }}
+              className="text-cyan-300 underline font-bold hover:text-white"
+            >
+              Học từ đầu (#1)
+            </button>
+            <button
+              type="button"
+              onClick={() => setResumeNotice(null)}
+              className="text-slate-400 hover:text-white ml-1 font-bold"
+            >
+              ✕
+            </button>
+          </div>
+        </div>
+      )}
+
       {/* Progress Bar under Header */}
       <div
         className="w-full h-1.5 bg-[#142134] rounded-full overflow-hidden"
         role="progressbar"
         aria-label="Tiến độ học"
         aria-valuemin={0}
-        aria-valuemax={words.length}
-        aria-valuenow={index}
+        aria-valuemax={activeWords.length}
+        aria-valuenow={safeIndex}
       >
         <div
           className="h-full bg-gradient-to-r from-blue-600 to-cyan-400 transition-all duration-300 ease-out"
-          style={{ width: `${((index + 1) / words.length) * 100}%` }}
+          style={{ width: `${((safeIndex + 1) / activeWords.length) * 100}%` }}
         />
       </div>
 
@@ -316,6 +558,21 @@ export default function ContextLearning({
             })}
           </nav>
 
+          {/* Current Word Mastery Status Badge */}
+          <div className="flex items-center gap-1.5">
+            {isCurrentMastered ? (
+              <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-emerald-500/20 border border-emerald-500/40 text-emerald-300 text-[11px] font-bold">
+                <span>✓</span>
+                <span>ĐÃ THUỘC</span>
+              </span>
+            ) : (
+              <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-blue-500/20 border border-blue-500/40 text-blue-300 text-[11px] font-bold">
+                <span>●</span>
+                <span>CHƯA THUỘC</span>
+              </span>
+            )}
+          </div>
+
           {/* Right Card Tools */}
           <div className={styles.dauCardControls}>
             <button
@@ -328,13 +585,14 @@ export default function ContextLearning({
             </button>
 
             <button
-              onClick={() => handleAdvanceWord(undefined, true)}
+              onClick={() => handleAdvanceWord(undefined, !isCurrentMastered)}
               className={`${styles.dauControlBtn} ${
-                masteredSet.has(word.id) ? "text-emerald-400 border-emerald-500/50" : ""
+                isCurrentMastered ? "text-emerald-400 border-emerald-500/50 bg-emerald-950/40" : ""
               }`}
-              title="Đánh dấu đã thuộc"
+              title={isCurrentMastered ? "Đã thuộc từ này" : "Đánh dấu đã thuộc"}
             >
               <span>✓</span>
+              <span className="hidden sm:inline">{isCurrentMastered ? "Đã thuộc" : "Đánh dấu thuộc"}</span>
             </button>
 
             <button
@@ -769,6 +1027,184 @@ export default function ContextLearning({
           </span>
         </div>
       </div>
+
+      {/* Slide-over Word List Drawer */}
+      {showWordDrawer && (
+        <div
+          className="fixed inset-0 z-50 flex justify-end bg-black/60 backdrop-blur-sm animate-[fadeIn_0.15s_ease-out]"
+          onClick={() => setShowWordDrawer(false)}
+          role="dialog"
+          aria-modal="true"
+          aria-label="Danh sách từ vựng"
+        >
+          <div
+            className="w-full max-w-lg h-full bg-[#0b1320] border-l border-[#1e3048] flex flex-col shadow-2xl text-slate-200 animate-[slideInRight_0.2s_ease-out]"
+            onClick={(e) => e.stopPropagation()}
+          >
+            {/* Drawer Header */}
+            <div className="p-4 border-b border-[#1e3048] flex items-center justify-between bg-[#0e1726]">
+              <div>
+                <h2 className="text-base font-extrabold text-white flex items-center gap-2">
+                  <span>📋</span> Danh sách từ vựng ({words.length})
+                </h2>
+                <p className="text-xs text-slate-400 mt-0.5">
+                  <span className="text-emerald-400 font-bold">{masteredCount} đã thuộc</span> ·{" "}
+                  <span className="text-amber-400 font-bold">{dueCount} chưa thuộc</span>
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setShowWordDrawer(false)}
+                className="w-8 h-8 rounded-lg bg-[#142134] border border-[#1e3048] text-slate-300 hover:text-white flex items-center justify-center font-bold transition-all"
+                title="Đóng"
+              >
+                ✕
+              </button>
+            </div>
+
+            {/* Drawer Search & Filter Tabs */}
+            <div className="p-3 border-b border-[#1e3048] space-y-2.5 bg-[#0b1320]">
+              <input
+                type="text"
+                value={drawerQuery}
+                onChange={(e) => setDrawerQuery(e.target.value)}
+                placeholder="Tìm theo từ tiếng Anh hoặc nghĩa..."
+                className="w-full px-3 py-2 rounded-xl bg-[#142134] border border-[#1e3048] text-white text-xs placeholder:text-slate-500 focus:outline-none focus:border-cyan-400"
+              />
+              <div className="flex items-center gap-1.5">
+                <button
+                  type="button"
+                  onClick={() => setDrawerFilter("all")}
+                  className={`flex-1 py-1 rounded-lg text-xs font-bold border transition-all ${
+                    drawerFilter === "all"
+                      ? "bg-blue-600 border-blue-400 text-white"
+                      : "bg-[#142134] border-[#1e3048] text-slate-400 hover:text-white"
+                  }`}
+                >
+                  Tất cả ({words.length})
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setDrawerFilter("unmastered")}
+                  className={`flex-1 py-1 rounded-lg text-xs font-bold border transition-all ${
+                    drawerFilter === "unmastered"
+                      ? "bg-amber-600 border-amber-400 text-white"
+                      : "bg-[#142134] border-[#1e3048] text-slate-400 hover:text-white"
+                  }`}
+                >
+                  Chưa thuộc ({dueCount})
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setDrawerFilter("mastered")}
+                  className={`flex-1 py-1 rounded-lg text-xs font-bold border transition-all ${
+                    drawerFilter === "mastered"
+                      ? "bg-emerald-600 border-emerald-400 text-white"
+                      : "bg-[#142134] border-[#1e3048] text-slate-400 hover:text-white"
+                  }`}
+                >
+                  Đã thuộc ({masteredCount})
+                </button>
+              </div>
+            </div>
+
+            {/* Drawer Word List */}
+            <div className="flex-1 overflow-y-auto divide-y divide-[#1e3048]/50 p-2 space-y-1">
+              {drawerWords.length === 0 ? (
+                <div className="p-8 text-center text-slate-400 text-xs">
+                  Không tìm thấy từ nào phù hợp với bộ lọc hiện tại.
+                </div>
+              ) : (
+                drawerWords.map((item) => {
+                  const originalIndex = words.findIndex((w) => w.id === item.id);
+                  const isMastered = isWordMastered(item);
+                  const isCurrent = word?.id === item.id;
+                  return (
+                    <div
+                      key={item.id}
+                      onClick={() => handleJumpToWord(item.id)}
+                      className={`p-3 rounded-xl transition-all cursor-pointer flex items-center justify-between gap-3 ${
+                        isCurrent
+                          ? "bg-blue-950/60 border border-blue-500/50"
+                          : "hover:bg-[#142134] border border-transparent"
+                      }`}
+                    >
+                      <div className="flex items-start gap-3 min-w-0">
+                        <span className="text-xs font-mono font-bold text-slate-400 shrink-0 mt-0.5">
+                          #{originalIndex + 1}
+                        </span>
+                        <div className="min-w-0">
+                          <div className="flex items-center gap-2 flex-wrap">
+                            <span className="font-extrabold text-sm text-white">{item.word}</span>
+                            {item.partOfSpeech && (
+                              <span className="text-[10px] text-slate-400 font-semibold italic">
+                                ({item.partOfSpeech})
+                              </span>
+                            )}
+                            {item.phoneticUs || item.phonetic ? (
+                              <span className="text-[11px] text-slate-400 font-mono">
+                                {item.phoneticUs || item.phonetic}
+                              </span>
+                            ) : null}
+                            {isCurrent && (
+                              <span className="text-[10px] font-bold text-cyan-300 bg-cyan-950 px-1.5 py-0.5 rounded border border-cyan-800">
+                                Đang học
+                              </span>
+                            )}
+                          </div>
+                          <p className="text-xs text-slate-300 line-clamp-1 mt-0.5 font-medium">
+                            {item.meaning}
+                          </p>
+                        </div>
+                      </div>
+
+                      <div className="flex items-center gap-2 shrink-0">
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            speakWord(item, "us");
+                          }}
+                          className="w-7 h-7 rounded-lg bg-[#142134] border border-[#1e3048] hover:bg-blue-600 hover:border-blue-500 text-slate-300 hover:text-white flex items-center justify-center text-xs transition-all"
+                          title="Phát âm"
+                        >
+                          🔊
+                        </button>
+
+                        <button
+                          type="button"
+                          onClick={(e) => handleToggleMasteredInList(item, e)}
+                          className={`px-2 py-1 rounded-lg text-xs font-bold border transition-all flex items-center gap-1 ${
+                            isMastered
+                              ? "bg-emerald-950/80 border-emerald-500/60 text-emerald-400 hover:bg-emerald-900"
+                              : "bg-[#142134] border-[#1e3048] text-slate-400 hover:text-slate-200"
+                          }`}
+                          title={isMastered ? "Bỏ đánh dấu đã thuộc" : "Đánh dấu đã thuộc"}
+                        >
+                          <span>✓</span>
+                          <span>{isMastered ? "Đã thuộc" : "Chưa thuộc"}</span>
+                        </button>
+                      </div>
+                    </div>
+                  );
+                })
+              )}
+            </div>
+
+            {/* Drawer Footer */}
+            <div className="p-3 border-t border-[#1e3048] bg-[#0e1726] flex items-center justify-between text-xs text-slate-400">
+              <span>Bấm vào từ để nhảy tới học ngay</span>
+              <button
+                type="button"
+                onClick={() => setShowWordDrawer(false)}
+                className="px-3 py-1.5 rounded-lg bg-blue-600 hover:bg-blue-500 text-white font-bold text-xs transition-all"
+              >
+                Xong
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

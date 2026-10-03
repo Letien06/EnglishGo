@@ -34,13 +34,13 @@ describe("new vocabulary modes integrate with results", () => {
     vi.stubGlobal("fetch", vi.fn());
     render(<FlashcardGame session={session} initialMode="blast" practiceOptions={[]} reviewMode={false} isAuthenticated={false} loginHref="/login" />);
     await screen.findByRole("button", { name: "Bắt đầu chơi" });
-    fireEvent.click(screen.getByRole("tab", { name: "Xem từ" }));
+    fireEvent.click(screen.getByRole("tab", { name: /xem từ/i }));
     expect(screen.getByRole("dialog", { name: "Rời phiên hiện tại?" })).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "Ở lại học tiếp" }));
     expect(screen.getByRole("button", { name: "Bắt đầu chơi" })).toBeInTheDocument();
-    fireEvent.click(screen.getByRole("tab", { name: "Xem từ" }));
+    fireEvent.click(screen.getByRole("tab", { name: /xem từ/i }));
     fireEvent.click(screen.getByRole("button", { name: "Rời phiên" }));
-    expect(screen.getByRole("tab", { name: "Xem từ" })).toHaveAttribute("aria-selected", "true");
+    expect(screen.getByRole("tab", { name: /xem từ/i })).toHaveAttribute("aria-selected", "true");
     expect(fetch).not.toHaveBeenCalled();
   });
 });
