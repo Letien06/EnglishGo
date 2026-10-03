@@ -263,13 +263,14 @@ export const submitAnswer = async (
     // Determine points and lives
     let points = 0;
     let newCombo = 0;
-    let newLives = player.lives;
+    const currentLives = typeof player.lives === "number" ? player.lives : 3;
+    let newLives = currentLives;
 
     if (correct) {
       newCombo = (player.combo || 0) + 1;
       points = 15 + Math.min(newCombo * 2, 10);
     } else {
-      newLives = Math.max(0, player.lives - 1);
+      newLives = Math.max(0, currentLives - 1);
       newCombo = 0;
     }
 
