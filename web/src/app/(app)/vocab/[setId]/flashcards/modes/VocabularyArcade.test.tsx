@@ -2,11 +2,74 @@ import { act, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import VocabularyArcade from "./VocabularyArcade";
 
-vi.mock("../useVocabularyAudio", () => ({ default: () => ({ speakWord: vi.fn(), stop: vi.fn() }) }));
+const vocabularyAudio = vi.hoisted(() => ({ speakWord: vi.fn(), stop: vi.fn() }));
+vi.mock("../useVocabularyAudio", () => ({ default: () => vocabularyAudio }));
 const words = [{ id: 1, word: "carry", meaning: "mang theo", mastered: false }];
-afterEach(() => { vi.useRealTimers(); vi.unstubAllGlobals(); });
+afterEach(() => { vi.useRealTimers(); vi.unstubAllGlobals(); vi.clearAllMocks(); });
+
+function mockSoundContext() {
+  const oscillator = {
+    type: "",
+    connect: vi.fn(),
+    frequency: { setValueAtTime: vi.fn(), linearRampToValueAtTime: vi.fn() },
+    start: vi.fn(),
+    stop: vi.fn(),
+    onended: null as (() => void) | null,
+  };
+  const gain = {
+    connect: vi.fn(),
+    gain: { setValueAtTime: vi.fn(), linearRampToValueAtTime: vi.fn() },
+  };
+  const context = {
+    currentTime: 0,
+    destination: {},
+    createOscillator: vi.fn(() => oscillator),
+    createGain: vi.fn(() => gain),
+    close: vi.fn().mockResolvedValue(undefined),
+  };
+  vi.stubGlobal("AudioContext", vi.fn(function () { return context; }));
+  return { context, oscillator };
+}
 
 describe("arcade interaction", () => {
+  it("plays a celebration chime without pronouncing a correct Word Blast answer", () => {
+    vi.useFakeTimers();
+    const { context, oscillator } = mockSoundContext();
+    render(<VocabularyArcade words={words} mode="blast" muted={false} onComplete={vi.fn()} onExit={vi.fn()} />);
+    fireEvent.click(screen.getByRole("button", { name: "Bắt đầu chơi" }));
+    expect(screen.getByRole("button", { name: "Tắt âm thanh" })).toHaveAttribute("aria-pressed", "true");
+    fireEvent.click(screen.getByRole("button", { name: /carry/i }));
+    act(() => vi.advanceTimersByTime(500));
+    expect(oscillator.type).toBe("sine");
+    expect(oscillator.frequency.setValueAtTime.mock.calls).toEqual([[523, 0], [659, 0.1], [784, 0.2]]);
+    expect(oscillator.start).toHaveBeenCalledTimes(1);
+    expect(oscillator.stop).toHaveBeenCalledWith(0.35);
+    expect(vocabularyAudio.speakWord).not.toHaveBeenCalled();
+    oscillator.onended?.();
+    expect(context.close).toHaveBeenCalledTimes(1);
+  });
+  it("keeps muted Word Blast hits silent and does not replay them when unmuted", () => {
+    vi.useFakeTimers();
+    const { context } = mockSoundContext();
+    render(<VocabularyArcade words={words} mode="blast" muted onComplete={vi.fn()} onExit={vi.fn()} />);
+    fireEvent.click(screen.getByRole("button", { name: "Bắt đầu chơi" }));
+    fireEvent.click(screen.getByRole("button", { name: /carry/i }));
+    act(() => vi.advanceTimersByTime(500));
+    expect(context.createOscillator).not.toHaveBeenCalled();
+    fireEvent.click(screen.getByRole("button", { name: "Bật âm thanh" }));
+    act(() => vi.advanceTimersByTime(500));
+    expect(context.createOscillator).not.toHaveBeenCalled();
+    expect(vocabularyAudio.speakWord).not.toHaveBeenCalled();
+  });
+  it("preserves automatic pronunciation for Vocabulary Rain", () => {
+    vi.useFakeTimers();
+    mockSoundContext();
+    render(<VocabularyArcade words={words} mode="rain" muted={false} onComplete={vi.fn()} onExit={vi.fn()} />);
+    fireEvent.click(screen.getByRole("button", { name: "Bắt đầu chơi" }));
+    fireEvent.change(screen.getByRole("textbox", { name: "Từ tiếng Anh" }), { target: { value: "carry" } });
+    act(() => vi.advanceTimersByTime(500));
+    expect(vocabularyAudio.speakWord).toHaveBeenCalledExactlyOnceWith(words[0]);
+  });
   it("shows simultaneous rain drops, matches typed prefixes, and auto-catches a complete answer", () => {
     vi.useFakeTimers();
     const pool = [...words, { id: 2, word: "office", meaning: "văn phòng", mastered: false }, { id: 3, word: "invoice", meaning: "hóa đơn", mastered: false }];

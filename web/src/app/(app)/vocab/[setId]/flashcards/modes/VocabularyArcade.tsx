@@ -19,7 +19,8 @@ export default function VocabularyArcade({ words, mode, muted, suspended = false
   const [untimed, setUntimed] = useState(false);
   const [quiet, setQuiet] = useState(muted);
   const title = mode === "blast" ? "Word Blast" : "Mưa từ vựng";
-  if (initialState) return <div className="space-y-3"><div className="flex justify-end"><button className={styles.button} aria-pressed={!quiet} onClick={() => setQuiet(!quiet)}>{quiet ? "Bật phát âm" : "Tắt phát âm"}</button></div>{mode === "rain" ? <VocabularyRain initialState={initialState} muted={quiet} suspended={suspended} onComplete={onComplete} onExit={onExit} /> : <ArcadeRound initialState={initialState} muted={quiet} suspended={suspended} onComplete={onComplete} onExit={onExit} />}</div>;
+  const soundLabel = mode === "blast" ? "âm thanh" : "phát âm";
+  if (initialState) return <div className="space-y-3"><div className="flex justify-end"><button className={styles.button} aria-pressed={!quiet} onClick={() => setQuiet(!quiet)}>{quiet ? `Bật ${soundLabel}` : `Tắt ${soundLabel}`}</button></div>{mode === "rain" ? <VocabularyRain initialState={initialState} muted={quiet} suspended={suspended} onComplete={onComplete} onExit={onExit} /> : <ArcadeRound initialState={initialState} muted={quiet} suspended={suspended} onComplete={onComplete} onExit={onExit} />}</div>;
   const count = Math.min(20, arcadeWords(words).length);
   return <section className={`${styles.hero} space-y-5`}>
     <span className={styles.eyebrow}>Góc luyện phản xạ · chơi một mình</span>
@@ -128,18 +129,13 @@ function ArcadeRound({ initialState, muted, suspended, onComplete, onExit }: {
     return () => cancelAnimationFrame(rafId);
   }, [state.paused, state.phase, state.mode, state.index, suspended]);
 
-  // ---- Sound effects: play success + pronunciation on correct, fail buzzer on wrong ----
   const prevAnswerCount = useRef(state.answers.length);
   useEffect(() => {
     if (state.answers.length > prevAnswerCount.current) {
       const latest = state.answers[state.answers.length - 1];
       if (!muted) {
         if (latest.correct) {
-          // Play success chime, then pronunciation after short delay
           playSuccessSound();
-          const timer = window.setTimeout(() => speakWord(latest.item), 200);
-          prevAnswerCount.current = state.answers.length;
-          return () => window.clearTimeout(timer);
         } else {
           // Play fail buzzer
           playFailSound();
@@ -147,7 +143,7 @@ function ArcadeRound({ initialState, muted, suspended, onComplete, onExit }: {
       }
     }
     prevAnswerCount.current = state.answers.length;
-  }, [state.answers, muted, speakWord]);
+  }, [state.answers, muted]);
 
   // Auto-advance after feedback
   useEffect(() => {
