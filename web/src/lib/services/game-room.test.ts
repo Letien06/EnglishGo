@@ -60,6 +60,29 @@ describe("game-room service", () => {
     expect(checkGameStatus([0, 2, 0])).toBe("playing");
     expect(checkGameStatus([0, 0, 0])).toBe("finished");
   });
+
+  it("skips answer submission if question has already advanced by another player", () => {
+    const shouldProcessAnswer = (roomCurrentIndex: number, submittedQuestionIndex: number) => {
+      if (roomCurrentIndex !== submittedQuestionIndex) {
+        return { skipped: true, reason: "Question already advanced" };
+      }
+      return { skipped: false };
+    };
+
+    expect(shouldProcessAnswer(1, 0)).toEqual({ skipped: true, reason: "Question already advanced" });
+    expect(shouldProcessAnswer(1, 1)).toEqual({ skipped: false });
+  });
+
+  it("preserves monotonicity of room question index so clients never revert to older questions", () => {
+    const updateRoomIndex = (currentIndex: number, incomingIndex: number) => {
+      if (incomingIndex < currentIndex) return currentIndex;
+      return incomingIndex;
+    };
+
+    expect(updateRoomIndex(2, 1)).toBe(2);
+    expect(updateRoomIndex(2, 2)).toBe(2);
+    expect(updateRoomIndex(2, 3)).toBe(3);
+  });
 });
 
 

@@ -1633,7 +1633,7 @@ function PlaySurface({
         isAuthenticated={isAuthenticated}
         currentUserId={currentUserId}
         loginHref={loginHref}
-        enableMultiplayer={true}
+        enableMultiplayer={Boolean(isAuthenticated)}
         onComplete={completeLocalRound}
         onExit={onExit}
       />

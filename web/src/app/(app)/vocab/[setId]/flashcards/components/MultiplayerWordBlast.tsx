@@ -121,12 +121,26 @@ export function MultiplayerWordBlast({
   const [feedback, setFeedback] = useState<{ message: string; tone: "correct" | "wrong" } | null>(null);
 
   const [myUid, setMyUid] = useState<string>(currentUserId);
+  const [winnerNotice, setWinnerNotice] = useState<{ displayName: string; points: number } | null>(null);
 
   useEffect(() => {
     if (currentUserId && currentUserId !== myUid) {
       setMyUid(currentUserId);
     }
   }, [currentUserId]);
+
+  useEffect(() => {
+    if (room.lastWinner) {
+      setWinnerNotice({
+        displayName: room.lastWinner.displayName,
+        points: room.lastWinner.points,
+      });
+      const timer = window.setTimeout(() => {
+        setWinnerNotice(null);
+      }, 3500);
+      return () => window.clearTimeout(timer);
+    }
+  }, [room.currentIndex, room.lastWinner?.uid, room.lastWinner?.points]);
 
   const { speakWord } = useVocabularyAudio();
   const QUESTION_DURATION = 14; // 14 seconds per question
@@ -146,7 +160,12 @@ export function MultiplayerWordBlast({
         roomRef,
         (snap) => {
           if (snap.exists()) {
-            setRoom(snap.data() as GameRoomData);
+            const data = snap.data() as GameRoomData;
+            setRoom((prev) => {
+              // Never revert back to an older question index
+              if ((data.currentIndex ?? 0) < (prev.currentIndex ?? 0)) return prev;
+              return data;
+            });
           }
         },
         () => {
@@ -169,21 +188,26 @@ export function MultiplayerWordBlast({
       /* Handled by polling fallback */
     }
 
-    // Polling fallback every 1200ms
+    // Polling fallback every 400ms for instant real-time sync across players
     const pollTimer = window.setInterval(async () => {
       try {
         const res = await fetch(`/api/vocab/game-room?code=${roomCode}`);
         if (!res.ok) return;
         const json = await res.json();
         if (json.success && json.data) {
-          if (json.data.room) setRoom(json.data.room);
+          if (json.data.room) {
+            setRoom((prev) => {
+              if ((json.data.room.currentIndex ?? 0) < (prev.currentIndex ?? 0)) return prev;
+              return json.data.room;
+            });
+          }
           if (json.data.players) setPlayers(json.data.players);
           if (json.data.currentUserId && !myUid) setMyUid(json.data.currentUserId);
         }
       } catch {
         /* Ignore transient poll errors */
       }
-    }, 1200);
+    }, 400);
 
     return () => {
       if (unsubRoom) unsubRoom();
@@ -224,8 +248,9 @@ export function MultiplayerWordBlast({
     const interval = window.setInterval(() => {
       setTimeLeft((prev) => {
         if (prev <= 1) {
-          // Question expired: auto advance if host
-          if (players.find((p) => p.uid === myUid)?.isHost) {
+          // Question expired: host advances immediately; any player acts as fallback
+          const isHost = players.find((p) => p.uid === myUid)?.isHost;
+          if (isHost || prev <= 0) {
             fetch("/api/vocab/game-room/next", {
               method: "POST",
               headers: { "Content-Type": "application/json" },
@@ -274,6 +299,15 @@ export function MultiplayerWordBlast({
     if (isCorrect) {
       setHasAnswered(true);
       setFeedback({ message: "CHÍNH XÁC! 🎯 CƯỚP ĐIỂM THÀNH CÔNG!", tone: "correct" });
+      const targetUid = me?.uid || myUid;
+      const pointsEarned = 15 + Math.min(((me?.combo || 0) + 1) * 2, 10);
+      setPlayers((prev) =>
+        prev.map((p) =>
+          p.uid === targetUid
+            ? { ...p, score: (p.score || 0) + pointsEarned, combo: (p.combo || 0) + 1 }
+            : p
+        )
+      );
       if (!soundQuiet) {
         playSuccessSound();
         window.setTimeout(() => speakWord(currentWord), 200);
@@ -310,16 +344,30 @@ export function MultiplayerWordBlast({
       });
       const json = await res.json();
       if (json.success && json.data) {
-        if (json.data.advanced || json.data.nextIndex !== undefined) {
+        if (json.data.advanced || (json.data.nextIndex !== undefined && json.data.nextIndex !== currentIndex)) {
           setRoom((prev) => ({
             ...prev,
             currentIndex: json.data.nextIndex,
-            status: json.data.status,
+            status: json.data.status || prev.status,
+            lastWinner: json.data.lastWinner || prev.lastWinner,
           }));
         }
         if (json.data.status === "finished") {
           setRoom((prev) => ({ ...prev, status: "finished" }));
         }
+
+        // Fast re-poll to ensure all players & scores are in exact sync
+        fetch(`/api/vocab/game-room?code=${roomCode}`)
+          .then((r) => r.json())
+          .then((d) => {
+            if (d.success && d.data) {
+              if (d.data.room) {
+                setRoom((prev) => (d.data.room.currentIndex < (prev.currentIndex ?? 0) ? prev : d.data.room));
+              }
+              if (d.data.players) setPlayers(d.data.players);
+            }
+          })
+          .catch(() => {});
       }
     } catch (err) {
       console.error("Failed to submit answer", err);
@@ -459,11 +507,11 @@ export function MultiplayerWordBlast({
       <div className={styles.blastArena} style={{ minHeight: "440px" }}>
         {/* Vietnamese Meaning Prompt */}
         <div className="flex flex-col items-center justify-center p-6 text-center select-none">
-          {room.lastWinner && (
+          {winnerNotice && (
             <div className="mb-3 bg-amber-50 border border-amber-300 text-amber-900 px-4 py-1.5 rounded-full text-xs font-bold shadow-sm flex items-center gap-1.5 animate-pulse">
               <span>⚡</span>
               <span>
-                {room.lastWinner.displayName} vừa cướp điểm thành công (+{room.lastWinner.points}đ)! Đang ở câu tiếp theo.
+                {winnerNotice.displayName} vừa cướp điểm thành công (+{winnerNotice.points}đ)! Đang ở câu tiếp theo.
               </span>
             </div>
           )}

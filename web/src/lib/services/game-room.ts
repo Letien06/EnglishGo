@@ -242,6 +242,9 @@ export const submitAnswer = async (
     const player = playerDoc.data()!;
     if (player.lives <= 0) return { skipped: true, reason: "Player has no lives left" };
 
+    // READ 3: All reads must be executed before ANY writes in a Firestore transaction!
+    const playersSnapshot = await transaction.get(roomRef.collection("players"));
+
     const questionAnswers: Record<string, { uid: string; correct: boolean; time: number }> =
       room.questionAnswers || {};
 
@@ -264,6 +267,7 @@ export const submitAnswer = async (
 
     questionAnswers[user.uid] = { uid: user.uid, correct, time: Date.now() };
 
+    // ALL WRITES START HERE:
     transaction.update(playerRef, {
       score: (player.score || 0) + points,
       lives: newLives,
@@ -278,8 +282,6 @@ export const submitAnswer = async (
       }),
     });
 
-    const playersSnapshot = await transaction.get(roomRef.collection("players"));
-
     // 1. If correct: IMMEDIATELY advance to next question (first to answer snatches the point!)
     if (correct) {
       let nextIndex = room.currentIndex;
@@ -291,17 +293,20 @@ export const submitAnswer = async (
         nextIndex = room.currentIndex + 1;
       }
 
+      const winnerInfo = {
+        uid: user.uid,
+        displayName: player.displayName || user.displayName || "Người chơi",
+        word: selected,
+        points,
+        at: Date.now(),
+      };
+
       transaction.update(roomRef, {
         currentIndex: nextIndex,
         status: newStatus,
         roundStartedAt: Date.now(),
         questionAnswers: {},
-        lastWinner: {
-          uid: user.uid,
-          displayName: player.displayName,
-          word: selected,
-          points,
-        },
+        lastWinner: winnerInfo,
       });
 
       return {
@@ -311,6 +316,7 @@ export const submitAnswer = async (
         advanced: true,
         nextIndex,
         status: newStatus,
+        lastWinner: winnerInfo,
       };
     }
 
@@ -359,6 +365,7 @@ export const submitAnswer = async (
         status: newStatus,
         roundStartedAt: Date.now(),
         questionAnswers: {},
+        lastWinner: null,
       });
     } else {
       transaction.update(roomRef, {
