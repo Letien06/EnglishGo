@@ -8,11 +8,15 @@ export interface RainState {
   nextSpawn: number; paused: boolean; untimed: boolean; lives: number;
   score: number; combo: number; answers: VocabularyRoundAnswer[];
   notice: string; lastCorrect: boolean; done: boolean;
+  /** The most recently dropped (missed) word, shown in the answer bar. */
+  droppedWord: VocabWordCard | null;
+  /** Maximum combo achieved during the round. */
+  maxCombo: number;
 }
 export type RainAction = { type: "tick"; delta: number } | { type: "pause"; paused: boolean } | { type: "answer"; value: string };
 
 export function createRainState(words: VocabWordCard[], untimed = false): RainState {
-  return { words, drops: words.length ? [{ index: 0, lane: 0, born: 0 }] : [], nextIndex: Math.min(1, words.length), time: 0, nextSpawn: 3_800, paused: false, untimed, lives: 3, score: 0, combo: 0, answers: [], notice: "", lastCorrect: false, done: !words.length };
+  return { words, drops: words.length ? [{ index: 0, lane: 0, born: 0 }] : [], nextIndex: Math.min(1, words.length), time: 0, nextSpawn: 3_800, paused: false, untimed, lives: 3, score: 0, combo: 0, answers: [], notice: "", lastCorrect: false, done: !words.length, droppedWord: null, maxCombo: 0 };
 }
 
 export function rainFraction(state: RainState, drop: RainDrop) {
@@ -39,7 +43,8 @@ export function rainReducer(state: RainState, action: RainAction): RainState {
     if (!drop) return { ...state, notice: "Chưa khớp, thử lại nhé.", lastCorrect: false };
     const word = state.words[drop.index];
     const points = arcadePoints("rain", rainFraction(state, drop), state.combo);
-    return replenish({ ...state, drops: state.drops.filter((entry) => entry !== drop), score: state.score + points, combo: state.combo + 1, notice: `Chính xác! ${word.word} · +${points} điểm`, lastCorrect: true, answers: [...state.answers, { item: word, correct: true, selected: action.value, expected: word.word }] });
+    const newCombo = state.combo + 1;
+    return replenish({ ...state, drops: state.drops.filter((entry) => entry !== drop), score: state.score + points, combo: newCombo, maxCombo: Math.max(state.maxCombo, newCombo), notice: `Chính xác! ${word.word} · +${points} điểm`, lastCorrect: true, droppedWord: null, answers: [...state.answers, { item: word, correct: true, selected: action.value, expected: word.word }] });
   }
   if (state.untimed || !Number.isFinite(action.delta) || action.delta <= 0) return state;
   const targetTime = state.time + action.delta;
@@ -52,7 +57,7 @@ export function rainReducer(state: RainState, action: RainAction): RainState {
     for (const drop of next.drops.filter((entry) => entry.born + arcadeDuration(entry.index) <= time)) {
       if (!next.lives) break;
       const word = next.words[drop.index];
-      next = { ...next, lives: next.lives - 1, combo: 0, lastCorrect: false, notice: `Để lọt: ${word.word} — ${word.meaning}`, drops: next.drops.filter((entry) => entry !== drop), answers: [...next.answers, { item: word, correct: false, selected: "Hết giờ", expected: word.word }] };
+      next = { ...next, lives: next.lives - 1, combo: 0, lastCorrect: false, notice: `Để lọt: ${word.word} — ${word.meaning}`, droppedWord: word, drops: next.drops.filter((entry) => entry !== drop), answers: [...next.answers, { item: word, correct: false, selected: "Hết giờ", expected: word.word }] };
     }
     next = replenish(next);
   }

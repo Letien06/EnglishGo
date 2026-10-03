@@ -17,8 +17,8 @@ describe("vocabulary arcade rules", () => {
     expect(arcadeDuration(0)).toBe(18000);
     expect(arcadeDuration(100)).toBe(8000);
     expect(rainHint("carry a bag", 0)).toBe("_____ _ ___");
-    expect(rainHint("carry", 0.5)).toBe("c____");
-    expect(rainHint("carry", 0.8)).toBe("car__");
+    expect(rainHint("carry", 0.5)).toBe("ca___");
+    expect(rainHint("carry", 0.8)).toBe("carr_");
     expect(arcadePoints("rain", 0, 0)).toBe(15);
     expect(arcadePoints("rain", 0.5, 3)).toBe(20);
     expect(arcadePoints("rain", 0.8, 99)).toBe(20);

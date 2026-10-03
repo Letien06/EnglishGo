@@ -7,6 +7,44 @@ import { normalizeVocabularyAnswer } from "@/lib/vocab-content";
 import useVocabularyAudio from "../useVocabularyAudio";
 import styles from "../vocabulary.module.css";
 
+/* ---- Sound effects via Web Audio API ---- */
+function playFailSound() {
+  try {
+    const ctx = new (window.AudioContext || (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext)();
+    const oscillator = ctx.createOscillator();
+    const gain = ctx.createGain();
+    oscillator.connect(gain);
+    gain.connect(ctx.destination);
+    oscillator.type = "square";
+    oscillator.frequency.setValueAtTime(300, ctx.currentTime);
+    oscillator.frequency.linearRampToValueAtTime(100, ctx.currentTime + 0.3);
+    gain.gain.setValueAtTime(0.15, ctx.currentTime);
+    gain.gain.linearRampToValueAtTime(0, ctx.currentTime + 0.35);
+    oscillator.start(ctx.currentTime);
+    oscillator.stop(ctx.currentTime + 0.35);
+    oscillator.onended = () => ctx.close();
+  } catch { /* audio not available */ }
+}
+
+function playSuccessSound() {
+  try {
+    const ctx = new (window.AudioContext || (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext)();
+    const oscillator = ctx.createOscillator();
+    const gain = ctx.createGain();
+    oscillator.connect(gain);
+    gain.connect(ctx.destination);
+    oscillator.type = "sine";
+    oscillator.frequency.setValueAtTime(523, ctx.currentTime);
+    oscillator.frequency.setValueAtTime(659, ctx.currentTime + 0.1);
+    oscillator.frequency.setValueAtTime(784, ctx.currentTime + 0.2);
+    gain.gain.setValueAtTime(0.12, ctx.currentTime);
+    gain.gain.linearRampToValueAtTime(0, ctx.currentTime + 0.35);
+    oscillator.start(ctx.currentTime);
+    oscillator.stop(ctx.currentTime + 0.35);
+    oscillator.onended = () => ctx.close();
+  } catch { /* audio not available */ }
+}
+
 export default function VocabularyRain({ initialState, muted, suspended, onComplete, onExit }: {
   initialState: ArcadeState; muted: boolean; suspended: boolean;
   onComplete: (result: VocabularyRoundResult) => void; onExit: () => void;
@@ -17,10 +55,31 @@ export default function VocabularyRain({ initialState, muted, suspended, onCompl
   const completed = useRef(false);
   const { speakWord, stop } = useVocabularyAudio();
   const paused = state.paused || suspended;
-  const latest = state.answers.at(-1);
+
+  // Track answer count for sound effects
+  const prevAnswerCount = useRef(state.answers.length);
   useEffect(() => {
-    if (latest && !muted) speakWord(latest.item);
-  }, [latest, muted, speakWord]);
+    if (state.answers.length > prevAnswerCount.current) {
+      const latest = state.answers[state.answers.length - 1];
+      if (!muted) {
+        if (latest.correct) {
+          playSuccessSound();
+          // Small delay before pronunciation so SFX plays first
+          const timer = window.setTimeout(() => speakWord(latest.item), 200);
+          prevAnswerCount.current = state.answers.length;
+          return () => window.clearTimeout(timer);
+        } else {
+          playFailSound();
+          // Pronounce the missed word after fail sound
+          const timer = window.setTimeout(() => speakWord(latest.item), 400);
+          prevAnswerCount.current = state.answers.length;
+          return () => window.clearTimeout(timer);
+        }
+      }
+    }
+    prevAnswerCount.current = state.answers.length;
+  }, [state.answers, muted, speakWord]);
+
   useEffect(() => {
     function hide() { if (document.hidden) { dispatch({ type: "pause", paused: true }); stop(); } }
     document.addEventListener("visibilitychange", hide);
@@ -46,12 +105,63 @@ export default function VocabularyRain({ initialState, muted, suspended, onCompl
     setTyped(matched ? "" : value);
   }
 
+  // ---- Game Over screen (like dauenglish) ----
+  if (state.done) {
+    const correctCount = state.answers.filter((a) => a.correct).length;
+    const total = state.answers.length;
+    const droppedWords = state.answers.filter((a) => !a.correct);
+    const accuracy = total ? Math.round((correctCount / total) * 100) : 0;
+    return <section className={styles.arcadeRound} aria-label="Kết quả mưa từ vựng">
+      <div className={styles.rainArena}>
+        <div className={styles.rainGameOver}>
+          <div className={styles.rainGameOverIcon} aria-hidden="true">🌧️</div>
+          <h2 className={styles.rainGameOverTitle}>{state.lives ? "Bắt từ rất tốt!" : "Hết mạng rồi!"}</h2>
+          <p className={styles.rainGameOverSubtitle}>Mưa từ vựng · {total}/{state.words.length} từ</p>
+
+          <div className={styles.rainGameOverStats}>
+            <div className={styles.rainGameOverStat}>
+              <strong>{state.score}</strong>
+              <small>Điểm</small>
+            </div>
+            <div className={styles.rainGameOverStat}>
+              <strong>Từ đúng ({accuracy}%)</strong>
+              <small>{correctCount} từ</small>
+            </div>
+            <div className={styles.rainGameOverStat}>
+              <strong>Combo cao nhất</strong>
+              <small>x{Math.max(1, state.maxCombo)}</small>
+            </div>
+          </div>
+
+          {droppedWords.length > 0 && <>
+            <h3 className={styles.rainGameOverReviewTitle}>Từ để lọt ({droppedWords.length})</h3>
+            <div className={styles.rainGameOverWordList}>
+              {droppedWords.map((a, i) => (
+                <div key={`${a.item.id}-${i}`} className={styles.rainGameOverWordRow}>
+                  <button type="button" className={styles.rainSpeakBtn} onClick={() => speakWord(a.item)} aria-label={`Nghe ${a.item.word}`}>🔊</button>
+                  <strong>{a.item.word}</strong>
+                  <span>{a.item.meaning}</span>
+                </div>
+              ))}
+            </div>
+          </>}
+
+          <div className={styles.rainGameOverActions}>
+            <button className={`${styles.button} ${styles.primary}`} onClick={() => window.location.reload()}>↻ Chơi lại</button>
+            <button className={styles.button} disabled={suspended} onClick={() => { if (!completed.current) { completed.current = true; stop(); onComplete({ answers: state.answers, score: state.score }); } }}>Xem kết quả</button>
+            <button className={styles.button} onClick={onExit}>≡ Về danh sách trò chơi</button>
+          </div>
+        </div>
+      </div>
+    </section>;
+  }
+
   return <section className={styles.arcadeRound} aria-label="Mưa từ vựng">
     <header className={styles.toolbar}><div><span className={styles.eyebrow}>GÕ NHANH · NHỚ LÂU</span><h2 className="text-xl font-bold text-ink">Mưa từ vựng</h2></div><div className="flex gap-2"><button className={styles.button} disabled={state.done || suspended} onClick={() => dispatch({ type: "pause", paused: !state.paused })}>{state.paused ? "Tiếp tục chơi" : "Tạm dừng"}</button><button className={styles.button} onClick={onExit}>Thoát</button></div></header>
     <div className={styles.rainArena}>
-      <div className={styles.scoreboard}><span className={styles.hearts} aria-label={`Còn ${state.lives} mạng`}>{"♥".repeat(state.lives)}<span>{"♡".repeat(3 - state.lives)}</span></span><span>{state.answers.length}/{state.words.length} từ · Mốc {Math.min(10, Math.floor(state.answers.length / 2) + 1)}</span><strong>{state.score} điểm · x{Math.min(4, 1 + Math.floor(state.combo / 3))}</strong></div>
+      <div className={styles.scoreboard}><span className={styles.hearts} aria-label={`Còn ${state.lives} mạng`}>{"♥".repeat(state.lives)}<span>{"♡".repeat(3 - state.lives)}</span></span><span>Mốc {Math.min(10, Math.floor(state.answers.length / 2) + 1)}/{Math.min(10, Math.ceil(state.words.length / 2))}</span><strong>{state.score} điểm · x{Math.min(4, 1 + Math.floor(state.combo / 3))}</strong></div>
       <div className={styles.rainField} data-paused={paused}>
-        {!state.done && state.drops.map((drop) => {
+        {state.drops.map((drop) => {
           const word = state.words[drop.index];
           const fraction = rainFraction(state, drop);
           const prefix = normalizeVocabularyAnswer(typed);
@@ -61,14 +171,19 @@ export default function VocabularyRain({ initialState, muted, suspended, onCompl
         })}
         <div className={styles.ground} />
         {paused && <div className={styles.pause}><h3 className="text-2xl font-bold">Đã tạm dừng</h3><p>Thời gian và mạng được giữ nguyên.</p><button className={`${styles.button} ${styles.primary}`} disabled={suspended} onClick={() => dispatch({ type: "pause", paused: false })}>Tiếp tục chơi</button></div>}
-        {state.done && <div className={styles.pause}><span className={styles.eyebrow}>HOÀN THÀNH LƯỢT CHƠI</span><h3 className="text-2xl font-bold">{state.lives ? "Bắt từ rất tốt!" : "Hết mạng rồi. Thử lại nhé!"}</h3><p>{state.score} điểm · {state.answers.filter((answer) => answer.correct).length} từ đúng</p><button className={`${styles.button} ${styles.primary}`} disabled={suspended} onClick={() => { if (!completed.current) { completed.current = true; stop(); onComplete({ answers: state.answers, score: state.score }); } }}>Xem kết quả</button></div>}
       </div>
+      {/* Answer bar — shows the most recently dropped or correctly answered word */}
+      {state.droppedWord && <div className={styles.rainAnswerBar} data-correct={false}>
+        <button type="button" className={styles.rainSpeakBtn} onClick={() => speakWord(state.droppedWord!)} aria-label={`Nghe ${state.droppedWord.word}`}>🔊</button>
+        <span>Đáp án: <strong>{state.droppedWord.word}</strong></span>
+        <span className={styles.rainAnswerMeaning}>{state.droppedWord.meaning}</span>
+      </div>}
     </div>
     <form className={styles.rainInput} onSubmit={(event) => { event.preventDefault(); submit(typed); }}>
       <input ref={input} className={styles.input} aria-label="Từ tiếng Anh" placeholder="Gõ từ tiếng Anh của nghĩa đang rơi..." value={typed} disabled={paused || state.done} autoComplete="off" autoCapitalize="none" spellCheck={false} onChange={(event) => { if ((event.nativeEvent as InputEvent).isComposing) setTyped(event.target.value); else submit(event.target.value, true); }} onKeyDown={(event) => { if (event.key === "Escape") setTyped(""); }} />
       <button className={`${styles.button} ${styles.primary}`} disabled={!typed.trim() || paused || state.done}>Gửi</button>
     </form>
-    <p className={styles.arcadeHelp}>Tự bắt khi gõ đúng · Enter để kiểm tra · Esc để xóa · {state.untimed ? "Không giới hạn thời gian" : "Tối đa 2 từ rơi cùng lúc"}</p>
-    <div className={state.lastCorrect ? styles.success : styles.details} role="status">{state.notice || "Nhìn nghĩa, gõ từ tiếng Anh. Bạn làm được!"}</div>
+    <p className={styles.arcadeHelp}>Nhấn Enter để bắt đầu · Esc xoá chữ đang gõ · {state.untimed ? "Không giới hạn thời gian" : "Tối đa 2 từ rơi cùng lúc"}</p>
+    {state.notice && <div className={state.lastCorrect ? styles.success : styles.error} role="status"><p>{state.notice}</p></div>}
   </section>;
 }

@@ -143,6 +143,27 @@
 .hearts span { color: var(--muted); }
 .rainInput { display: flex; gap: 8px; }
 .rainInput input { min-width: 0; font-size: 16px; }
+/* ---- Rain answer bar (shows dropped word at bottom of arena) ---- */
+.rainAnswerBar { display: flex; align-items: center; gap: 10px; padding: 10px 16px; border-top: 2px solid var(--danger-line); background: var(--danger-soft); color: var(--ink); font-size: 14px; font-weight: 600; }
+.rainAnswerBar strong { font-weight: 800; font-family: monospace; letter-spacing: .04em; }
+.rainAnswerMeaning { margin-left: auto; color: var(--muted); font-weight: 400; font-size: 13px; }
+.rainSpeakBtn { display: inline-flex; align-items: center; justify-content: center; width: 34px; height: 34px; border-radius: 8px; background: var(--surface-soft); border: 1px solid var(--line); font-size: 16px; cursor: pointer; flex-shrink: 0; }
+.rainSpeakBtn:hover { background: var(--primary-soft); border-color: var(--primary); }
+/* ---- Rain game over ---- */
+.rainGameOver { display: flex; flex-direction: column; align-items: center; gap: 16px; padding: 40px 24px; text-align: center; }
+.rainGameOverIcon { font-size: 48px; margin-bottom: -8px; }
+.rainGameOverTitle { font-size: clamp(22px, 4vw, 32px); font-weight: 800; color: var(--ink); }
+.rainGameOverSubtitle { font-size: 13px; color: var(--muted); font-weight: 600; }
+.rainGameOverStats { display: flex; gap: 14px; flex-wrap: wrap; justify-content: center; margin-block: 6px; }
+.rainGameOverStat { display: flex; flex-direction: column; align-items: center; gap: 2px; min-width: 100px; padding: 14px 16px; border: 1px solid var(--line); border-radius: 14px; background: var(--surface-soft); }
+.rainGameOverStat strong { font-size: 20px; font-weight: 800; color: var(--ink); font-variant-numeric: tabular-nums; }
+.rainGameOverStat small { font-size: 11px; color: var(--muted); font-weight: 600; }
+.rainGameOverReviewTitle { font-size: 14px; color: var(--muted); font-weight: 700; margin-top: 6px; }
+.rainGameOverWordList { display: grid; gap: 4px; width: 100%; max-width: 500px; max-height: 220px; overflow-y: auto; }
+.rainGameOverWordRow { display: grid; grid-template-columns: auto 1fr 1fr; align-items: center; gap: 10px; padding: 10px 14px; border-radius: 10px; background: var(--surface); border: 1px solid var(--line); text-align: left; font-size: 14px; }
+.rainGameOverWordRow strong { color: var(--ink); font-weight: 700; font-family: monospace; letter-spacing: .04em; }
+.rainGameOverWordRow span { color: var(--muted); text-align: right; }
+.rainGameOverActions { display: flex; gap: 10px; flex-wrap: wrap; justify-content: center; margin-top: 8px; }
 .matchGrid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; }
 .matchTile { min-height: 100px; padding: 16px 12px; border: 2px solid var(--warning-line); background: var(--warning-soft); color: var(--warning-ink); border-radius: 14px; font-size: 16px; font-weight: 750; overflow-wrap: anywhere; }
 .matchTile[data-language="vi"] { border-color: var(--info-line); background: var(--info-soft); color: var(--info-ink); }

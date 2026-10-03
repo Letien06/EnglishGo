@@ -56,6 +56,25 @@ function playFailSound() {
   } catch { /* audio not available */ }
 }
 
+function playSuccessSound() {
+  try {
+    const ctx = new (window.AudioContext || (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext)();
+    const oscillator = ctx.createOscillator();
+    const gain = ctx.createGain();
+    oscillator.connect(gain);
+    gain.connect(ctx.destination);
+    oscillator.type = "sine";
+    oscillator.frequency.setValueAtTime(523, ctx.currentTime);
+    oscillator.frequency.setValueAtTime(659, ctx.currentTime + 0.1);
+    oscillator.frequency.setValueAtTime(784, ctx.currentTime + 0.2);
+    gain.gain.setValueAtTime(0.12, ctx.currentTime);
+    gain.gain.linearRampToValueAtTime(0, ctx.currentTime + 0.35);
+    oscillator.start(ctx.currentTime);
+    oscillator.stop(ctx.currentTime + 0.35);
+    oscillator.onended = () => ctx.close();
+  } catch { /* audio not available */ }
+}
+
 function ArcadeRound({ initialState, muted, suspended, onComplete, onExit }: {
   initialState: ArcadeState;
   muted: boolean;
@@ -109,15 +128,18 @@ function ArcadeRound({ initialState, muted, suspended, onComplete, onExit }: {
     return () => cancelAnimationFrame(rafId);
   }, [state.paused, state.phase, state.mode, state.index, suspended]);
 
-  // ---- Sound effects: play fail sound on wrong, pronunciation on correct ----
+  // ---- Sound effects: play success + pronunciation on correct, fail buzzer on wrong ----
   const prevAnswerCount = useRef(state.answers.length);
   useEffect(() => {
     if (state.answers.length > prevAnswerCount.current) {
       const latest = state.answers[state.answers.length - 1];
       if (!muted) {
         if (latest.correct) {
-          // Play pronunciation of the correct word
-          speakWord(latest.item);
+          // Play success chime, then pronunciation after short delay
+          playSuccessSound();
+          const timer = window.setTimeout(() => speakWord(latest.item), 200);
+          prevAnswerCount.current = state.answers.length;
+          return () => window.clearTimeout(timer);
         } else {
           // Play fail buzzer
           playFailSound();

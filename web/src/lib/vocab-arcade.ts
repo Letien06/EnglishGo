@@ -87,7 +87,8 @@ export function arcadeDuration(index: number): number {
 
 export function rainHint(word: string, elapsedFraction: number): string {
   const letters = [...word].filter((letter) => /[\p{L}\p{N}]/u.test(letter)).length;
-  const revealed = elapsedFraction >= 0.7 ? Math.ceil(letters / 2) : elapsedFraction >= 0.4 ? 1 : 0;
+  // Progressive reveal: at 20% show first letter, then linearly reveal up to ~80% of letters at 100%
+  const revealed = elapsedFraction < 0.2 ? 0 : Math.min(letters, Math.floor(1 + (elapsedFraction - 0.2) / 0.8 * (letters * 0.8)));
   let position = 0;
   return [...word].map((letter) => {
     if (!/[\p{L}\p{N}]/u.test(letter)) return letter;

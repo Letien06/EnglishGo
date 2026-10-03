@@ -57,8 +57,8 @@ describe("arcade interaction", () => {
     expect(screen.getByLabelText("Còn 3 mạng")).toBeInTheDocument();
     fireEvent.click(screen.getAllByRole("button", { name: "Tiếp tục chơi" })[0]);
     fireEvent.change(screen.getByRole("textbox", { name: "Từ tiếng Anh" }), { target: { value: " CARRY " } });
-    fireEvent.click(screen.getByRole("button", { name: "Gửi" }));
-    expect(screen.getByRole("status")).toHaveTextContent("Chính xác");
+    // With 1 word, auto-submit catches the answer and the game ends immediately → game over screen shown
+    expect(screen.getByRole("heading", { name: /rất tốt/i })).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "Xem kết quả" }));
     expect(onComplete).toHaveBeenCalledWith({ score: 15, answers: [expect.objectContaining({ correct: true, item: words[0] })] });
     expect(fetcher).not.toHaveBeenCalled();
