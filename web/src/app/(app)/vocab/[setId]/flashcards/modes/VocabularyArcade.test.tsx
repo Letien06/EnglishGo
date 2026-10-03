@@ -140,4 +140,39 @@ describe("arcade interaction", () => {
     render(<VocabularyArcade words={[]} mode="blast" muted onComplete={vi.fn()} onExit={vi.fn()} />);
     expect(screen.getByRole("button", { name: "Bắt đầu chơi" })).toBeDisabled();
   });
+  it("auto-advances to onComplete after answering the final question in Word Blast", () => {
+    vi.useFakeTimers();
+    mockSoundContext();
+    const onComplete = vi.fn();
+    render(<VocabularyArcade words={words} mode="blast" muted onComplete={onComplete} onExit={vi.fn()} />);
+    fireEvent.click(screen.getByRole("button", { name: "Bắt đầu chơi" }));
+    // 1 word in pool, so answering it triggers the final question completion
+    fireEvent.click(screen.getByRole("button", { name: /carry/i }));
+    expect(screen.getByText(/Chính xác/)).toBeInTheDocument();
+    expect(onComplete).not.toHaveBeenCalled();
+
+    // Advance past the 1000ms feedback delay
+    act(() => vi.advanceTimersByTime(1100));
+    expect(onComplete).toHaveBeenCalledTimes(1);
+    expect(onComplete).toHaveBeenCalledWith({
+      score: 10,
+      answers: [expect.objectContaining({ correct: true, item: words[0] })],
+    });
+  });
+  it("displays word limit options for large pools and allows switching", () => {
+    const largePool = Array.from({ length: 80 }, (_, i) => ({
+      id: i + 1,
+      word: `word${i + 1}`,
+      meaning: `meaning ${i + 1}`,
+      mastered: false,
+    }));
+    render(<VocabularyArcade words={largePool} mode="blast" muted onComplete={vi.fn()} onExit={vi.fn()} />);
+    expect(screen.getByText("Tất cả (80 từ)")).toBeInTheDocument();
+    expect(screen.getByText("20 từ (Chơi nhanh)")).toBeInTheDocument();
+    expect(screen.getByText("50 từ")).toBeInTheDocument();
+    expect(screen.getByText(/80 từ mỗi lượt/)).toBeInTheDocument();
+
+    fireEvent.click(screen.getByText("20 từ (Chơi nhanh)"));
+    expect(screen.getByText(/20 từ mỗi lượt/)).toBeInTheDocument();
+  });
 });

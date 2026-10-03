@@ -62,8 +62,20 @@ export default function VocabularyArcade({
   const [initialState, setInitialState] = useState<ArcadeState | null>(null);
   const [untimed, setUntimed] = useState(false);
   const [quiet, setQuiet] = useState(muted);
+  const [wordLimit, setWordLimit] = useState<number | "all">("all");
   const title = mode === "blast" ? "Word Blast" : "Mưa từ vựng";
   const soundLabel = mode === "blast" ? "âm thanh" : "phát âm";
+
+  const startSoloRound = (limit = wordLimit) => {
+    setInitialState(
+      createArcadeState(
+        mode,
+        words,
+        untimed,
+        limit === "all" ? undefined : limit
+      )
+    );
+  };
 
   // Fetch authenticated session user ID only when multiplayer is enabled
   useEffect(() => {
@@ -310,6 +322,7 @@ export default function VocabularyArcade({
             suspended={suspended}
             onComplete={onComplete}
             onExit={onExit}
+            onRestart={() => startSoloRound()}
           />
         ) : (
           <ArcadeRound
@@ -318,13 +331,17 @@ export default function VocabularyArcade({
             suspended={suspended}
             onComplete={onComplete}
             onExit={onExit}
+            onRestart={() => startSoloRound()}
           />
         )}
       </div>
     );
   }
 
-  const count = Math.min(20, arcadeWords(words).length);
+  const availablePool = arcadeWords(words);
+  const totalCount = availablePool.length;
+  const effectiveCount = wordLimit === "all" ? totalCount : Math.min(wordLimit, totalCount);
+
   return (
     <section className={`${styles.hero} space-y-5`}>
       <span className={styles.eyebrow}>Góc luyện phản xạ · chơi một mình</span>
@@ -335,7 +352,7 @@ export default function VocabularyArcade({
           : "Nhiều nghĩa tiếng Việt đang rơi! Gõ đúng từ tiếng Anh để tự bắt lấy. Đúng liên tiếp để tăng combo."}
       </p>
       <ul className="space-y-2 text-sm text-ink2">
-        <li>{count} từ mỗi lượt · 3 mạng · tốc độ tăng sau mỗi 2 từ.</li>
+        <li>{effectiveCount} từ mỗi lượt · 3 mạng · tốc độ tăng sau mỗi 2 từ.</li>
         <li>
           {mode === "blast"
             ? "Chọn sai hoặc để từ chạm vạch: mất 1 mạng."
@@ -348,6 +365,48 @@ export default function VocabularyArcade({
         )}
         <li>Tự tạm dừng khi chuyển tab. Từ sai được giữ trong nhóm cần ôn khi lưu cuối lượt.</li>
       </ul>
+      {totalCount > 20 && (
+        <div className="space-y-2">
+          <span className="text-sm font-semibold text-ink block">Số lượng từ lượt chơi:</span>
+          <div className="flex flex-wrap gap-2">
+            <button
+              type="button"
+              className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-all ${
+                wordLimit === "all"
+                  ? "bg-sky-500 text-white shadow-sm ring-2 ring-sky-300 dark:ring-sky-700"
+                  : "bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700"
+              }`}
+              onClick={() => setWordLimit("all")}
+            >
+              Tất cả ({totalCount} từ)
+            </button>
+            <button
+              type="button"
+              className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-all ${
+                wordLimit === 20
+                  ? "bg-sky-500 text-white shadow-sm ring-2 ring-sky-300 dark:ring-sky-700"
+                  : "bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700"
+              }`}
+              onClick={() => setWordLimit(20)}
+            >
+              20 từ (Chơi nhanh)
+            </button>
+            {totalCount > 50 && (
+              <button
+                type="button"
+                className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-all ${
+                  wordLimit === 50
+                    ? "bg-sky-500 text-white shadow-sm ring-2 ring-sky-300 dark:ring-sky-700"
+                    : "bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700"
+                }`}
+                onClick={() => setWordLimit(50)}
+              >
+                50 từ
+              </button>
+            )}
+          </div>
+        </div>
+      )}
       <label className="flex items-center gap-3 text-sm text-ink">
         <input
           type="checkbox"
@@ -360,8 +419,8 @@ export default function VocabularyArcade({
       <div className="flex flex-wrap gap-3">
         <button
           className={`${styles.button} ${styles.primary}`}
-          disabled={!count}
-          onClick={() => setInitialState(createArcadeState(mode, words, untimed))}
+          disabled={!totalCount}
+          onClick={() => startSoloRound()}
         >
           Bắt đầu chơi
         </button>
@@ -374,7 +433,7 @@ export default function VocabularyArcade({
           Quay lại
         </button>
       </div>
-      {!count && <p role="status">Bộ hiện tại chưa có từ và nghĩa để chơi.</p>}
+      {!totalCount && <p role="status">Bộ hiện tại chưa có từ và nghĩa để chơi.</p>}
     </section>
   );
 }
@@ -417,12 +476,13 @@ function playSuccessSound() {
   } catch { /* audio not available */ }
 }
 
-function ArcadeRound({ initialState, muted, suspended, onComplete, onExit }: {
+function ArcadeRound({ initialState, muted, suspended, onComplete, onExit, onRestart }: {
   initialState: ArcadeState;
   muted: boolean;
   suspended: boolean;
   onComplete: (result: VocabularyRoundResult) => void;
   onExit: () => void;
+  onRestart?: () => void;
 }) {
   const [state, dispatch] = useReducer(arcadeReducer, initialState);
   const [typed, setTyped] = useState("");
@@ -488,10 +548,24 @@ function ArcadeRound({ initialState, muted, suspended, onComplete, onExit }: {
 
   // Auto-advance after feedback
   useEffect(() => {
-    if (suspended || state.paused || state.phase !== "feedback" || done) return;
-    const timer = window.setTimeout(() => { stop(); setTyped(""); setShot(null); dispatch({ type: "next" }); }, state.lastCorrect ? 900 : 2400);
+    if (suspended || state.paused || state.phase !== "feedback") return;
+    if (state.lives <= 0) return; // handled by showGameOver
+    const delay = state.lastCorrect ? 1000 : 2200;
+    const timer = window.setTimeout(() => {
+      stop();
+      if (done) {
+        if (!finished.current) {
+          finished.current = true;
+          onComplete({ answers: state.answers, score: state.score });
+        }
+      } else {
+        setTyped("");
+        setShot(null);
+        dispatch({ type: "next" });
+      }
+    }, delay);
     return () => window.clearTimeout(timer);
-  }, [state.phase, state.paused, state.lastCorrect, state.index, suspended, done, stop]);
+  }, [state.phase, state.paused, state.lastCorrect, state.index, state.lives, suspended, done, stop, onComplete, state.answers, state.score]);
 
   useEffect(() => {
     if (typeof ResizeObserver === "undefined") return;
@@ -560,9 +634,11 @@ function ArcadeRound({ initialState, muted, suspended, onComplete, onExit }: {
 
   function handleRestart() {
     setShowGameOver(false);
-    // Trigger a fresh game by calling onExit, which will reset the state
-    // For restart, we dispatch a complete state reset
-    window.location.reload();
+    if (onRestart) {
+      onRestart();
+    } else {
+      window.location.reload();
+    }
   }
 
   // ---- Game Over overlay ----
@@ -661,7 +737,29 @@ function ArcadeRound({ initialState, muted, suspended, onComplete, onExit }: {
       <input ref={input} className={styles.input} aria-label="Từ tiếng Anh" placeholder="Gõ từ tiếng Anh..." value={typed} disabled={state.paused || state.phase === "feedback"} autoComplete="off" autoCapitalize="none" spellCheck={false} onChange={(event) => setTyped(event.target.value)} onKeyDown={(event) => { if (event.key === "Escape") setTyped(""); }} />
       <button className={`${styles.button} ${styles.primary}`} disabled={!typed.trim() || state.paused || state.phase === "feedback"}>Gửi</button>
     </form>}
-    {state.notice && <div className={state.lastCorrect ? styles.success : styles.error} role="status"><p>{state.notice}</p>{state.phase === "feedback" && <p className="mt-1 text-sm">{word.word} — {word.meaning}</p>}</div>}
-    {state.phase === "feedback" && !showGameOver && <div className="flex flex-wrap gap-2"><button ref={continueButton} className={`${styles.button} ${styles.primary}`} disabled={state.paused} onClick={next}>{done ? "Xem kết quả" : "Từ tiếp theo →"}</button><button className={styles.button} onClick={() => speakWord(word)}>Nghe lại</button></div>}
+    {state.notice && (
+      <div className={state.lastCorrect ? styles.success : styles.error} role="status">
+        <p>
+          {state.notice}
+          {done && state.lives > 0 ? " · Đang mở bảng kết quả..." : ""}
+        </p>
+        {state.phase === "feedback" && <p className="mt-1 text-sm">{word.word} — {word.meaning}</p>}
+      </div>
+    )}
+    {state.phase === "feedback" && !showGameOver && (
+      <div className="flex flex-wrap gap-2">
+        <button
+          ref={continueButton}
+          className={`${styles.button} ${styles.primary}`}
+          disabled={state.paused}
+          onClick={next}
+        >
+          {done ? "Xem kết quả →" : "Từ tiếp theo →"}
+        </button>
+        <button className={styles.button} onClick={() => speakWord(word)}>
+          Nghe lại
+        </button>
+      </div>
+    )}
   </section>;
 }

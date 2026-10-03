@@ -45,9 +45,10 @@ function playSuccessSound() {
   } catch { /* audio not available */ }
 }
 
-export default function VocabularyRain({ initialState, muted, suspended, onComplete, onExit }: {
+export default function VocabularyRain({ initialState, muted, suspended, onComplete, onExit, onRestart }: {
   initialState: ArcadeState; muted: boolean; suspended: boolean;
   onComplete: (result: VocabularyRoundResult) => void; onExit: () => void;
+  onRestart?: () => void;
 }) {
   const [state, dispatch] = useReducer(rainReducer, initialState, (initial) => createRainState(initial.words, initial.untimed));
   const [typed, setTyped] = useState("");
@@ -147,7 +148,7 @@ export default function VocabularyRain({ initialState, muted, suspended, onCompl
           </>}
 
           <div className={styles.rainGameOverActions}>
-            <button className={`${styles.button} ${styles.primary}`} onClick={() => window.location.reload()}>↻ Chơi lại</button>
+            <button className={`${styles.button} ${styles.primary}`} onClick={() => { if (onRestart) onRestart(); else window.location.reload(); }}>↻ Chơi lại</button>
             <button className={styles.button} disabled={suspended} onClick={() => { if (!completed.current) { completed.current = true; stop(); onComplete({ answers: state.answers, score: state.score }); } }}>Xem kết quả</button>
             <button className={styles.button} onClick={onExit}>≡ Về danh sách trò chơi</button>
           </div>

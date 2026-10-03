@@ -62,4 +62,19 @@ describe("vocabulary arcade rules", () => {
     expect(ended.lives).toBe(0);
     expect(createArcadeState("blast", []).words).toEqual([]);
   });
+  it("defaults to using all words in the pool and respects an optional limit", () => {
+    const largePool: VocabWordCard[] = Array.from({ length: 80 }, (_, i) => ({
+      id: i + 1,
+      word: `word${i + 1}`,
+      meaning: `meaning ${i + 1}`,
+      mastered: false,
+    }));
+    const fullState = createArcadeState("blast", largePool);
+    expect(fullState.words).toHaveLength(80);
+    expect(fullState.options).toHaveLength(80);
+
+    const limitedState = createArcadeState("blast", largePool, false, 20);
+    expect(limitedState.words).toHaveLength(20);
+    expect(limitedState.options).toHaveLength(20);
+  });
 });

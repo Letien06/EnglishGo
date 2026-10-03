@@ -123,9 +123,16 @@ export interface ArcadeState {
 
 export type ArcadeAction = { type: "tick"; delta: number } | { type: "answer"; value: string; optionId?: number } | { type: "pause"; paused: boolean } | { type: "next" };
 
-export function createArcadeState(mode: VocabularyArcadeMode, source: VocabWordCard[], untimed = false): ArcadeState {
+export function createArcadeState(
+  mode: VocabularyArcadeMode,
+  source: VocabWordCard[],
+  untimed = false,
+  limit?: number
+): ArcadeState {
   const pool = arcadeWords(source);
-  const words = shuffleVocabulary(pool).slice(0, 20);
+  const words = typeof limit === "number" && limit > 0
+    ? shuffleVocabulary(pool).slice(0, limit)
+    : shuffleVocabulary(pool);
   return { mode, words, options: words.map((word) => blastOptions(word, pool)), index: 0, phase: "playing", paused: false, untimed, elapsed: 0, lives: 3, combo: 0, score: 0, answers: [], disabled: [], notice: "", lastCorrect: false };
 }
 

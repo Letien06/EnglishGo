@@ -1668,7 +1668,7 @@ function PlaySurface({
     setShowResult(true);
   }
 
-  if (mode === "learn") return <ContextLearning words={words.slice(0, 20)} onComplete={completeLocalRound} onExit={onExit} />;
+  if (mode === "learn") return <ContextLearning words={words} onComplete={completeLocalRound} onExit={onExit} />;
   if (mode === "blast" || mode === "rain") {
     return (
       <VocabularyArcade
