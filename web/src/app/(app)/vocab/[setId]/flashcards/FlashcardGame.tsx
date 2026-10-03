@@ -1617,7 +1617,22 @@ function PlaySurface({
   }
 
   if (mode === "learn") return <ContextLearning words={words.slice(0, 20)} onComplete={completeLocalRound} onExit={onExit} />;
-  if (mode === "blast" || mode === "rain") return <VocabularyArcade words={words} mode={mode} muted={muted} suspended={suspended} onComplete={completeLocalRound} onExit={onExit} />;
+  if (mode === "blast" || mode === "rain") {
+    return (
+      <VocabularyArcade
+        words={words}
+        mode={mode}
+        muted={muted}
+        suspended={suspended}
+        setId={setId}
+        isAuthenticated={isAuthenticated}
+        loginHref={loginHref}
+        enableMultiplayer={true}
+        onComplete={completeLocalRound}
+        onExit={onExit}
+      />
+    );
+  }
 
   const progressPercent =
     activeMode === "matching"

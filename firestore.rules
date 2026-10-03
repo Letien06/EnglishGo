@@ -101,6 +101,16 @@ service cloud.firestore {
       }
     }
 
+    match /gameRooms/{code} {
+      allow read: if true;
+      allow write: if false;
+
+      match /players/{uid} {
+        allow read: if true;
+        allow write: if false;
+      }
+    }
+
     match /{document=**} {
       allow read, write: if false;
     }

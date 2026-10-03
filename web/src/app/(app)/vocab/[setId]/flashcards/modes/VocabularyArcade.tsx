@@ -7,35 +7,353 @@ import useVocabularyAudio from "../useVocabularyAudio";
 import VocabularyRain from "./VocabularyRain";
 import styles from "../vocabulary.module.css";
 
-export default function VocabularyArcade({ words, mode, muted, suspended = false, onComplete, onExit }: {
+import { GameModeSelector } from "../components/GameModeSelector";
+import { GameLobby } from "../components/GameLobby";
+import { MultiplayerWordBlast } from "../components/MultiplayerWordBlast";
+import { getClientDb, getClientAuth } from "@/lib/firebase/client";
+import { collection, doc, onSnapshot } from "firebase/firestore";
+import { COLLECTIONS } from "@/lib/firestore/collections";
+
+export default function VocabularyArcade({
+  words,
+  mode,
+  muted,
+  suspended = false,
+  setId,
+  isAuthenticated = false,
+  loginHref,
+  enableMultiplayer = false,
+  onComplete,
+  onExit,
+}: {
   words: VocabWordCard[];
   mode: VocabularyArcadeMode;
   muted: boolean;
   suspended?: boolean;
+  setId?: number;
+  isAuthenticated?: boolean;
+  loginHref?: string;
+  enableMultiplayer?: boolean;
   onComplete: (result: VocabularyRoundResult) => void;
   onExit: () => void;
 }) {
+  const [view, setView] = useState<"mode-select" | "solo" | "lobby" | "multiplayer">(() =>
+    enableMultiplayer ? "mode-select" : "solo"
+  );
+  const [roomCode, setRoomCode] = useState<string>("");
+  const [currentUserId, setCurrentUserId] = useState<string>(() => {
+    try {
+      return getClientAuth().currentUser?.uid || "";
+    } catch {
+      return "";
+    }
+  });
+  const [lobbyRoom, setLobbyRoom] = useState<any>(null);
+  const [lobbyPlayers, setLobbyPlayers] = useState<any[]>([]);
+  const [loadingRoom, setLoadingRoom] = useState(false);
+
   const [initialState, setInitialState] = useState<ArcadeState | null>(null);
   const [untimed, setUntimed] = useState(false);
   const [quiet, setQuiet] = useState(muted);
   const title = mode === "blast" ? "Word Blast" : "Mưa từ vựng";
   const soundLabel = mode === "blast" ? "âm thanh" : "phát âm";
-  if (initialState) return <div className="space-y-3"><div className="flex justify-end"><button className={styles.button} aria-pressed={!quiet} onClick={() => setQuiet(!quiet)}>{quiet ? `Bật ${soundLabel}` : `Tắt ${soundLabel}`}</button></div>{mode === "rain" ? <VocabularyRain initialState={initialState} muted={quiet} suspended={suspended} onComplete={onComplete} onExit={onExit} /> : <ArcadeRound initialState={initialState} muted={quiet} suspended={suspended} onComplete={onComplete} onExit={onExit} />}</div>;
+
+  // Fetch authenticated session user ID only when multiplayer is enabled
+  useEffect(() => {
+    if (!enableMultiplayer) return;
+    try {
+      const p = fetch("/api/auth/session");
+      if (p && typeof p.then === "function") {
+        p.then((r) => r.json())
+          .then((res) => {
+            if (res?.data?.uid) setCurrentUserId(res.data.uid);
+          })
+          .catch(() => {});
+      }
+    } catch {}
+  }, [enableMultiplayer]);
+
+  // Handle URL room param if someone opens link with ?room=XYZ
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const params = new URLSearchParams(window.location.search);
+    const roomFromUrl = params.get("room")?.trim().toUpperCase();
+    if (roomFromUrl && roomFromUrl.length === 6) {
+      handleJoinRoom(roomFromUrl);
+    }
+  }, []);
+
+  // Lobby realtime syncing via Firestore listener and polling fallback
+  useEffect(() => {
+    if (view !== "lobby" || !roomCode) return;
+
+    let unsubRoom: (() => void) | null = null;
+    let unsubPlayers: (() => void) | null = null;
+
+    try {
+      const db = getClientDb();
+      unsubRoom = onSnapshot(doc(db, COLLECTIONS.gameRooms, roomCode), (snap) => {
+        if (snap.exists()) {
+          const data = snap.data();
+          setLobbyRoom(data);
+          if (data.status === "playing") {
+            setView("multiplayer");
+          }
+        }
+      });
+
+      unsubPlayers = onSnapshot(
+        collection(db, COLLECTIONS.gameRooms, roomCode, "players"),
+        (snap) => {
+          const list: any[] = [];
+          snap.forEach((d) => list.push(d.data()));
+          if (list.length > 0) setLobbyPlayers(list);
+        },
+      );
+    } catch {}
+
+    const interval = window.setInterval(async () => {
+      try {
+        const res = await fetch(`/api/vocab/game-room?code=${roomCode}`);
+        const json = await res.json();
+        if (json.success && json.data) {
+          if (json.data.room) {
+            setLobbyRoom(json.data.room);
+            if (json.data.room.status === "playing") {
+              setView("multiplayer");
+            }
+          }
+          if (json.data.players) setLobbyPlayers(json.data.players);
+        }
+      } catch {}
+    }, 1200);
+
+    return () => {
+      if (unsubRoom) unsubRoom();
+      if (unsubPlayers) unsubPlayers();
+      window.clearInterval(interval);
+    };
+  }, [view, roomCode]);
+
+  const handleCreateRoom = async () => {
+    if (!isAuthenticated) {
+      if (loginHref) window.location.href = loginHref;
+      else alert("Vui lòng đăng nhập để chơi đối kháng với bạn bè!");
+      return;
+    }
+    setLoadingRoom(true);
+    try {
+      const res = await fetch("/api/vocab/game-room", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          vocabSetId: setId || 1,
+          gameMode: mode,
+          words,
+        }),
+      });
+      const json = await res.json();
+      if (!res.ok || !json.success) {
+        alert(json.error || "Không thể tạo phòng lúc này");
+        return;
+      }
+      setRoomCode(json.data.code);
+      setView("lobby");
+    } catch {
+      alert("Lỗi kết nối khi tạo phòng");
+    } finally {
+      setLoadingRoom(false);
+    }
+  };
+
+  const handleJoinRoom = async (code: string) => {
+    if (!isAuthenticated) {
+      if (loginHref) window.location.href = loginHref;
+      else alert("Vui lòng đăng nhập để tham gia phòng đối kháng!");
+      return;
+    }
+    setLoadingRoom(true);
+    try {
+      const res = await fetch("/api/vocab/game-room/join", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ code }),
+      });
+      const json = await res.json();
+      if (!res.ok || !json.success) {
+        alert(json.error || "Mã phòng không tồn tại hoặc phòng đã đầy");
+        return;
+      }
+      setRoomCode(code);
+      setView("lobby");
+    } catch {
+      alert("Lỗi kết nối khi tham gia phòng");
+    } finally {
+      setLoadingRoom(false);
+    }
+  };
+
+  const handleStartGame = async () => {
+    try {
+      const res = await fetch("/api/vocab/game-room/start", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ code: roomCode }),
+      });
+      const json = await res.json();
+      if (!res.ok || !json.success) {
+        alert(json.error || "Không thể bắt đầu game");
+        return;
+      }
+      setView("multiplayer");
+    } catch {
+      alert("Lỗi khi bắt đầu game");
+    }
+  };
+
+  const handleLeaveRoom = async () => {
+    try {
+      await fetch("/api/vocab/game-room/leave", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ code: roomCode }),
+      });
+    } catch {}
+    setRoomCode("");
+    setView("mode-select");
+  };
+
+  // MÀN HÌNH 1: Chọn chế độ chơi (1 mình vs Bạn bè)
+  if (view === "mode-select") {
+    return (
+      <GameModeSelector
+        gameTitle={title}
+        gameMode={mode}
+        onPlaySolo={() => setView("solo")}
+        onCreateRoom={handleCreateRoom}
+        onJoinRoom={handleJoinRoom}
+      />
+    );
+  }
+
+  // MÀN HÌNH 2: Phòng chờ (Lobby)
+  if (view === "lobby") {
+    const isHost = lobbyRoom?.hostId === currentUserId;
+    const canStart = lobbyPlayers.length >= 2;
+    return (
+      <GameLobby
+        roomCode={roomCode}
+        gameMode={mode}
+        players={lobbyPlayers}
+        currentUserId={currentUserId}
+        isHost={isHost}
+        canStart={canStart}
+        onStart={handleStartGame}
+        onLeave={handleLeaveRoom}
+      />
+    );
+  }
+
+  // MÀN HÌNH 3: Đối kháng trực tiếp (Multiplayer Word Blast)
+  if (view === "multiplayer" && lobbyRoom) {
+    return (
+      <MultiplayerWordBlast
+        roomCode={roomCode}
+        initialRoom={lobbyRoom}
+        initialPlayers={lobbyPlayers}
+        currentUserId={currentUserId}
+        muted={quiet}
+        onExit={() => {
+          handleLeaveRoom();
+          setView("mode-select");
+        }}
+      />
+    );
+  }
+
+  // MÀN HÌNH SOLO (Gốc)
+  if (initialState) {
+    return (
+      <div className="space-y-3">
+        <div className="flex justify-end">
+          <button className={styles.button} aria-pressed={!quiet} onClick={() => setQuiet(!quiet)}>
+            {quiet ? `Bật ${soundLabel}` : `Tắt ${soundLabel}`}
+          </button>
+        </div>
+        {mode === "rain" ? (
+          <VocabularyRain
+            initialState={initialState}
+            muted={quiet}
+            suspended={suspended}
+            onComplete={onComplete}
+            onExit={onExit}
+          />
+        ) : (
+          <ArcadeRound
+            initialState={initialState}
+            muted={quiet}
+            suspended={suspended}
+            onComplete={onComplete}
+            onExit={onExit}
+          />
+        )}
+      </div>
+    );
+  }
+
   const count = Math.min(20, arcadeWords(words).length);
-  return <section className={`${styles.hero} space-y-5`}>
-    <span className={styles.eyebrow}>Góc luyện phản xạ · chơi một mình</span>
-    <h2>{title}</h2>
-    <p>{mode === "blast" ? "Nhìn nghĩa tiếng Việt, bắn mục tiêu tiếng Anh đang bay lơ lửng. Chạm mục tiêu hoặc bấm phím 1–4; mỗi đáp án đúng nhận 10 điểm." : "Nhiều nghĩa tiếng Việt đang rơi! Gõ đúng từ tiếng Anh để tự bắt lấy. Đúng liên tiếp để tăng combo."}</p>
-    <ul className="space-y-2 text-sm text-ink2">
-      <li>{count} từ mỗi lượt · 3 mạng · tốc độ tăng sau mỗi 2 từ.</li>
-      <li>{mode === "blast" ? "Chọn sai hoặc để từ chạm vạch: mất 1 mạng." : "Gõ chưa đúng có thể thử lại. Để từ chạm vạch: mất 1 mạng; đáp án hiện để bạn ôn lại."}</li>
-      {mode === "rain" && <li>Gợi ý xuất hiện ở 40% và 70% thời gian: 15 → 10 → 5 điểm. Mỗi 3 câu đúng liên tiếp tăng hệ số, tối đa x4.</li>}
-      <li>Tự tạm dừng khi chuyển tab. Từ sai được giữ trong nhóm cần ôn khi lưu cuối lượt.</li>
-    </ul>
-    <label className="flex items-center gap-3 text-sm text-ink"><input type="checkbox" checked={untimed} onChange={(event) => setUntimed(event.target.checked)} className="h-5 w-5" />Không giới hạn thời gian (luyện nhẹ nhàng)</label>
-    <div className="flex flex-wrap gap-3"><button className={`${styles.button} ${styles.primary}`} disabled={!count} onClick={() => setInitialState(createArcadeState(mode, words, untimed))}>Bắt đầu chơi</button><button className={styles.button} onClick={onExit}>Quay lại</button></div>
-    {!count && <p role="status">Bộ hiện tại chưa có từ và nghĩa để chơi.</p>}
-  </section>;
+  return (
+    <section className={`${styles.hero} space-y-5`}>
+      <span className={styles.eyebrow}>Góc luyện phản xạ · chơi một mình</span>
+      <h2>{title}</h2>
+      <p>
+        {mode === "blast"
+          ? "Nhìn nghĩa tiếng Việt, bắn mục tiêu tiếng Anh đang bay lơ lửng. Chạm mục tiêu hoặc bấm phím 1–4; mỗi đáp án đúng nhận 10 điểm."
+          : "Nhiều nghĩa tiếng Việt đang rơi! Gõ đúng từ tiếng Anh để tự bắt lấy. Đúng liên tiếp để tăng combo."}
+      </p>
+      <ul className="space-y-2 text-sm text-ink2">
+        <li>{count} từ mỗi lượt · 3 mạng · tốc độ tăng sau mỗi 2 từ.</li>
+        <li>
+          {mode === "blast"
+            ? "Chọn sai hoặc để từ chạm vạch: mất 1 mạng."
+            : "Gõ chưa đúng có thể thử lại. Để từ chạm vạch: mất 1 mạng; đáp án hiện để bạn ôn lại."}
+        </li>
+        {mode === "rain" && (
+          <li>
+            Gợi ý xuất hiện ở 40% và 70% thời gian: 15 → 10 → 5 điểm. Mỗi 3 câu đúng liên tiếp tăng hệ số, tối đa x4.
+          </li>
+        )}
+        <li>Tự tạm dừng khi chuyển tab. Từ sai được giữ trong nhóm cần ôn khi lưu cuối lượt.</li>
+      </ul>
+      <label className="flex items-center gap-3 text-sm text-ink">
+        <input
+          type="checkbox"
+          checked={untimed}
+          onChange={(event) => setUntimed(event.target.checked)}
+          className="h-5 w-5"
+        />
+        Không giới hạn thời gian (luyện nhẹ nhàng)
+      </label>
+      <div className="flex flex-wrap gap-3">
+        <button
+          className={`${styles.button} ${styles.primary}`}
+          disabled={!count}
+          onClick={() => setInitialState(createArcadeState(mode, words, untimed))}
+        >
+          Bắt đầu chơi
+        </button>
+        {enableMultiplayer && (
+          <button className={styles.button} onClick={() => setView("mode-select")}>
+            ← Chọn chế độ khác
+          </button>
+        )}
+        <button className={styles.button} onClick={onExit}>
+          Quay lại
+        </button>
+      </div>
+      {!count && <p role="status">Bộ hiện tại chưa có từ và nghĩa để chơi.</p>}
+    </section>
+  );
 }
 
 /* ---- Fail buzzer sound effect via Web Audio API ---- */

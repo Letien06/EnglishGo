@@ -47,6 +47,9 @@ export const COLLECTIONS = {
   comments: "comments",
   leaderboardEntries: "leaderboardEntries",
 
+  // --- Game Rooms ---
+  gameRooms: "gameRooms",
+
   // --- Content moderation ---
   contentAuditLogs: "contentAuditLogs",
 

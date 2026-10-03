@@ -18,8 +18,11 @@ const firebaseConfig = {
   appId: process.env.NEXT_PUBLIC_FIREBASE_APP_ID ?? "",
 };
 
+import { getFirestore, type Firestore } from "firebase/firestore";
+
 let _app: FirebaseApp | undefined;
 let _auth: Auth | undefined;
+let _db: Firestore | undefined;
 
 export function getClientApp(): FirebaseApp {
   if (!_app) {
@@ -35,6 +38,13 @@ export function getClientAuth(): Auth {
   return _auth;
 }
 
+export function getClientDb(): Firestore {
+  if (!_db) {
+    _db = getFirestore(getClientApp());
+  }
+  return _db;
+}
+
 /**
  * Backward-compatible named export.
  * Since login page accesses `clientAuth` at the top of a React component
@@ -42,3 +52,4 @@ export function getClientAuth(): Auth {
  * defers initialization until first call.
  */
 export { getClientAuth as clientAuth_fn };
+
