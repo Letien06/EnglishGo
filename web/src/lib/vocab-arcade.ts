@@ -1,6 +1,48 @@
 import type { VocabWordCard } from "@/types/vocab";
 import { normalizeVocabularyAnswer } from "./vocab-content";
 
+/** Floating position & velocity for one word target in blast mode. */
+export interface FloatingTarget {
+  x: number; // percent 0–100 of field width
+  y: number; // percent 0–100 of field height
+  vx: number; // horizontal velocity (% per second)
+  vy: number; // vertical velocity (% per second, positive = downward)
+}
+
+/** Create initial floating positions with random spread and velocities. */
+export function createFloatingTargets(count: number): FloatingTarget[] {
+  const slots = [
+    { x: 15, y: 12 },
+    { x: 65, y: 8 },
+    { x: 35, y: 50 },
+    { x: 75, y: 55 },
+  ];
+  return Array.from({ length: count }, (_, i) => {
+    const slot = slots[i % slots.length];
+    return {
+      x: slot.x + (Math.random() - 0.5) * 16,
+      y: slot.y + (Math.random() - 0.5) * 10,
+      vx: (Math.random() - 0.5) * 18, // -9 to +9 %/s
+      vy: 2 + Math.random() * 4,       // 2–6 %/s downward drift
+    };
+  });
+}
+
+/** Advance one floating target by delta ms, bouncing off field edges. */
+export function tickFloatingTarget(t: FloatingTarget, deltaMs: number): FloatingTarget {
+  const dt = deltaMs / 1000;
+  let { x, y, vx, vy } = t;
+  x += vx * dt;
+  y += vy * dt;
+  // Bounce horizontally (keep within 2%–88%)
+  if (x < 2) { x = 2; vx = Math.abs(vx); }
+  if (x > 88) { x = 88; vx = -Math.abs(vx); }
+  // Bounce vertically (keep within 2%–82%)
+  if (y < 2) { y = 2; vy = Math.abs(vy) * 0.6 + 1; }
+  if (y > 82) { y = 82; vy = -Math.abs(vy) * 0.4; }
+  return { x, y, vx, vy };
+}
+
 export type VocabularyArcadeMode = "blast" | "rain";
 export interface VocabularyRoundAnswer {
   item: VocabWordCard;
