@@ -38,11 +38,19 @@ export function GameLobby({
     }
   };
   
+  const getShareableRoomUrl = () => {
+    if (typeof window === "undefined") return "";
+    const url = new URL(window.location.href);
+    url.searchParams.set("mode", "blast");
+    url.searchParams.set("tab", "play");
+    url.searchParams.set("room", roomCode);
+    return url.toString();
+  };
+
   const handleCopyLink = async () => {
     try {
-      const url = new URL(window.location.href);
-      url.searchParams.set("room", roomCode);
-      await navigator.clipboard.writeText(url.toString());
+      const shareUrl = getShareableRoomUrl();
+      await navigator.clipboard.writeText(shareUrl);
       setCopiedLink(true);
       setTimeout(() => setCopiedLink(false), 2000);
     } catch (err) {
@@ -83,7 +91,7 @@ export function GameLobby({
             {typeof window !== "undefined" ? (
               <img
                 src={`https://api.qrserver.com/v1/create-qr-code/?size=180x180&data=${encodeURIComponent(
-                  `${window.location.origin}${window.location.pathname}?room=${roomCode}`
+                  getShareableRoomUrl()
                 )}`}
                 alt={`QR Code phòng ${roomCode}`}
                 className="w-full h-full object-contain"

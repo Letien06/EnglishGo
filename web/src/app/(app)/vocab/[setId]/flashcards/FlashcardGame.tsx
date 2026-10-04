@@ -48,6 +48,7 @@ interface Props {
   selectedMastery?: string;
   selectedOrder?: string;
   selectedAmount?: string;
+  initialRoom?: string;
 }
 
 type PlayMode =
@@ -303,6 +304,7 @@ function parseGameDraft(raw: string | null): VocabGameDraftPayload | null {
 export default function FlashcardGame({
   partsReady = false,
   initialTab,
+  initialRoom,
   session,
   initialMode,
   practiceOptions,
@@ -318,16 +320,25 @@ export default function FlashcardGame({
   const words = session.words;
   const setId = session.set.id;
 
-  const startInPlay = initialMode && initialMode !== "menu";
+  const [roomParam, setRoomParam] = useState<string | null>(() => {
+    if (initialRoom && /^[A-Z0-9]{6}$/.test(initialRoom)) return initialRoom;
+    if (typeof window !== "undefined") {
+      const r = new URLSearchParams(window.location.search).get("room")?.trim().toUpperCase();
+      if (r && /^[A-Z0-9]{6}$/.test(r)) return r;
+    }
+    return null;
+  });
+
+  const startInPlay = Boolean(roomParam) || (initialMode && initialMode !== "menu");
   const [screen, setScreen] = useState<Screen>(startInPlay ? "play" : "hub");
-  const [workspaceTab, setWorkspaceTab] = useState<WorkspaceTab>(initialTab ?? (startInPlay ? (["quiz", "matching", "blast", "rain"].includes(initialMode) ? "play" : "learn") : "view"));
+  const [workspaceTab, setWorkspaceTab] = useState<WorkspaceTab>(roomParam ? "play" : (initialTab ?? (startInPlay ? (["quiz", "matching", "blast", "rain"].includes(initialMode) ? "play" : "learn") : "view")));
   const [pendingTab, setPendingTab] = useState<WorkspaceTab | null>(null);
   const [pendingHref, setPendingHref] = useState<string | null>(null);
   const [sidebarOverride, setSidebarOpen] = useState<boolean | null>(null);
   const wideWorkspace = useSyncExternalStore(subscribeWorkspaceWidth, isWideWorkspace, serverWorkspaceWidth);
   const sidebarOpen = sidebarOverride ?? wideWorkspace;
   const [mode, setMode] = useState<PlayMode>(
-    startInPlay && isPlayMode(initialMode) ? (initialMode as PlayMode) : "flashcard",
+    roomParam ? "blast" : (startInPlay && isPlayMode(initialMode) ? (initialMode as PlayMode) : "flashcard"),
   );
   const [quizMode, setQuizMode] = useState<QuizMode>("wordMeaning");
   const [quizChooser, setQuizChooser] = useState(initialMode === "quiz");
@@ -342,6 +353,31 @@ export default function FlashcardGame({
   useEffect(() => () => {
     if (completionTimerRef.current) window.clearTimeout(completionTimerRef.current);
   }, []);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const r = new URLSearchParams(window.location.search).get("room")?.trim().toUpperCase();
+    if (r && /^[A-Z0-9]{6}$/.test(r)) {
+      setRoomParam(r);
+      setScreen("play");
+      setMode("blast");
+      setWorkspaceTab("play");
+    }
+  }, []);
+
+  function handleJoinRoomFromHub(code: string) {
+    setRoomParam(code);
+    setMode("blast");
+    setWorkspaceTab("play");
+    setScreen("play");
+    if (typeof window !== "undefined") {
+      const url = new URL(window.location.href);
+      url.searchParams.set("mode", "blast");
+      url.searchParams.set("tab", "play");
+      url.searchParams.set("room", code);
+      window.history.replaceState({}, "", url.toString());
+    }
+  }
 
   // Load history from localStorage after mount (avoids hydration mismatch).
   useEffect(() => {
@@ -532,12 +568,13 @@ export default function FlashcardGame({
           onApplyFilters={applyFilters}
           onSelectTab={selectWorkspaceTab}
           onRecordRound={recordHistory}
+          onJoinRoom={handleJoinRoomFromHub}
         />
       )}
 
       {screen === "play" && words.length > 0 && (
         <PlaySurface
-          key={`${mode}-${quizMode}`}
+          key={`${mode}-${quizMode}-${roomParam || ""}`}
           words={mode === "quiz" ? words.slice(0, 20) : words}
           setId={setId}
           title={session.set.title}
@@ -550,6 +587,7 @@ export default function FlashcardGame({
           isAuthenticated={isAuthenticated}
           currentUserId={currentUserId}
           loginHref={loginHref}
+          roomCode={roomParam || undefined}
           onExit={goHub}
           onFinish={(record) => {
             recordHistory(record);
@@ -622,10 +660,12 @@ function Hub({
   onApplyFilters,
   onSelectTab,
   onRecordRound,
+  onJoinRoom,
 }: {
   tab: WorkspaceTab;
   onSelectTab?: (tab: WorkspaceTab) => void;
   onRecordRound?: (record: any) => void;
+  onJoinRoom?: (code: string) => void;
   words: VocabWordCard[];
   setId: number;
   practiceOptions: VocabSetCard[];
@@ -650,6 +690,7 @@ function Hub({
     amount?: string;
   }) => void;
 }) {
+  const [showJoinModal, setShowJoinModal] = useState(false);
   return (
     <div className="space-y-6">
       {!isAuthenticated ? (
@@ -763,6 +804,29 @@ function Hub({
             </div>
           </div>
 
+          {/* Multiplayer Room Entry Banner */}
+          {onJoinRoom && (
+            <aside aria-label="Phòng đấu đối kháng" className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3 rounded-2xl border border-indigo-200/80 bg-gradient-to-r from-indigo-50/80 via-purple-50/50 to-pink-50/60 p-4 shadow-sm dark:border-indigo-900/40 dark:from-indigo-950/20 dark:via-purple-950/10 dark:to-pink-950/10">
+              <div className="flex items-center gap-3">
+                <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-indigo-600 text-xl text-white shadow">
+                  ⚔️
+                </span>
+                <div>
+                  <h3 className="text-sm font-bold text-ink">Đấu từ vựng cùng bạn bè</h3>
+                  <p className="text-xs text-muted">Được bạn bè gửi mã phòng hoặc link mời chơi đối kháng?</p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setShowJoinModal(true)}
+                className="flex items-center justify-center gap-1.5 rounded-xl bg-indigo-600 px-4 py-2 text-xs font-bold text-white shadow hover:bg-indigo-700 active:scale-95 transition-all"
+              >
+                <span>🔑</span>
+                <span>Nhập mã phòng</span>
+              </button>
+            </aside>
+          )}
+
           {/* Game cards */}
           <section className="grid gap-3 sm:grid-cols-2">
             {MODE_CARDS.map((card) => {
@@ -842,6 +906,15 @@ function Hub({
 
       {quizChooser && (
         <QuizChooser onClose={onCloseQuizChooser} onSelect={onStartQuiz} />
+      )}
+      {showJoinModal && onJoinRoom && (
+        <JoinRoomModal
+          onClose={() => setShowJoinModal(false)}
+          onJoin={(code) => {
+            setShowJoinModal(false);
+            onJoinRoom(code);
+          }}
+        />
       )}
     </>
   )}
@@ -949,6 +1022,109 @@ function QuizChooser({
   );
 }
 
+function JoinRoomModal({
+  onClose,
+  onJoin,
+}: {
+  onClose: () => void;
+  onJoin: (code: string) => void;
+}) {
+  const dialogRef = useRef<HTMLDivElement>(null);
+  useDialogFocus(true, onClose, dialogRef);
+  const [code, setCode] = useState("");
+  const [error, setError] = useState("");
+
+  const handleSubmit = (e?: React.FormEvent) => {
+    e?.preventDefault();
+    const clean = code.trim().toUpperCase();
+    if (!clean) {
+      setError("Vui lòng nhập mã phòng");
+      return;
+    }
+    if (clean.length !== 6 || !/^[A-Z0-9]{6}$/.test(clean)) {
+      setError("Mã phòng gồm đúng 6 ký tự chữ hoặc số");
+      return;
+    }
+    onJoin(clean);
+  };
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm">
+      <button
+        type="button"
+        className="absolute inset-0 cursor-default"
+        aria-label="Đóng"
+        onClick={onClose}
+      />
+      <div
+        ref={dialogRef}
+        tabIndex={-1}
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="join-room-title"
+        className="relative w-full max-w-sm space-y-4 rounded-2xl border border-line bg-surface p-6 shadow-2xl"
+      >
+        <button
+          type="button"
+          data-dialog-initial-focus
+          onClick={onClose}
+          className="absolute right-4 top-4 text-xl text-muted hover:text-ink"
+          aria-label="Đóng"
+        >
+          ×
+        </button>
+
+        <div className="text-center space-y-1">
+          <div className="mx-auto grid h-12 w-12 place-items-center rounded-2xl bg-indigo-500/10 text-2xl text-indigo-500">
+            🔑
+          </div>
+          <h2 id="join-room-title" className="text-lg font-bold text-ink">
+            Nhập mã phòng
+          </h2>
+          <p className="text-xs text-muted">
+            Nhập mã 6 ký tự do bạn bè chia sẻ để tham gia phòng
+          </p>
+        </div>
+
+        <form onSubmit={handleSubmit} className="space-y-4">
+          <div>
+            <input
+              type="text"
+              autoFocus
+              maxLength={6}
+              value={code}
+              placeholder="VD: 7CWB2A"
+              onChange={(e) => {
+                setCode(e.target.value.toUpperCase());
+                setError("");
+              }}
+              className="w-full rounded-xl border border-line bg-surface-soft px-4 py-3 text-center text-2xl font-black font-mono tracking-widest text-ink placeholder:font-normal placeholder:text-sm placeholder:tracking-normal focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 uppercase"
+            />
+            {error && <p className="mt-1.5 text-center text-xs text-red-500 font-medium">{error}</p>}
+          </div>
+
+          <div className="flex gap-2">
+            <button
+              type="button"
+              onClick={onClose}
+              className="flex-1 rounded-xl border border-line py-2.5 text-sm font-semibold text-ink2 hover:bg-surface-soft"
+            >
+              Hủy
+            </button>
+            <button
+              type="submit"
+              disabled={code.trim().length !== 6}
+              className="flex-1 rounded-xl bg-indigo-600 py-2.5 text-sm font-bold text-white shadow-md transition-all hover:bg-indigo-700 disabled:opacity-50 disabled:pointer-events-none"
+            >
+              Vào phòng
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  );
+}
+
 /* ================================================================== */
 /*  Play surface — one instance per game session                       */
 /* ================================================================== */
@@ -972,6 +1148,7 @@ function PlaySurface({
   isAuthenticated,
   currentUserId = "",
   loginHref,
+  roomCode,
   onExit,
   onFinish,
 }: {
@@ -987,6 +1164,7 @@ function PlaySurface({
   isAuthenticated: boolean;
   currentUserId?: string;
   loginHref: string;
+  roomCode?: string;
   onExit: () => void;
   onFinish: (record: {
     mode: string;
@@ -1680,7 +1858,8 @@ function PlaySurface({
         isAuthenticated={isAuthenticated}
         currentUserId={currentUserId}
         loginHref={loginHref}
-        enableMultiplayer={Boolean(isAuthenticated)}
+        enableMultiplayer={Boolean(isAuthenticated || roomCode)}
+        initialRoomCode={roomCode}
         onComplete={completeLocalRound}
         onExit={onExit}
       />

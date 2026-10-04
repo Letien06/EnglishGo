@@ -24,6 +24,7 @@ export default function VocabularyArcade({
   currentUserId: initialCurrentUserId = "",
   loginHref,
   enableMultiplayer = false,
+  initialRoomCode,
   onComplete,
   onExit,
 }: {
@@ -36,13 +37,14 @@ export default function VocabularyArcade({
   currentUserId?: string;
   loginHref?: string;
   enableMultiplayer?: boolean;
+  initialRoomCode?: string;
   onComplete: (result: VocabularyRoundResult) => void;
   onExit: () => void;
 }) {
   const [view, setView] = useState<"mode-select" | "solo" | "lobby" | "multiplayer">(() =>
-    enableMultiplayer ? "mode-select" : "solo"
+    initialRoomCode ? "lobby" : enableMultiplayer ? "mode-select" : "solo"
   );
-  const [roomCode, setRoomCode] = useState<string>("");
+  const [roomCode, setRoomCode] = useState<string>(() => initialRoomCode || "");
   const [currentUserId, setCurrentUserId] = useState<string>(() => {
     if (initialCurrentUserId) return initialCurrentUserId;
     try {
@@ -101,13 +103,16 @@ export default function VocabularyArcade({
 
   // Handle URL room param if someone opens link with ?room=XYZ
   useEffect(() => {
-    if (typeof window === "undefined") return;
-    const params = new URLSearchParams(window.location.search);
-    const roomFromUrl = params.get("room")?.trim().toUpperCase();
-    if (roomFromUrl && roomFromUrl.length === 6) {
-      handleJoinRoom(roomFromUrl);
+    const code =
+      initialRoomCode ||
+      (typeof window !== "undefined"
+        ? new URLSearchParams(window.location.search).get("room")?.trim().toUpperCase()
+        : null);
+    if (code && code.length === 6) {
+      setRoomCode(code);
+      handleJoinRoom(code);
     }
-  }, []);
+  }, [initialRoomCode]);
 
   // Lobby realtime syncing via Firestore listener and polling fallback
   useEffect(() => {
@@ -196,8 +201,14 @@ export default function VocabularyArcade({
 
   const handleJoinRoom = async (code: string) => {
     if (!isAuthenticated) {
-      if (loginHref) window.location.href = loginHref;
-      else alert("Vui lòng đăng nhập để tham gia phòng đối kháng!");
+      if (typeof window !== "undefined") {
+        const url = new URL(window.location.href);
+        url.searchParams.set("mode", "blast");
+        url.searchParams.set("tab", "play");
+        url.searchParams.set("room", code);
+        const targetLogin = loginHref || `/login?redirect=${encodeURIComponent(url.toString())}`;
+        window.location.href = targetLogin;
+      }
       return;
     }
     setLoadingRoom(true);
@@ -210,6 +221,7 @@ export default function VocabularyArcade({
       const json = await res.json();
       if (!res.ok || !json.success) {
         alert(json.error || "Mã phòng không tồn tại hoặc phòng đã đầy");
+        setView(enableMultiplayer ? "mode-select" : "solo");
         return;
       }
       if (json.data?.currentUserId) setCurrentUserId(json.data.currentUserId);
@@ -217,6 +229,7 @@ export default function VocabularyArcade({
       setView("lobby");
     } catch {
       alert("Lỗi kết nối khi tham gia phòng");
+      setView(enableMultiplayer ? "mode-select" : "solo");
     } finally {
       setLoadingRoom(false);
     }
@@ -275,6 +288,15 @@ export default function VocabularyArcade({
 
   // MÀN HÌNH 2: Phòng chờ (Lobby)
   if (view === "lobby") {
+    if (loadingRoom && !lobbyRoom) {
+      return (
+        <div className="flex flex-col items-center justify-center min-h-[50vh] gap-4 p-8 text-center text-ink">
+          <div className="animate-spin text-4xl">⏳</div>
+          <h2 className="text-xl font-bold">Đang kết nối vào phòng #{roomCode}...</h2>
+          <p className="text-sm text-muted">Vui lòng chờ trong giây lát.</p>
+        </div>
+      );
+    }
     const isHost = lobbyRoom?.hostId === currentUserId;
     const canStart = lobbyPlayers.length >= 2;
     return (

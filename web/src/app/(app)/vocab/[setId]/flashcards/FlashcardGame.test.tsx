@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import FlashcardGame from "./FlashcardGame";
 
@@ -43,4 +43,52 @@ describe("new vocabulary modes integrate with results", () => {
     expect(screen.getByRole("tab", { name: /xem từ/i })).toHaveAttribute("aria-selected", "true");
     expect(fetch).not.toHaveBeenCalled();
   });
+
+  it("allows entering room code manually from Hub to join multiplayer lobby", async () => {
+    vi.stubGlobal("fetch", vi.fn(async () => new Response(JSON.stringify({ success: true, data: { room: { code: "ABC123" } } }), { status: 200 })));
+    render(
+      <FlashcardGame
+        session={session}
+        initialMode="menu"
+        initialTab="play"
+        practiceOptions={[]}
+        reviewMode={false}
+        isAuthenticated={true}
+        loginHref="/login"
+      />
+    );
+    expect(screen.getByText("Đấu từ vựng cùng bạn bè")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: /Nhập mã phòng/i }));
+    expect(screen.getByRole("dialog", { name: /Nhập mã phòng/i })).toBeInTheDocument();
+
+    const input = screen.getByPlaceholderText("VD: 7CWB2A");
+    fireEvent.change(input, { target: { value: "abc123" } });
+    expect(input).toHaveValue("ABC123");
+
+    fireEvent.click(screen.getByRole("button", { name: "Vào phòng" }));
+    // Modal closes and user transitions to play mode
+    await waitFor(() => {
+      expect(screen.queryByRole("dialog", { name: /Nhập mã phòng/i })).not.toBeInTheDocument();
+    });
+  });
+
+  it("enters play mode immediately when initialRoom prop is provided", async () => {
+    vi.stubGlobal("fetch", vi.fn(async () => new Response(JSON.stringify({ success: true, data: {} }), { status: 200 })));
+    await act(async () => {
+      render(
+        <FlashcardGame
+          session={session}
+          initialMode="menu"
+          initialRoom="XYZ789"
+          practiceOptions={[]}
+          reviewMode={false}
+          isAuthenticated={true}
+          loginHref="/login"
+        />
+      );
+    });
+    // When initialRoom is provided, it skips hub and opens play surface directly
+    expect(screen.queryByText("Chọn trò chơi")).not.toBeInTheDocument();
+  });
 });
+
