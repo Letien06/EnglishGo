@@ -60,6 +60,7 @@ export default function VocabularyArcade({
   const [loadingRoom, setLoadingRoom] = useState(false);
 
   const [initialState, setInitialState] = useState<ArcadeState | null>(null);
+  const [roundKey, setRoundKey] = useState(0);
   const [untimed, setUntimed] = useState(false);
   const [quiet, setQuiet] = useState(muted);
   const [wordLimit, setWordLimit] = useState<number | "all">("all");
@@ -67,6 +68,7 @@ export default function VocabularyArcade({
   const soundLabel = mode === "blast" ? "âm thanh" : "phát âm";
 
   const startSoloRound = (limit = wordLimit) => {
+    setRoundKey((k) => k + 1);
     setInitialState(
       createArcadeState(
         mode,
@@ -317,6 +319,7 @@ export default function VocabularyArcade({
         </div>
         {mode === "rain" ? (
           <VocabularyRain
+            key={roundKey}
             initialState={initialState}
             muted={quiet}
             suspended={suspended}
@@ -326,6 +329,7 @@ export default function VocabularyArcade({
           />
         ) : (
           <ArcadeRound
+            key={roundKey}
             initialState={initialState}
             muted={quiet}
             suspended={suspended}
@@ -626,6 +630,7 @@ function ArcadeRound({ initialState, muted, suspended, onComplete, onExit, onRes
   function next() {
     stop();
     if (done) {
+      if (state.lives <= 0) return;
       if (finished.current) return;
       finished.current = true;
       onComplete({ answers: state.answers, score: state.score });
@@ -633,6 +638,7 @@ function ArcadeRound({ initialState, muted, suspended, onComplete, onExit, onRes
   }
 
   function handleRestart() {
+    stop();
     setShowGameOver(false);
     if (onRestart) {
       onRestart();
@@ -684,12 +690,8 @@ function ArcadeRound({ initialState, muted, suspended, onComplete, onExit, onRes
           </>}
 
           <div className={styles.gameOverActions}>
-            <button className={`${styles.button} ${styles.primary}`} onClick={handleRestart}>↻ RESTART</button>
-            <button className={styles.button} onClick={() => {
-              if (finished.current) return;
-              finished.current = true;
-              onComplete({ answers: state.answers, score: state.score });
-            }}>Xem kết quả →</button>
+            <button className={`${styles.button} ${styles.primary}`} onClick={handleRestart}>↻ THỬ LẠI</button>
+            <button className={styles.button} onClick={onExit}>Thoát</button>
           </div>
         </div>
       </div>
@@ -746,7 +748,7 @@ function ArcadeRound({ initialState, muted, suspended, onComplete, onExit, onRes
         {state.phase === "feedback" && <p className="mt-1 text-sm">{word.word} — {word.meaning}</p>}
       </div>
     )}
-    {state.phase === "feedback" && !showGameOver && (
+    {state.phase === "feedback" && !showGameOver && state.lives > 0 && (
       <div className="flex flex-wrap gap-2">
         <button
           ref={continueButton}

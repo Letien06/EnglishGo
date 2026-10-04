@@ -175,4 +175,44 @@ describe("arcade interaction", () => {
     fireEvent.click(screen.getByText("20 từ (Chơi nhanh)"));
     expect(screen.getByText(/20 từ mỗi lượt/)).toBeInTheDocument();
   });
+  it("hides Xem kết quả on Game Over and restarts fresh when clicking THỬ LẠI", () => {
+    vi.useFakeTimers();
+    mockSoundContext();
+    const onComplete = vi.fn();
+    const onExit = vi.fn();
+    const pool = [
+      { id: 1, word: "word1", meaning: "meaning1", mastered: false },
+      { id: 2, word: "word2", meaning: "meaning2", mastered: false },
+      { id: 3, word: "word3", meaning: "meaning3", mastered: false },
+      { id: 4, word: "word4", meaning: "meaning4", mastered: false },
+    ];
+    render(<VocabularyArcade words={pool} mode="blast" muted onComplete={onComplete} onExit={onExit} />);
+    fireEvent.click(screen.getByRole("button", { name: "Bắt đầu chơi" }));
+
+    // Current target is shown in the clue h3
+    const clueMeaning = screen.getByRole("heading", { level: 3 }).textContent;
+    const targetWord = pool.find((p) => p.meaning === clueMeaning)!.word;
+    const wrongButtons = screen.getAllByRole("button").filter(
+      (b) => b.textContent && !b.textContent.includes(targetWord) && /^[1-4]/.test(b.textContent)
+    );
+    expect(wrongButtons.length).toBeGreaterThanOrEqual(3);
+    fireEvent.click(wrongButtons[0]);
+    fireEvent.click(wrongButtons[1]);
+    fireEvent.click(wrongButtons[2]);
+
+    // Wait for 800ms game over overlay timer
+    act(() => vi.advanceTimersByTime(900));
+    expect(screen.getByRole("heading", { name: "GAME OVER" })).toBeInTheDocument();
+    // Verify Xem kết quả is NOT rendered on Game Over
+    expect(screen.queryByRole("button", { name: /xem kết quả/i })).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /thử lại/i })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /thoát/i })).toBeInTheDocument();
+
+    // Click THỬ LẠI to restart
+    fireEvent.click(screen.getByRole("button", { name: /thử lại/i }));
+    // Game is restarted fresh with 3 lives and no game over
+    expect(screen.queryByRole("heading", { name: "GAME OVER" })).not.toBeInTheDocument();
+    expect(screen.getByLabelText("Còn 3 mạng")).toBeInTheDocument();
+    expect(onComplete).not.toHaveBeenCalled();
+  });
 });
