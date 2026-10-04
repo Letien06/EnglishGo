@@ -215,4 +215,44 @@ describe("arcade interaction", () => {
     expect(screen.getByLabelText("Còn 3 mạng")).toBeInTheDocument();
     expect(onComplete).not.toHaveBeenCalled();
   });
+  it("targets word on pointer enter and does not show 'Chưa khớp' notice banner on wrong answer", () => {
+    vi.useFakeTimers();
+    mockSoundContext();
+    const pool = [
+      { id: 1, word: "targetWord", meaning: "targetMeaning", mastered: false },
+      { id: 2, word: "otherWord1", meaning: "otherMeaning1", mastered: false },
+      { id: 3, word: "otherWord2", meaning: "otherMeaning2", mastered: false },
+      { id: 4, word: "otherWord3", meaning: "otherMeaning3", mastered: false },
+    ];
+    render(<VocabularyArcade words={pool} mode="blast" muted onComplete={vi.fn()} onExit={vi.fn()} />);
+    fireEvent.click(screen.getByRole("button", { name: "Bắt đầu chơi" }));
+
+    // Find the button for otherWord1
+    const targetBtn = screen.getByRole("button", { name: /otherWord1/i });
+    expect(targetBtn).not.toHaveAttribute("data-targeted");
+
+    // Pointer enter triggers targeting
+    fireEvent.pointerEnter(targetBtn);
+    expect(targetBtn).toHaveAttribute("data-targeted", "true");
+
+    // Pointer leave removes targeting
+    fireEvent.pointerLeave(targetBtn);
+    expect(targetBtn).not.toHaveAttribute("data-targeted");
+
+    // Click a wrong answer (pool has targetWord vs otherWord1)
+    const clueMeaning = screen.getByRole("heading", { level: 3 }).textContent;
+    const targetWord = pool.find((p) => p.meaning === clueMeaning)!.word;
+    const wrongBtn = screen.getAllByRole("button").find(
+      (b) => b.textContent && !b.textContent.includes(targetWord) && /^[1-4]/.test(b.textContent)
+    )!;
+    fireEvent.click(wrongBtn);
+
+    // Life is reduced by 1
+    expect(screen.getByLabelText("Còn 2 mạng")).toBeInTheDocument();
+
+    // Verify 'Chưa khớp, thử lại nhé.' banner is NOT in the document!
+    expect(screen.queryByText(/chưa khớp/i)).not.toBeInTheDocument();
+    expect(screen.queryByRole("status")).not.toBeInTheDocument();
+  });
 });
+

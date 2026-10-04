@@ -163,6 +163,12 @@ export function arcadeReducer(state: ArcadeState, action: ArcadeAction): ArcadeS
     disabled: action.optionId != null && !correct ? [...state.disabled, action.optionId] : state.disabled,
     lastCorrect: correct,
     phase: correct || lives === 0 ? "feedback" : "playing",
-    notice: correct ? `Chính xác! +${points} điểm` : lives === 0 ? `Hết mạng. ${word.word} — ${word.meaning}` : "Chưa khớp, thử lại nhé.",
+    notice: correct
+      ? `Chính xác! +${points} điểm`
+      : lives === 0
+      ? `Hết mạng. ${word.word} — ${word.meaning}`
+      : state.mode === "blast"
+      ? ""
+      : "Chưa khớp, thử lại nhé.",
   };
 }

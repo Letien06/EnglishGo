@@ -480,6 +480,17 @@ function playSuccessSound() {
   } catch { /* audio not available */ }
 }
 
+function getAngleToTarget(targetXPercent: number, targetYPercent: number, fieldEl: HTMLDivElement | null): number {
+  if (!fieldEl) return 0;
+  const width = fieldEl.clientWidth || 800;
+  const height = fieldEl.clientHeight || 350;
+  const cannonCenterX = width / 2;
+  const cannonBottomY = height - 25;
+  const targetPixelX = (targetXPercent / 100) * width;
+  const targetPixelY = (targetYPercent / 100) * height;
+  return (Math.atan2(targetPixelX - cannonCenterX, cannonBottomY - targetPixelY) * 180) / Math.PI;
+}
+
 function ArcadeRound({ initialState, muted, suspended, onComplete, onExit, onRestart }: {
   initialState: ArcadeState;
   muted: boolean;
@@ -497,6 +508,7 @@ function ArcadeRound({ initialState, muted, suspended, onComplete, onExit, onRes
   const [travel, setTravel] = useState(140);
   const [aim, setAim] = useState(0);
   const [shot, setShot] = useState<number | null>(null);
+  const [hoveredOptionId, setHoveredOptionId] = useState<number | null>(null);
   const finished = useRef(false);
   const [showGameOver, setShowGameOver] = useState(false);
   const { speakWord, stop } = useVocabularyAudio();
@@ -518,6 +530,27 @@ function ArcadeRound({ initialState, muted, suspended, onComplete, onExit, onRes
       setFloats(createFloatingTargets(state.options[state.index]?.length ?? 4));
     }
   }, [state.index, state.options]);
+
+  // Reset hovered target when moving to next question or if target gets disabled
+  useEffect(() => {
+    setHoveredOptionId(null);
+  }, [state.index]);
+
+  useEffect(() => {
+    if (hoveredOptionId !== null && state.disabled.includes(hoveredOptionId)) {
+      setHoveredOptionId(null);
+    }
+  }, [state.disabled, hoveredOptionId]);
+
+  // Dynamically track hovered floating target as it moves with rAF
+  useEffect(() => {
+    if (hoveredOptionId === null || suspended || state.paused || state.phase !== "playing" || state.mode !== "blast") return;
+    const idx = state.options[state.index]?.findIndex((opt) => opt.id === hoveredOptionId) ?? -1;
+    const f = idx >= 0 ? floats[idx] : null;
+    if (f && field.current) {
+      setAim(getAngleToTarget(f.x, f.y, field.current));
+    }
+  }, [floats, hoveredOptionId, state.index, state.options, state.phase, state.paused, suspended, state.mode]);
 
   // Animate floating targets with requestAnimationFrame
   useEffect(() => {
@@ -698,34 +731,100 @@ function ArcadeRound({ initialState, muted, suspended, onComplete, onExit, onRes
     </section>;
   }
 
+  const hoveredIndex = hoveredOptionId !== null ? state.options[state.index]?.findIndex((opt) => opt.id === hoveredOptionId) ?? -1 : -1;
+  const hoveredFloat = hoveredIndex >= 0 ? floats[hoveredIndex] : null;
+
   return <section className={styles.arcadeRound} aria-label={state.mode === "blast" ? "Word Blast" : "Mưa từ vựng"}>
     <div className={styles.toolbar}><h2 className="text-xl font-bold text-ink">{state.mode === "blast" ? "Word Blast" : "Mưa từ vựng"}</h2><div className="flex gap-2"><button className={styles.button} onClick={() => dispatch({ type: "pause", paused: !state.paused })}>{state.paused ? "Tiếp tục chơi" : "Tạm dừng"}</button><button className={styles.button} onClick={onExit}>Thoát</button></div></div>
     <div className={`${styles.arcade} ${styles.blastArena}`}>
       <div className={styles.scoreboard}><span className={styles.hearts} aria-label={`Còn ${state.lives} mạng`}>{"🔥".repeat(state.lives)}<span>{"💀".repeat(3 - state.lives)}</span></span><span>Mốc {Math.floor(state.index / 2) + 1} · {state.index + 1}/{state.words.length}</span><span>{state.score} điểm{state.mode === "rain" && ` · Combo ${state.combo}`}</span></div>
       <div className={styles.blastClue}><p>&gt; FIND THE WORD</p>{state.mode === "blast" && <h3>{word.meaning}</h3>}<small>{state.untimed ? "Không giới hạn thời gian" : `Còn ${Math.ceil((duration - state.elapsed) / 1000)} giây`}</small></div>
-      <div ref={field} className={styles.field} data-paused={state.paused || suspended} onPointerMove={(event) => { const bounds = event.currentTarget.getBoundingClientRect(); setAim(Math.atan2(event.clientX - bounds.left - bounds.width / 2, bounds.bottom - event.clientY) * 180 / Math.PI); }}>
+      <div
+        ref={field}
+        className={styles.field}
+        data-paused={state.paused || suspended}
+        onPointerMove={(event) => {
+          if (hoveredOptionId !== null) return;
+          const bounds = event.currentTarget.getBoundingClientRect();
+          const cannonCenterX = bounds.width / 2;
+          const cannonBottomY = bounds.height - 25;
+          const mouseX = event.clientX - bounds.left;
+          const mouseY = event.clientY - bounds.top;
+          setAim((Math.atan2(mouseX - cannonCenterX, cannonBottomY - mouseY) * 180) / Math.PI);
+        }}
+      >
         {state.mode === "blast" ? <>
           {state.options[state.index].map((option, index) => {
             const f = floats[index];
+            const isHovered = hoveredOptionId === option.id;
             return <button
               key={`${state.index}-${option.id}`}
               className={styles.floatingTarget}
               data-hit={shot === option.id ? (state.lastCorrect ? "correct" : "wrong") : undefined}
               data-nth={index + 1}
+              data-targeted={isHovered ? "true" : undefined}
               style={{
                 left: `${f?.x ?? 25}%`,
                 top: `${f?.y ?? 25}%`,
               }}
               disabled={suspended || state.paused || state.phase === "feedback" || state.disabled.includes(option.id)}
-              onClick={() => { setShot(option.id); dispatch({ type: "answer", value: option.word, optionId: option.id }); }}
+              onClick={() => {
+                setShot(option.id);
+                if (f && field.current) {
+                  setAim(getAngleToTarget(f.x, f.y, field.current));
+                }
+                dispatch({ type: "answer", value: option.word, optionId: option.id });
+              }}
+              onPointerEnter={() => {
+                if (state.phase === "playing" && !state.disabled.includes(option.id)) {
+                  setHoveredOptionId(option.id);
+                  if (f && field.current) {
+                    setAim(getAngleToTarget(f.x, f.y, field.current));
+                  }
+                }
+              }}
+              onPointerLeave={() => {
+                setHoveredOptionId((prev) => (prev === option.id ? null : prev));
+              }}
             >
               <kbd>{index + 1}</kbd>{option.word}
+              <span className={styles.reticle} aria-hidden="true">
+                <svg viewBox="0 0 32 32" fill="none">
+                  <circle cx="16" cy="16" r="8" stroke="currentColor" strokeWidth="1.5" />
+                  <line x1="16" y1="2" x2="16" y2="9" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
+                  <line x1="16" y1="23" x2="16" y2="30" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
+                  <line x1="2" y1="16" x2="9" y2="16" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
+                  <line x1="22" y1="16" x2="29" y2="16" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
+                  <circle cx="16" cy="16" r="1.5" fill="currentColor" />
+                </svg>
+              </span>
               {shot === option.id && <span key={state.answers.length} className={styles.hitBurst} aria-hidden="true">{state.lastCorrect ? "✦" : "×"}</span>}
             </button>;
           })}
         </> : <div ref={falling} className={styles.drop} style={{ transform: `translateY(${12 + fraction * travel}px)` }}><strong>{word.meaning}</strong><span aria-label="Gợi ý chữ">{rainHint(word.word, fraction)}</span></div>}
+        {state.mode === "blast" && hoveredFloat && state.phase === "playing" && !state.paused && !suspended && (
+          <svg className={styles.aimGuideOverlay} viewBox="0 0 1000 1000" preserveAspectRatio="none" aria-hidden="true">
+            <line
+              x1="500"
+              y1="870"
+              x2={hoveredFloat.x * 10}
+              y2={hoveredFloat.y * 10}
+              className={styles.aimLaserGuide}
+            />
+          </svg>
+        )}
         <div className={styles.ground} />
-        <div className={styles.cannon} aria-hidden="true"><svg viewBox="0 0 100 100"><g style={{ transform: `rotate(${aim}deg)`, transformOrigin: "50px 75px" }}><path d="M40 70V20Q50 10 60 20V70Z" /><path d="M43 25H57M43 35H57" /></g><path d="M25 85Q25 60 50 60Q75 60 75 85Z" /><ellipse cx="50" cy="85" rx="36" ry="8" /></svg></div>
+        <div className={styles.cannon} data-aiming={hoveredOptionId !== null ? "true" : undefined} aria-hidden="true">
+          <svg viewBox="0 0 100 100">
+            <g style={{ transform: `rotate(${aim}deg)`, transformOrigin: "50px 75px" }}>
+              <path d="M40 70V20Q50 10 60 20V70Z" />
+              <path d="M43 25H57M43 35H57" />
+              <ellipse cx="50" cy="20" rx="10" ry="4" className={styles.cannonMuzzle} />
+            </g>
+            <path d="M25 85Q25 60 50 60Q75 60 75 85Z" />
+            <ellipse cx="50" cy="85" rx="36" ry="8" />
+          </svg>
+        </div>
         {shot !== null && <div key={`${state.index}-${state.answers.length}`} className={styles.shotBeam} style={{ rotate: `${aim}deg` }} aria-hidden="true" />}
         {state.paused && <div className={styles.pause}><h3 className="text-2xl font-bold">Đã tạm dừng</h3><p className="text-sm text-muted">Thời gian và mạng được giữ nguyên.</p><button className={`${styles.button} ${styles.primary}`} onClick={() => dispatch({ type: "pause", paused: false })}>Tiếp tục chơi</button></div>}
       </div>
@@ -739,7 +838,7 @@ function ArcadeRound({ initialState, muted, suspended, onComplete, onExit, onRes
       <input ref={input} className={styles.input} aria-label="Từ tiếng Anh" placeholder="Gõ từ tiếng Anh..." value={typed} disabled={state.paused || state.phase === "feedback"} autoComplete="off" autoCapitalize="none" spellCheck={false} onChange={(event) => setTyped(event.target.value)} onKeyDown={(event) => { if (event.key === "Escape") setTyped(""); }} />
       <button className={`${styles.button} ${styles.primary}`} disabled={!typed.trim() || state.paused || state.phase === "feedback"}>Gửi</button>
     </form>}
-    {state.notice && (
+    {state.notice && (state.mode !== "blast" || state.lastCorrect) && (
       <div className={state.lastCorrect ? styles.success : styles.error} role="status">
         <p>
           {state.notice}
