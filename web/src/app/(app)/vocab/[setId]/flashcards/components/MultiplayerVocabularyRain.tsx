@@ -6,6 +6,7 @@ import { rainHint } from "@/lib/vocab-arcade";
 import { normalizeVocabularyAnswer } from "@/lib/vocab-content";
 import useVocabularyAudio from "../useVocabularyAudio";
 import { MultiplayerScoreboard } from "./MultiplayerScoreboard";
+import { MultiplayerCountdown } from "./MultiplayerCountdown";
 import styles from "../vocabulary.module.css";
 import { getClientDb } from "@/lib/firebase/client";
 import { collection, doc, onSnapshot } from "firebase/firestore";
@@ -22,19 +23,30 @@ interface GamePlayer {
   status: "waiting" | "playing" | "eliminated" | "finished";
 }
 
+interface RainDropData {
+  index: number;
+  lane: number;
+  spawnAt: number;
+}
+
 interface GameRoomData {
   code: string;
   hostId: string;
   gameMode: "blast" | "rain";
-  status: "waiting" | "playing" | "finished";
+  status: "waiting" | "countdown" | "playing" | "finished";
+  countdownEndsAt?: number;
   words: VocabWordCard[];
   currentIndex: number;
   roundStartedAt?: number;
+  activeDrops?: RainDropData[];
+  nextIndex?: number;
+  droppedWord?: VocabWordCard | null;
   lastWinner?: {
     uid: string;
     displayName: string;
     word: string;
     points: number;
+    at?: number;
   };
 }
 
@@ -65,9 +77,7 @@ function playFailSound() {
     osc.start(ctx.currentTime);
     osc.stop(ctx.currentTime + 0.35);
     osc.onended = () => ctx.close();
-  } catch {
-    /* audio unavailable */
-  }
+  } catch {}
 }
 
 function playSuccessSound() {
@@ -87,10 +97,10 @@ function playSuccessSound() {
     osc.start(ctx.currentTime);
     osc.stop(ctx.currentTime + 0.35);
     osc.onended = () => ctx.close();
-  } catch {
-    /* audio unavailable */
-  }
+  } catch {}
 }
+
+const DROP_DURATION = 13000; // 13 seconds from top of track to ground
 
 export function MultiplayerVocabularyRain({
   roomCode,
@@ -103,12 +113,16 @@ export function MultiplayerVocabularyRain({
 }: MultiplayerVocabularyRainProps) {
   const [room, setRoom] = useState<GameRoomData>(() => ({
     ...initialRoom,
-    status: initialRoom.status === "finished" ? "finished" : "playing",
+    status:
+      initialRoom.status === "finished"
+        ? "finished"
+        : initialRoom.status === "countdown"
+        ? "countdown"
+        : "playing",
   }));
   const [players, setPlayers] = useState<GamePlayer[]>(initialPlayers);
   const [soundQuiet, setSoundQuiet] = useState(muted);
   const [typed, setTyped] = useState("");
-  const [hasAnswered, setHasAnswered] = useState(false);
   const [feedback, setFeedback] = useState<{ message: string; tone: "correct" | "wrong" } | null>(null);
 
   // Dedicated locking state for when local player runs out of hearts
@@ -120,14 +134,13 @@ export function MultiplayerVocabularyRain({
 
   const [myUid, setMyUid] = useState<string>(currentUserId);
   const [winnerNotice, setWinnerNotice] = useState<{ displayName: string; points: number; word: string } | null>(null);
-  const [crashedNotice, setCrashedNotice] = useState<{ word: string; meaning: string } | null>(null);
 
   const inputRef = useRef<HTMLInputElement>(null);
   const { speakWord } = useVocabularyAudio();
+  const expiredRef = useRef<Set<number>>(new Set());
 
-  const QUESTION_DURATION = 13; // 13 seconds for each rain drop
-  const [timeLeft, setTimeLeft] = useState(QUESTION_DURATION);
-  const [fraction, setFraction] = useState(0);
+  // Real-time animation clock for smooth falling drops
+  const [now, setNow] = useState(Date.now());
 
   useEffect(() => {
     if (currentUserId && currentUserId !== myUid) {
@@ -166,6 +179,10 @@ export function MultiplayerVocabularyRain({
   const allEliminated = players.length >= 1 && players.every((p) => (p.lives ?? 3) <= 0);
   const isFinished = finalized || room.status === "finished" || allEliminated;
 
+  const isCountdown =
+    room.status === "countdown" ||
+    (Boolean(room.countdownEndsAt) && Date.now() < (room.countdownEndsAt || 0));
+
   useEffect(() => {
     if (isFinished && !finalized) {
       setFinalized(true);
@@ -185,9 +202,9 @@ export function MultiplayerVocabularyRain({
       }, 3500);
       return () => window.clearTimeout(timer);
     }
-  }, [room.currentIndex, room.lastWinner?.uid, room.lastWinner?.points]);
+  }, [room.lastWinner?.at, room.lastWinner?.uid, room.lastWinner?.word]);
 
-  // Real-time listener via Firestore with polling fallback
+  // Real-time listener via Firestore with guarded polling fallback
   useEffect(() => {
     let unsubRoom: (() => void) | null = null;
     let unsubPlayers: (() => void) | null = null;
@@ -209,8 +226,19 @@ export function MultiplayerVocabularyRain({
             setRoom((prev) => {
               if (prev.status === "finished") return prev;
               if (data.status === "finished") return { ...prev, ...data, status: "finished" };
-              if ((data.currentIndex ?? 0) < (prev.currentIndex ?? 0)) return prev;
-              return data;
+              // Guard re-renders if no state difference
+              if (
+                prev.status === data.status &&
+                prev.currentIndex === data.currentIndex &&
+                prev.lastWinner?.at === data.lastWinner?.at &&
+                prev.roundStartedAt === data.roundStartedAt &&
+                prev.countdownEndsAt === data.countdownEndsAt &&
+                JSON.stringify(prev.activeDrops) === JSON.stringify(data.activeDrops) &&
+                prev.droppedWord?.id === data.droppedWord?.id
+              ) {
+                return prev;
+              }
+              return { ...prev, ...data };
             });
           }
         },
@@ -222,12 +250,30 @@ export function MultiplayerVocabularyRain({
         (snap) => {
           const list: GamePlayer[] = [];
           snap.forEach((d) => list.push(d.data() as GamePlayer));
-          if (list.length > 0) setPlayers(list);
+          if (list.length > 0) {
+            setPlayers((prev) => {
+              if (prev.length === list.length) {
+                const identical = prev.every((p, i) => {
+                  const n = list[i];
+                  return (
+                    p.uid === n.uid &&
+                    p.score === n.score &&
+                    p.lives === n.lives &&
+                    p.status === n.status &&
+                    p.combo === n.combo
+                  );
+                });
+                if (identical) return prev;
+              }
+              return list;
+            });
+          }
         },
         () => {},
       );
     } catch {}
 
+    // Polling fallback every 2500ms (reduced from 400ms to eliminate stutter)
     const pollTimer = window.setInterval(async () => {
       try {
         const res = await fetch(`/api/vocab/game-room?code=${roomCode}`);
@@ -241,18 +287,46 @@ export function MultiplayerVocabularyRain({
             }
             setRoom((prev) => {
               if (prev.status === "finished") return prev;
-              if (json.data.room.status === "finished") return { ...prev, ...json.data.room, status: "finished" };
-              if ((json.data.room.currentIndex ?? 0) < (prev.currentIndex ?? 0)) return prev;
-              return json.data.room;
+              const r = json.data.room;
+              if (r.status === "finished") return { ...prev, ...r, status: "finished" };
+              if (
+                prev.status === r.status &&
+                prev.currentIndex === r.currentIndex &&
+                prev.lastWinner?.at === r.lastWinner?.at &&
+                prev.roundStartedAt === r.roundStartedAt &&
+                JSON.stringify(prev.activeDrops) === JSON.stringify(r.activeDrops) &&
+                prev.droppedWord?.id === r.droppedWord?.id
+              ) {
+                return prev;
+              }
+              return { ...prev, ...r };
             });
           }
-          if (json.data.players) setPlayers(json.data.players);
+          if (json.data.players) {
+            const list = json.data.players as GamePlayer[];
+            setPlayers((prev) => {
+              if (prev.length === list.length) {
+                const identical = prev.every((p, i) => {
+                  const n = list[i];
+                  return (
+                    p.uid === n.uid &&
+                    p.score === n.score &&
+                    p.lives === n.lives &&
+                    p.status === n.status &&
+                    p.combo === n.combo
+                  );
+                });
+                if (identical) return prev;
+              }
+              return list;
+            });
+          }
           if (json.data.currentUserId) {
             setMyUid((prev) => prev || json.data.currentUserId);
           }
         }
       } catch {}
-    }, 400);
+    }, 2500);
 
     return () => {
       if (unsubRoom) unsubRoom();
@@ -261,10 +335,7 @@ export function MultiplayerVocabularyRain({
     };
   }, [roomCode, onReturnToLobby]);
 
-  // Current word
-  const currentIndex = room.currentIndex ?? 0;
-  const currentWord = room.words?.[currentIndex];
-
+  // Identify current player accurately
   const currentPlayer =
     players.find((p) => p.uid === myUid) ||
     players.find((p) => p.uid === currentUserId) ||
@@ -273,160 +344,196 @@ export function MultiplayerVocabularyRain({
   const isEliminated =
     isLocalEliminated || Boolean(currentPlayer && (currentPlayer.lives ?? 3) <= 0);
 
-  // Sync state on question change
-  const [prevIndex, setPrevIndex] = useState(currentIndex);
-  if (prevIndex !== currentIndex) {
-    setPrevIndex(currentIndex);
-    setTimeLeft(QUESTION_DURATION);
-    setFraction(0);
-    if (!isEliminated) {
-      setHasAnswered(false);
-      setTyped("");
-      setFeedback(null);
+  // Active falling drops from room, with fallback
+  const activeDrops: RainDropData[] = React.useMemo(() => {
+    if (room.activeDrops && room.activeDrops.length > 0) {
+      return room.activeDrops;
     }
-  }
+    const idx = room.currentIndex ?? 0;
+    if (room.words?.[idx]) {
+      return [{ index: idx, lane: 0, spawnAt: room.roundStartedAt || Date.now() }];
+    }
+    return [];
+  }, [room.activeDrops, room.currentIndex, room.words, room.roundStartedAt]);
 
-  // Smooth falling animation ticker
+  // Falling animation loop: updates `now` timestamp for smooth CSS translateY
   useEffect(() => {
-    if (isFinished) return;
+    if (isFinished || isEliminated || isCountdown) return;
 
-    let start = performance.now();
-    const interval = window.setInterval(() => {
-      const elapsed = (performance.now() - start) / 1000;
-      const frac = Math.min(1, elapsed / QUESTION_DURATION);
-      setFraction(frac);
-      const remaining = Math.max(0, Math.ceil(QUESTION_DURATION - elapsed));
-      setTimeLeft(remaining);
+    let rafId: number;
+    let lastTick = performance.now();
 
-      // Drop reached the ground!
-      if (frac >= 1) {
-        window.clearInterval(interval);
-        handleDropCrash();
+    function loop(current: number) {
+      if (current - lastTick >= 60) {
+        setNow(Date.now());
+        lastTick = current;
       }
-    }, 100);
-
-    return () => window.clearInterval(interval);
-  }, [currentIndex, isFinished]);
-
-  // Auto-focus input when alive
-  useEffect(() => {
-    if (!isEliminated && !isFinished) {
-      inputRef.current?.focus({ preventScroll: true });
-    }
-  }, [currentIndex, isEliminated, isFinished]);
-
-  // Drop hits ground without being caught
-  const handleDropCrash = async () => {
-    if (isFinished) return;
-    if (!soundQuiet) playFailSound();
-
-    if (currentWord) {
-      setCrashedNotice({ word: currentWord.word, meaning: currentWord.meaning });
-      window.setTimeout(() => setCrashedNotice(null), 3000);
+      rafId = requestAnimationFrame(loop);
     }
 
-    // If local player is alive and hasn't answered, subtract 1 heart
-    if (currentPlayer && (currentPlayer.lives ?? 3) > 0 && !hasAnswered) {
-      if ((currentPlayer.lives ?? 3) - 1 <= 0) {
-        setIsLocalEliminated(true);
-      }
-      fetch("/api/vocab/game-room/answer", {
+    rafId = requestAnimationFrame(loop);
+    return () => cancelAnimationFrame(rafId);
+  }, [isFinished, isEliminated, isCountdown]);
+
+  // Drop crash / expiration handler
+  const handleDropCrash = async (dropIndex: number) => {
+    if (expiredRef.current.has(dropIndex)) return;
+    expiredRef.current.add(dropIndex);
+
+    const crashedWord = room.words?.[dropIndex];
+    if (crashedWord && !soundQuiet) {
+      playFailSound();
+      window.setTimeout(() => speakWord(crashedWord), 350);
+    }
+
+    try {
+      await fetch("/api/vocab/game-room/rain-drop-expire", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ code: roomCode, dropIndex }),
+      });
+    } catch {}
+  };
+
+  // Submit correct drop answer
+  const submitDropAnswer = async (dropIndex: number, word: VocabWordCard) => {
+    if (isEliminated || isFinished || isCountdown) return;
+    if (!currentPlayer) return;
+
+    setFeedback({
+      message: `Chính xác! Bạn đã bắt được từ "${word.word}"!`,
+      tone: "correct",
+    });
+
+    const pointsEarned = 15 + Math.min(((currentPlayer.combo || 0) + 1) * 2, 10);
+    setPlayers((prev) =>
+      prev.map((p) =>
+        p.uid === currentPlayer.uid
+          ? { ...p, score: (p.score || 0) + pointsEarned, combo: (p.combo || 0) + 1 }
+          : p
+      )
+    );
+
+    if (!soundQuiet) {
+      playSuccessSound();
+      window.setTimeout(() => speakWord(word), 200);
+    }
+
+    try {
+      const res = await fetch("/api/vocab/game-room/answer", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           code: roomCode,
-          questionIndex: currentIndex,
-          correct: false,
-          selected: "",
+          questionIndex: dropIndex,
+          correct: true,
+          selected: word.word,
         }),
-      }).catch(() => {});
-    }
-
-    // Host or fallback advances question
-    fetch("/api/vocab/game-room/next", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ code: roomCode, questionIndex: currentIndex }),
-    }).catch(() => {});
-  };
-
-  // Submit word (either on Enter or auto-catch when exact match)
-  const handleSubmitWord = async (text: string) => {
-    if (isEliminated || hasAnswered || isFinished) return;
-    if (!currentWord || !currentPlayer) return;
-
-    const normalizedTyped = normalizeVocabularyAnswer(text);
-    const normalizedExpected = normalizeVocabularyAnswer(currentWord.word);
-
-    if (normalizedTyped === normalizedExpected) {
-      // CORRECT CATCH!
-      setHasAnswered(true);
-      setTyped("");
-      setFeedback({ message: `✓ Chính xác! Bạn đã bắt được từ "${currentWord.word}"!`, tone: "correct" });
-
-      if (!soundQuiet) {
-        playSuccessSound();
-        window.setTimeout(() => speakWord(currentWord), 200);
+      });
+      const json = await res.json();
+      if (json.success && json.data) {
+        if (json.data.status === "finished") {
+          setFinalized(true);
+          setRoom((prev) => ({ ...prev, status: "finished" }));
+        }
       }
-
-      try {
-        await fetch("/api/vocab/game-room/answer", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            code: roomCode,
-            questionIndex: currentIndex,
-            correct: true,
-            selected: currentWord.word,
-          }),
-        });
-      } catch {}
-    } else {
-      // INCORRECT ATTEMPT
-      setFeedback({ message: "Chưa đúng, thử lại nhanh!", tone: "wrong" });
-      window.setTimeout(() => setFeedback(null), 1200);
-    }
+    } catch {}
   };
 
+  // Handle typing input and match prefix in real time
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const val = e.target.value;
     setTyped(val);
-    if (!currentWord) return;
 
-    // Fast automatic catch if typed full word
-    if (normalizeVocabularyAnswer(val) === normalizeVocabularyAnswer(currentWord.word)) {
-      handleSubmitWord(val);
+    const normalized = normalizeVocabularyAnswer(val);
+    if (!normalized) return;
+
+    // Check if typed equals ANY active drop
+    for (const drop of activeDrops) {
+      if (drop.spawnAt > now) continue;
+      const word = room.words?.[drop.index];
+      if (word && normalizeVocabularyAnswer(word.word) === normalized) {
+        submitDropAnswer(drop.index, word);
+        setTyped("");
+        return;
+      }
     }
   };
 
-  // Lane determination (3 distinct lanes across the screen)
-  const lanePositions = [10, 40, 70];
-  const laneIndex = (currentIndex % 3);
-  const laneLeft = lanePositions[laneIndex];
+  const handleFormSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    const normalized = normalizeVocabularyAnswer(typed);
+    if (!normalized) return;
 
-  // Hint generation based on prefix and falling fraction
-  const currentPrefix = normalizeVocabularyAnswer(typed);
-  const matchesPrefix = !!currentPrefix && !!currentWord && normalizeVocabularyAnswer(currentWord.word).startsWith(currentPrefix);
-  const displayHint = currentWord
-    ? matchesPrefix
-      ? [...currentWord.word].map((letter, i) => (i < typed.trim().length ? letter : "_")).join(" ")
-      : rainHint(currentWord.word, fraction)
-    : "";
+    for (const drop of activeDrops) {
+      if (drop.spawnAt > now) continue;
+      const word = room.words?.[drop.index];
+      if (word && normalizeVocabularyAnswer(word.word) === normalized) {
+        submitDropAnswer(drop.index, word);
+        setTyped("");
+        return;
+      }
+    }
 
-  // ---- PODIUM / VICTORY SCREEN ----
+    setFeedback({
+      message: "Chưa khớp với từ nào đang rơi, thử lại nhé!",
+      tone: "wrong",
+    });
+  };
+
+  // Focus input automatically
+  useEffect(() => {
+    if (!isCountdown && !isEliminated && !isFinished) {
+      inputRef.current?.focus({ preventScroll: true });
+    }
+  }, [isCountdown, isEliminated, isFinished]);
+
+  // Check drop crash conditions
+  useEffect(() => {
+    if (isFinished || isCountdown) return;
+
+    for (const drop of activeDrops) {
+      if (now < drop.spawnAt) continue;
+      const elapsed = now - drop.spawnAt;
+      if (elapsed >= DROP_DURATION) {
+        handleDropCrash(drop.index);
+      }
+    }
+  }, [now, activeDrops, isFinished, isCountdown]);
+
+  // RENDER: 5-Second Countdown Screen
+  if (isCountdown && room.countdownEndsAt) {
+    return (
+      <MultiplayerCountdown
+        countdownEndsAt={room.countdownEndsAt}
+        gameMode="rain"
+        roomCode={roomCode}
+        players={players}
+        currentUserId={myUid || currentUserId}
+        muted={soundQuiet}
+        onFinish={() => {
+          setRoom((prev) => ({ ...prev, status: "playing" }));
+        }}
+      />
+    );
+  }
+
+  // RENDER: Game Over / Finished Screen
   if (isFinished) {
     const sorted = [...players].sort((a, b) => b.score - a.score);
     const winner = sorted[0];
 
     return (
-      <div className={`${styles.podiumEntrance} flex flex-col items-center justify-center min-h-[70vh] p-6 text-[var(--ink)]`}>
-        <div className="bg-[var(--surface)] border border-[var(--line)] rounded-3xl p-8 max-w-xl w-full shadow-2xl text-center">
-          <div className="text-6xl mb-3">🌧️🏆</div>
-          <h1 className="text-3xl font-black tracking-tight mb-2 text-[var(--ink)]">TỔNG KẾT MƯA TỪ VỰNG</h1>
+      <div className="relative min-h-[580px] flex flex-col items-center justify-center p-6 text-center select-none overflow-hidden rounded-3xl border border-[var(--line)] bg-[var(--surface)] shadow-2xl">
+        <div className="w-full max-w-xl mx-auto py-6">
+          <div className="text-6xl mb-3 animate-bounce">🌧️</div>
+          <h2 className="text-3xl font-black text-[var(--ink)] mb-2 tracking-wide uppercase">
+            TỔNG KẾT MƯA TỪ VỰNG
+          </h2>
           <p className="text-[var(--muted)] mb-8 font-medium">
             {allEliminated
               ? "Toàn bộ người chơi đã hết tim — Trận đấu kết thúc!"
-              : `Phòng: ${roomCode} · Hoàn thành ${room.words.length} từ vựng`}
+              : `Phòng: ${roomCode} · Hoàn thành các từ rơi`}
           </p>
 
           {/* Winner banner */}
@@ -502,8 +609,10 @@ export function MultiplayerVocabularyRain({
     );
   }
 
+  const prefix = normalizeVocabularyAnswer(typed);
+
   return (
-    <section className={`${styles.arcadeRound} relative min-h-[640px]`} aria-label="Mưa Từ Vựng Đối Kháng">
+    <section className={`${styles.arcadeRound} relative min-h-[640px]`} aria-label="Mưa từ vựng Đối Kháng">
       {/* Realtime Scoreboard in corner */}
       <MultiplayerScoreboard players={players} currentUserId={myUid || currentUserId} />
 
@@ -529,80 +638,90 @@ export function MultiplayerVocabularyRain({
         </div>
       </header>
 
-      {/* Scoreboard bar */}
-      <div className={styles.scoreboard}>
-        <span className={styles.hearts} aria-label={`Còn ${currentPlayer?.lives ?? 0} mạng`}>
-          {"❤️".repeat(Math.max(0, currentPlayer?.lives ?? 0))}
-          <span>{"🤍".repeat(Math.max(0, 3 - Math.max(0, currentPlayer?.lives ?? 0)))}</span>
-        </span>
-        <span className="font-bold">
-          Từ {currentIndex + 1}/{room.words.length}
-        </span>
-        <span className="font-mono font-bold text-amber-400">
-          ⏳ {timeLeft}s
-        </span>
-        <strong>{currentPlayer?.score ?? 0} điểm</strong>
-      </div>
+      {/* Rain Arena matching Solo Mode */}
+      <div className={styles.rainArena}>
+        {/* Scoreboard bar */}
+        <div className={styles.scoreboard}>
+          <span className={styles.hearts} aria-label={`Còn ${currentPlayer?.lives ?? 0} mạng`}>
+            {"❤️".repeat(Math.max(0, currentPlayer?.lives ?? 0))}
+            <span>{"🤍".repeat(Math.max(0, 3 - Math.max(0, currentPlayer?.lives ?? 0)))}</span>
+          </span>
+          <span className="font-bold">
+            Số từ còn lại: {Math.max(0, (room.words?.length || 0) - (room.nextIndex || 0))}
+          </span>
+          <span className="font-mono font-bold text-teal-400">
+            Combo x{Math.min(4, 1 + Math.floor((currentPlayer?.combo || 0) / 3))}
+          </span>
+          <strong>{currentPlayer?.score ?? 0} điểm</strong>
+        </div>
 
-      {/* Arena */}
-      <div className={styles.rainArena} style={{ minHeight: "440px" }}>
-        {/* Winner or Miss Notice */}
         {winnerNotice && (
           <div className="m-3 bg-amber-400/20 border border-amber-400/40 text-amber-300 px-4 py-2 rounded-xl text-xs sm:text-sm font-bold shadow-sm flex items-center justify-center gap-2 animate-pulse">
             <span>⚡</span>
             <span>
-              {winnerNotice.displayName} vừa cướp điểm từ &ldquo;{winnerNotice.word}&rdquo; (+{winnerNotice.points}đ)!
+              {winnerNotice.displayName} vừa bắt đúng &ldquo;{winnerNotice.word}&rdquo; (+{winnerNotice.points}đ)!
             </span>
           </div>
         )}
 
-        {crashedNotice && (
-          <div className="m-3 bg-rose-500/20 border border-rose-500/40 text-rose-300 px-4 py-2 rounded-xl text-xs sm:text-sm font-bold shadow-sm flex items-center justify-center gap-2">
-            <span>💥</span>
-            <span>
-              Đã rơi chạm đất! Đáp án: <strong>{crashedNotice.word}</strong> ({crashedNotice.meaning})
-            </span>
-          </div>
-        )}
+        {/* Rain Falling Field with Lanes */}
+        <div className={styles.rainField} data-paused={isFinished || isEliminated}>
+          {activeDrops.map((drop) => {
+            if (now < drop.spawnAt) return null;
+            const word = room.words?.[drop.index];
+            if (!word) return null;
 
-        {/* Rain Falling Field */}
-        <div className={styles.rainField} style={{ height: "350px", position: "relative" }}>
-          {currentWord && (
-            <div
-              key={`drop-${currentIndex}`}
-              style={{
-                position: "absolute",
-                left: `${laneLeft}%`,
-                top: `${fraction * 65}%`,
-                transition: "top 100ms linear",
-                width: "min(90%, 250px)",
-                transform: "translateX(-10%)",
-              }}
-            >
+            const elapsed = now - drop.spawnAt;
+            const fraction = Math.min(1, Math.max(0, elapsed / DROP_DURATION));
+            const remainingSec = Math.max(0, Math.ceil((DROP_DURATION - elapsed) / 1000));
+
+            const isMatching = Boolean(
+              prefix && normalizeVocabularyAnswer(word.word).startsWith(prefix)
+            );
+
+            const hint = isMatching
+              ? [...word.word].map((letter, i) => (i < typed.trim().length ? letter : "_")).join("")
+              : rainHint(word.word, fraction);
+
+            return (
               <div
-                className={styles.rainClue}
-                data-matching={matchesPrefix ? "true" : undefined}
-                style={{
-                  borderWidth: "2px",
-                  borderColor: matchesPrefix ? "var(--teal-ink)" : undefined,
-                  boxShadow: "0 8px 24px rgba(0,0,0,0.15)",
-                }}
+                key={`drop-${drop.index}`}
+                className={styles.rainTrack}
+                data-lane={drop.lane}
+                style={{ transform: `translateY(${fraction * 100}%)` }}
               >
-                <strong className="text-base sm:text-lg font-bold text-[var(--ink)] block mb-1">
-                  {currentWord.meaning}
-                </strong>
-                <span className="text-xs font-mono tracking-widest text-[var(--muted)] block mb-1">
-                  {displayHint}
-                </span>
-                <small className="text-[11px] font-semibold text-amber-500">
-                  {timeLeft}s
-                </small>
+                <div
+                  className={styles.rainClue}
+                  data-matching={isMatching ? "true" : undefined}
+                >
+                  <strong title={word.meaning}>{word.meaning}</strong>
+                  <span aria-label="Gợi ý chữ">{hint}</span>
+                  <small>{remainingSec}s</small>
+                </div>
               </div>
-            </div>
-          )}
+            );
+          })}
 
           <div className={styles.ground} />
         </div>
+
+        {/* Answer bar — shows the most recently dropped word */}
+        {room.droppedWord && (
+          <div className={styles.rainAnswerBar} data-correct={false}>
+            <button
+              type="button"
+              className={styles.rainSpeakBtn}
+              onClick={() => speakWord(room.droppedWord!)}
+              aria-label={`Nghe ${room.droppedWord.word}`}
+            >
+              🔊
+            </button>
+            <span>
+              Đáp án vừa rơi chạm đất: <strong>{room.droppedWord.word}</strong>
+            </span>
+            <span className={styles.rainAnswerMeaning}>{room.droppedWord.meaning}</span>
+          </div>
+        )}
       </div>
 
       {/* Spectator Locked Screen OR Typing Form */}
@@ -626,19 +745,15 @@ export function MultiplayerVocabularyRain({
           </div>
         </div>
       ) : (
-        <form
-          className="flex gap-2 max-w-2xl mx-auto w-full mt-3"
-          onSubmit={(e) => {
-            e.preventDefault();
-            handleSubmitWord(typed);
-          }}
-        >
+        <form className={styles.rainInput} onSubmit={handleFormSubmit}>
           <input
             ref={inputRef}
             type="text"
-            className={`${styles.input} flex-1 text-base sm:text-lg font-semibold py-3 px-4 rounded-xl border border-[var(--line)] bg-[var(--surface)] text-[var(--ink)] placeholder:text-[var(--muted)] focus:outline-none focus:ring-2 focus:ring-amber-400`}
+            className={styles.input}
+            aria-label="Từ tiếng Anh"
             placeholder="Gõ từ tiếng Anh tương ứng với nghĩa đang rơi..."
             value={typed}
+            disabled={isEliminated || isFinished || isCountdown}
             autoComplete="off"
             autoCapitalize="none"
             spellCheck={false}
@@ -649,8 +764,8 @@ export function MultiplayerVocabularyRain({
           />
           <button
             type="submit"
-            disabled={!typed.trim()}
-            className={`${styles.button} ${styles.primary} px-6 py-3 font-bold rounded-xl disabled:opacity-50 disabled:cursor-not-allowed`}
+            disabled={!typed.trim() || isEliminated || isFinished || isCountdown}
+            className={`${styles.button} ${styles.primary}`}
           >
             Bắt từ
           </button>
@@ -673,7 +788,7 @@ export function MultiplayerVocabularyRain({
       <footer className="text-center text-xs text-[var(--muted)] mt-2">
         {isEliminated
           ? "Bạn đang ở chế độ quan sát trận đấu."
-          : "Gõ nhanh từ tiếng Anh trước khi từ rơi chạm đất. Người đầu tiên gõ đúng sẽ cướp được điểm!"}
+          : "Gõ nhanh từ tiếng Anh trước khi từ rơi chạm đất. Tối đa 2 từ rơi cùng lúc trên 2 làn. Esc xoá chữ đang gõ!"}
       </footer>
     </section>
   );

@@ -166,26 +166,48 @@ export const startGame = async (user: AppUser, code: string) => {
     
     const playersRef = roomRef.collection("players");
     const playersSnapshot = await transaction.get(playersRef);
-    
-    if (playersSnapshot.size < 2) {
-      throw BadRequest("Need at least 2 players to start");
-    }
-    
-    const shuffledWords = [...room.words];
+
+    const countdownDuration = 5000;
+    const now = Date.now();
+    const countdownEndsAt = now + countdownDuration;
+
+    const shuffledWords = [...(room.words || [])];
     for (let i = shuffledWords.length - 1; i > 0; i--) {
       const j = Math.floor(Math.random() * (i + 1));
       [shuffledWords[i], shuffledWords[j]] = [shuffledWords[j], shuffledWords[i]];
     }
-    
+
+    const isRain = room.gameMode === "rain";
+    const initialDrops: Array<{ index: number; lane: number; spawnAt: number }> = [];
+    let nextIndex = 0;
+
+    if (isRain && shuffledWords.length > 0) {
+      // First drop in Lane 0 at countdown end
+      initialDrops.push({ index: 0, lane: 0, spawnAt: countdownEndsAt });
+      nextIndex = 1;
+      // Second drop in Lane 1 3.8s later (if at least 2 words exist)
+      if (shuffledWords.length > 1) {
+        initialDrops.push({ index: 1, lane: 1, spawnAt: countdownEndsAt + 3800 });
+        nextIndex = 2;
+      }
+    }
+
     transaction.update(roomRef, {
-      status: "playing",
+      status: "countdown",
+      countdownEndsAt,
       words: shuffledWords,
       currentIndex: 0,
-      roundStartedAt: Date.now(),
+      roundStartedAt: countdownEndsAt,
       questionAnswers: {},
+      ...(isRain
+        ? {
+            activeDrops: initialDrops,
+            nextIndex,
+          }
+        : {}),
     });
-    
-    playersSnapshot.docs.forEach(doc => {
+
+    playersSnapshot.docs.forEach((doc) => {
       transaction.update(doc.ref, {
         status: "playing",
         score: 0,
@@ -230,9 +252,28 @@ export const submitAnswer = async (
     if (!roomDoc.exists) throw NotFound("Room not found");
 
     const room = roomDoc.data()!;
-    if (room.status !== "playing") throw BadRequest("Game is not active");
-    if (room.currentIndex !== questionIndex) {
-      return { skipped: true, reason: "Question already advanced" };
+    const now = Date.now();
+    if (room.status === "countdown") {
+      if (now < (room.countdownEndsAt || 0)) {
+        return { skipped: true, reason: "Countdown in progress" };
+      }
+      transaction.update(roomRef, { status: "playing" });
+    } else if (room.status !== "playing") {
+      throw BadRequest("Game is not active");
+    }
+
+    const isRain = room.gameMode === "rain";
+    const activeDrops: Array<{ index: number; lane: number; spawnAt: number }> = room.activeDrops || [];
+
+    if (isRain) {
+      const dropExists = activeDrops.some((d) => d.index === questionIndex);
+      if (!dropExists && room.currentIndex !== questionIndex) {
+        return { skipped: true, reason: "Drop already resolved or expired" };
+      }
+    } else {
+      if (room.currentIndex !== questionIndex) {
+        return { skipped: true, reason: "Question already advanced" };
+      }
     }
 
     const playerRef = roomRef.collection("players").doc(user.uid);
@@ -270,8 +311,11 @@ export const submitAnswer = async (
       newCombo = (player.combo || 0) + 1;
       points = 15 + Math.min(newCombo * 2, 10);
     } else {
-      newLives = Math.max(0, currentLives - 1);
-      newCombo = 0;
+      // In rain mode, typing mismatch does NOT deduct lives (only ground crashes do)
+      if (!isRain) {
+        newLives = Math.max(0, currentLives - 1);
+        newCombo = 0;
+      }
     }
 
     questionAnswers[user.uid] = { uid: user.uid, correct, time: Date.now() };
@@ -291,8 +335,8 @@ export const submitAnswer = async (
       }),
     });
 
-    // 1. If correct: IMMEDIATELY advance to next question (first to answer snatches the point!)
-    if (correct) {
+    // 1. If correct in Word Blast mode: IMMEDIATELY advance to next question
+    if (correct && !isRain) {
       let nextIndex = room.currentIndex;
       let newStatus = room.status;
 
@@ -329,31 +373,77 @@ export const submitAnswer = async (
       };
     }
 
-    // 2. If incorrect: Check if ALL players are out of hearts
-    const anyAlive = playersSnapshot.docs.some((d) => {
-      if (d.id === user.uid) return newLives > 0;
-      return (d.data().lives ?? 3) > 0;
-    });
+    // 2. If correct in Rain mode: Remove the caught drop and spawn next drop into that lane
+    if (correct && isRain) {
+      const clearedDrop = activeDrops.find((d) => d.index === questionIndex);
+      const remainingDrops = activeDrops.filter((d) => d.index !== questionIndex);
+      const clearedLane = clearedDrop ? clearedDrop.lane : 0;
+      let nextIndex = typeof room.nextIndex === "number" ? room.nextIndex : (room.currentIndex || 0) + 1;
+      let newStatus = room.status;
 
-    if (!anyAlive) {
-      // Hết tim của toàn bộ người chơi -> Tổng kết game ngay lập tức
+      // Spawn next word into the cleared lane if words remain
+      if (nextIndex < room.words.length) {
+        remainingDrops.push({
+          index: nextIndex,
+          lane: clearedLane,
+          spawnAt: Date.now(),
+        });
+        nextIndex += 1;
+      } else if (remainingDrops.length === 0) {
+        newStatus = "finished";
+      }
+
+      const winnerInfo = {
+        uid: user.uid,
+        displayName: player.displayName || user.displayName || "Người chơi",
+        word: selected,
+        points,
+        at: Date.now(),
+      };
+
       transaction.update(roomRef, {
-        status: "finished",
+        activeDrops: remainingDrops,
+        nextIndex,
+        status: newStatus,
+        lastWinner: winnerInfo,
       });
+
       return {
-        points: 0,
+        points,
         lives: newLives,
-        combo: 0,
-        allEliminated: true,
-        status: "finished",
+        combo: newCombo,
+        advanced: true,
+        activeDrops: remainingDrops,
+        nextIndex,
+        status: newStatus,
+        lastWinner: winnerInfo,
       };
     }
 
-    // Do NOT advance question on wrong answer!
-    // Players can keep trying remaining options until correct, out of hearts, or timeout.
-    transaction.update(roomRef, {
-      questionAnswers,
-    });
+    // 3. If incorrect in Word Blast: Check if ALL players are out of hearts
+    if (!isRain) {
+      const anyAlive = playersSnapshot.docs.some((d) => {
+        if (d.id === user.uid) return newLives > 0;
+        return (d.data().lives ?? 3) > 0;
+      });
+
+      if (!anyAlive) {
+        transaction.update(roomRef, {
+          status: "finished",
+        });
+        return {
+          points: 0,
+          lives: newLives,
+          combo: 0,
+          allEliminated: true,
+          status: "finished",
+        };
+      }
+
+      transaction.update(roomRef, {
+        questionAnswers,
+      });
+    }
 
     return {
       points: 0,
@@ -374,7 +464,7 @@ export const advanceQuestion = async (user: AppUser, code: string, questionIndex
     if (!roomDoc.exists) throw NotFound("Room not found");
 
     const room = roomDoc.data()!;
-    if (room.status !== "playing") return { status: room.status };
+    if (room.status !== "playing" && room.status !== "countdown") return { status: room.status };
     if (room.currentIndex !== questionIndex) {
       return { currentIndex: room.currentIndex, status: room.status };
     }
@@ -383,7 +473,7 @@ export const advanceQuestion = async (user: AppUser, code: string, questionIndex
     const anyAlive = playersSnapshot.docs.some((d) => (d.data().lives ?? 3) > 0);
 
     let nextIndex = room.currentIndex + 1;
-    let newStatus = room.status;
+    let newStatus = room.status === "countdown" ? "playing" : room.status;
 
     if (!anyAlive || nextIndex >= room.words.length) {
       newStatus = "finished";
@@ -397,6 +487,78 @@ export const advanceQuestion = async (user: AppUser, code: string, questionIndex
     });
 
     return { currentIndex: nextIndex, status: newStatus };
+  });
+};
+
+export const expireRainDrop = async (
+  user: AppUser,
+  code: string,
+  dropIndex: number
+) => {
+  const roomRef = adminDb.collection(COLLECTIONS.gameRooms).doc(code);
+
+  return await adminDb.runTransaction(async (transaction) => {
+    const roomDoc = await transaction.get(roomRef);
+    if (!roomDoc.exists) throw NotFound("Room not found");
+
+    const room = roomDoc.data()!;
+    if (room.status !== "playing" && room.status !== "countdown") {
+      return { status: room.status };
+    }
+
+    const activeDrops: Array<{ index: number; lane: number; spawnAt: number }> = room.activeDrops || [];
+    const targetDrop = activeDrops.find((d) => d.index === dropIndex);
+    if (!targetDrop) {
+      return { skipped: true, reason: "Drop already resolved" };
+    }
+
+    const playersSnapshot = await transaction.get(roomRef.collection("players"));
+    const remainingDrops = activeDrops.filter((d) => d.index !== dropIndex);
+    let nextIndex = typeof room.nextIndex === "number" ? room.nextIndex : (room.currentIndex || 0) + 1;
+    let newStatus = room.status === "countdown" ? "playing" : room.status;
+
+    // Deduct 1 life from all alive players for the crashed word
+    let anyAlive = false;
+    playersSnapshot.docs.forEach((doc) => {
+      const p = doc.data();
+      const currentLives = typeof p.lives === "number" ? p.lives : 3;
+      const updatedLives = Math.max(0, currentLives - 1);
+      if (updatedLives > 0) anyAlive = true;
+      transaction.update(doc.ref, {
+        lives: updatedLives,
+        combo: 0,
+        status: updatedLives <= 0 ? "eliminated" : "playing",
+      });
+    });
+
+    if (!anyAlive) {
+      newStatus = "finished";
+    } else if (nextIndex < room.words.length) {
+      remainingDrops.push({
+        index: nextIndex,
+        lane: targetDrop.lane,
+        spawnAt: Date.now(),
+      });
+      nextIndex += 1;
+    } else if (remainingDrops.length === 0) {
+      newStatus = "finished";
+    }
+
+    const droppedWord = room.words?.[dropIndex] || null;
+
+    transaction.update(roomRef, {
+      activeDrops: remainingDrops,
+      nextIndex,
+      status: newStatus,
+      droppedWord,
+    });
+
+    return {
+      activeDrops: remainingDrops,
+      nextIndex,
+      status: newStatus,
+      droppedWord,
+    };
   });
 };
 
@@ -428,6 +590,10 @@ export const resetRoomToLobby = async (user: AppUser, code: string) => {
       status: "waiting",
       currentIndex: 0,
       roundStartedAt: null,
+      countdownEndsAt: null,
+      activeDrops: FieldValue.delete(),
+      nextIndex: FieldValue.delete(),
+      droppedWord: FieldValue.delete(),
       questionAnswers: {},
       lastWinner: FieldValue.delete(),
       words: shuffledWords,

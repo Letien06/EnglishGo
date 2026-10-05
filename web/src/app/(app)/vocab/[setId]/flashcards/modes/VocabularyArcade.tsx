@@ -128,7 +128,7 @@ export default function VocabularyArcade({
         if (snap.exists()) {
           const data = snap.data();
           setLobbyRoom(data);
-          if (data.status === "playing") {
+          if (data.status === "playing" || data.status === "countdown") {
             setView("multiplayer");
           }
         }
@@ -151,7 +151,7 @@ export default function VocabularyArcade({
         if (json.success && json.data) {
           if (json.data.room) {
             setLobbyRoom(json.data.room);
-            if (json.data.room.status === "playing") {
+            if (json.data.room.status === "playing" || json.data.room.status === "countdown") {
               setView("multiplayer");
             }
           }
@@ -253,7 +253,8 @@ export default function VocabularyArcade({
       }
       setLobbyRoom((prev: any) => ({
         ...prev,
-        status: "playing",
+        status: "countdown",
+        countdownEndsAt: Date.now() + 5000,
         currentIndex: 0,
       }));
       setLobbyPlayers((prev) =>
