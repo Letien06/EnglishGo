@@ -400,3 +400,51 @@ export const advanceQuestion = async (user: AppUser, code: string, questionIndex
   });
 };
 
+export const resetRoomToLobby = async (user: AppUser, code: string) => {
+  const roomRef = adminDb.collection(COLLECTIONS.gameRooms).doc(code);
+
+  return await adminDb.runTransaction(async (transaction) => {
+    const roomDoc = await transaction.get(roomRef);
+    if (!roomDoc.exists) throw NotFound("Room not found");
+
+    const playerRef = roomRef.collection("players").doc(user.uid);
+    const playerDoc = await transaction.get(playerRef);
+    if (!playerDoc.exists) throw NotFound("Player not in room");
+
+    const playersSnapshot = await transaction.get(roomRef.collection("players"));
+    const room = roomDoc.data()!;
+
+    if (room.status === "waiting") {
+      return { status: "waiting", code };
+    }
+
+    const shuffledWords = [...(room.words || [])];
+    for (let i = shuffledWords.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [shuffledWords[i], shuffledWords[j]] = [shuffledWords[j], shuffledWords[i]];
+    }
+
+    transaction.update(roomRef, {
+      status: "waiting",
+      currentIndex: 0,
+      roundStartedAt: null,
+      questionAnswers: {},
+      lastWinner: FieldValue.delete(),
+      words: shuffledWords,
+    });
+
+    playersSnapshot.docs.forEach((doc) => {
+      transaction.update(doc.ref, {
+        status: "waiting",
+        score: 0,
+        lives: 3,
+        combo: 0,
+        answers: [],
+      });
+    });
+
+    return { status: "waiting", code };
+  });
+};
+
+

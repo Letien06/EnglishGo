@@ -317,6 +317,7 @@ export default function VocabularyArcade({
   if (view === "multiplayer" && lobbyRoom) {
     return (
       <MultiplayerWordBlast
+        key={`multiplayer-${roomCode}-${lobbyRoom.roundStartedAt || 0}`}
         roomCode={roomCode}
         initialRoom={lobbyRoom}
         initialPlayers={lobbyPlayers}
@@ -325,6 +326,15 @@ export default function VocabularyArcade({
         onExit={() => {
           handleLeaveRoom();
           setView("mode-select");
+        }}
+        onReturnToLobby={() => {
+          setLobbyRoom((prev: any) =>
+            prev ? { ...prev, status: "waiting", currentIndex: 0 } : null
+          );
+          setLobbyPlayers((prev) =>
+            prev.map((p) => ({ ...p, status: "waiting", lives: 3, score: 0 }))
+          );
+          setView("lobby");
         }}
       />
     );

@@ -49,6 +49,7 @@ interface MultiplayerWordBlastProps {
   currentUserId: string;
   muted: boolean;
   onExit: () => void;
+  onReturnToLobby?: () => void;
 }
 
 /* ---- Web Audio Sound Effects ---- */
@@ -112,6 +113,7 @@ export function MultiplayerWordBlast({
   currentUserId,
   muted,
   onExit,
+  onReturnToLobby,
 }: MultiplayerWordBlastProps) {
   const [room, setRoom] = useState<GameRoomData>(() => ({
     ...initialRoom,
@@ -128,6 +130,23 @@ export function MultiplayerWordBlast({
 
   // Dedicated permanent finalization state to prevent result screen flashing or reverting
   const [finalized, setFinalized] = useState(false);
+  const [isResetting, setIsResetting] = useState(false);
+
+  const handleBackToLobby = async () => {
+    setIsResetting(true);
+    try {
+      await fetch("/api/vocab/game-room/reset", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ code: roomCode }),
+      });
+      onReturnToLobby?.();
+    } catch {
+      onReturnToLobby?.();
+    } finally {
+      setIsResetting(false);
+    }
+  };
 
   const [myUid, setMyUid] = useState<string>(currentUserId);
   const [winnerNotice, setWinnerNotice] = useState<{ displayName: string; points: number } | null>(null);
@@ -193,8 +212,12 @@ export function MultiplayerWordBlast({
         (snap) => {
           if (snap.exists()) {
             const data = snap.data() as GameRoomData;
+            if (data.status === "waiting") {
+              onReturnToLobby?.();
+              return;
+            }
             setRoom((prev) => {
-              // ONCE FINISHED, NEVER REVERT!
+              // ONCE FINISHED, NEVER REVERT to active question while finished!
               if (prev.status === "finished") return prev;
               if (data.status === "finished") return { ...prev, ...data, status: "finished" };
               // Never revert back to an older question index
@@ -231,8 +254,11 @@ export function MultiplayerWordBlast({
         const json = await res.json();
         if (json.success && json.data) {
           if (json.data.room) {
+            if (json.data.room.status === "waiting") {
+              onReturnToLobby?.();
+              return;
+            }
             setRoom((prev) => {
-              // ONCE FINISHED, NEVER REVERT!
               if (prev.status === "finished") return prev;
               if (json.data.room.status === "finished") return { ...prev, ...json.data.room, status: "finished" };
               if ((json.data.room.currentIndex ?? 0) < (prev.currentIndex ?? 0)) return prev;
@@ -254,7 +280,7 @@ export function MultiplayerWordBlast({
       if (unsubPlayers) unsubPlayers();
       window.clearInterval(pollTimer);
     };
-  }, [roomCode]);
+  }, [roomCode, onReturnToLobby]);
 
   // Current question data
   const currentIndex = room.currentIndex ?? 0;
@@ -526,13 +552,23 @@ export function MultiplayerWordBlast({
             })}
           </div>
 
-          <div className="flex gap-4">
+          <div className="flex flex-col sm:flex-row gap-3">
+            <button
+              type="button"
+              disabled={isResetting}
+              onClick={handleBackToLobby}
+              className="flex-1 py-4 bg-gradient-to-r from-emerald-500 via-teal-500 to-emerald-600 hover:from-emerald-400 hover:to-teal-400 text-white font-black rounded-xl shadow-lg transition-all cursor-pointer active:scale-98 flex items-center justify-center gap-2 disabled:opacity-70 disabled:pointer-events-none"
+            >
+              <span>{isResetting ? "⏳" : "🔄"}</span>
+              <span>{isResetting ? "Đang trở lại phòng..." : "Quay lại phòng chơi tiếp"}</span>
+            </button>
             <button
               type="button"
               onClick={onExit}
-              className="flex-1 py-4 bg-gradient-to-r from-amber-400 to-amber-500 hover:from-amber-300 hover:to-amber-400 text-slate-950 font-black rounded-xl shadow-lg transition-all cursor-pointer active:scale-98"
+              className="flex-1 py-4 bg-[var(--surface-soft)] hover:bg-[var(--line)] text-[var(--ink)] font-bold rounded-xl border border-[var(--line)] shadow transition-all cursor-pointer active:scale-98 flex items-center justify-center gap-2"
             >
-              Về danh sách trò chơi
+              <span>🚪</span>
+              <span>Rời phòng</span>
             </button>
           </div>
         </div>

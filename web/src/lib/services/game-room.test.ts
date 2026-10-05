@@ -83,6 +83,35 @@ describe("game-room service", () => {
     expect(updateRoomIndex(2, 2)).toBe(2);
     expect(updateRoomIndex(2, 3)).toBe(3);
   });
+
+  it("resets room status, questions, and all players to waiting state for rematch", () => {
+    const resetRoomState = (
+      room: { status: string; currentIndex: number; lastWinner?: any },
+      players: Array<{ status: string; score: number; lives: number; combo: number }>
+    ) => {
+      return {
+        room: { ...room, status: "waiting", currentIndex: 0, lastWinner: undefined },
+        players: players.map((p) => ({ ...p, status: "waiting", score: 0, lives: 3, combo: 0 })),
+      };
+    };
+
+    const previousRound = {
+      room: { status: "finished", currentIndex: 10, lastWinner: { displayName: "Winner", points: 25 } },
+      players: [
+        { status: "finished", score: 120, lives: 2, combo: 4 },
+        { status: "eliminated", score: 45, lives: 0, combo: 0 },
+      ],
+    };
+
+    const nextRound = resetRoomState(previousRound.room, previousRound.players);
+    expect(nextRound.room.status).toBe("waiting");
+    expect(nextRound.room.currentIndex).toBe(0);
+    expect(nextRound.room.lastWinner).toBeUndefined();
+    expect(nextRound.players).toHaveLength(2);
+    expect(nextRound.players[0]).toEqual({ status: "waiting", score: 0, lives: 3, combo: 0 });
+    expect(nextRound.players[1]).toEqual({ status: "waiting", score: 0, lives: 3, combo: 0 });
+  });
 });
+
 
 

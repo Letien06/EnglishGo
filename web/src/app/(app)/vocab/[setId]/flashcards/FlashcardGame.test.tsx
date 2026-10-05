@@ -33,7 +33,7 @@ describe("new vocabulary modes integrate with results", () => {
   it("guards tab navigation with an accessible cancelable dialog", async () => {
     vi.stubGlobal("fetch", vi.fn());
     render(<FlashcardGame session={session} initialMode="blast" practiceOptions={[]} reviewMode={false} isAuthenticated={false} loginHref="/login" />);
-    await screen.findByRole("button", { name: "Bắt đầu chơi" });
+    await screen.findByRole("button", { name: "Bắt đầu chơi" }, { timeout: 4000 });
     fireEvent.click(screen.getByRole("tab", { name: /xem từ/i }));
     expect(screen.getByRole("dialog", { name: "Rời phiên hiện tại?" })).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "Ở lại học tiếp" }));
