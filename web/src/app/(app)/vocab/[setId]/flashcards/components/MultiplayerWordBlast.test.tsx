@@ -92,7 +92,7 @@ describe("MultiplayerWordBlast", () => {
     const targetBtn = screen.getByRole("button", { name: /apple/i });
     fireEvent.click(targetBtn);
 
-    expect(screen.getByText(/CHÍNH XÁC!/i)).toBeInTheDocument();
+    expect(screen.getByText(/BẠN ĐÃ BẮN TRÚNG!/i)).toBeInTheDocument();
 
     await waitFor(() => {
       expect(fetchMock).toHaveBeenCalledWith(

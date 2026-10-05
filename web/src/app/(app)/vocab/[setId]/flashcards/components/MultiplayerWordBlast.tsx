@@ -139,6 +139,18 @@ export function MultiplayerWordBlast({
   const [hasAnswered, setHasAnswered] = useState(false);
   const [feedback, setFeedback] = useState<{ message: string; tone: "correct" | "wrong" } | null>(null);
 
+  // Authoritative displayed index and winner celebration state
+  const [displayedIndex, setDisplayedIndex] = useState(initialRoom?.currentIndex ?? 0);
+  const [prevDisplayedIndex, setPrevDisplayedIndex] = useState(displayedIndex);
+  const [roundWinner, setRoundWinner] = useState<{
+    uid: string;
+    displayName: string;
+    word: string;
+    points: number;
+    isMe: boolean;
+  } | null>(null);
+  const lastProcessedWinnerAt = useRef<number>(0);
+
   // Cannon & Sliding Reticle States
   const [aim, setAim] = useState(0);
   const [shot, setShot] = useState<number | null>(null);
@@ -204,7 +216,7 @@ export function MultiplayerWordBlast({
 
   // When all players run out of hearts or room ends, finalize permanently
   const allEliminated = players.length >= 1 && players.every((p) => (p.lives ?? 3) <= 0);
-  const isFinished = finalized || room.status === "finished" || allEliminated;
+  const isFinished = finalized || (!roundWinner && room.status === "finished") || allEliminated;
 
   const isCountdown =
     room.status === "countdown" &&
@@ -231,8 +243,6 @@ export function MultiplayerWordBlast({
       setRoom((prev) => {
         if (prev.status === "finished") return prev;
         if (data.status === "finished") return { ...prev, ...data, status: "finished" };
-        // Only advance if data index is newer
-        if ((data.currentIndex ?? 0) < (prev.currentIndex ?? 0)) return prev;
 
         const wordsDiffer =
           Boolean(data.words?.length) &&
@@ -240,8 +250,12 @@ export function MultiplayerWordBlast({
             prev.words.length !== data.words.length ||
             prev.words[0]?.id !== data.words[0]?.id);
 
+        const lastWinnerChanged =
+          Boolean(data.lastWinner?.at) && data.lastWinner?.at !== prev.lastWinner?.at;
+
         if (
           !wordsDiffer &&
+          !lastWinnerChanged &&
           prev.status === data.status &&
           prev.currentIndex === data.currentIndex &&
           prev.roundStartedAt === data.roundStartedAt &&
@@ -349,18 +363,78 @@ export function MultiplayerWordBlast({
     };
   }, [roomCode, onReturnToLobby, isFinished]);
 
-  // Current question data
-  const currentIndex = room.currentIndex ?? 0;
-  const currentWord = room.words?.[currentIndex];
+  // Synchronize incoming room.lastWinner from server (via SSE, Firestore onSnapshot, or polling)
+  useEffect(() => {
+    if (!room.lastWinner?.at || room.lastWinner.at <= lastProcessedWinnerAt.current) {
+      return;
+    }
+    lastProcessedWinnerAt.current = room.lastWinner.at;
+
+    const isMe =
+      room.lastWinner.uid === myUid ||
+      room.lastWinner.uid === currentUserId;
+
+    setRoundWinner({
+      uid: room.lastWinner.uid,
+      displayName: room.lastWinner.displayName || "Đối thủ",
+      word: room.lastWinner.word,
+      points: room.lastWinner.points || 15,
+      isMe,
+    });
+    setHasAnswered(true);
+
+    if (isMe) {
+      if (!soundQuiet) playSuccessSound();
+    } else {
+      if (!soundQuiet) playFailSound();
+    }
+  }, [room.lastWinner, myUid, currentUserId, soundQuiet]);
+
+  // Manage roundWinner duration (1.6s) and advance to next question in lockstep
+  useEffect(() => {
+    if (!roundWinner) return;
+
+    const timer = window.setTimeout(() => {
+      setRoundWinner(null);
+      const nextIdx =
+        typeof room.currentIndex === "number" ? room.currentIndex : displayedIndex + 1;
+      setDisplayedIndex(nextIdx);
+      setHasAnswered(false);
+      setDisabledOptions([]);
+      setShot(null);
+      setHoveredOptionId(null);
+      setFeedback(null);
+      setTimeLeft(QUESTION_DURATION);
+    }, 1600);
+
+    return () => window.clearTimeout(timer);
+  }, [roundWinner, room.currentIndex, displayedIndex]);
+
+  // Advance question when server increments currentIndex without a winner (e.g. timeout or next)
+  useEffect(() => {
+    if (roundWinner) return;
+    if (typeof room.currentIndex === "number" && room.currentIndex !== displayedIndex) {
+      setDisplayedIndex(room.currentIndex);
+      setHasAnswered(false);
+      setDisabledOptions([]);
+      setShot(null);
+      setHoveredOptionId(null);
+      setFeedback(null);
+      setTimeLeft(QUESTION_DURATION);
+    }
+  }, [room.currentIndex, roundWinner, displayedIndex]);
+
+  // Current question data based on authoritative displayedIndex
+  const currentWord = room.words?.[displayedIndex];
 
   // Options for current question (deterministically seeded)
   const currentOptions = React.useMemo(() => {
     if (!currentWord || !room.words?.length) return [];
     const seed =
-      roomCode.split("").reduce((acc, c) => acc + c.charCodeAt(0), 0) + currentIndex * 997;
+      roomCode.split("").reduce((acc, c) => acc + c.charCodeAt(0), 0) + displayedIndex * 997;
     const rng = pseudoRandom(seed);
     return blastOptions(currentWord, room.words, rng);
-  }, [room.words, currentIndex, currentWord, roomCode]);
+  }, [room.words, displayedIndex, currentWord, roomCode]);
 
   const [floats, setFloats] = useState<FloatingTarget[]>(() =>
     createFloatingTargets(currentOptions.length || 4)
@@ -374,21 +448,21 @@ export function MultiplayerWordBlast({
 
   const isEliminated = Boolean(currentPlayer && (currentPlayer.lives ?? 3) <= 0);
 
-  // Synchronously adjust round states when question index changes
-  const [prevIndex, setPrevIndex] = useState(currentIndex);
-  if (prevIndex !== currentIndex) {
-    setPrevIndex(currentIndex);
+  // Synchronously adjust round states when displayed question index changes
+  if (prevDisplayedIndex !== displayedIndex) {
+    setPrevDisplayedIndex(displayedIndex);
     setTimeLeft(QUESTION_DURATION);
     setHasAnswered(false);
     setDisabledOptions([]);
     setShot(null);
     setHoveredOptionId(null);
+    setFeedback(null);
     setFloats(createFloatingTargets(currentOptions.length || 4));
   }
 
   // Timer countdown: 14s per question with server round synchronization
   useEffect(() => {
-    if (isFinished || isCountdown) return;
+    if (isFinished || isCountdown || Boolean(roundWinner)) return;
 
     if (room.roundStartedAt && room.roundStartedAt > 0) {
       const elapsed = Math.floor((Date.now() - room.roundStartedAt) / 1000);
@@ -402,23 +476,18 @@ export function MultiplayerWordBlast({
           fetch("/api/vocab/game-room/next", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ code: roomCode, questionIndex: currentIndex }),
+            body: JSON.stringify({ code: roomCode, questionIndex: displayedIndex }),
           })
             .then(async (res) => {
               const json = await res.json();
               if (json.success && json.data) {
                 if (typeof json.data.currentIndex === "number") {
-                  setRoom((prevRoom) => {
-                    if (json.data.currentIndex > (prevRoom.currentIndex ?? 0)) {
-                      return {
-                        ...prevRoom,
-                        currentIndex: json.data.currentIndex,
-                        status: json.data.status || prevRoom.status,
-                        roundStartedAt: json.data.roundStartedAt || Date.now(),
-                      };
-                    }
-                    return prevRoom;
-                  });
+                  setRoom((prevRoom) => ({
+                    ...prevRoom,
+                    currentIndex: json.data.currentIndex,
+                    status: json.data.status || prevRoom.status,
+                    roundStartedAt: json.data.roundStartedAt || Date.now(),
+                  }));
                 }
               }
             })
@@ -430,7 +499,7 @@ export function MultiplayerWordBlast({
     }, 1000);
 
     return () => window.clearInterval(interval);
-  }, [currentIndex, isFinished, isCountdown, roomCode, room.roundStartedAt]);
+  }, [displayedIndex, isFinished, isCountdown, roundWinner, roomCode, room.roundStartedAt]);
 
   // Floating animation loop
   useEffect(() => {
@@ -448,11 +517,11 @@ export function MultiplayerWordBlast({
 
     rafId = requestAnimationFrame(animate);
     return () => cancelAnimationFrame(rafId);
-  }, [currentIndex, isFinished, isEliminated, isCountdown]);
+  }, [displayedIndex, isFinished, isEliminated, isCountdown]);
 
-  // Handle answering - CHUYỂN CÂU NGAY LUÔN, CẬP NHẬT ĐIỂM NGAY, CHỈ PHÁT SOUND
+  // Handle answering - KHÔNG NHẢY TỰ DO, HIỂN THỊ KẾT QUẢ AI DÀNH ĐƯỢC CÂU NÀY, ĐỒNG BỘ TOÀN DIỆN
   const handleSelectOption = async (option: VocabWordCard) => {
-    if (isEliminated || hasAnswered || isFinished || isCountdown) return;
+    if (isEliminated || hasAnswered || isFinished || isCountdown || Boolean(roundWinner)) return;
     if (!currentPlayer) return;
     if (disabledOptions.includes(option.id)) return;
 
@@ -465,10 +534,8 @@ export function MultiplayerWordBlast({
       }
 
       const pointsEarned = 15 + Math.min(((currentPlayer.combo || 0) + 1) * 2, 10);
-      const nextIndex = currentIndex + 1;
-      const isLastWord = nextIndex >= (room.words?.length || 0);
 
-      // Cập nhật điểm ngay tức thì
+      // Cập nhật điểm ngay tức thì trên giao diện bản thân
       setPlayers((prev) =>
         prev.map((p) =>
           p.uid === currentPlayer.uid
@@ -477,25 +544,23 @@ export function MultiplayerWordBlast({
         )
       );
 
-      // Chuyển câu ngay luôn!
-      if (!isLastWord) {
-        setRoom((prev) => ({
-          ...prev,
-          currentIndex: nextIndex,
-        }));
-        setTimeLeft(QUESTION_DURATION);
-      }
+      // Hiển thị ngay kết quả giành câu hỏi cho chính mình
+      lastProcessedWinnerAt.current = Date.now();
+      setRoundWinner({
+        uid: currentPlayer.uid,
+        displayName: currentPlayer.displayName || "Bạn",
+        word: option.word,
+        points: pointsEarned,
+        isMe: true,
+      });
 
-      setFeedback({ message: "CHÍNH XÁC! 🎯", tone: "correct" });
-      window.setTimeout(() => setFeedback(null), 1200);
-
-      // Gửi server trong nền, không bắt người dùng chờ
+      // Gửi server trong nền, server cập nhật Firestore và SSE broadcast cho đối thủ
       fetch("/api/vocab/game-room/answer", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           code: roomCode,
-          questionIndex: currentIndex,
+          questionIndex: displayedIndex,
           correct: true,
           selected: option.word,
         }),
@@ -510,7 +575,7 @@ export function MultiplayerWordBlast({
             if (typeof json.data.nextIndex === "number") {
               setRoom((prev) => ({
                 ...prev,
-                currentIndex: Math.max(prev.currentIndex, json.data.nextIndex),
+                currentIndex: json.data.nextIndex,
               }));
             }
           }
@@ -550,7 +615,7 @@ export function MultiplayerWordBlast({
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           code: roomCode,
-          questionIndex: currentIndex,
+          questionIndex: displayedIndex,
           correct: false,
           selected: option.word,
         }),
@@ -569,7 +634,7 @@ export function MultiplayerWordBlast({
   // Keyboard shortcut listener for numbers 1 to 4
   useEffect(() => {
     function handleKeyDown(e: KeyboardEvent) {
-      if (isEliminated || hasAnswered || isFinished || isCountdown) return;
+      if (isEliminated || hasAnswered || isFinished || isCountdown || Boolean(roundWinner)) return;
       const num = parseInt(e.key, 10);
       if (num >= 1 && num <= currentOptions.length) {
         const opt = currentOptions[num - 1];
@@ -589,7 +654,7 @@ export function MultiplayerWordBlast({
     }
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [currentOptions, disabledOptions, floats, hasAnswered, isCountdown, isEliminated, isFinished]);
+  }, [currentOptions, disabledOptions, floats, hasAnswered, isCountdown, isEliminated, isFinished, roundWinner]);
 
   // RENDER: 5-Second Countdown Screen
   if (isCountdown && room.countdownEndsAt) {
@@ -741,7 +806,7 @@ export function MultiplayerWordBlast({
             <span>{"🤍".repeat(Math.max(0, 3 - Math.max(0, currentPlayer?.lives ?? 0)))}</span>
           </span>
           <span className="font-bold">
-            Câu {currentIndex + 1}/{room.words.length}
+            Câu {displayedIndex + 1}/{room.words.length}
           </span>
           <span className="font-mono font-bold text-amber-400">
             ⏳ {timeLeft}s
@@ -749,18 +814,42 @@ export function MultiplayerWordBlast({
           <strong>{currentPlayer?.score ?? 0} điểm</strong>
         </div>
 
-        {/* Vietnamese Meaning Clue */}
-        <div className={styles.blastClue}>
-          <p>&gt; TÌM TỪ TIẾNG ANH TƯƠNG ỨNG</p>
-          <h3 className="text-2xl sm:text-3xl font-extrabold max-w-xl mx-auto">
-            &ldquo;{currentWord?.meaning}&rdquo;
-          </h3>
-          <small>
-            {feedback
-              ? feedback.message
-              : `Còn ${timeLeft} giây · Người bấm đúng đầu tiên sẽ cướp điểm!`}
-          </small>
-        </div>
+        {/* Vietnamese Meaning Clue & Winner Announcement */}
+        {roundWinner ? (
+          <div
+            className={`w-full max-w-xl mx-auto p-4 rounded-2xl border-2 shadow-xl transition-all duration-300 animate-in zoom-in-95 ${
+              roundWinner.isMe
+                ? "bg-gradient-to-r from-emerald-950/80 via-emerald-900/90 to-emerald-950/80 border-emerald-400 text-emerald-200 shadow-emerald-500/20"
+                : "bg-gradient-to-r from-amber-950/80 via-amber-900/90 to-amber-950/80 border-amber-400 text-amber-200 shadow-amber-500/20"
+            }`}
+          >
+            <div className="flex items-center justify-center gap-2 text-base sm:text-lg font-black tracking-wider uppercase">
+              <span className="text-xl animate-bounce">{roundWinner.isMe ? "🎯" : "⚡"}</span>
+              <span>
+                {roundWinner.isMe
+                  ? `BẠN ĐÃ BẮN TRÚNG! (+${roundWinner.points} ĐIỂM)`
+                  : `${roundWinner.displayName.toUpperCase()} ĐÃ GIÀNH ĐƯỢC CÂU NÀY! (+${roundWinner.points} ĐIỂM)`}
+              </span>
+            </div>
+            <p className="text-xs sm:text-sm font-semibold opacity-90 mt-1 text-center">
+              {roundWinner.isMe
+                ? `Bạn đã nhanh tay bắn đúng từ "${roundWinner.word}"`
+                : `${roundWinner.displayName} đã nhanh tay bắn đúng từ "${roundWinner.word}"`}
+            </p>
+          </div>
+        ) : (
+          <div className={styles.blastClue}>
+            <p>&gt; TÌM TỪ TIẾNG ANH TƯƠNG ỨNG</p>
+            <h3 className="text-2xl sm:text-3xl font-extrabold max-w-xl mx-auto">
+              &ldquo;{currentWord?.meaning}&rdquo;
+            </h3>
+            <small>
+              {feedback
+                ? feedback.message
+                : `Còn ${timeLeft} giây · Người bấm đúng đầu tiên sẽ cướp điểm!`}
+            </small>
+          </div>
+        )}
 
         {/* Field with Cannon, Laser Guide, Sliding Reticle, Targets */}
         <div
@@ -813,27 +902,46 @@ export function MultiplayerWordBlast({
                 const pos = floats[i] || { x: 25 * ((i % 4) + 1) - 10, y: 35 };
                 const isHovered = hoveredOptionId === opt.id;
                 const isWrongChoice = disabledOptions.includes(opt.id);
-                const isCorrectAnswer = hasAnswered && opt.id === currentWord?.id;
-                const isDisabled = isWrongChoice || (hasAnswered && !isCorrectAnswer);
+                const isWinningWord =
+                  Boolean(roundWinner) &&
+                  (opt.word.toLowerCase() === roundWinner?.word.toLowerCase() ||
+                    opt.id === currentWord?.id);
+                const isCorrectAnswer =
+                  isWinningWord || (hasAnswered && opt.id === currentWord?.id);
+                const isDisabled =
+                  Boolean(roundWinner) || isWrongChoice || (hasAnswered && !isCorrectAnswer);
 
                 return (
                   <button
-                    key={`${currentIndex}-${opt.id}`}
+                    key={`${displayedIndex}-${opt.id}`}
                     type="button"
                     data-nth={(i % 4) + 1}
-                    data-hit={shot === opt.id ? (isCorrectAnswer ? "correct" : isWrongChoice ? "wrong" : undefined) : undefined}
+                    data-hit={
+                      shot === opt.id || isWinningWord
+                        ? isCorrectAnswer
+                          ? "correct"
+                          : isWrongChoice
+                          ? "wrong"
+                          : undefined
+                        : undefined
+                    }
                     data-targeted={isHovered ? "true" : undefined}
                     className={`${styles.floatingTarget} ${
                       isWrongChoice ? styles.floatingTargetWrong : ""
-                    } ${isCorrectAnswer ? styles.floatingTargetCorrect : ""}`}
+                    } ${isCorrectAnswer ? styles.floatingTargetCorrect : ""} ${
+                      isWinningWord
+                        ? "ring-4 ring-emerald-400 border-emerald-400 bg-emerald-500/25 shadow-[0_0_25px_rgba(16,185,129,0.7)]"
+                        : ""
+                    }`}
                     style={{
                       left: `${pos.x}%`,
                       top: `${pos.y}%`,
-                      opacity: isWrongChoice ? 0.3 : isDisabled && !isCorrectAnswer ? 0.4 : 1,
+                      opacity: isWrongChoice ? 0.3 : isDisabled && !isWinningWord ? 0.4 : 1,
                       cursor: isDisabled ? "not-allowed" : "pointer",
                     }}
                     disabled={isDisabled}
                     onClick={() => {
+                      if (isDisabled) return;
                       setShot(opt.id);
                       setReticlePos({ x: pos.x, y: pos.y });
                       setReticleActive(true);
@@ -857,7 +965,12 @@ export function MultiplayerWordBlast({
                     }}
                   >
                     <kbd>{i + 1}</kbd> {opt.word}
-                    {shot === opt.id && (
+                    {isWinningWord && roundWinner && (
+                      <span className="ml-1.5 inline-flex items-center gap-0.5 px-2 py-0.5 text-xs font-black rounded-full bg-emerald-500/30 text-emerald-200 border border-emerald-400/50">
+                        👑 {roundWinner.displayName} (+{roundWinner.points}đ)
+                      </span>
+                    )}
+                    {(shot === opt.id || isWinningWord) && (
                       <span className={styles.hitBurst} aria-hidden="true">
                         {isCorrectAnswer ? "✦" : "×"}
                       </span>
@@ -926,7 +1039,7 @@ export function MultiplayerWordBlast({
 
           {/* Shot Beam Animation */}
           {shot !== null && (
-            <div key={`shot-${shot}-${currentIndex}`} className={styles.shotBeam} style={{ rotate: `${aim}deg` }} aria-hidden="true" />
+            <div key={`shot-${shot}-${displayedIndex}`} className={styles.shotBeam} style={{ rotate: `${aim}deg` }} aria-hidden="true" />
           )}
         </div>
       </div>

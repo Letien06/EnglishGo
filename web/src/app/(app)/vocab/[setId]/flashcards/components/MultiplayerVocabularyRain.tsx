@@ -124,6 +124,16 @@ export function MultiplayerVocabularyRain({
   const [typed, setTyped] = useState("");
   const [feedback, setFeedback] = useState<{ message: string; tone: "correct" | "wrong" } | null>(null);
 
+  // Winner announcement state for caught drops
+  const [roundWinner, setRoundWinner] = useState<{
+    uid: string;
+    displayName: string;
+    word: string;
+    points: number;
+    isMe: boolean;
+  } | null>(null);
+  const lastProcessedWinnerAt = useRef<number>(0);
+
   // Dedicated permanent finalization state to prevent result screen flashing or reverting
   const [finalized, setFinalized] = useState(false);
   const [isResetting, setIsResetting] = useState(false);
@@ -218,9 +228,13 @@ export function MultiplayerVocabularyRain({
             prev.words.length !== data.words.length ||
             prev.words[0]?.id !== data.words[0]?.id);
 
+        const lastWinnerChanged =
+          Boolean(data.lastWinner?.at) && data.lastWinner?.at !== prev.lastWinner?.at;
+
         // Guard re-renders if no state difference
         if (
           !wordsDiffer &&
+          !lastWinnerChanged &&
           prev.status === data.status &&
           prev.currentIndex === data.currentIndex &&
           prev.roundStartedAt === data.roundStartedAt &&
@@ -330,6 +344,38 @@ export function MultiplayerVocabularyRain({
     };
   }, [roomCode, onReturnToLobby, isFinished]);
 
+  // Synchronize incoming room.lastWinner from server (via SSE, Firestore onSnapshot, or polling)
+  useEffect(() => {
+    if (!room.lastWinner?.at || room.lastWinner.at <= lastProcessedWinnerAt.current) {
+      return;
+    }
+    lastProcessedWinnerAt.current = room.lastWinner.at;
+
+    const isMe =
+      room.lastWinner.uid === myUid ||
+      room.lastWinner.uid === currentUserId;
+
+    setRoundWinner({
+      uid: room.lastWinner.uid,
+      displayName: room.lastWinner.displayName || "Đối thủ",
+      word: room.lastWinner.word,
+      points: room.lastWinner.points || 15,
+      isMe,
+    });
+
+    if (isMe) {
+      if (!soundQuiet) playSuccessSound();
+    } else {
+      if (!soundQuiet) playFailSound();
+    }
+
+    const timer = window.setTimeout(() => {
+      setRoundWinner(null);
+    }, 1800);
+
+    return () => window.clearTimeout(timer);
+  }, [room.lastWinner, myUid, currentUserId, soundQuiet]);
+
   // Identify current player accurately
   const currentPlayer =
     players.find((p) => p.uid === myUid) ||
@@ -406,6 +452,17 @@ export function MultiplayerVocabularyRain({
     window.setTimeout(() => setFeedback(null), 1200);
 
     const pointsEarned = 15 + Math.min(((currentPlayer.combo || 0) + 1) * 2, 10);
+
+    // Hiển thị kết quả bắt từ ngay tức thì
+    lastProcessedWinnerAt.current = Date.now();
+    setRoundWinner({
+      uid: currentPlayer.uid,
+      displayName: currentPlayer.displayName || "Bạn",
+      word: word.word,
+      points: pointsEarned,
+      isMe: true,
+    });
+
     // Cập nhật điểm ngay lập tức
     setPlayers((prev) =>
       prev.map((p) =>
@@ -663,6 +720,26 @@ export function MultiplayerVocabularyRain({
           </span>
           <strong>{currentPlayer?.score ?? 0} điểm</strong>
         </div>
+
+        {/* Drop Winner Announcement Banner */}
+        {roundWinner && (
+          <div
+            className={`w-full max-w-xl mx-auto my-2 p-2.5 rounded-2xl border-2 shadow-lg transition-all duration-300 animate-in zoom-in-95 ${
+              roundWinner.isMe
+                ? "bg-gradient-to-r from-emerald-950/80 via-emerald-900/90 to-emerald-950/80 border-emerald-400 text-emerald-200"
+                : "bg-gradient-to-r from-amber-950/80 via-amber-900/90 to-amber-950/80 border-amber-400 text-amber-200"
+            }`}
+          >
+            <div className="flex items-center justify-center gap-2 text-xs sm:text-sm font-black tracking-wider uppercase">
+              <span className="text-base">{roundWinner.isMe ? "🎯" : "⚡"}</span>
+              <span>
+                {roundWinner.isMe
+                  ? `BẠN ĐÃ BẮT ĐƯỢC TỪ "${roundWinner.word.toUpperCase()}"! (+${roundWinner.points} ĐIỂM)`
+                  : `${roundWinner.displayName.toUpperCase()} ĐÃ BẮT ĐƯỢC TỪ "${roundWinner.word.toUpperCase()}"! (+${roundWinner.points} ĐIỂM)`}
+              </span>
+            </div>
+          </div>
+        )}
 
         {/* Rain Falling Field with Lanes */}
         <div className={styles.rainField} data-paused={isFinished || isEliminated}>
