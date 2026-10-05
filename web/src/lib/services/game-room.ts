@@ -200,6 +200,7 @@ export const startGame = async (user: AppUser, code: string) => {
       currentIndex: 0,
       roundStartedAt: countdownEndsAt,
       questionAnswers: {},
+      lastWinner: FieldValue.delete(),
       ...(isRain
         ? {
             activeDrops: initialDrops,
@@ -363,6 +364,7 @@ export const submitAnswer = async (
         displayName: player.displayName || user.displayName || "Người chơi",
         word: selected,
         points,
+        questionIndex: room.currentIndex,
         at: Date.now(),
       };
 
@@ -410,6 +412,7 @@ export const submitAnswer = async (
         displayName: player.displayName || user.displayName || "Người chơi",
         word: selected,
         points,
+        questionIndex,
         at: Date.now(),
       };
 
@@ -502,6 +505,7 @@ export const advanceQuestion = async (user: AppUser, code: string, questionIndex
       status: newStatus,
       roundStartedAt,
       questionAnswers: {},
+      lastWinner: FieldValue.delete(),
     });
 
     return { currentIndex: nextIndex, status: newStatus, roundStartedAt };

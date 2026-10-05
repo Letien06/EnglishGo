@@ -40,6 +40,7 @@ interface GameRoomData {
     displayName: string;
     word: string;
     points: number;
+    questionIndex?: number;
     at?: number;
   };
 }
@@ -147,9 +148,17 @@ export function MultiplayerWordBlast({
     displayName: string;
     word: string;
     points: number;
+    questionIndex: number;
     isMe: boolean;
   } | null>(null);
-  const lastProcessedWinnerAt = useRef<number>(0);
+  const lastProcessedWinnerAt = useRef<number>(Date.now());
+  const winnerTimerRef = useRef<NodeJS.Timeout | null>(null);
+
+  useEffect(() => {
+    return () => {
+      if (winnerTimerRef.current) clearTimeout(winnerTimerRef.current);
+    };
+  }, []);
 
   // Cannon & Sliding Reticle States
   const [aim, setAim] = useState(0);
@@ -363,67 +372,6 @@ export function MultiplayerWordBlast({
     };
   }, [roomCode, onReturnToLobby, isFinished]);
 
-  // Synchronize incoming room.lastWinner from server (via SSE, Firestore onSnapshot, or polling)
-  useEffect(() => {
-    if (!room.lastWinner?.at || room.lastWinner.at <= lastProcessedWinnerAt.current) {
-      return;
-    }
-    lastProcessedWinnerAt.current = room.lastWinner.at;
-
-    const isMe =
-      room.lastWinner.uid === myUid ||
-      room.lastWinner.uid === currentUserId;
-
-    setRoundWinner({
-      uid: room.lastWinner.uid,
-      displayName: room.lastWinner.displayName || "Đối thủ",
-      word: room.lastWinner.word,
-      points: room.lastWinner.points || 15,
-      isMe,
-    });
-    setHasAnswered(true);
-
-    if (isMe) {
-      if (!soundQuiet) playSuccessSound();
-    } else {
-      if (!soundQuiet) playFailSound();
-    }
-  }, [room.lastWinner, myUid, currentUserId, soundQuiet]);
-
-  // Manage roundWinner duration (1.6s) and advance to next question in lockstep
-  useEffect(() => {
-    if (!roundWinner) return;
-
-    const timer = window.setTimeout(() => {
-      setRoundWinner(null);
-      const nextIdx =
-        typeof room.currentIndex === "number" ? room.currentIndex : displayedIndex + 1;
-      setDisplayedIndex(nextIdx);
-      setHasAnswered(false);
-      setDisabledOptions([]);
-      setShot(null);
-      setHoveredOptionId(null);
-      setFeedback(null);
-      setTimeLeft(QUESTION_DURATION);
-    }, 1600);
-
-    return () => window.clearTimeout(timer);
-  }, [roundWinner, room.currentIndex, displayedIndex]);
-
-  // Advance question when server increments currentIndex without a winner (e.g. timeout or next)
-  useEffect(() => {
-    if (roundWinner) return;
-    if (typeof room.currentIndex === "number" && room.currentIndex !== displayedIndex) {
-      setDisplayedIndex(room.currentIndex);
-      setHasAnswered(false);
-      setDisabledOptions([]);
-      setShot(null);
-      setHoveredOptionId(null);
-      setFeedback(null);
-      setTimeLeft(QUESTION_DURATION);
-    }
-  }, [room.currentIndex, roundWinner, displayedIndex]);
-
   // Current question data based on authoritative displayedIndex
   const currentWord = room.words?.[displayedIndex];
 
@@ -456,9 +404,101 @@ export function MultiplayerWordBlast({
     setDisabledOptions([]);
     setShot(null);
     setHoveredOptionId(null);
+    setReticleActive(false);
     setFeedback(null);
     setFloats(createFloatingTargets(currentOptions.length || 4));
   }
+
+  // Unified question progression and winner celebration synchronization
+  useEffect(() => {
+    // If winner celebration is already active, do not interrupt; it will transition when timer ends
+    if (roundWinner) return;
+
+    const lw = room.lastWinner;
+    const isNewWinner =
+      Boolean(lw?.at) &&
+      lw!.at! > lastProcessedWinnerAt.current &&
+      (typeof lw!.questionIndex !== "number" || lw!.questionIndex === displayedIndex);
+
+    if (isNewWinner && lw) {
+      lastProcessedWinnerAt.current = lw.at!;
+      const isMe = lw.uid === myUid || lw.uid === currentUserId;
+
+      setRoundWinner({
+        uid: lw.uid,
+        displayName: lw.displayName || "Đối thủ",
+        word: lw.word,
+        points: lw.points || 15,
+        questionIndex: displayedIndex,
+        isMe,
+      });
+      setHasAnswered(true);
+
+      if (isMe) {
+        if (!soundQuiet) playSuccessSound();
+      } else {
+        if (!soundQuiet) playFailSound();
+        // Opponent won: aim cannon and reticle at opponent's winning word in CURRENT question options
+        const winOpt = currentOptions.find(
+          (o) => o.word.toLowerCase() === lw.word.toLowerCase()
+        );
+        if (winOpt) {
+          const winIdx = currentOptions.indexOf(winOpt);
+          const winFloat = floats[winIdx];
+          setShot(winOpt.id);
+          if (winFloat && fieldRef.current) {
+            setReticlePos({ x: winFloat.x, y: winFloat.y });
+            setReticleActive(true);
+            setAim(getAngleToTarget(winFloat.x, winFloat.y, fieldRef.current));
+          }
+        }
+      }
+
+      // Keep current question on screen for 1600ms so both players clearly see who grabbed it
+      if (winnerTimerRef.current) clearTimeout(winnerTimerRef.current);
+      winnerTimerRef.current = setTimeout(() => {
+        setRoundWinner(null);
+        setDisplayedIndex((prev) => {
+          const next =
+            typeof room.currentIndex === "number" && room.currentIndex > prev
+              ? room.currentIndex
+              : prev + 1;
+          return next;
+        });
+        setHasAnswered(false);
+        setDisabledOptions([]);
+        setShot(null);
+        setHoveredOptionId(null);
+        setReticleActive(false);
+        setFeedback(null);
+        setTimeLeft(QUESTION_DURATION);
+      }, 1600);
+
+      return;
+    }
+
+    // Advance question if server advanced currentIndex without any winner (e.g. timeout)
+    if (typeof room.currentIndex === "number" && room.currentIndex > displayedIndex) {
+      setDisplayedIndex(room.currentIndex);
+      setHasAnswered(false);
+      setDisabledOptions([]);
+      setShot(null);
+      setHoveredOptionId(null);
+      setReticleActive(false);
+      setFeedback(null);
+      setTimeLeft(QUESTION_DURATION);
+    }
+  }, [
+    room.lastWinner,
+    room.currentIndex,
+    roundWinner,
+    displayedIndex,
+    myUid,
+    currentUserId,
+    soundQuiet,
+    currentOptions,
+    floats,
+  ]);
 
   // Timer countdown: 14s per question with server round synchronization
   useEffect(() => {
@@ -519,7 +559,7 @@ export function MultiplayerWordBlast({
     return () => cancelAnimationFrame(rafId);
   }, [displayedIndex, isFinished, isEliminated, isCountdown]);
 
-  // Handle answering - KHÔNG NHẢY TỰ DO, HIỂN THỊ KẾT QUẢ AI DÀNH ĐƯỢC CÂU NÀY, ĐỒNG BỘ TOÀN DIỆN
+  // Handle answering - KHÔNG NHẢY TỰ DO, HIỂN THỊ KẾT QUẢ CÂU HIỆN TẠI, ĐỒNG BỘ TOÀN DIỆN
   const handleSelectOption = async (option: VocabWordCard) => {
     if (isEliminated || hasAnswered || isFinished || isCountdown || Boolean(roundWinner)) return;
     if (!currentPlayer) return;
@@ -544,15 +584,30 @@ export function MultiplayerWordBlast({
         )
       );
 
-      // Hiển thị ngay kết quả giành câu hỏi cho chính mình
+      // Hiển thị ngay kết quả giành câu hỏi cho chính mình ở câu hiện tại
       lastProcessedWinnerAt.current = Date.now();
       setRoundWinner({
         uid: currentPlayer.uid,
         displayName: currentPlayer.displayName || "Bạn",
         word: option.word,
         points: pointsEarned,
+        questionIndex: displayedIndex,
         isMe: true,
       });
+
+      // Bắt đầu đếm 1.6s giữ câu hiện tại, sau đó mới chuyển sang câu tiếp theo
+      if (winnerTimerRef.current) clearTimeout(winnerTimerRef.current);
+      winnerTimerRef.current = setTimeout(() => {
+        setRoundWinner(null);
+        setDisplayedIndex((prev) => prev + 1);
+        setHasAnswered(false);
+        setDisabledOptions([]);
+        setShot(null);
+        setHoveredOptionId(null);
+        setReticleActive(false);
+        setFeedback(null);
+        setTimeLeft(QUESTION_DURATION);
+      }, 1600);
 
       // Gửi server trong nền, server cập nhật Firestore và SSE broadcast cho đối thủ
       fetch("/api/vocab/game-room/answer", {
@@ -571,12 +626,6 @@ export function MultiplayerWordBlast({
             if (json.data.status === "finished") {
               setFinalized(true);
               setRoom((prev) => ({ ...prev, status: "finished" }));
-            }
-            if (typeof json.data.nextIndex === "number") {
-              setRoom((prev) => ({
-                ...prev,
-                currentIndex: json.data.nextIndex,
-              }));
             }
           }
         })
@@ -904,8 +953,7 @@ export function MultiplayerWordBlast({
                 const isWrongChoice = disabledOptions.includes(opt.id);
                 const isWinningWord =
                   Boolean(roundWinner) &&
-                  (opt.word.toLowerCase() === roundWinner?.word.toLowerCase() ||
-                    opt.id === currentWord?.id);
+                  opt.word.toLowerCase() === roundWinner?.word.toLowerCase();
                 const isCorrectAnswer =
                   isWinningWord || (hasAnswered && opt.id === currentWord?.id);
                 const isDisabled =

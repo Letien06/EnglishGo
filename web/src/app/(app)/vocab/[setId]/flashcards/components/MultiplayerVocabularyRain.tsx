@@ -45,6 +45,7 @@ interface GameRoomData {
     displayName: string;
     word: string;
     points: number;
+    questionIndex?: number;
     at?: number;
   };
 }
@@ -132,7 +133,7 @@ export function MultiplayerVocabularyRain({
     points: number;
     isMe: boolean;
   } | null>(null);
-  const lastProcessedWinnerAt = useRef<number>(0);
+  const lastProcessedWinnerAt = useRef<number>(Date.now());
 
   // Dedicated permanent finalization state to prevent result screen flashing or reverting
   const [finalized, setFinalized] = useState(false);
