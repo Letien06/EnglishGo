@@ -147,9 +147,6 @@ export function MultiplayerWordBlast({
   const [reticleActive, setReticleActive] = useState(false);
   const fieldRef = useRef<HTMLDivElement>(null);
 
-  // Dedicated locking state for when local player runs out of hearts
-  const [isLocalEliminated, setIsLocalEliminated] = useState(false);
-
   // Dedicated permanent finalization state to prevent result screen flashing or reverting
   const [finalized, setFinalized] = useState(false);
   const [isResetting, setIsResetting] = useState(false);
@@ -210,8 +207,9 @@ export function MultiplayerWordBlast({
   const isFinished = finalized || room.status === "finished" || allEliminated;
 
   const isCountdown =
-    room.status === "countdown" ||
-    (Boolean(room.countdownEndsAt) && Date.now() < (room.countdownEndsAt || 0));
+    room.status === "countdown" &&
+    Boolean(room.countdownEndsAt) &&
+    Date.now() < (room.countdownEndsAt || 0);
 
   useEffect(() => {
     if (isFinished && !finalized) {
@@ -358,7 +356,7 @@ export function MultiplayerWordBlast({
           }
         }
       } catch {}
-    }, 2500);
+    }, 1000);
 
     return () => {
       if (unsubRoom) unsubRoom();
@@ -390,38 +388,57 @@ export function MultiplayerWordBlast({
     players.find((p) => p.uid === currentUserId) ||
     null;
 
-  const isEliminated =
-    isLocalEliminated || Boolean(currentPlayer && (currentPlayer.lives ?? 3) <= 0);
+  const isEliminated = Boolean(currentPlayer && (currentPlayer.lives ?? 3) <= 0);
 
   // Synchronously adjust round states when question index changes
   const [prevIndex, setPrevIndex] = useState(currentIndex);
   if (prevIndex !== currentIndex) {
     setPrevIndex(currentIndex);
     setTimeLeft(QUESTION_DURATION);
-    if (!isEliminated) {
-      setHasAnswered(false);
-      setDisabledOptions([]);
-      setShot(null);
-      setHoveredOptionId(null);
-      setFloats(createFloatingTargets(currentOptions.length || 4));
-    }
+    setHasAnswered(false);
+    setDisabledOptions([]);
+    setShot(null);
+    setHoveredOptionId(null);
+    setFloats(createFloatingTargets(currentOptions.length || 4));
   }
 
-  // Timer countdown
+  // Timer countdown: 14s per question with server round synchronization
   useEffect(() => {
     if (isFinished || isCountdown) return;
+
+    if (room.roundStartedAt && room.roundStartedAt > 0) {
+      const elapsed = Math.floor((Date.now() - room.roundStartedAt) / 1000);
+      const remaining = Math.max(0, QUESTION_DURATION - elapsed);
+      setTimeLeft(remaining);
+    }
 
     const interval = window.setInterval(() => {
       setTimeLeft((prev) => {
         if (prev <= 1) {
-          const isHost = currentPlayer?.isHost;
-          if (isHost || prev <= 0) {
-            fetch("/api/vocab/game-room/next", {
-              method: "POST",
-              headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({ code: roomCode, questionIndex: currentIndex }),
-            }).catch(() => {});
-          }
+          fetch("/api/vocab/game-room/next", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ code: roomCode, questionIndex: currentIndex }),
+          })
+            .then(async (res) => {
+              const json = await res.json();
+              if (json.success && json.data) {
+                if (typeof json.data.currentIndex === "number") {
+                  setRoom((prevRoom) => {
+                    if (json.data.currentIndex > (prevRoom.currentIndex ?? 0)) {
+                      return {
+                        ...prevRoom,
+                        currentIndex: json.data.currentIndex,
+                        status: json.data.status || prevRoom.status,
+                        roundStartedAt: json.data.roundStartedAt || Date.now(),
+                      };
+                    }
+                    return prevRoom;
+                  });
+                }
+              }
+            })
+            .catch(() => {});
           return 0;
         }
         return prev - 1;
@@ -429,7 +446,7 @@ export function MultiplayerWordBlast({
     }, 1000);
 
     return () => window.clearInterval(interval);
-  }, [currentIndex, isFinished, isCountdown, roomCode, currentPlayer?.isHost]);
+  }, [currentIndex, isFinished, isCountdown, roomCode, room.roundStartedAt]);
 
   // Floating animation loop
   useEffect(() => {
@@ -521,7 +538,6 @@ export function MultiplayerWordBlast({
       );
 
       if (newLives <= 0) {
-        setIsLocalEliminated(true);
         setHasAnswered(true);
         setFeedback({
           message: "💀 BẠN ĐÃ HẾT TIM! Màn chọn đã bị khóa. Hãy quan sát trận đấu.",

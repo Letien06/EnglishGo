@@ -474,7 +474,11 @@ export const advanceQuestion = async (user: AppUser, code: string, questionIndex
     const room = roomDoc.data()!;
     if (room.status !== "playing" && room.status !== "countdown") return { status: room.status };
     if (room.currentIndex !== questionIndex) {
-      return { currentIndex: room.currentIndex, status: room.status };
+      return {
+        currentIndex: room.currentIndex,
+        status: room.status,
+        roundStartedAt: room.roundStartedAt || Date.now(),
+      };
     }
 
     const playersSnapshot = await transaction.get(roomRef.collection("players"));
@@ -487,14 +491,15 @@ export const advanceQuestion = async (user: AppUser, code: string, questionIndex
       newStatus = "finished";
     }
 
+    const roundStartedAt = Date.now();
     transaction.update(roomRef, {
       currentIndex: nextIndex,
       status: newStatus,
-      roundStartedAt: Date.now(),
+      roundStartedAt,
       questionAnswers: {},
     });
 
-    return { currentIndex: nextIndex, status: newStatus };
+    return { currentIndex: nextIndex, status: newStatus, roundStartedAt };
   });
 };
 

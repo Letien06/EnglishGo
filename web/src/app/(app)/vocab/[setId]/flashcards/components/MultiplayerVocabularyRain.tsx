@@ -124,9 +124,6 @@ export function MultiplayerVocabularyRain({
   const [typed, setTyped] = useState("");
   const [feedback, setFeedback] = useState<{ message: string; tone: "correct" | "wrong" } | null>(null);
 
-  // Dedicated locking state for when local player runs out of hearts
-  const [isLocalEliminated, setIsLocalEliminated] = useState(false);
-
   // Dedicated permanent finalization state to prevent result screen flashing or reverting
   const [finalized, setFinalized] = useState(false);
   const [isResetting, setIsResetting] = useState(false);
@@ -193,8 +190,9 @@ export function MultiplayerVocabularyRain({
   const isFinished = finalized || room.status === "finished" || allEliminated;
 
   const isCountdown =
-    room.status === "countdown" ||
-    (Boolean(room.countdownEndsAt) && Date.now() < (room.countdownEndsAt || 0));
+    room.status === "countdown" &&
+    Boolean(room.countdownEndsAt) &&
+    Date.now() < (room.countdownEndsAt || 0);
 
   useEffect(() => {
     if (isFinished && !finalized) {
@@ -341,7 +339,7 @@ export function MultiplayerVocabularyRain({
           }
         }
       } catch {}
-    }, 2500);
+    }, 1000);
 
     return () => {
       if (unsubRoom) unsubRoom();
@@ -356,8 +354,7 @@ export function MultiplayerVocabularyRain({
     players.find((p) => p.uid === currentUserId) ||
     null;
 
-  const isEliminated =
-    isLocalEliminated || Boolean(currentPlayer && (currentPlayer.lives ?? 3) <= 0);
+  const isEliminated = Boolean(currentPlayer && (currentPlayer.lives ?? 3) <= 0);
 
   // Active falling drops from room, with fallback
   const activeDrops: RainDropData[] = React.useMemo(() => {
