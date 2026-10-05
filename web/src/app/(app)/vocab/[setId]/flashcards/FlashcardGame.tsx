@@ -338,7 +338,7 @@ export default function FlashcardGame({
   const wideWorkspace = useSyncExternalStore(subscribeWorkspaceWidth, isWideWorkspace, serverWorkspaceWidth);
   const sidebarOpen = sidebarOverride ?? wideWorkspace;
   const [mode, setMode] = useState<PlayMode>(
-    roomParam ? "blast" : (startInPlay && isPlayMode(initialMode) ? (initialMode as PlayMode) : "flashcard"),
+    roomParam ? (initialMode === "rain" ? "rain" : "blast") : (startInPlay && isPlayMode(initialMode) ? (initialMode as PlayMode) : "flashcard"),
   );
   const [quizMode, setQuizMode] = useState<QuizMode>("wordMeaning");
   const [quizChooser, setQuizChooser] = useState(initialMode === "quiz");
@@ -356,23 +356,26 @@ export default function FlashcardGame({
 
   useEffect(() => {
     if (typeof window === "undefined") return;
-    const r = new URLSearchParams(window.location.search).get("room")?.trim().toUpperCase();
+    const searchParams = new URLSearchParams(window.location.search);
+    const r = searchParams.get("room")?.trim().toUpperCase();
+    const urlMode = searchParams.get("mode");
     if (r && /^[A-Z0-9]{6}$/.test(r)) {
       setRoomParam(r);
       setScreen("play");
-      setMode("blast");
+      setMode(urlMode === "rain" ? "rain" : "blast");
       setWorkspaceTab("play");
     }
   }, []);
 
   function handleJoinRoomFromHub(code: string) {
     setRoomParam(code);
-    setMode("blast");
+    const targetMode = mode === "rain" ? "rain" : "blast";
+    setMode(targetMode);
     setWorkspaceTab("play");
     setScreen("play");
     if (typeof window !== "undefined") {
       const url = new URL(window.location.href);
-      url.searchParams.set("mode", "blast");
+      url.searchParams.set("mode", targetMode);
       url.searchParams.set("tab", "play");
       url.searchParams.set("room", code);
       window.history.replaceState({}, "", url.toString());

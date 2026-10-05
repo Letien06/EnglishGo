@@ -41,7 +41,7 @@ export function GameLobby({
   const getShareableRoomUrl = () => {
     if (typeof window === "undefined") return "";
     const url = new URL(window.location.href);
-    url.searchParams.set("mode", "blast");
+    url.searchParams.set("mode", gameMode);
     url.searchParams.set("tab", "play");
     url.searchParams.set("room", roomCode);
     return url.toString();

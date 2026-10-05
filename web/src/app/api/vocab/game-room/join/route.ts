@@ -13,7 +13,7 @@ export const POST = withErrorHandling(async (req) => {
   const user = await requireUser();
   const body = await parseBody(req, schema);
   
-  await joinRoom(user, body.code);
+  const result = await joinRoom(user, body.code.toUpperCase());
   
-  return ok({ success: true, currentUserId: user.uid });
+  return ok({ success: true, currentUserId: user.uid, ...(result || {}) });
 });

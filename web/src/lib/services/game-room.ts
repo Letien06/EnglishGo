@@ -75,7 +75,7 @@ export const createRoom = async (
 export const joinRoom = async (user: AppUser, code: string) => {
   const roomRef = adminDb.collection(COLLECTIONS.gameRooms).doc(code);
   
-  await adminDb.runTransaction(async (transaction) => {
+  return await adminDb.runTransaction(async (transaction) => {
     const roomDoc = await transaction.get(roomRef);
     if (!roomDoc.exists) {
       throw NotFound("Room not found");
@@ -95,21 +95,21 @@ export const joinRoom = async (user: AppUser, code: string) => {
     
     const playerRef = playersRef.doc(user.uid);
     const playerDoc = await transaction.get(playerRef);
-    if (playerDoc.exists) {
-      return;
+    if (!playerDoc.exists) {
+      transaction.set(playerRef, {
+        uid: user.uid,
+        displayName: user.displayName || "Unknown Player",
+        photoURL: user.avatarUrl || null,
+        isHost: false,
+        score: 0,
+        lives: 3,
+        combo: 0,
+        status: "waiting",
+        joinedAt: FieldValue.serverTimestamp(),
+      });
     }
-    
-    transaction.set(playerRef, {
-      uid: user.uid,
-      displayName: user.displayName || "Unknown Player",
-      photoURL: user.avatarUrl || null,
-      isHost: false,
-      score: 0,
-      lives: 3,
-      combo: 0,
-      status: "waiting",
-      joinedAt: FieldValue.serverTimestamp(),
-    });
+
+    return { gameMode: room.gameMode, vocabSetId: room.vocabSetId };
   });
 };
 

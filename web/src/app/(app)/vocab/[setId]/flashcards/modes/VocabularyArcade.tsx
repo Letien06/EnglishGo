@@ -10,6 +10,7 @@ import styles from "../vocabulary.module.css";
 import { GameModeSelector } from "../components/GameModeSelector";
 import { GameLobby } from "../components/GameLobby";
 import { MultiplayerWordBlast } from "../components/MultiplayerWordBlast";
+import { MultiplayerVocabularyRain } from "../components/MultiplayerVocabularyRain";
 import { getClientDb, getClientAuth } from "@/lib/firebase/client";
 import { collection, doc, onSnapshot } from "firebase/firestore";
 import { COLLECTIONS } from "@/lib/firestore/collections";
@@ -203,7 +204,7 @@ export default function VocabularyArcade({
     if (!isAuthenticated) {
       if (typeof window !== "undefined") {
         const url = new URL(window.location.href);
-        url.searchParams.set("mode", "blast");
+        url.searchParams.set("mode", mode);
         url.searchParams.set("tab", "play");
         url.searchParams.set("room", code);
         const targetLogin = loginHref || `/login?redirect=${encodeURIComponent(url.toString())}`;
@@ -225,6 +226,9 @@ export default function VocabularyArcade({
         return;
       }
       if (json.data?.currentUserId) setCurrentUserId(json.data.currentUserId);
+      if (json.data?.gameMode) {
+        setLobbyRoom((prev: any) => ({ ...prev, gameMode: json.data.gameMode }));
+      }
       setRoomCode(code);
       setView("lobby");
     } catch {
@@ -313,9 +317,32 @@ export default function VocabularyArcade({
     );
   }
 
-  // MÀN HÌNH 3: Đối kháng trực tiếp (Multiplayer Word Blast)
+  // MÀN HÌNH 3: Đối kháng trực tiếp (Word Blast hoặc Mưa từ vựng)
   if (view === "multiplayer" && lobbyRoom) {
-    return (
+    const isRain = (lobbyRoom.gameMode || mode) === "rain";
+    return isRain ? (
+      <MultiplayerVocabularyRain
+        key={`multiplayer-rain-${roomCode}-${lobbyRoom.roundStartedAt || 0}`}
+        roomCode={roomCode}
+        initialRoom={lobbyRoom}
+        initialPlayers={lobbyPlayers}
+        currentUserId={currentUserId}
+        muted={quiet}
+        onExit={() => {
+          handleLeaveRoom();
+          setView("mode-select");
+        }}
+        onReturnToLobby={() => {
+          setLobbyRoom((prev: any) =>
+            prev ? { ...prev, status: "waiting", currentIndex: 0 } : null
+          );
+          setLobbyPlayers((prev) =>
+            prev.map((p) => ({ ...p, status: "waiting", lives: 3, score: 0 }))
+          );
+          setView("lobby");
+        }}
+      />
+    ) : (
       <MultiplayerWordBlast
         key={`multiplayer-${roomCode}-${lobbyRoom.roundStartedAt || 0}`}
         roomCode={roomCode}

@@ -24,7 +24,7 @@ export default async function FlashcardsPage({ params, searchParams }: Props) {
   const rawRoom = typeof sp.room === "string" ? sp.room.trim().toUpperCase() : Array.isArray(sp.room) ? sp.room[0]?.trim().toUpperCase() : undefined;
   const room = rawRoom && /^[A-Z0-9]{6}$/.test(rawRoom) ? rawRoom : undefined;
 
-  const mode = room ? "blast" : ((sp.mode as string) ?? "flashcard");
+  const mode = room ? (sp.mode === "rain" ? "rain" : "blast") : ((sp.mode as string) ?? "flashcard");
   const tab = room ? "play" : (sp.tab === "view" || sp.tab === "learn" || sp.tab === "play" ? sp.tab : undefined);
   const mastery = (sp.mastery as string) ?? undefined;
   const order = (sp.order as string) ?? undefined;
