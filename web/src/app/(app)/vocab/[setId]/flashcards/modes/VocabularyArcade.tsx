@@ -323,7 +323,7 @@ export default function VocabularyArcade({
     const isRain = (lobbyRoom.gameMode || mode) === "rain";
     return isRain ? (
       <MultiplayerVocabularyRain
-        key={`multiplayer-rain-${roomCode}-${lobbyRoom.roundStartedAt || 0}`}
+        key={`multiplayer-rain-${roomCode}`}
         roomCode={roomCode}
         initialRoom={lobbyRoom}
         initialPlayers={lobbyPlayers}
@@ -345,7 +345,7 @@ export default function VocabularyArcade({
       />
     ) : (
       <MultiplayerWordBlast
-        key={`multiplayer-${roomCode}-${lobbyRoom.roundStartedAt || 0}`}
+        key={`multiplayer-blast-${roomCode}`}
         roomCode={roomCode}
         initialRoom={lobbyRoom}
         initialPlayers={lobbyPlayers}

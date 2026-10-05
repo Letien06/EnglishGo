@@ -8,7 +8,6 @@ import {
   tickFloatingTarget,
   type FloatingTarget,
 } from "@/lib/vocab-arcade";
-import useVocabularyAudio from "../useVocabularyAudio";
 import { MultiplayerScoreboard } from "./MultiplayerScoreboard";
 import { MultiplayerCountdown } from "./MultiplayerCountdown";
 import styles from "../vocabulary.module.css";
@@ -140,10 +139,12 @@ export function MultiplayerWordBlast({
   const [hasAnswered, setHasAnswered] = useState(false);
   const [feedback, setFeedback] = useState<{ message: string; tone: "correct" | "wrong" } | null>(null);
 
-  // Cannon & Reticle Aiming States
+  // Cannon & Sliding Reticle States
   const [aim, setAim] = useState(0);
   const [shot, setShot] = useState<number | null>(null);
   const [hoveredOptionId, setHoveredOptionId] = useState<number | null>(null);
+  const [reticlePos, setReticlePos] = useState<{ x: number; y: number }>({ x: 50, y: 40 });
+  const [reticleActive, setReticleActive] = useState(false);
   const fieldRef = useRef<HTMLDivElement>(null);
 
   // Dedicated locking state for when local player runs out of hearts
@@ -170,15 +171,13 @@ export function MultiplayerWordBlast({
   };
 
   const [myUid, setMyUid] = useState<string>(currentUserId);
-  const [winnerNotice, setWinnerNotice] = useState<{ displayName: string; points: number } | null>(null);
 
   useEffect(() => {
     if (currentUserId && currentUserId !== myUid) {
       setMyUid(currentUserId);
     }
-  }, [currentUserId]);
+  }, [currentUserId, myUid]);
 
-  // Ensure myUid is accurately loaded from authenticated session
   useEffect(() => {
     fetch("/api/app/session")
       .then((r) => r.json())
@@ -205,20 +204,6 @@ export function MultiplayerWordBlast({
     }
   }, [isFinished, finalized]);
 
-  useEffect(() => {
-    if (room.lastWinner) {
-      setWinnerNotice({
-        displayName: room.lastWinner.displayName,
-        points: room.lastWinner.points,
-      });
-      const timer = window.setTimeout(() => {
-        setWinnerNotice(null);
-      }, 3500);
-      return () => window.clearTimeout(timer);
-    }
-  }, [room.currentIndex, room.lastWinner?.uid, room.lastWinner?.points]);
-
-  const { speakWord } = useVocabularyAudio();
   const QUESTION_DURATION = 14; // 14 seconds per question
   const [timeLeft, setTimeLeft] = useState(QUESTION_DURATION);
 
@@ -244,12 +229,11 @@ export function MultiplayerWordBlast({
             setRoom((prev) => {
               if (prev.status === "finished") return prev;
               if (data.status === "finished") return { ...prev, ...data, status: "finished" };
+              // Only advance if data index is newer
               if ((data.currentIndex ?? 0) < (prev.currentIndex ?? 0)) return prev;
-              // Guard re-renders if no state difference
               if (
                 prev.status === data.status &&
                 prev.currentIndex === data.currentIndex &&
-                prev.lastWinner?.at === data.lastWinner?.at &&
                 prev.roundStartedAt === data.roundStartedAt &&
                 prev.countdownEndsAt === data.countdownEndsAt
               ) {
@@ -290,7 +274,7 @@ export function MultiplayerWordBlast({
       );
     } catch {}
 
-    // Polling fallback every 2500ms (reduced from 400ms to eliminate stutter)
+    // Safe fallback poll every 2500ms
     const pollTimer = window.setInterval(async () => {
       try {
         const res = await fetch(`/api/vocab/game-room?code=${roomCode}`);
@@ -310,7 +294,6 @@ export function MultiplayerWordBlast({
               if (
                 prev.status === r.status &&
                 prev.currentIndex === r.currentIndex &&
-                prev.lastWinner?.at === r.lastWinner?.at &&
                 prev.roundStartedAt === r.roundStartedAt
               ) {
                 return prev;
@@ -382,7 +365,6 @@ export function MultiplayerWordBlast({
   if (prevIndex !== currentIndex) {
     setPrevIndex(currentIndex);
     setTimeLeft(QUESTION_DURATION);
-    // ONLY reset answering state if player is still alive in the game!
     if (!isEliminated) {
       setHasAnswered(false);
       setDisabledOptions([]);
@@ -434,7 +416,7 @@ export function MultiplayerWordBlast({
     return () => cancelAnimationFrame(rafId);
   }, [currentIndex, isFinished, isEliminated, isCountdown]);
 
-  // Handle answering
+  // Handle answering - CHUYỂN CÂU NGAY LUÔN, CẬP NHẬT ĐIỂM NGAY, CHỈ PHÁT SOUND
   const handleSelectOption = async (option: VocabWordCard) => {
     if (isEliminated || hasAnswered || isFinished || isCountdown) return;
     if (!currentPlayer) return;
@@ -444,8 +426,15 @@ export function MultiplayerWordBlast({
 
     if (isCorrect) {
       setHasAnswered(true);
-      setFeedback({ message: "CHÍNH XÁC! 🎯 CƯỚP ĐIỂM THÀNH CÔNG!", tone: "correct" });
+      if (!soundQuiet) {
+        playSuccessSound();
+      }
+
       const pointsEarned = 15 + Math.min(((currentPlayer.combo || 0) + 1) * 2, 10);
+      const nextIndex = currentIndex + 1;
+      const isLastWord = nextIndex >= (room.words?.length || 0);
+
+      // Cập nhật điểm ngay tức thì
       setPlayers((prev) =>
         prev.map((p) =>
           p.uid === currentPlayer.uid
@@ -453,10 +442,40 @@ export function MultiplayerWordBlast({
             : p
         )
       );
-      if (!soundQuiet && currentWord) {
-        playSuccessSound();
-        window.setTimeout(() => speakWord(currentWord), 200);
+
+      // Chuyển câu ngay luôn!
+      if (!isLastWord) {
+        setRoom((prev) => ({
+          ...prev,
+          currentIndex: nextIndex,
+        }));
+        setTimeLeft(QUESTION_DURATION);
       }
+
+      setFeedback({ message: "CHÍNH XÁC! 🎯", tone: "correct" });
+      window.setTimeout(() => setFeedback(null), 1200);
+
+      // Gửi server trong nền, không bắt người dùng chờ
+      fetch("/api/vocab/game-room/answer", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          code: roomCode,
+          questionIndex: currentIndex,
+          correct: true,
+          selected: option.word,
+        }),
+      })
+        .then(async (res) => {
+          const json = await res.json();
+          if (json.success && json.data) {
+            if (json.data.status === "finished") {
+              setFinalized(true);
+              setRoom((prev) => ({ ...prev, status: "finished" }));
+            }
+          }
+        })
+        .catch(() => {});
     } else {
       // Wrong choice: deduct 1 heart
       const currentLives = currentPlayer.lives ?? 3;
@@ -477,43 +496,35 @@ export function MultiplayerWordBlast({
         });
       } else {
         setFeedback({
-          message: `❌ Sai rồi! -1 tim (Còn ${newLives}❤️). Hãy chọn lại đáp án khác!`,
+          message: `❌ Sai rồi! -1 tim (Còn ${newLives}❤️)`,
           tone: "wrong",
         });
+        window.setTimeout(() => setFeedback(null), 1200);
       }
 
       if (!soundQuiet) {
         playFailSound();
       }
-    }
 
-    try {
-      const res = await fetch("/api/vocab/game-room/answer", {
+      fetch("/api/vocab/game-room/answer", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           code: roomCode,
           questionIndex: currentIndex,
-          correct: isCorrect,
+          correct: false,
           selected: option.word,
         }),
-      });
-      const json = await res.json();
-      if (json.success && json.data) {
-        if (json.data.advanced || (json.data.nextIndex !== undefined && json.data.nextIndex !== currentIndex)) {
-          setRoom((prev) => ({
-            ...prev,
-            currentIndex: json.data.nextIndex,
-            status: json.data.status || prev.status,
-            lastWinner: json.data.lastWinner || prev.lastWinner,
-          }));
-        }
-        if (json.data.status === "finished") {
-          setFinalized(true);
-          setRoom((prev) => ({ ...prev, status: "finished" }));
-        }
-      }
-    } catch {}
+      })
+        .then(async (res) => {
+          const json = await res.json();
+          if (json?.data?.status === "finished") {
+            setFinalized(true);
+            setRoom((prev) => ({ ...prev, status: "finished" }));
+          }
+        })
+        .catch(() => {});
+    }
   };
 
   // Keyboard shortcut listener for numbers 1 to 4
@@ -526,8 +537,12 @@ export function MultiplayerWordBlast({
         if (opt && !disabledOptions.includes(opt.id)) {
           const f = floats[num - 1];
           setShot(opt.id);
-          if (f && fieldRef.current) {
-            setAim(getAngleToTarget(f.x, f.y, fieldRef.current));
+          if (f) {
+            setReticlePos({ x: f.x, y: f.y });
+            setReticleActive(true);
+            if (fieldRef.current) {
+              setAim(getAngleToTarget(f.x, f.y, fieldRef.current));
+            }
           }
           handleSelectOption(opt);
         }
@@ -702,27 +717,36 @@ export function MultiplayerWordBlast({
             &ldquo;{currentWord?.meaning}&rdquo;
           </h3>
           <small>
-            {winnerNotice
-              ? `⚡ ${winnerNotice.displayName} vừa cướp điểm (+${winnerNotice.points}đ)!`
-              : feedback
+            {feedback
               ? feedback.message
               : `Còn ${timeLeft} giây · Người bấm đúng đầu tiên sẽ cướp điểm!`}
           </small>
         </div>
 
-        {/* Field with Cannon, Laser Guide, Targets */}
+        {/* Field with Cannon, Laser Guide, Sliding Reticle, Targets */}
         <div
           ref={fieldRef}
           className={styles.field}
           data-paused={isFinished || isEliminated}
           onPointerMove={(event) => {
-            if (hoveredOptionId !== null) return;
             const bounds = event.currentTarget.getBoundingClientRect();
-            const cannonCenterX = bounds.width / 2;
-            const cannonBottomY = bounds.height - 25;
             const mouseX = event.clientX - bounds.left;
             const mouseY = event.clientY - bounds.top;
-            setAim((Math.atan2(mouseX - cannonCenterX, cannonBottomY - mouseY) * 180) / Math.PI);
+            const cannonCenterX = bounds.width / 2;
+            const cannonBottomY = bounds.height - 25;
+            const mouseXPercent = (mouseX / bounds.width) * 100;
+            const mouseYPercent = (mouseY / bounds.height) * 100;
+
+            if (hoveredOptionId === null) {
+              setAim((Math.atan2(mouseX - cannonCenterX, cannonBottomY - mouseY) * 180) / Math.PI);
+              setReticlePos({ x: mouseXPercent, y: mouseYPercent });
+              setReticleActive(true);
+            }
+          }}
+          onPointerLeave={() => {
+            if (hoveredOptionId === null) {
+              setReticleActive(false);
+            }
           }}
         >
           {isEliminated ? (
@@ -772,6 +796,8 @@ export function MultiplayerWordBlast({
                     disabled={isDisabled}
                     onClick={() => {
                       setShot(opt.id);
+                      setReticlePos({ x: pos.x, y: pos.y });
+                      setReticleActive(true);
                       if (pos && fieldRef.current) {
                         setAim(getAngleToTarget(pos.x, pos.y, fieldRef.current));
                       }
@@ -780,6 +806,8 @@ export function MultiplayerWordBlast({
                     onPointerEnter={() => {
                       if (!isDisabled && !isEliminated) {
                         setHoveredOptionId(opt.id);
+                        setReticlePos({ x: pos.x, y: pos.y });
+                        setReticleActive(true);
                         if (pos && fieldRef.current) {
                           setAim(getAngleToTarget(pos.x, pos.y, fieldRef.current));
                         }
@@ -790,16 +818,6 @@ export function MultiplayerWordBlast({
                     }}
                   >
                     <kbd>{i + 1}</kbd> {opt.word}
-                    <span className={styles.reticle} aria-hidden="true">
-                      <svg viewBox="0 0 32 32" fill="none">
-                        <circle cx="16" cy="16" r="8" stroke="currentColor" strokeWidth="1.5" />
-                        <line x1="16" y1="2" x2="16" y2="9" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
-                        <line x1="16" y1="23" x2="16" y2="30" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
-                        <line x1="2" y1="16" x2="9" y2="16" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
-                        <line x1="22" y1="16" x2="29" y2="16" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
-                        <circle cx="16" cy="1.5" fill="currentColor" />
-                      </svg>
-                    </span>
                     {shot === opt.id && (
                       <span className={styles.hitBurst} aria-hidden="true">
                         {isCorrectAnswer ? "✦" : "×"}
@@ -809,6 +827,33 @@ export function MultiplayerWordBlast({
                 );
               })}
             </>
+          )}
+
+          {/* Dynamic Sliding Crosshair Reticle */}
+          {reticlePos && !isEliminated && !isFinished && (
+            <div
+              className={styles.slidingReticle}
+              style={{
+                left: `${reticlePos.x}%`,
+                top: `${reticlePos.y}%`,
+                opacity: reticleActive ? 1 : 0,
+                transform: `translate(-50%, -50%) scale(${hoveredOptionId !== null ? 1.25 : 1})`,
+              }}
+              aria-hidden="true"
+            >
+              <svg viewBox="0 0 40 40" fill="none">
+                <path d="M6 14V6H14" stroke="#5cd9ff" strokeWidth="2.5" strokeLinecap="round" />
+                <path d="M26 6H34V14" stroke="#5cd9ff" strokeWidth="2.5" strokeLinecap="round" />
+                <path d="M34 26V34H26" stroke="#5cd9ff" strokeWidth="2.5" strokeLinecap="round" />
+                <path d="M14 34H6V26" stroke="#5cd9ff" strokeWidth="2.5" strokeLinecap="round" />
+                <circle cx="20" cy="20" r="7" stroke="#5cd9ff" strokeWidth="1.5" />
+                <line x1="20" y1="9" x2="20" y2="15" stroke="#5cd9ff" strokeWidth="1.5" />
+                <line x1="20" y1="25" x2="20" y2="31" stroke="#5cd9ff" strokeWidth="1.5" />
+                <line x1="9" y1="20" x2="15" y2="20" stroke="#5cd9ff" strokeWidth="1.5" />
+                <line x1="25" y1="20" x2="31" y2="20" stroke="#5cd9ff" strokeWidth="1.5" />
+                <circle cx="20" cy="20" r="2" fill="#5cd9ff" />
+              </svg>
+            </div>
           )}
 
           {/* Aim Laser Guide */}
