@@ -2,14 +2,20 @@
 
 import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
+import { createPortal } from "react-dom";
 
 export default function HeaderJoinRoomButton() {
   const [isOpen, setIsOpen] = useState(false);
+  const [mounted, setMounted] = useState(false);
   const [code, setCode] = useState("");
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
   const router = useRouter();
   const inputRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    setMounted(true);
+  }, []);
 
   useEffect(() => {
     if (isOpen) {
@@ -85,12 +91,12 @@ export default function HeaderJoinRoomButton() {
         <span className="md:hidden">Mã phòng</span>
       </button>
 
-      {isOpen && (
+      {isOpen && mounted && typeof document !== "undefined" && createPortal(
         <div
           role="dialog"
           aria-modal="true"
           aria-labelledby="header-join-room-title"
-          className="fixed inset-0 z-[100] flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm"
+          className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/70 p-4 backdrop-blur-sm"
         >
           <button
             type="button"
@@ -98,7 +104,7 @@ export default function HeaderJoinRoomButton() {
             aria-label="Đóng"
             onClick={() => !loading && setIsOpen(false)}
           />
-          <div className="relative w-full max-w-sm space-y-4 rounded-2xl border border-line bg-surface p-6 shadow-2xl">
+          <div className="relative w-full max-w-sm space-y-4 rounded-2xl border border-line bg-surface p-6 shadow-2xl z-10 m-auto">
             <button
               type="button"
               onClick={() => !loading && setIsOpen(false)}
@@ -161,7 +167,8 @@ export default function HeaderJoinRoomButton() {
               </div>
             </form>
           </div>
-        </div>
+        </div>,
+        document.body
       )}
     </>
   );
