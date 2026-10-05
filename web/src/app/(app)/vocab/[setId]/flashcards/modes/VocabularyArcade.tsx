@@ -254,7 +254,11 @@ export default function VocabularyArcade({
       setLobbyRoom((prev: any) => ({
         ...prev,
         status: "countdown",
-        countdownEndsAt: Date.now() + 5000,
+        countdownEndsAt: json.data?.countdownEndsAt || Date.now() + 5000,
+        roundStartedAt: json.data?.roundStartedAt || json.data?.countdownEndsAt,
+        words: json.data?.words && json.data.words.length > 0 ? json.data.words : prev.words,
+        activeDrops: json.data?.activeDrops,
+        nextIndex: json.data?.nextIndex,
         currentIndex: 0,
       }));
       setLobbyPlayers((prev) =>

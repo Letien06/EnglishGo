@@ -150,7 +150,7 @@ export const leaveRoom = async (user: AppUser, code: string) => {
 export const startGame = async (user: AppUser, code: string) => {
   const roomRef = adminDb.collection(COLLECTIONS.gameRooms).doc(code);
   
-  await adminDb.runTransaction(async (transaction) => {
+  return await adminDb.runTransaction(async (transaction) => {
     const roomDoc = await transaction.get(roomRef);
     if (!roomDoc.exists) {
       throw NotFound("Room not found");
@@ -216,6 +216,14 @@ export const startGame = async (user: AppUser, code: string) => {
         answers: [],
       });
     });
+
+    return {
+      countdownEndsAt,
+      roundStartedAt: countdownEndsAt,
+      words: shuffledWords,
+      activeDrops: isRain ? initialDrops : [],
+      nextIndex,
+    };
   });
 };
 

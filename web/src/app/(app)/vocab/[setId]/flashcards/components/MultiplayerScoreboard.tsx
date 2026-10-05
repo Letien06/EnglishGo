@@ -15,7 +15,7 @@ export function MultiplayerScoreboard({
   const sortedPlayers = [...players].sort((a, b) => b.score - a.score);
 
   return (
-    <div className="fixed top-4 right-4 bg-[var(--surface)]/95 backdrop-blur-md shadow-2xl border border-[var(--line)] rounded-xl overflow-hidden min-w-[240px] z-50 text-[var(--ink)]">
+    <div className="fixed top-16 right-2 sm:right-4 bg-[var(--surface)]/95 backdrop-blur-md shadow-2xl border border-[var(--line)] rounded-xl overflow-hidden min-w-[220px] max-w-[calc(100vw-1rem)] z-40 text-[var(--ink)]">
       <div className="bg-[var(--surface-soft)] border-b border-[var(--line)] px-4 py-2.5 font-black text-sm flex items-center gap-2 text-amber-400">
         🏆 Bảng xếp hạng trực tiếp
       </div>

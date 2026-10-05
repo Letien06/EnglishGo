@@ -189,6 +189,22 @@ export function MultiplayerWordBlast({
       .catch(() => {});
   }, []);
 
+  // Synchronize room words if updated by parent (e.g. host start response with shuffled words)
+  useEffect(() => {
+    if (initialRoom?.words?.length) {
+      setRoom((prev) => {
+        if (
+          !prev.words?.length ||
+          prev.words.length !== initialRoom.words.length ||
+          prev.words[0]?.id !== initialRoom.words[0]?.id
+        ) {
+          return { ...prev, words: initialRoom.words };
+        }
+        return prev;
+      });
+    }
+  }, [initialRoom?.words]);
+
   // When all players run out of hearts or room ends, finalize permanently
   const allEliminated = players.length >= 1 && players.every((p) => (p.lives ?? 3) <= 0);
   const isFinished = finalized || room.status === "finished" || allEliminated;
@@ -231,7 +247,15 @@ export function MultiplayerWordBlast({
               if (data.status === "finished") return { ...prev, ...data, status: "finished" };
               // Only advance if data index is newer
               if ((data.currentIndex ?? 0) < (prev.currentIndex ?? 0)) return prev;
+
+              const wordsDiffer =
+                Boolean(data.words?.length) &&
+                (!prev.words?.length ||
+                  prev.words.length !== data.words.length ||
+                  prev.words[0]?.id !== data.words[0]?.id);
+
               if (
+                !wordsDiffer &&
                 prev.status === data.status &&
                 prev.currentIndex === data.currentIndex &&
                 prev.roundStartedAt === data.roundStartedAt &&
@@ -291,10 +315,19 @@ export function MultiplayerWordBlast({
               const r = json.data.room;
               if (r.status === "finished") return { ...prev, ...r, status: "finished" };
               if ((r.currentIndex ?? 0) < (prev.currentIndex ?? 0)) return prev;
+
+              const wordsDiffer =
+                Boolean(r.words?.length) &&
+                (!prev.words?.length ||
+                  prev.words.length !== r.words.length ||
+                  prev.words[0]?.id !== r.words[0]?.id);
+
               if (
+                !wordsDiffer &&
                 prev.status === r.status &&
                 prev.currentIndex === r.currentIndex &&
-                prev.roundStartedAt === r.roundStartedAt
+                prev.roundStartedAt === r.roundStartedAt &&
+                prev.countdownEndsAt === r.countdownEndsAt
               ) {
                 return prev;
               }

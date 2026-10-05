@@ -13,7 +13,7 @@ export const POST = withErrorHandling(async (req) => {
   const user = await requireUser();
   const body = await parseBody(req, schema);
   
-  await startGame(user, body.code);
+  const result = await startGame(user, body.code);
   
-  return ok({ success: true });
+  return ok({ success: true, ...result });
 });

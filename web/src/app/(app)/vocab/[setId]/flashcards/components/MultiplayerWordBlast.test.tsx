@@ -175,4 +175,40 @@ describe("MultiplayerWordBlast", () => {
       );
     });
   });
+
+  it("synchronizes shuffled words when initialRoom words updates", () => {
+    const { rerender } = render(
+      <MultiplayerWordBlast
+        roomCode="BLST99"
+        initialRoom={mockRoom}
+        initialPlayers={mockPlayers}
+        currentUserId="user-1"
+        muted={true}
+        onExit={vi.fn()}
+      />
+    );
+
+    // Initial word is apple (quả táo)
+    expect(screen.getByText("“quả táo”")).toBeInTheDocument();
+
+    // Rerender with shuffled words where author (tác giả) is first
+    const shuffledWords = [
+      { id: 99, word: "author", meaning: "tác giả", mastered: false },
+      ...words,
+    ];
+
+    rerender(
+      <MultiplayerWordBlast
+        roomCode="BLST99"
+        initialRoom={{ ...mockRoom, words: shuffledWords }}
+        initialPlayers={mockPlayers}
+        currentUserId="user-1"
+        muted={true}
+        onExit={vi.fn()}
+      />
+    );
+
+    expect(screen.getByText("“tác giả”")).toBeInTheDocument();
+  });
 });
+
