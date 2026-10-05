@@ -44,65 +44,6 @@ describe("new vocabulary modes integrate with results", () => {
     expect(fetch).not.toHaveBeenCalled();
   });
 
-  it("allows entering room code manually from Hub to join multiplayer lobby", async () => {
-    vi.stubGlobal("fetch", vi.fn(async () => new Response(JSON.stringify({ success: true, data: { room: { code: "ABC123" } } }), { status: 200 })));
-    render(
-      <FlashcardGame
-        session={session}
-        initialMode="menu"
-        initialTab="play"
-        practiceOptions={[]}
-        reviewMode={false}
-        isAuthenticated={true}
-        loginHref="/login"
-      />
-    );
-    expect(screen.getByText("Đấu từ vựng cùng bạn bè")).toBeInTheDocument();
-    const buttons = screen.getAllByRole("button", { name: /Nhập mã phòng/i });
-    expect(buttons.length).toBeGreaterThanOrEqual(2);
-    // Click banner button
-    fireEvent.click(buttons[1]);
-    expect(screen.getByRole("dialog", { name: /Nhập mã phòng/i })).toBeInTheDocument();
-
-    const input = screen.getByPlaceholderText("VD: 7CWB2A");
-    fireEvent.change(input, { target: { value: "abc123" } });
-    expect(input).toHaveValue("ABC123");
-
-    fireEvent.click(screen.getByRole("button", { name: "Vào phòng" }));
-    // Modal closes and user transitions to play mode
-    await waitFor(() => {
-      expect(screen.queryByRole("dialog", { name: /Nhập mã phòng/i })).not.toBeInTheDocument();
-    });
-  });
-
-  it("allows entering room code directly from workspace header button", async () => {
-    vi.stubGlobal("fetch", vi.fn(async () => new Response(JSON.stringify({ success: true, data: { room: { code: "XYZ999", gameMode: "blast" } } }), { status: 200 })));
-    render(
-      <FlashcardGame
-        session={session}
-        initialMode="menu"
-        initialTab="view"
-        practiceOptions={[]}
-        reviewMode={false}
-        isAuthenticated={true}
-        loginHref="/login"
-      />
-    );
-    const headerBtn = screen.getByTestId("header-join-room-button");
-    expect(headerBtn).toBeInTheDocument();
-    fireEvent.click(headerBtn);
-    expect(screen.getByRole("dialog", { name: /Nhập mã phòng/i })).toBeInTheDocument();
-
-    const input = screen.getByPlaceholderText("VD: 7CWB2A");
-    fireEvent.change(input, { target: { value: "xyz999" } });
-    expect(input).toHaveValue("XYZ999");
-
-    fireEvent.click(screen.getByRole("button", { name: "Vào phòng" }));
-    await waitFor(() => {
-      expect(screen.queryByRole("dialog", { name: /Nhập mã phòng/i })).not.toBeInTheDocument();
-    });
-  });
-
   it("enters play mode immediately when initialRoom prop is provided", async () => {
     vi.stubGlobal("fetch", vi.fn(async () => new Response(JSON.stringify({ success: true, data: {} }), { status: 200 })));
     await act(async () => {

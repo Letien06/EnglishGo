@@ -347,7 +347,6 @@ export default function FlashcardGame({
   const [availableSets, setAvailableSets] = useState(practiceOptions);
   const historyChanged = useRef(false);
   const [filterPending, setFilterPending] = useState(false);
-  const [showHeaderJoinModal, setShowHeaderJoinModal] = useState(false);
   const [completionNotice, setCompletionNotice] = useState<string | null>(null);
   const completionTimerRef = useRef<number | null>(null);
 
@@ -570,22 +569,11 @@ export default function FlashcardGame({
           </button>
         ))}
       </nav>
-      <div className="flex items-center gap-2 sm:gap-3 shrink-0">
-        <button
-          type="button"
-          data-testid="header-join-room-button"
-          onClick={() => setShowHeaderJoinModal(true)}
-          className="flex items-center gap-1.5 rounded-xl bg-gradient-to-r from-indigo-600 via-purple-600 to-violet-600 px-2.5 sm:px-3 py-1.5 text-xs font-bold text-white shadow-sm hover:from-indigo-500 hover:to-violet-500 active:scale-95 transition-all cursor-pointer shrink-0 border border-white/20"
-          title="Nhập mã phòng đấu đối kháng cùng bạn bè"
-        >
-          <span className="text-sm">🔑</span>
-          <span className="hidden sm:inline">Nhập mã phòng</span>
-          <span className="sm:hidden">Mã phòng</span>
-        </button>
+      <div className="flex items-center gap-3">
         <span className="text-amber-500 font-extrabold flex items-center gap-1 text-xs sm:text-sm">
           ⚡ +0
         </span>
-        <span className={`${styles.workspaceCount} hidden md:inline`}>
+        <span className={styles.workspaceCount}>
           {words.length} từ · {session.set.topic}
         </span>
       </div>
@@ -667,16 +655,6 @@ export default function FlashcardGame({
       </div>
       </div>
 
-      {showHeaderJoinModal && (
-        <JoinRoomModal
-          onClose={() => setShowHeaderJoinModal(false)}
-          onJoin={async (code) => {
-            await handleJoinRoomFromHub(code);
-            setShowHeaderJoinModal(false);
-          }}
-        />
-      )}
-
       {(pendingTab || pendingHref) && <LeaveSessionDialog onCancel={() => { setPendingTab(null); setPendingHref(null); }} onLeave={() => { if (pendingHref) { router.push(pendingHref); return; } setWorkspaceTab(pendingTab!); setScreen("hub"); setQuizChooser(false); setPendingTab(null); }} />}
 
       {completionNotice ? (
@@ -749,7 +727,6 @@ function Hub({
     amount?: string;
   }) => void;
 }) {
-  const [showJoinModal, setShowJoinModal] = useState(false);
   return (
     <div className="space-y-6">
       {!isAuthenticated ? (
@@ -863,29 +840,6 @@ function Hub({
             </div>
           </div>
 
-          {/* Multiplayer Room Entry Banner */}
-          {onJoinRoom && (
-            <aside aria-label="Phòng đấu đối kháng" className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3 rounded-2xl border border-indigo-200/80 bg-gradient-to-r from-indigo-50/80 via-purple-50/50 to-pink-50/60 p-4 shadow-sm dark:border-indigo-900/40 dark:from-indigo-950/20 dark:via-purple-950/10 dark:to-pink-950/10">
-              <div className="flex items-center gap-3">
-                <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-indigo-600 text-xl text-white shadow">
-                  ⚔️
-                </span>
-                <div>
-                  <h3 className="text-sm font-bold text-ink">Đấu từ vựng cùng bạn bè</h3>
-                  <p className="text-xs text-muted">Được bạn bè gửi mã phòng hoặc link mời chơi đối kháng?</p>
-                </div>
-              </div>
-              <button
-                type="button"
-                onClick={() => setShowJoinModal(true)}
-                className="flex items-center justify-center gap-1.5 rounded-xl bg-indigo-600 px-4 py-2 text-xs font-bold text-white shadow hover:bg-indigo-700 active:scale-95 transition-all"
-              >
-                <span>🔑</span>
-                <span>Nhập mã phòng</span>
-              </button>
-            </aside>
-          )}
-
           {/* Game cards */}
           <section className="grid gap-3 sm:grid-cols-2">
             {MODE_CARDS.map((card) => {
@@ -965,15 +919,6 @@ function Hub({
 
       {quizChooser && (
         <QuizChooser onClose={onCloseQuizChooser} onSelect={onStartQuiz} />
-      )}
-      {showJoinModal && onJoinRoom && (
-        <JoinRoomModal
-          onClose={() => setShowJoinModal(false)}
-          onJoin={async (code) => {
-            await onJoinRoom(code);
-            setShowJoinModal(false);
-          }}
-        />
       )}
     </>
   )}
@@ -1076,119 +1021,6 @@ function QuizChooser({
             <span className="text-xs text-muted">{c.desc}</span>
           </button>
         ))}
-      </div>
-    </div>
-  );
-}
-
-function JoinRoomModal({
-  onClose,
-  onJoin,
-}: {
-  onClose: () => void;
-  onJoin: (code: string) => void | Promise<void>;
-}) {
-  const dialogRef = useRef<HTMLDivElement>(null);
-  useDialogFocus(true, onClose, dialogRef);
-  const [code, setCode] = useState("");
-  const [error, setError] = useState("");
-  const [loading, setLoading] = useState(false);
-
-  const handleSubmit = async (e?: React.FormEvent) => {
-    e?.preventDefault();
-    const clean = code.trim().toUpperCase();
-    if (!clean) {
-      setError("Vui lòng nhập mã phòng");
-      return;
-    }
-    if (clean.length !== 6 || !/^[A-Z0-9]{6}$/.test(clean)) {
-      setError("Mã phòng gồm đúng 6 ký tự chữ hoặc số");
-      return;
-    }
-    try {
-      setLoading(true);
-      setError("");
-      await onJoin(clean);
-    } catch (err: any) {
-      setError(err?.message || "Không thể tham gia phòng");
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm">
-      <button
-        type="button"
-        className="absolute inset-0 cursor-default"
-        aria-label="Đóng"
-        onClick={onClose}
-      />
-      <div
-        ref={dialogRef}
-        tabIndex={-1}
-        role="dialog"
-        aria-modal="true"
-        aria-labelledby="join-room-title"
-        className="relative w-full max-w-sm space-y-4 rounded-2xl border border-line bg-surface p-6 shadow-2xl"
-      >
-        <button
-          type="button"
-          data-dialog-initial-focus
-          onClick={onClose}
-          className="absolute right-4 top-4 text-xl text-muted hover:text-ink"
-          aria-label="Đóng"
-        >
-          ×
-        </button>
-
-        <div className="text-center space-y-1">
-          <div className="mx-auto grid h-12 w-12 place-items-center rounded-2xl bg-indigo-500/10 text-2xl text-indigo-500">
-            🔑
-          </div>
-          <h2 id="join-room-title" className="text-lg font-bold text-ink">
-            Nhập mã phòng
-          </h2>
-          <p className="text-xs text-muted">
-            Nhập mã 6 ký tự do bạn bè chia sẻ để tham gia phòng
-          </p>
-        </div>
-
-        <form onSubmit={handleSubmit} className="space-y-4">
-          <div>
-            <input
-              type="text"
-              autoFocus
-              maxLength={6}
-              value={code}
-              placeholder="VD: 7CWB2A"
-              onChange={(e) => {
-                setCode(e.target.value.toUpperCase());
-                setError("");
-              }}
-              className="w-full rounded-xl border border-line bg-surface-soft px-4 py-3 text-center text-2xl font-black font-mono tracking-widest text-ink placeholder:font-normal placeholder:text-sm placeholder:tracking-normal focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 uppercase"
-            />
-            {error && <p className="mt-1.5 text-center text-xs text-red-500 font-medium">{error}</p>}
-          </div>
-
-          <div className="flex gap-2">
-            <button
-              type="button"
-              onClick={onClose}
-              disabled={loading}
-              className="flex-1 rounded-xl border border-line py-2.5 text-sm font-semibold text-ink2 hover:bg-surface-soft disabled:opacity-50"
-            >
-              Hủy
-            </button>
-            <button
-              type="submit"
-              disabled={code.trim().length !== 6 || loading}
-              className="flex-1 rounded-xl bg-indigo-600 py-2.5 text-sm font-bold text-white shadow-md transition-all hover:bg-indigo-700 disabled:opacity-50 disabled:pointer-events-none"
-            >
-              {loading ? "Đang vào..." : "Vào phòng"}
-            </button>
-          </div>
-        </form>
       </div>
     </div>
   );

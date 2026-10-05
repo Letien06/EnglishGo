@@ -10,6 +10,7 @@ import StudyStreakBadge from "./StudyStreakBadge";
 import NavIcon, { type NavIconName } from "./NavIcon";
 import MobileNavigationMenu from "./MobileNavigationMenu";
 import PwaInstallPrompt from "./PwaInstallPrompt";
+import HeaderJoinRoomButton from "./HeaderJoinRoomButton";
 import { clearActiveLearnerCache, setActiveLearnerId } from "@/lib/client-learning-progress-cache";
 
 const StudyStreakCelebration = dynamic(() => import("./StudyStreakCelebration"), { ssr: false });
@@ -193,6 +194,7 @@ export default function AppShell({ children }: { children: ReactNode }) {
           <div className="ml-auto flex items-center gap-3">
             <MobileNavigationMenu />
             <PwaInstallPrompt />
+            <HeaderJoinRoomButton />
             {authenticated && <StudyStreakBadge className="hidden sm:inline-flex" initialStreak={bootstrap?.streak ?? null} />}
             <ThemeToggle className="!hidden border border-line bg-surface-soft text-ink xl:!inline-flex" />
             <Link
