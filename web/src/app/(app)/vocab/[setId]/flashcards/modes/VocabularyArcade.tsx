@@ -749,28 +749,28 @@ function ArcadeRound({ initialState, muted, suspended, onComplete, onExit, onRes
     const wrongAnswers = state.answers.filter(a => !a.correct);
     const correctCount = state.answers.filter(a => a.correct).length;
     const maxCombo = state.combo;
-    return <section className={styles.arcadeRound} aria-label="Game Over">
+    return <section className={styles.arcadeRound} aria-label="Kết thúc lượt chơi">
       <div className={`${styles.arcade} ${styles.blastArena}`}>
         <div className={styles.gameOverOverlay}>
           <div className={styles.gameOverIcon} aria-hidden="true">💥</div>
-          <h2 className={styles.gameOverTitle}>GAME OVER</h2>
-          <p className={styles.gameOverSubtitle}>SCORE: {state.score} // LEVEL: {Math.floor(state.index / 2) + 1}</p>
+          <h2 className={styles.gameOverTitle}>KẾT THÚC LƯỢT CHƠI</h2>
+          <p className={styles.gameOverSubtitle}>ĐIỂM: {state.score} // MỐC: {Math.floor(state.index / 2) + 1}</p>
 
           <div className={styles.gameOverStats}>
             <div className={styles.gameOverStat}>
               <span className={styles.gameOverStatIcon}>🎯</span>
               <strong>{state.score}</strong>
-              <small>PTS</small>
+              <small>ĐIỂM</small>
             </div>
             <div className={styles.gameOverStat}>
               <span className={styles.gameOverStatIcon}>⚡</span>
               <strong>{correctCount}</strong>
-              <small>HIT</small>
+              <small>ĐÚNG</small>
             </div>
             <div className={styles.gameOverStat}>
               <span className={styles.gameOverStatIcon}>🔥</span>
               <strong>x{Math.max(1, maxCombo)}</strong>
-              <small>MAX</small>
+              <small>COMBO</small>
             </div>
           </div>
 
@@ -802,7 +802,7 @@ function ArcadeRound({ initialState, muted, suspended, onComplete, onExit, onRes
     <div className={styles.toolbar}><h2 className="text-xl font-bold text-ink">{state.mode === "blast" ? "Word Blast" : "Mưa từ vựng"}</h2><div className="flex gap-2"><button className={styles.button} onClick={() => dispatch({ type: "pause", paused: !state.paused })}>{state.paused ? "Tiếp tục chơi" : "Tạm dừng"}</button><button className={styles.button} onClick={onExit}>Thoát</button></div></div>
     <div className={`${styles.arcade} ${styles.blastArena}`}>
       <div className={styles.scoreboard}><span className={styles.hearts} aria-label={`Còn ${state.lives} mạng`}>{"🔥".repeat(state.lives)}<span>{"💀".repeat(3 - state.lives)}</span></span><span>Mốc {Math.floor(state.index / 2) + 1} · {state.index + 1}/{state.words.length}</span><span>{state.score} điểm{state.mode === "rain" && ` · Combo ${state.combo}`}</span></div>
-      <div className={styles.blastClue}><p>&gt; FIND THE WORD</p>{state.mode === "blast" && <h3>{word.meaning}</h3>}<small>{state.untimed ? "Không giới hạn thời gian" : `Còn ${Math.ceil((duration - state.elapsed) / 1000)} giây`}</small></div>
+      <div className={styles.blastClue}><p>&gt; TÌM TỪ TIẾNG ANH TƯƠNG ỨNG</p>{state.mode === "blast" && <h3>{word.meaning}</h3>}<small>{state.untimed ? "Không giới hạn thời gian" : `Còn ${Math.ceil((duration - state.elapsed) / 1000)} giây`}</small></div>
       <div
         ref={field}
         className={styles.field}
@@ -894,7 +894,7 @@ function ArcadeRound({ initialState, muted, suspended, onComplete, onExit, onRes
       </div>
       <div className={styles.progress}><span style={{ transform: `scaleX(${1 - fraction})` }} /></div>
       <div className={styles.blastStatus}>
-        <span>{state.answers.filter(a => a.correct).length} HIT // {state.options[state.index]?.length ?? 4} TARGETS</span>
+        <span>{state.answers.filter(a => a.correct).length} ĐÚNG // {state.options[state.index]?.length ?? 4} MỤC TIÊU</span>
       </div>
     </div>
     <p className={styles.arcadeHelp}>Chạm mục tiêu hoặc bấm 1–4 · Đúng +10 điểm · Tự chuyển sang từ tiếp theo</p>

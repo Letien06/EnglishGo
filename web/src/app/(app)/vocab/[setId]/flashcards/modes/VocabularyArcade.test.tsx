@@ -202,7 +202,7 @@ describe("arcade interaction", () => {
 
     // Wait for 800ms game over overlay timer
     act(() => vi.advanceTimersByTime(900));
-    expect(screen.getByRole("heading", { name: "GAME OVER" })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "KẾT THÚC LƯỢT CHƠI" })).toBeInTheDocument();
     // Verify Xem kết quả is NOT rendered on Game Over
     expect(screen.queryByRole("button", { name: /xem kết quả/i })).not.toBeInTheDocument();
     expect(screen.getByRole("button", { name: /thử lại/i })).toBeInTheDocument();
@@ -211,7 +211,7 @@ describe("arcade interaction", () => {
     // Click THỬ LẠI to restart
     fireEvent.click(screen.getByRole("button", { name: /thử lại/i }));
     // Game is restarted fresh with 3 lives and no game over
-    expect(screen.queryByRole("heading", { name: "GAME OVER" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("heading", { name: "KẾT THÚC LƯỢT CHƠI" })).not.toBeInTheDocument();
     expect(screen.getByLabelText("Còn 3 mạng")).toBeInTheDocument();
     expect(onComplete).not.toHaveBeenCalled();
   });

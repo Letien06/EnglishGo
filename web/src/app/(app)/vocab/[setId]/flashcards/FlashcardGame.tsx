@@ -1788,7 +1788,7 @@ function PlaySurface({
       {/* Play header */}
       <section className="flashcard-play-header mx-auto flex max-w-3xl flex-wrap items-center gap-3 rounded-2xl border border-line bg-white p-4 shadow-sm">
         <span className="rounded-full bg-amber-400/20 px-3 py-1 text-xs font-bold text-amber-600">
-          ~<b>{score}</b> GAME
+          ~<b>{score}</b> điểm
         </span>
         <strong className="text-sm text-ink">
           {activeMode === "matching"

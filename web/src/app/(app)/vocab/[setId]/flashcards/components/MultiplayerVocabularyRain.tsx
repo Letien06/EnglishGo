@@ -606,7 +606,7 @@ export function MultiplayerVocabularyRain({
                       </div>
                     </div>
                   </div>
-                  <div className="font-mono font-black text-xl text-amber-400">{p.score} pts</div>
+                  <div className="font-mono font-black text-xl text-amber-400">{p.score} điểm</div>
                 </div>
               );
             })}
@@ -798,7 +798,7 @@ export function MultiplayerVocabularyRain({
       <footer className="text-center text-xs text-[var(--muted)] mt-2">
         {isEliminated
           ? "Bạn đang ở chế độ quan sát trận đấu."
-          : "Gõ nhanh từ tiếng Anh trước khi từ rơi chạm đất. Tối đa 2 từ rơi cùng lúc trên 2 làn. Esc xoá chữ đang gõ!"}
+          : "Gõ nhanh từ tiếng Anh trước khi từ rơi chạm đất. Tối đa 2 từ rơi cùng lúc trên 2 làn. Esc xóa chữ đang gõ!"}
       </footer>
     </section>
   );

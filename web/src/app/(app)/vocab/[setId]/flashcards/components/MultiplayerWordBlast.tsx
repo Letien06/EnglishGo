@@ -628,7 +628,7 @@ export function MultiplayerWordBlast({
         <div className="w-full max-w-xl mx-auto py-6">
           <div className="text-6xl mb-3 animate-bounce">🏆</div>
           <h2 className="text-3xl font-black text-[var(--ink)] mb-2 tracking-wide uppercase">
-            Tổng kết trận đấu!
+            TỔNG KẾT TRẬN ĐẤU!
           </h2>
           <p className="text-[var(--muted)] mb-8 font-medium">
             {allEliminated
@@ -679,7 +679,7 @@ export function MultiplayerWordBlast({
                       </div>
                     </div>
                   </div>
-                  <div className="font-mono font-black text-xl text-amber-400">{p.score} pts</div>
+                  <div className="font-mono font-black text-xl text-amber-400">{p.score} điểm</div>
                 </div>
               );
             })}

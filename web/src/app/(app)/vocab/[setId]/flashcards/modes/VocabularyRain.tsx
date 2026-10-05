@@ -186,7 +186,7 @@ export default function VocabularyRain({ initialState, muted, suspended, onCompl
       <input ref={input} className={styles.input} aria-label="Từ tiếng Anh" placeholder="Gõ từ tiếng Anh của nghĩa đang rơi..." value={typed} disabled={paused || state.done} autoComplete="off" autoCapitalize="none" spellCheck={false} onChange={(event) => { if ((event.nativeEvent as InputEvent).isComposing) setTyped(event.target.value); else submit(event.target.value, true); }} onKeyDown={(event) => { if (event.key === "Escape") setTyped(""); }} />
       <button className={`${styles.button} ${styles.primary}`} disabled={!typed.trim() || paused || state.done}>Gửi</button>
     </form>
-    <p className={styles.arcadeHelp}>Nhấn Enter để bắt đầu · Esc xoá chữ đang gõ · {state.untimed ? "Không giới hạn thời gian" : "Tối đa 2 từ rơi cùng lúc"}</p>
+    <p className={styles.arcadeHelp}>Nhấn Enter để bắt đầu · Esc xóa chữ đang gõ · {state.untimed ? "Không giới hạn thời gian" : "Tối đa 2 từ rơi cùng lúc"}</p>
     {state.notice && <div className={state.lastCorrect ? styles.success : styles.error} role="status"><p>{state.notice}</p></div>}
   </section>;
 }

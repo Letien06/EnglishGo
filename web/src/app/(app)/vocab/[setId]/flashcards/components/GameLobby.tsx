@@ -70,7 +70,7 @@ export function GameLobby({
           ← Rời phòng
         </button>
         <div className="font-bold text-[var(--ink)] text-sm sm:text-base flex items-center gap-2">
-          <span>Game:</span>
+          <span>Trò chơi:</span>
           <span className="text-amber-400">{gameTitle}</span>
           <span>🔊</span>
         </div>
@@ -97,7 +97,7 @@ export function GameLobby({
                 className="w-full h-full object-contain"
               />
             ) : (
-              <div className="text-slate-800 text-sm font-semibold">QR Code</div>
+              <div className="text-slate-800 text-sm font-semibold">Mã QR</div>
             )}
           </div>
           
@@ -173,7 +173,7 @@ export function GameLobby({
                   </div>
                   {player.isHost && (
                     <div className="px-2.5 py-1 bg-amber-500/20 text-amber-300 border border-amber-500/40 text-xs font-black rounded-lg uppercase tracking-wider flex-shrink-0">
-                      HOST
+                      CHỦ PHÒNG
                     </div>
                   )}
                 </div>
@@ -209,7 +209,7 @@ export function GameLobby({
                 }`}
               >
                 <span>▶</span>
-                <span>{canStart ? "Bắt đầu trận đấu" : "Bắt đầu game (Cần tối thiểu 2 người)"}</span>
+                <span>{canStart ? "Bắt đầu trận đấu" : "Bắt đầu chơi (Cần tối thiểu 2 người)"}</span>
               </button>
             ) : (
               <div className="w-full py-4 bg-[var(--surface-soft)] border border-[var(--line)] text-[var(--ink2)] font-bold text-base rounded-xl text-center flex items-center justify-center gap-2">
