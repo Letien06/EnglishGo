@@ -347,6 +347,7 @@ export default function FlashcardGame({
   const [availableSets, setAvailableSets] = useState(practiceOptions);
   const historyChanged = useRef(false);
   const [filterPending, setFilterPending] = useState(false);
+  const [showHeaderJoinModal, setShowHeaderJoinModal] = useState(false);
   const [completionNotice, setCompletionNotice] = useState<string | null>(null);
   const completionTimerRef = useRef<number | null>(null);
 
@@ -367,18 +368,52 @@ export default function FlashcardGame({
     }
   }, []);
 
-  function handleJoinRoomFromHub(code: string) {
-    setRoomParam(code);
-    const targetMode = mode === "rain" ? "rain" : "blast";
-    setMode(targetMode);
-    setWorkspaceTab("play");
-    setScreen("play");
-    if (typeof window !== "undefined") {
-      const url = new URL(window.location.href);
-      url.searchParams.set("mode", targetMode);
-      url.searchParams.set("tab", "play");
-      url.searchParams.set("room", code);
-      window.history.replaceState({}, "", url.toString());
+  async function handleJoinRoomFromHub(code: string) {
+    try {
+      const res = await fetch(`/api/vocab/game-room?code=${encodeURIComponent(code)}`);
+      if (res.ok) {
+        const payload = await res.json();
+        if (payload?.success && payload?.data?.room) {
+          const room = payload.data.room;
+          const targetMode = room.gameMode === "rain" ? "rain" : "blast";
+          if (room.vocabSetId && room.vocabSetId !== setId) {
+            router.push(`/vocab/${room.vocabSetId}/flashcards?mode=${targetMode}&tab=play&room=${encodeURIComponent(code)}`);
+            return;
+          }
+          setRoomParam(code);
+          setMode(targetMode);
+          setWorkspaceTab("play");
+          setScreen("play");
+          if (typeof window !== "undefined") {
+            const url = new URL(window.location.href);
+            url.searchParams.set("mode", targetMode);
+            url.searchParams.set("tab", "play");
+            url.searchParams.set("room", code);
+            window.history.replaceState({}, "", url.toString());
+          }
+          return;
+        } else {
+          throw new Error("Phòng không tồn tại hoặc đã kết thúc");
+        }
+      } else {
+        throw new Error("Phòng không tồn tại hoặc đã kết thúc");
+      }
+    } catch (err: any) {
+      if (err?.message?.includes("Phòng")) {
+        throw err;
+      }
+      setRoomParam(code);
+      const targetMode = mode === "rain" ? "rain" : "blast";
+      setMode(targetMode);
+      setWorkspaceTab("play");
+      setScreen("play");
+      if (typeof window !== "undefined") {
+        const url = new URL(window.location.href);
+        url.searchParams.set("mode", targetMode);
+        url.searchParams.set("tab", "play");
+        url.searchParams.set("room", code);
+        window.history.replaceState({}, "", url.toString());
+      }
     }
   }
 
@@ -535,11 +570,22 @@ export default function FlashcardGame({
           </button>
         ))}
       </nav>
-      <div className="flex items-center gap-3">
+      <div className="flex items-center gap-2 sm:gap-3 shrink-0">
+        <button
+          type="button"
+          data-testid="header-join-room-button"
+          onClick={() => setShowHeaderJoinModal(true)}
+          className="flex items-center gap-1.5 rounded-xl bg-gradient-to-r from-indigo-600 via-purple-600 to-violet-600 px-2.5 sm:px-3 py-1.5 text-xs font-bold text-white shadow-sm hover:from-indigo-500 hover:to-violet-500 active:scale-95 transition-all cursor-pointer shrink-0 border border-white/20"
+          title="Nhập mã phòng đấu đối kháng cùng bạn bè"
+        >
+          <span className="text-sm">🔑</span>
+          <span className="hidden sm:inline">Nhập mã phòng</span>
+          <span className="sm:hidden">Mã phòng</span>
+        </button>
         <span className="text-amber-500 font-extrabold flex items-center gap-1 text-xs sm:text-sm">
           ⚡ +0
         </span>
-        <span className={styles.workspaceCount}>
+        <span className={`${styles.workspaceCount} hidden md:inline`}>
           {words.length} từ · {session.set.topic}
         </span>
       </div>
@@ -620,6 +666,16 @@ export default function FlashcardGame({
       )}
       </div>
       </div>
+
+      {showHeaderJoinModal && (
+        <JoinRoomModal
+          onClose={() => setShowHeaderJoinModal(false)}
+          onJoin={async (code) => {
+            await handleJoinRoomFromHub(code);
+            setShowHeaderJoinModal(false);
+          }}
+        />
+      )}
 
       {(pendingTab || pendingHref) && <LeaveSessionDialog onCancel={() => { setPendingTab(null); setPendingHref(null); }} onLeave={() => { if (pendingHref) { router.push(pendingHref); return; } setWorkspaceTab(pendingTab!); setScreen("hub"); setQuizChooser(false); setPendingTab(null); }} />}
 
@@ -913,9 +969,9 @@ function Hub({
       {showJoinModal && onJoinRoom && (
         <JoinRoomModal
           onClose={() => setShowJoinModal(false)}
-          onJoin={(code) => {
+          onJoin={async (code) => {
+            await onJoinRoom(code);
             setShowJoinModal(false);
-            onJoinRoom(code);
           }}
         />
       )}
@@ -1030,14 +1086,15 @@ function JoinRoomModal({
   onJoin,
 }: {
   onClose: () => void;
-  onJoin: (code: string) => void;
+  onJoin: (code: string) => void | Promise<void>;
 }) {
   const dialogRef = useRef<HTMLDivElement>(null);
   useDialogFocus(true, onClose, dialogRef);
   const [code, setCode] = useState("");
   const [error, setError] = useState("");
+  const [loading, setLoading] = useState(false);
 
-  const handleSubmit = (e?: React.FormEvent) => {
+  const handleSubmit = async (e?: React.FormEvent) => {
     e?.preventDefault();
     const clean = code.trim().toUpperCase();
     if (!clean) {
@@ -1048,7 +1105,15 @@ function JoinRoomModal({
       setError("Mã phòng gồm đúng 6 ký tự chữ hoặc số");
       return;
     }
-    onJoin(clean);
+    try {
+      setLoading(true);
+      setError("");
+      await onJoin(clean);
+    } catch (err: any) {
+      setError(err?.message || "Không thể tham gia phòng");
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (
@@ -1110,16 +1175,17 @@ function JoinRoomModal({
             <button
               type="button"
               onClick={onClose}
-              className="flex-1 rounded-xl border border-line py-2.5 text-sm font-semibold text-ink2 hover:bg-surface-soft"
+              disabled={loading}
+              className="flex-1 rounded-xl border border-line py-2.5 text-sm font-semibold text-ink2 hover:bg-surface-soft disabled:opacity-50"
             >
               Hủy
             </button>
             <button
               type="submit"
-              disabled={code.trim().length !== 6}
+              disabled={code.trim().length !== 6 || loading}
               className="flex-1 rounded-xl bg-indigo-600 py-2.5 text-sm font-bold text-white shadow-md transition-all hover:bg-indigo-700 disabled:opacity-50 disabled:pointer-events-none"
             >
-              Vào phòng
+              {loading ? "Đang vào..." : "Vào phòng"}
             </button>
           </div>
         </form>

@@ -58,7 +58,10 @@ describe("new vocabulary modes integrate with results", () => {
       />
     );
     expect(screen.getByText("Đấu từ vựng cùng bạn bè")).toBeInTheDocument();
-    fireEvent.click(screen.getByRole("button", { name: /Nhập mã phòng/i }));
+    const buttons = screen.getAllByRole("button", { name: /Nhập mã phòng/i });
+    expect(buttons.length).toBeGreaterThanOrEqual(2);
+    // Click banner button
+    fireEvent.click(buttons[1]);
     expect(screen.getByRole("dialog", { name: /Nhập mã phòng/i })).toBeInTheDocument();
 
     const input = screen.getByPlaceholderText("VD: 7CWB2A");
@@ -67,6 +70,34 @@ describe("new vocabulary modes integrate with results", () => {
 
     fireEvent.click(screen.getByRole("button", { name: "Vào phòng" }));
     // Modal closes and user transitions to play mode
+    await waitFor(() => {
+      expect(screen.queryByRole("dialog", { name: /Nhập mã phòng/i })).not.toBeInTheDocument();
+    });
+  });
+
+  it("allows entering room code directly from workspace header button", async () => {
+    vi.stubGlobal("fetch", vi.fn(async () => new Response(JSON.stringify({ success: true, data: { room: { code: "XYZ999", gameMode: "blast" } } }), { status: 200 })));
+    render(
+      <FlashcardGame
+        session={session}
+        initialMode="menu"
+        initialTab="view"
+        practiceOptions={[]}
+        reviewMode={false}
+        isAuthenticated={true}
+        loginHref="/login"
+      />
+    );
+    const headerBtn = screen.getByTestId("header-join-room-button");
+    expect(headerBtn).toBeInTheDocument();
+    fireEvent.click(headerBtn);
+    expect(screen.getByRole("dialog", { name: /Nhập mã phòng/i })).toBeInTheDocument();
+
+    const input = screen.getByPlaceholderText("VD: 7CWB2A");
+    fireEvent.change(input, { target: { value: "xyz999" } });
+    expect(input).toHaveValue("XYZ999");
+
+    fireEvent.click(screen.getByRole("button", { name: "Vào phòng" }));
     await waitFor(() => {
       expect(screen.queryByRole("dialog", { name: /Nhập mã phòng/i })).not.toBeInTheDocument();
     });
