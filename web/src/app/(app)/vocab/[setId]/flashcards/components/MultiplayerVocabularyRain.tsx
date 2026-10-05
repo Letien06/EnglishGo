@@ -201,11 +201,80 @@ export function MultiplayerVocabularyRain({
     }
   }, [isFinished, finalized]);
 
-  // Real-time listener via Firestore with guarded polling fallback
+  // Real-time listener via Server-Sent Events (SSE), Firestore, and fast fallback polling
   useEffect(() => {
+    const handleRoomUpdate = (data: GameRoomData) => {
+      if (data.status === "waiting") {
+        onReturnToLobby?.();
+        return;
+      }
+      setRoom((prev) => {
+        if (prev.status === "finished") return prev;
+        if (data.status === "finished") return { ...prev, ...data, status: "finished" };
+
+        const wordsDiffer =
+          Boolean(data.words?.length) &&
+          (!prev.words?.length ||
+            prev.words.length !== data.words.length ||
+            prev.words[0]?.id !== data.words[0]?.id);
+
+        // Guard re-renders if no state difference
+        if (
+          !wordsDiffer &&
+          prev.status === data.status &&
+          prev.currentIndex === data.currentIndex &&
+          prev.roundStartedAt === data.roundStartedAt &&
+          prev.countdownEndsAt === data.countdownEndsAt &&
+          JSON.stringify(prev.activeDrops) === JSON.stringify(data.activeDrops) &&
+          prev.droppedWord?.id === data.droppedWord?.id
+        ) {
+          return prev;
+        }
+        return { ...prev, ...data };
+      });
+    };
+
+    const handlePlayersUpdate = (list: GamePlayer[]) => {
+      if (!list || list.length === 0) return;
+      setPlayers((prev) => {
+        if (prev.length === list.length) {
+          const identical = prev.every((p, i) => {
+            const n = list[i];
+            return (
+              p.uid === n.uid &&
+              p.score === n.score &&
+              p.lives === n.lives &&
+              p.status === n.status &&
+              p.combo === n.combo
+            );
+          });
+          if (identical) return prev;
+        }
+        return list;
+      });
+    };
+
+    // 1. Server-Sent Events (SSE) for instant, sub-50ms push updates
+    let eventSource: EventSource | null = null;
+    if (typeof window !== "undefined" && "EventSource" in window) {
+      try {
+        eventSource = new EventSource(`/api/vocab/game-room/events?code=${roomCode}`);
+        eventSource.onmessage = (event) => {
+          try {
+            const data = JSON.parse(event.data);
+            if (data.type === "room" && data.room) {
+              handleRoomUpdate(data.room as GameRoomData);
+            } else if (data.type === "players" && data.players) {
+              handlePlayersUpdate(data.players as GamePlayer[]);
+            }
+          } catch {}
+        };
+      } catch {}
+    }
+
+    // 2. Client Firestore SDK listener (if credentials present)
     let unsubRoom: (() => void) | null = null;
     let unsubPlayers: (() => void) | null = null;
-
     try {
       const db = getClientDb();
       const roomRef = doc(db, COLLECTIONS.gameRooms, roomCode);
@@ -215,35 +284,7 @@ export function MultiplayerVocabularyRain({
         roomRef,
         (snap) => {
           if (snap.exists()) {
-            const data = snap.data() as GameRoomData;
-            if (data.status === "waiting") {
-              onReturnToLobby?.();
-              return;
-            }
-            setRoom((prev) => {
-              if (prev.status === "finished") return prev;
-              if (data.status === "finished") return { ...prev, ...data, status: "finished" };
-
-              const wordsDiffer =
-                Boolean(data.words?.length) &&
-                (!prev.words?.length ||
-                  prev.words.length !== data.words.length ||
-                  prev.words[0]?.id !== data.words[0]?.id);
-
-              // Guard re-renders if no state difference
-              if (
-                !wordsDiffer &&
-                prev.status === data.status &&
-                prev.currentIndex === data.currentIndex &&
-                prev.roundStartedAt === data.roundStartedAt &&
-                prev.countdownEndsAt === data.countdownEndsAt &&
-                JSON.stringify(prev.activeDrops) === JSON.stringify(data.activeDrops) &&
-                prev.droppedWord?.id === data.droppedWord?.id
-              ) {
-                return prev;
-              }
-              return { ...prev, ...data };
-            });
+            handleRoomUpdate(snap.data() as GameRoomData);
           }
         },
         () => {},
@@ -254,30 +295,14 @@ export function MultiplayerVocabularyRain({
         (snap) => {
           const list: GamePlayer[] = [];
           snap.forEach((d) => list.push(d.data() as GamePlayer));
-          if (list.length > 0) {
-            setPlayers((prev) => {
-              if (prev.length === list.length) {
-                const identical = prev.every((p, i) => {
-                  const n = list[i];
-                  return (
-                    p.uid === n.uid &&
-                    p.score === n.score &&
-                    p.lives === n.lives &&
-                    p.status === n.status &&
-                    p.combo === n.combo
-                  );
-                });
-                if (identical) return prev;
-              }
-              return list;
-            });
-          }
+          handlePlayersUpdate(list);
         },
         () => {},
       );
     } catch {}
 
-    // Polling fallback every 2500ms
+    // 3. Fast polling fallback: every 350ms during active game, 1500ms when finished
+    const pollIntervalMs = isFinished ? 1500 : 350;
     const pollTimer = window.setInterval(async () => {
       try {
         const res = await fetch(`/api/vocab/game-room?code=${roomCode}`);
@@ -285,68 +310,25 @@ export function MultiplayerVocabularyRain({
         const json = await res.json();
         if (json.success && json.data) {
           if (json.data.room) {
-            if (json.data.room.status === "waiting") {
-              onReturnToLobby?.();
-              return;
-            }
-            setRoom((prev) => {
-              if (prev.status === "finished") return prev;
-              const r = json.data.room;
-              if (r.status === "finished") return { ...prev, ...r, status: "finished" };
-              if ((r.currentIndex ?? 0) < (prev.currentIndex ?? 0)) return prev;
-
-              const wordsDiffer =
-                Boolean(r.words?.length) &&
-                (!prev.words?.length ||
-                  prev.words.length !== r.words.length ||
-                  prev.words[0]?.id !== r.words[0]?.id);
-
-              if (
-                !wordsDiffer &&
-                prev.status === r.status &&
-                prev.currentIndex === r.currentIndex &&
-                prev.roundStartedAt === r.roundStartedAt &&
-                prev.countdownEndsAt === r.countdownEndsAt &&
-                JSON.stringify(prev.activeDrops) === JSON.stringify(r.activeDrops) &&
-                prev.droppedWord?.id === r.droppedWord?.id
-              ) {
-                return prev;
-              }
-              return { ...prev, ...r };
-            });
+            handleRoomUpdate(json.data.room as GameRoomData);
           }
           if (json.data.players) {
-            const list = json.data.players as GamePlayer[];
-            setPlayers((prev) => {
-              if (prev.length === list.length) {
-                const identical = prev.every((p, i) => {
-                  const n = list[i];
-                  return (
-                    p.uid === n.uid &&
-                    p.score === n.score &&
-                    p.lives === n.lives &&
-                    p.status === n.status &&
-                    p.combo === n.combo
-                  );
-                });
-                if (identical) return prev;
-              }
-              return list;
-            });
+            handlePlayersUpdate(json.data.players as GamePlayer[]);
           }
           if (json.data.currentUserId) {
             setMyUid((prev) => prev || json.data.currentUserId);
           }
         }
       } catch {}
-    }, 1000);
+    }, pollIntervalMs);
 
     return () => {
+      if (eventSource) eventSource.close();
       if (unsubRoom) unsubRoom();
       if (unsubPlayers) unsubPlayers();
       window.clearInterval(pollTimer);
     };
-  }, [roomCode, onReturnToLobby]);
+  }, [roomCode, onReturnToLobby, isFinished]);
 
   // Identify current player accurately
   const currentPlayer =

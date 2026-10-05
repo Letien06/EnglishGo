@@ -128,12 +128,13 @@ export const leaveRoom = async (user: AppUser, code: string) => {
       return;
     }
     
+    const playersRef = roomRef.collection("players");
+    const playersSnapshot = await transaction.get(playersRef);
+    
     transaction.delete(playerRef);
     
     const room = roomDoc.data()!;
     if (room.hostId === user.uid) {
-      const playersRef = roomRef.collection("players");
-      const playersSnapshot = await transaction.get(playersRef);
       const remainingPlayers = playersSnapshot.docs.filter(doc => doc.id !== user.uid);
       
       if (remainingPlayers.length > 0) {
@@ -256,16 +257,27 @@ export const submitAnswer = async (
   const roomRef = adminDb.collection(COLLECTIONS.gameRooms).doc(code);
 
   return await adminDb.runTransaction(async (transaction) => {
+    // 1. ALL READS AT START OF TRANSACTION
     const roomDoc = await transaction.get(roomRef);
     if (!roomDoc.exists) throw NotFound("Room not found");
 
+    const playerRef = roomRef.collection("players").doc(user.uid);
+    const playerDoc = await transaction.get(playerRef);
+    if (!playerDoc.exists) throw NotFound("Player not in room");
+
+    const playersSnapshot = await transaction.get(roomRef.collection("players"));
+
+    // 2. IN-MEMORY VALIDATION
     const room = roomDoc.data()!;
+    const player = playerDoc.data()!;
     const now = Date.now();
+
+    let roomStatus = room.status;
     if (room.status === "countdown") {
       if (now < (room.countdownEndsAt || 0)) {
         return { skipped: true, reason: "Countdown in progress" };
       }
-      transaction.update(roomRef, { status: "playing" });
+      roomStatus = "playing";
     } else if (room.status !== "playing") {
       throw BadRequest("Game is not active");
     }
@@ -284,17 +296,9 @@ export const submitAnswer = async (
       }
     }
 
-    const playerRef = roomRef.collection("players").doc(user.uid);
-    const playerDoc = await transaction.get(playerRef);
-    if (!playerDoc.exists) throw NotFound("Player not in room");
-
-    const player = playerDoc.data()!;
-    // READ 3: All reads must be executed before ANY writes in a Firestore transaction!
-    const playersSnapshot = await transaction.get(roomRef.collection("players"));
-
     if (player.lives <= 0) {
       const anyAlive = playersSnapshot.docs.some((d) => (d.data().lives ?? 3) > 0);
-      if (!anyAlive && room.status === "playing") {
+      if (!anyAlive && roomStatus === "playing") {
         transaction.update(roomRef, { status: "finished" });
         return { skipped: true, isEliminated: true, allEliminated: true, status: "finished" };
       }
@@ -346,7 +350,7 @@ export const submitAnswer = async (
     // 1. If correct in Word Blast mode: IMMEDIATELY advance to next question
     if (correct && !isRain) {
       let nextIndex = room.currentIndex;
-      let newStatus = room.status;
+      let newStatus = roomStatus === "countdown" ? "playing" : roomStatus;
 
       if (room.currentIndex + 1 >= room.words.length) {
         newStatus = "finished";
@@ -387,7 +391,7 @@ export const submitAnswer = async (
       const remainingDrops = activeDrops.filter((d) => d.index !== questionIndex);
       const clearedLane = clearedDrop ? clearedDrop.lane : 0;
       let nextIndex = typeof room.nextIndex === "number" ? room.nextIndex : (room.currentIndex || 0) + 1;
-      let newStatus = room.status;
+      let newStatus = roomStatus === "countdown" ? "playing" : roomStatus;
 
       // Spawn next word into the cleared lane if words remain
       if (nextIndex < room.words.length) {
@@ -449,6 +453,7 @@ export const submitAnswer = async (
       }
 
       transaction.update(roomRef, {
+        status: roomStatus,
         questionAnswers,
       });
     }
@@ -459,7 +464,7 @@ export const submitAnswer = async (
       combo: 0,
       advanced: false,
       nextIndex: room.currentIndex,
-      status: room.status,
+      status: roomStatus,
     };
   });
 };
