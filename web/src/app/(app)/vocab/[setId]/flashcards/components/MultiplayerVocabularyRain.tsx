@@ -7,9 +7,7 @@ import { normalizeVocabularyAnswer } from "@/lib/vocab-content";
 import { MultiplayerScoreboard } from "./MultiplayerScoreboard";
 import { MultiplayerCountdown } from "./MultiplayerCountdown";
 import styles from "../vocabulary.module.css";
-import { getClientDb } from "@/lib/firebase/client";
-import { collection, doc, onSnapshot } from "firebase/firestore";
-import { COLLECTIONS } from "@/lib/firestore/collections";
+import { subscribeGameRoom } from "@/lib/game-room-subscription";
 
 interface GamePlayer {
   uid: string;
@@ -212,7 +210,7 @@ export function MultiplayerVocabularyRain({
     }
   }, [isFinished, finalized]);
 
-  // Real-time listener via Server-Sent Events (SSE), Firestore, and fast fallback polling
+  // Realtime updates with polling only when the listener is unavailable
   useEffect(() => {
     const handleRoomUpdate = (data: GameRoomData) => {
       if (data.status === "waiting") {
@@ -269,80 +267,11 @@ export function MultiplayerVocabularyRain({
       });
     };
 
-    // 1. Server-Sent Events (SSE) for instant, sub-50ms push updates
-    let eventSource: EventSource | null = null;
-    if (typeof window !== "undefined" && "EventSource" in window) {
-      try {
-        eventSource = new EventSource(`/api/vocab/game-room/events?code=${roomCode}`);
-        eventSource.onmessage = (event) => {
-          try {
-            const data = JSON.parse(event.data);
-            if (data.type === "room" && data.room) {
-              handleRoomUpdate(data.room as GameRoomData);
-            } else if (data.type === "players" && data.players) {
-              handlePlayersUpdate(data.players as GamePlayer[]);
-            }
-          } catch {}
-        };
-      } catch {}
-    }
-
-    // 2. Client Firestore SDK listener (if credentials present)
-    let unsubRoom: (() => void) | null = null;
-    let unsubPlayers: (() => void) | null = null;
-    try {
-      const db = getClientDb();
-      const roomRef = doc(db, COLLECTIONS.gameRooms, roomCode);
-      const playersRef = collection(db, COLLECTIONS.gameRooms, roomCode, "players");
-
-      unsubRoom = onSnapshot(
-        roomRef,
-        (snap) => {
-          if (snap.exists()) {
-            handleRoomUpdate(snap.data() as GameRoomData);
-          }
-        },
-        () => {},
-      );
-
-      unsubPlayers = onSnapshot(
-        playersRef,
-        (snap) => {
-          const list: GamePlayer[] = [];
-          snap.forEach((d) => list.push(d.data() as GamePlayer));
-          handlePlayersUpdate(list);
-        },
-        () => {},
-      );
-    } catch {}
-
-    // 3. Fast polling fallback: every 350ms during active game, 1500ms when finished
-    const pollIntervalMs = isFinished ? 1500 : 350;
-    const pollTimer = window.setInterval(async () => {
-      try {
-        const res = await fetch(`/api/vocab/game-room?code=${roomCode}`);
-        if (!res.ok) return;
-        const json = await res.json();
-        if (json.success && json.data) {
-          if (json.data.room) {
-            handleRoomUpdate(json.data.room as GameRoomData);
-          }
-          if (json.data.players) {
-            handlePlayersUpdate(json.data.players as GamePlayer[]);
-          }
-          if (json.data.currentUserId) {
-            setMyUid((prev) => prev || json.data.currentUserId);
-          }
-        }
-      } catch {}
-    }, pollIntervalMs);
-
-    return () => {
-      if (eventSource) eventSource.close();
-      if (unsubRoom) unsubRoom();
-      if (unsubPlayers) unsubPlayers();
-      window.clearInterval(pollTimer);
-    };
+    return subscribeGameRoom<GameRoomData, GamePlayer>(roomCode, {
+      room: handleRoomUpdate,
+      players: handlePlayersUpdate,
+      identity: (uid) => setMyUid((prev) => prev || uid),
+    });
   }, [roomCode, onReturnToLobby, isFinished]);
 
   // Synchronize incoming room.lastWinner from server (via SSE, Firestore onSnapshot, or polling)

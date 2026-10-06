@@ -11,9 +11,8 @@ import { GameModeSelector } from "../components/GameModeSelector";
 import { GameLobby } from "../components/GameLobby";
 import { MultiplayerWordBlast } from "../components/MultiplayerWordBlast";
 import { MultiplayerVocabularyRain } from "../components/MultiplayerVocabularyRain";
-import { getClientDb, getClientAuth } from "@/lib/firebase/client";
-import { collection, doc, onSnapshot } from "firebase/firestore";
-import { COLLECTIONS } from "@/lib/firestore/collections";
+import { getClientAuth } from "@/lib/firebase/client";
+import { subscribeGameRoom } from "@/lib/game-room-subscription";
 
 export default function VocabularyArcade({
   words,
@@ -122,53 +121,14 @@ export default function VocabularyArcade({
   useEffect(() => {
     if (view !== "lobby" || !roomCode) return;
 
-    let unsubRoom: (() => void) | null = null;
-    let unsubPlayers: (() => void) | null = null;
-
-    try {
-      const db = getClientDb();
-      unsubRoom = onSnapshot(doc(db, COLLECTIONS.gameRooms, roomCode), (snap) => {
-        if (snap.exists()) {
-          const data = snap.data();
-          setLobbyRoom(data);
-          if (data.status === "playing" || data.status === "countdown") {
-            setView("multiplayer");
-          }
-        }
-      });
-
-      unsubPlayers = onSnapshot(
-        collection(db, COLLECTIONS.gameRooms, roomCode, "players"),
-        (snap) => {
-          const list: any[] = [];
-          snap.forEach((d) => list.push(d.data()));
-          if (list.length > 0) setLobbyPlayers(list);
-        },
-      );
-    } catch {}
-
-    const interval = window.setInterval(async () => {
-      try {
-        const res = await fetch(`/api/vocab/game-room?code=${roomCode}`);
-        const json = await res.json();
-        if (json.success && json.data) {
-          if (json.data.room) {
-            setLobbyRoom(json.data.room);
-            if (json.data.room.status === "playing" || json.data.room.status === "countdown") {
-              setView("multiplayer");
-            }
-          }
-          if (json.data.players) setLobbyPlayers(json.data.players);
-          if (json.data.currentUserId) setCurrentUserId(json.data.currentUserId);
-        }
-      } catch {}
-    }, 1200);
-
-    return () => {
-      if (unsubRoom) unsubRoom();
-      if (unsubPlayers) unsubPlayers();
-      window.clearInterval(interval);
-    };
+    return subscribeGameRoom<any, any>(roomCode, {
+      room: (data) => {
+        setLobbyRoom(data);
+        if (data.status === "playing" || data.status === "countdown") setView("multiplayer");
+      },
+      players: (players) => setLobbyPlayers(players),
+      identity: setCurrentUserId,
+    });
   }, [view, roomCode]);
 
   const handleCreateRoom = async () => {

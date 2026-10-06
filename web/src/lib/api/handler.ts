@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { ApiEnvelope, ApiError, fail } from "./response";
 import { logServerError } from "@/lib/logging";
 import { withFirebaseRequestConcurrency } from "@/lib/services/distributed-concurrency";
+import { isFirestoreQuotaError } from "@/lib/firestore/quota";
 
 type RouteHandler<T> = (
   req: NextRequest,
@@ -36,6 +37,11 @@ export function withErrorHandling<T>(handler: RouteHandler<T>): RouteHandler<T> 
         method: req.method,
         path: req.nextUrl.pathname,
       });
+      if (isFirestoreQuotaError(err)) {
+        return fail("Dữ liệu học tập đang tạm gián đoạn. Vui lòng thử lại sau; tiến độ đã lưu được giữ nguyên.", 503, {
+          headers: { "Retry-After": "60" },
+        }) as NextResponse<ApiEnvelope<T>>;
+      }
       return fail("Internal server error", 500) as NextResponse<ApiEnvelope<T>>;
     }
   };

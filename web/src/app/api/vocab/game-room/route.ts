@@ -2,7 +2,7 @@ import { z } from "zod";
 import { withErrorHandling } from "@/lib/api/handler";
 import { ok } from "@/lib/api/response";
 import { parseBody } from "@/lib/api/validate";
-import { getCurrentUserForRead, requireUser } from "@/lib/auth/session";
+import { getReadIdentity, requireUser } from "@/lib/auth/session";
 import { createRoom } from "@/lib/services/game-room";
 
 const schema = z.object({
@@ -28,7 +28,7 @@ export const POST = withErrorHandling(async (req) => {
 });
 
 export const GET = withErrorHandling(async (req) => {
-  const user = await getCurrentUserForRead();
+  const user = await getReadIdentity();
   const { searchParams } = new URL(req.url);
   const code = searchParams.get("code")?.trim().toUpperCase();
   if (!code || code.length !== 6) {
