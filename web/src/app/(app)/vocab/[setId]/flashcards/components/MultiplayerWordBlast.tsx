@@ -24,6 +24,9 @@ interface GamePlayer {
   lives: number;
   combo: number;
   status: "waiting" | "playing" | "eliminated" | "finished";
+  // Monotonic version marker written by the server on every player update.
+  // Used to drop stale realtime snapshots (BUG-7b). Absent on old room docs.
+  updatedAt?: number;
 }
 
 interface GameRoomData {
@@ -225,7 +228,9 @@ export function MultiplayerWordBlast({
 
   // When all players run out of hearts or room ends, finalize permanently
   const allEliminated = players.length >= 1 && players.every((p) => (p.lives ?? 3) <= 0);
-  const isFinished = finalized || (!roundWinner && room.status === "finished") || allEliminated;
+  // BUG-8c: a finished room must always render the summary screen, even while a
+  // winner celebration banner is still showing — otherwise the game gets stuck.
+  const isFinished = finalized || room.status === "finished" || allEliminated;
 
   const isCountdown =
     room.status === "countdown" &&
@@ -241,6 +246,60 @@ export function MultiplayerWordBlast({
 
   const QUESTION_DURATION = 14; // 14 seconds per question
   const [timeLeft, setTimeLeft] = useState(QUESTION_DURATION);
+
+  // Mirror of the latest room state for use inside setTimeout callbacks.
+  const roomRef = useRef<GameRoomData>(initialRoom);
+  roomRef.current = room;
+
+  // Guard so the winner celebration for a given question starts exactly once,
+  // whether it is triggered by the realtime lastWinner broadcast or by the
+  // answer POST response (whichever arrives first).
+  const celebrationRef = useRef<{ active: boolean; questionIndex: number }>({
+    active: false,
+    questionIndex: -1,
+  });
+
+  // Show the "who grabbed this question" banner for 1600ms, then advance.
+  // The next index is clamped to the last valid word so the client can never
+  // render an out-of-bounds empty "Câu 81/80" (BUG-8b).
+  const showWinnerBanner = (winner: {
+    uid: string;
+    displayName: string;
+    word: string;
+    points: number;
+    questionIndex: number;
+    isMe: boolean;
+  }) => {
+    if (
+      celebrationRef.current.active &&
+      celebrationRef.current.questionIndex === winner.questionIndex
+    ) {
+      return;
+    }
+    celebrationRef.current = { active: true, questionIndex: winner.questionIndex };
+    setRoundWinner(winner);
+    if (winnerTimerRef.current) clearTimeout(winnerTimerRef.current);
+    winnerTimerRef.current = setTimeout(() => {
+      celebrationRef.current = { active: false, questionIndex: -1 };
+      setRoundWinner(null);
+      setDisplayedIndex((prev) => {
+        const r = roomRef.current;
+        const maxIdx = Math.max(0, (r.words?.length ?? 1) - 1);
+        const next =
+          typeof r.currentIndex === "number" && r.currentIndex > prev
+            ? r.currentIndex
+            : prev + 1;
+        return Math.min(next, maxIdx);
+      });
+      setHasAnswered(false);
+      setDisabledOptions([]);
+      setShot(null);
+      setHoveredOptionId(null);
+      setReticleActive(false);
+      setFeedback(null);
+      setTimeLeft(QUESTION_DURATION);
+    }, 1600);
+  };
 
   // Real-time listener via Server-Sent Events (SSE), Firestore, and fast fallback polling
   useEffect(() => {
@@ -279,20 +338,40 @@ export function MultiplayerWordBlast({
     const handlePlayersUpdate = (list: GamePlayer[]) => {
       if (!list || list.length === 0) return;
       setPlayers((prev) => {
-        if (prev.length === list.length) {
-          const identical = prev.every((p, i) => {
-            const n = list[i];
+        const prevByUid = new Map(prev.map((p) => [p.uid, p]));
+        // BUG-7b: SSE / onSnapshot / 350ms polling can race. The server stamps
+        // every player write with a monotonic `updatedAt`, so drop any snapshot
+        // older than what we already hold instead of letting it win by arrival order.
+        const merged = list.map((incoming) => {
+          const existing = prevByUid.get(incoming.uid);
+          if (
+            existing &&
+            typeof incoming.updatedAt === "number" &&
+            typeof existing.updatedAt === "number" &&
+            incoming.updatedAt < existing.updatedAt
+          ) {
+            return existing;
+          }
+          return incoming;
+        });
+        if (
+          prev.length === merged.length &&
+          merged.every((m, i) => {
+            const p = prev[i];
             return (
-              p.uid === n.uid &&
-              p.score === n.score &&
-              p.lives === n.lives &&
-              p.status === n.status &&
-              p.combo === n.combo
+              p &&
+              p.uid === m.uid &&
+              p.score === m.score &&
+              p.lives === m.lives &&
+              p.status === m.status &&
+              p.combo === m.combo &&
+              p.updatedAt === m.updatedAt
             );
-          });
-          if (identical) return prev;
+          })
+        ) {
+          return prev;
         }
-        return list;
+        return merged;
       });
     };
 
@@ -310,6 +389,14 @@ export function MultiplayerWordBlast({
               handlePlayersUpdate(data.players as GamePlayer[]);
             }
           } catch {}
+        };
+        // If the SSE stream breaks, close it and let the Firestore listener +
+        // polling fallback keep the game in sync instead of error-looping.
+        eventSource.onerror = () => {
+          try {
+            eventSource?.close();
+          } catch {}
+          eventSource = null;
         };
       } catch {}
     }
@@ -424,14 +511,6 @@ export function MultiplayerWordBlast({
       lastProcessedWinnerAt.current = lw.at!;
       const isMe = lw.uid === myUid || lw.uid === currentUserId;
 
-      setRoundWinner({
-        uid: lw.uid,
-        displayName: lw.displayName || "Đối thủ",
-        word: lw.word,
-        points: lw.points || 15,
-        questionIndex: displayedIndex,
-        isMe,
-      });
       setHasAnswered(true);
 
       if (isMe) {
@@ -455,24 +534,14 @@ export function MultiplayerWordBlast({
       }
 
       // Keep current question on screen for 1600ms so both players clearly see who grabbed it
-      if (winnerTimerRef.current) clearTimeout(winnerTimerRef.current);
-      winnerTimerRef.current = setTimeout(() => {
-        setRoundWinner(null);
-        setDisplayedIndex((prev) => {
-          const next =
-            typeof room.currentIndex === "number" && room.currentIndex > prev
-              ? room.currentIndex
-              : prev + 1;
-          return next;
-        });
-        setHasAnswered(false);
-        setDisabledOptions([]);
-        setShot(null);
-        setHoveredOptionId(null);
-        setReticleActive(false);
-        setFeedback(null);
-        setTimeLeft(QUESTION_DURATION);
-      }, 1600);
+      showWinnerBanner({
+        uid: lw.uid,
+        displayName: lw.displayName || "Đối thủ",
+        word: lw.word,
+        points: lw.points || 15,
+        questionIndex: displayedIndex,
+        isMe,
+      });
 
       return;
     }
@@ -502,7 +571,9 @@ export function MultiplayerWordBlast({
 
   // Timer countdown: 14s per question with server round synchronization
   useEffect(() => {
-    if (isFinished || isCountdown || Boolean(roundWinner)) return;
+    // BUG-7c: an eliminated player must not keep calling /next and pushing
+    // questions forward for the whole room.
+    if (isFinished || isCountdown || isEliminated || Boolean(roundWinner)) return;
 
     if (room.roundStartedAt && room.roundStartedAt > 0) {
       const elapsed = Math.floor((Date.now() - room.roundStartedAt) / 1000);
@@ -539,7 +610,7 @@ export function MultiplayerWordBlast({
     }, 1000);
 
     return () => window.clearInterval(interval);
-  }, [displayedIndex, isFinished, isCountdown, roundWinner, roomCode, room.roundStartedAt]);
+  }, [displayedIndex, isFinished, isCountdown, isEliminated, roundWinner, roomCode, room.roundStartedAt]);
 
   // Floating animation loop
   useEffect(() => {
@@ -568,48 +639,15 @@ export function MultiplayerWordBlast({
     const isCorrect = option.id === currentWord?.id;
 
     if (isCorrect) {
+      // BUG-9: never trust an optimistic score. The winner banner and the real
+      // points are only shown after the server confirms them; the scoreboard
+      // itself converges from the realtime server push. Lock input meanwhile so
+      // the player can't double-submit while waiting.
       setHasAnswered(true);
       if (!soundQuiet) {
         playSuccessSound();
       }
 
-      const pointsEarned = 15 + Math.min(((currentPlayer.combo || 0) + 1) * 2, 10);
-
-      // Cập nhật điểm ngay tức thì trên giao diện bản thân
-      setPlayers((prev) =>
-        prev.map((p) =>
-          p.uid === currentPlayer.uid
-            ? { ...p, score: (p.score || 0) + pointsEarned, combo: (p.combo || 0) + 1 }
-            : p
-        )
-      );
-
-      // Hiển thị ngay kết quả giành câu hỏi cho chính mình ở câu hiện tại
-      lastProcessedWinnerAt.current = Date.now();
-      setRoundWinner({
-        uid: currentPlayer.uid,
-        displayName: currentPlayer.displayName || "Bạn",
-        word: option.word,
-        points: pointsEarned,
-        questionIndex: displayedIndex,
-        isMe: true,
-      });
-
-      // Bắt đầu đếm 1.6s giữ câu hiện tại, sau đó mới chuyển sang câu tiếp theo
-      if (winnerTimerRef.current) clearTimeout(winnerTimerRef.current);
-      winnerTimerRef.current = setTimeout(() => {
-        setRoundWinner(null);
-        setDisplayedIndex((prev) => prev + 1);
-        setHasAnswered(false);
-        setDisabledOptions([]);
-        setShot(null);
-        setHoveredOptionId(null);
-        setReticleActive(false);
-        setFeedback(null);
-        setTimeLeft(QUESTION_DURATION);
-      }, 1600);
-
-      // Gửi server trong nền, server cập nhật Firestore và SSE broadcast cho đối thủ
       fetch("/api/vocab/game-room/answer", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -622,38 +660,43 @@ export function MultiplayerWordBlast({
       })
         .then(async (res) => {
           const json = await res.json();
-          if (json.success && json.data) {
-            if (json.data.status === "finished") {
+          const data = json?.data;
+          if (json.success && data && !data.skipped) {
+            if (data.status === "finished") {
               setFinalized(true);
               setRoom((prev) => ({ ...prev, status: "finished" }));
             }
+            // Server confirmed our grab — show the banner with the real points.
+            // The realtime lastWinner broadcast usually arrives first; the
+            // celebration guard makes the slower path a no-op.
+            lastProcessedWinnerAt.current = Date.now();
+            showWinnerBanner({
+              uid: currentPlayer.uid,
+              displayName: currentPlayer.displayName || "Bạn",
+              word: option.word,
+              points: typeof data.points === "number" ? data.points : 15,
+              questionIndex: displayedIndex,
+              isMe: true,
+            });
+          } else {
+            // Too slow (opponent grabbed it first) or time expired — release the lock.
+            setHasAnswered(false);
+            if (data?.reason === "Time expired") {
+              setFeedback({ message: "⏳ Hết giờ rồi, đáp án không được tính!", tone: "wrong" });
+            } else {
+              setFeedback({ message: "⚡ Đối thủ đã nhanh tay hơn!", tone: "wrong" });
+            }
+            window.setTimeout(() => setFeedback(null), 1500);
           }
         })
-        .catch(() => {});
+        .catch(() => {
+          setHasAnswered(false);
+        });
     } else {
-      // Wrong choice: deduct 1 heart
-      const currentLives = currentPlayer.lives ?? 3;
-      const newLives = Math.max(0, currentLives - 1);
-
+      // BUG-7a: lives are server-authoritative. Never decrement them optimistically:
+      // the server may skip this answer (e.g. the question already advanced), and an
+      // optimistic decrement would desync the client into a phantom "eliminated" state.
       setDisabledOptions((prev) => (prev.includes(option.id) ? prev : [...prev, option.id]));
-
-      setPlayers((prev) =>
-        prev.map((p) => (p.uid === currentPlayer.uid ? { ...p, lives: newLives, combo: 0 } : p))
-      );
-
-      if (newLives <= 0) {
-        setHasAnswered(true);
-        setFeedback({
-          message: "💀 BẠN ĐÃ HẾT TIM! Màn chọn đã bị khóa. Hãy quan sát trận đấu.",
-          tone: "wrong",
-        });
-      } else {
-        setFeedback({
-          message: `❌ Sai rồi! -1 tim (Còn ${newLives}❤️)`,
-          tone: "wrong",
-        });
-        window.setTimeout(() => setFeedback(null), 1200);
-      }
 
       if (!soundQuiet) {
         playFailSound();
@@ -671,9 +714,37 @@ export function MultiplayerWordBlast({
       })
         .then(async (res) => {
           const json = await res.json();
-          if (json?.data?.status === "finished") {
+          const data = json?.data;
+          if (data?.status === "finished") {
             setFinalized(true);
             setRoom((prev) => ({ ...prev, status: "finished" }));
+          }
+          if (data && typeof data.lives === "number") {
+            // The authoritative heart count comes from the server; the realtime
+            // player sync converges the scoreboard shortly after.
+            if (data.lives <= 0) {
+              setHasAnswered(true);
+              setFeedback({
+                message: "💀 BẠN ĐÃ HẾT TIM! Màn chọn đã bị khóa. Hãy quan sát trận đấu.",
+                tone: "wrong",
+              });
+            } else {
+              setFeedback({
+                message: `❌ Sai rồi! -1 tim (Còn ${data.lives}❤️)`,
+                tone: "wrong",
+              });
+              window.setTimeout(() => setFeedback(null), 1200);
+            }
+          } else if (data?.skipped) {
+            // Answer wasn't counted (question advanced or time expired) — no heart lost.
+            setFeedback({
+              message:
+                data.reason === "Time expired"
+                  ? "⏳ Hết giờ rồi, đáp án không được tính!"
+                  : "Câu hỏi đã chuyển, đáp án này không được tính.",
+              tone: "wrong",
+            });
+            window.setTimeout(() => setFeedback(null), 1200);
           }
         })
         .catch(() => {});

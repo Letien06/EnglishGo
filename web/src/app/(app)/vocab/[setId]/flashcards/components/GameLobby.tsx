@@ -11,6 +11,7 @@ interface GameLobbyProps {
   canStart: boolean; // true when 2+ players
   onStart: () => void;
   onLeave: () => void;
+  isLeaving?: boolean;
 }
 
 export function GameLobby({
@@ -22,6 +23,7 @@ export function GameLobby({
   canStart,
   onStart,
   onLeave,
+  isLeaving,
 }: GameLobbyProps) {
   const [copiedCode, setCopiedCode] = useState(false);
   const [copiedLink, setCopiedLink] = useState(false);
@@ -65,9 +67,10 @@ export function GameLobby({
         <button 
           type="button"
           onClick={onLeave}
-          className="px-3.5 py-1.5 text-[var(--ink2)] hover:text-[var(--ink)] hover:bg-[var(--surface-soft)] font-semibold rounded-xl border border-[var(--line)] transition-all flex items-center gap-1.5 text-sm"
+          disabled={isLeaving}
+          className="px-3.5 py-1.5 text-[var(--ink2)] hover:text-[var(--ink)] hover:bg-[var(--surface-soft)] font-semibold rounded-xl border border-[var(--line)] transition-all flex items-center gap-1.5 text-sm disabled:opacity-60 disabled:pointer-events-none"
         >
-          ← Rời phòng
+          {isLeaving ? "⏳ Đang rời..." : "← Rời phòng"}
         </button>
         <div className="font-bold text-[var(--ink)] text-sm sm:text-base flex items-center gap-2">
           <span>Trò chơi:</span>

@@ -64,6 +64,8 @@ export const createRoom = async (
     combo: 0,
     status: "waiting",
     joinedAt: FieldValue.serverTimestamp(),
+    // Monotonic version marker so clients can drop stale realtime updates (BUG-7b)
+    updatedAt: Date.now(),
   };
   batch.set(playerRef, playerData);
   
@@ -106,6 +108,7 @@ export const joinRoom = async (user: AppUser, code: string) => {
         combo: 0,
         status: "waiting",
         joinedAt: FieldValue.serverTimestamp(),
+        updatedAt: Date.now(),
       });
     }
 
@@ -201,6 +204,7 @@ export const startGame = async (user: AppUser, code: string) => {
       roundStartedAt: countdownEndsAt,
       questionAnswers: {},
       lastWinner: FieldValue.delete(),
+      updatedAt: Date.now(),
       ...(isRain
         ? {
             activeDrops: initialDrops,
@@ -216,6 +220,7 @@ export const startGame = async (user: AppUser, code: string) => {
         lives: 3,
         combo: 0,
         answers: [],
+        updatedAt: Date.now(),
       });
     });
 
@@ -295,6 +300,16 @@ export const submitAnswer = async (
       if (room.currentIndex !== questionIndex) {
         return { skipped: true, reason: "Question already advanced" };
       }
+      // BUG-10: enforce the per-question time limit on the server (Word Blast only).
+      // QUESTION_DURATION previously existed only on the client, so a slow request
+      // could still score after the timer hit 0s. Rain mode has per-drop lifetimes
+      // instead, so it is intentionally excluded here.
+      const QUESTION_DURATION_MS = 14 * 1000;
+      const roundStartedAt =
+        typeof room.roundStartedAt === "number" ? room.roundStartedAt : 0;
+      if (roundStartedAt > 0 && now - roundStartedAt > QUESTION_DURATION_MS) {
+        return { skipped: true, reason: "Time expired" };
+      }
     }
 
     if (player.lives <= 0) {
@@ -339,6 +354,7 @@ export const submitAnswer = async (
       lives: newLives,
       combo: newCombo,
       status: newLives <= 0 ? "eliminated" : "playing",
+      updatedAt: Date.now(),
       answers: FieldValue.arrayUnion({
         questionIndex,
         correct,
@@ -374,6 +390,7 @@ export const submitAnswer = async (
         roundStartedAt: Date.now(),
         questionAnswers: {},
         lastWinner: winnerInfo,
+        updatedAt: Date.now(),
       });
 
       return {
@@ -421,6 +438,7 @@ export const submitAnswer = async (
         nextIndex,
         status: newStatus,
         lastWinner: winnerInfo,
+        updatedAt: Date.now(),
       });
 
       return {
@@ -445,6 +463,7 @@ export const submitAnswer = async (
       if (!anyAlive) {
         transaction.update(roomRef, {
           status: "finished",
+          updatedAt: Date.now(),
         });
         return {
           points: 0,
@@ -458,6 +477,7 @@ export const submitAnswer = async (
       transaction.update(roomRef, {
         status: roomStatus,
         questionAnswers,
+        updatedAt: Date.now(),
       });
     }
 
@@ -499,16 +519,22 @@ export const advanceQuestion = async (user: AppUser, code: string, questionIndex
       newStatus = "finished";
     }
 
+    // BUG-8: when the game finishes, keep the last valid question index instead of
+    // writing an out-of-bounds index (e.g. 80/80 words) — otherwise clients render
+    // an empty "Câu 81/80" with no answers and get stuck.
+    const safeIndex = newStatus === "finished" ? room.currentIndex : nextIndex;
+
     const roundStartedAt = Date.now();
     transaction.update(roomRef, {
-      currentIndex: nextIndex,
+      currentIndex: safeIndex,
       status: newStatus,
       roundStartedAt,
       questionAnswers: {},
       lastWinner: FieldValue.delete(),
+      updatedAt: Date.now(),
     });
 
-    return { currentIndex: nextIndex, status: newStatus, roundStartedAt };
+    return { currentIndex: safeIndex, status: newStatus, roundStartedAt };
   });
 };
 
@@ -550,6 +576,7 @@ export const expireRainDrop = async (
         lives: updatedLives,
         combo: 0,
         status: updatedLives <= 0 ? "eliminated" : "playing",
+        updatedAt: Date.now(),
       });
     });
 
@@ -573,6 +600,7 @@ export const expireRainDrop = async (
       nextIndex,
       status: newStatus,
       droppedWord,
+      updatedAt: Date.now(),
     });
 
     return {
@@ -619,6 +647,7 @@ export const resetRoomToLobby = async (user: AppUser, code: string) => {
       questionAnswers: {},
       lastWinner: FieldValue.delete(),
       words: shuffledWords,
+      updatedAt: Date.now(),
     });
 
     playersSnapshot.docs.forEach((doc) => {
@@ -628,6 +657,7 @@ export const resetRoomToLobby = async (user: AppUser, code: string) => {
         lives: 3,
         combo: 0,
         answers: [],
+        updatedAt: Date.now(),
       });
     });
 

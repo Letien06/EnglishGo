@@ -61,6 +61,9 @@ export default function VocabularyArcade({
   const [lobbyRoom, setLobbyRoom] = useState<any>(null);
   const [lobbyPlayers, setLobbyPlayers] = useState<any[]>([]);
   const [loadingRoom, setLoadingRoom] = useState(false);
+  // BUG-6: tracks the in-flight leave-room request so the lobby button can show
+  // a loading state instead of looking dead on a cold-start fetch.
+  const [isLeavingRoom, setIsLeavingRoom] = useState(false);
 
   const [initialState, setInitialState] = useState<ArcadeState | null>(null);
   const [roundKey, setRoundKey] = useState(0);
@@ -270,16 +273,22 @@ export default function VocabularyArcade({
     }
   };
 
-  const handleLeaveRoom = async () => {
-    try {
-      await fetch("/api/vocab/game-room/leave", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ code: roomCode }),
-      });
-    } catch {}
+  const handleLeaveRoom = () => {
+    if (isLeavingRoom) return;
+    setIsLeavingRoom(true);
+    // BUG-6: leave the lobby UI immediately (optimistic) — the old code awaited
+    // the network request first, so on a cold-start the button looked dead and
+    // users had to click twice. The request itself is fire-and-forget.
+    const code = roomCode;
     setRoomCode("");
     setView("mode-select");
+    fetch("/api/vocab/game-room/leave", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ code }),
+    })
+      .catch(() => {})
+      .finally(() => setIsLeavingRoom(false));
   };
 
   // MÀN HÌNH 1: Chọn chế độ chơi (1 mình vs Bạn bè)
@@ -318,6 +327,7 @@ export default function VocabularyArcade({
         canStart={canStart}
         onStart={handleStartGame}
         onLeave={handleLeaveRoom}
+        isLeaving={isLeavingRoom}
       />
     );
   }

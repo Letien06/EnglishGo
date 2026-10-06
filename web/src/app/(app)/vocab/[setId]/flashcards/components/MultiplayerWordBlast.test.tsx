@@ -72,7 +72,7 @@ describe("MultiplayerWordBlast", () => {
   it("submits correct answer when clicking target button", async () => {
     const fetchMock = vi.fn(async (url: string) => {
       if (url.includes("/api/vocab/game-room/answer")) {
-        return new Response(JSON.stringify({ success: true, data: { advanced: true, nextIndex: 1 } }), { status: 200 });
+        return new Response(JSON.stringify({ success: true, data: { advanced: true, nextIndex: 1, points: 17 } }), { status: 200 });
       }
       return new Response(JSON.stringify({ success: true, data: {} }), { status: 200 });
     });
@@ -92,7 +92,11 @@ describe("MultiplayerWordBlast", () => {
     const targetBtn = screen.getByRole("button", { name: /apple/i });
     fireEvent.click(targetBtn);
 
-    expect(screen.getByText(/BẠN ĐÃ BẮN TRÚNG!/i)).toBeInTheDocument();
+    // The winner banner only appears after the server confirms the answer
+    // (no optimistic score UI — see BUG-9 fix).
+    await waitFor(() => {
+      expect(screen.getByText(/BẠN ĐÃ BẮN TRÚNG!/i)).toBeInTheDocument();
+    });
 
     await waitFor(() => {
       expect(fetchMock).toHaveBeenCalledWith(
