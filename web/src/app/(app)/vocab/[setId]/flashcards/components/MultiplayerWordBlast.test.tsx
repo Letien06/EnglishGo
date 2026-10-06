@@ -51,7 +51,7 @@ afterEach(() => {
 });
 
 describe("MultiplayerWordBlast", () => {
-  it("renders cannon, target reticles, laser ground, and prompt clue", () => {
+  it("renders cannon, laser ground, and prompt clue", () => {
     render(
       <MultiplayerWordBlast
         roomCode="BLST99"

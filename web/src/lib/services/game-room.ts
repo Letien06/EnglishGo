@@ -304,7 +304,8 @@ export const submitAnswer = async (
       // QUESTION_DURATION previously existed only on the client, so a slow request
       // could still score after the timer hit 0s. Rain mode has per-drop lifetimes
       // instead, so it is intentionally excluded here.
-      const QUESTION_DURATION_MS = 14 * 1000;
+      // NOTE: keep in sync with QUESTION_DURATION in MultiplayerWordBlast.tsx (7s).
+      const QUESTION_DURATION_MS = 7 * 1000;
       const roundStartedAt =
         typeof room.roundStartedAt === "number" ? room.roundStartedAt : 0;
       if (roundStartedAt > 0 && now - roundStartedAt > QUESTION_DURATION_MS) {

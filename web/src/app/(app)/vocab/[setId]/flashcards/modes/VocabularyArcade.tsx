@@ -862,16 +862,6 @@ function ArcadeRound({ initialState, muted, suspended, onComplete, onExit, onRes
               }}
             >
               <kbd>{index + 1}</kbd>{option.word}
-              <span className={styles.reticle} aria-hidden="true">
-                <svg viewBox="0 0 32 32" fill="none">
-                  <circle cx="16" cy="16" r="8" stroke="currentColor" strokeWidth="1.5" />
-                  <line x1="16" y1="2" x2="16" y2="9" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
-                  <line x1="16" y1="23" x2="16" y2="30" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
-                  <line x1="2" y1="16" x2="9" y2="16" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
-                  <line x1="22" y1="16" x2="29" y2="16" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
-                  <circle cx="16" cy="16" r="1.5" fill="currentColor" />
-                </svg>
-              </span>
               {shot === option.id && <span key={state.answers.length} className={styles.hitBurst} aria-hidden="true">{state.lastCorrect ? "✦" : "×"}</span>}
             </button>;
           })}

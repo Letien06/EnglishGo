@@ -163,12 +163,10 @@ export function MultiplayerWordBlast({
     };
   }, []);
 
-  // Cannon & Sliding Reticle States
+  // Cannon aim state (the mouse-following crosshair reticle was removed for performance)
   const [aim, setAim] = useState(0);
   const [shot, setShot] = useState<number | null>(null);
   const [hoveredOptionId, setHoveredOptionId] = useState<number | null>(null);
-  const [reticlePos, setReticlePos] = useState<{ x: number; y: number }>({ x: 50, y: 40 });
-  const [reticleActive, setReticleActive] = useState(false);
   const fieldRef = useRef<HTMLDivElement>(null);
 
   // Dedicated permanent finalization state to prevent result screen flashing or reverting
@@ -244,7 +242,7 @@ export function MultiplayerWordBlast({
     }
   }, [isFinished, finalized]);
 
-  const QUESTION_DURATION = 14; // 14 seconds per question
+  const QUESTION_DURATION = 7; // 7 seconds per question
   const [timeLeft, setTimeLeft] = useState(QUESTION_DURATION);
 
   // Mirror of the latest room state for use inside setTimeout callbacks.
@@ -295,7 +293,6 @@ export function MultiplayerWordBlast({
       setDisabledOptions([]);
       setShot(null);
       setHoveredOptionId(null);
-      setReticleActive(false);
       setFeedback(null);
       setTimeLeft(QUESTION_DURATION);
     }, 1600);
@@ -491,7 +488,6 @@ export function MultiplayerWordBlast({
     setDisabledOptions([]);
     setShot(null);
     setHoveredOptionId(null);
-    setReticleActive(false);
     setFeedback(null);
     setFloats(createFloatingTargets(currentOptions.length || 4));
   }
@@ -517,7 +513,7 @@ export function MultiplayerWordBlast({
         if (!soundQuiet) playSuccessSound();
       } else {
         if (!soundQuiet) playFailSound();
-        // Opponent won: aim cannon and reticle at opponent's winning word in CURRENT question options
+        // Opponent won: aim cannon at opponent's winning word in CURRENT question options
         const winOpt = currentOptions.find(
           (o) => o.word.toLowerCase() === lw.word.toLowerCase()
         );
@@ -526,8 +522,6 @@ export function MultiplayerWordBlast({
           const winFloat = floats[winIdx];
           setShot(winOpt.id);
           if (winFloat && fieldRef.current) {
-            setReticlePos({ x: winFloat.x, y: winFloat.y });
-            setReticleActive(true);
             setAim(getAngleToTarget(winFloat.x, winFloat.y, fieldRef.current));
           }
         }
@@ -553,7 +547,6 @@ export function MultiplayerWordBlast({
       setDisabledOptions([]);
       setShot(null);
       setHoveredOptionId(null);
-      setReticleActive(false);
       setFeedback(null);
       setTimeLeft(QUESTION_DURATION);
     }
@@ -569,7 +562,7 @@ export function MultiplayerWordBlast({
     floats,
   ]);
 
-  // Timer countdown: 14s per question with server round synchronization
+  // Timer countdown: 7s per question with server round synchronization
   useEffect(() => {
     // BUG-7c: an eliminated player must not keep calling /next and pushing
     // questions forward for the whole room.
@@ -618,11 +611,21 @@ export function MultiplayerWordBlast({
 
     let rafId: number;
     let lastTime = performance.now();
+    let acc = 0;
 
     function animate(now: number) {
       const delta = Math.min(now - lastTime, 200);
       lastTime = now;
-      setFloats((prev) => prev.map((f) => tickFloatingTarget(f, delta)));
+      // Throttle target-position state updates to ~30fps: pushing a React
+      // setState 60x/sec re-renders the whole arena every frame (visible
+      // jitter). Motion stays smooth because tickFloatingTarget integrates
+      // the accumulated delta.
+      acc += delta;
+      if (acc >= 33) {
+        const step = acc;
+        acc = 0;
+        setFloats((prev) => prev.map((f) => tickFloatingTarget(f, step)));
+      }
       rafId = requestAnimationFrame(animate);
     }
 
@@ -720,9 +723,25 @@ export function MultiplayerWordBlast({
             setRoom((prev) => ({ ...prev, status: "finished" }));
           }
           if (data && typeof data.lives === "number") {
-            // The authoritative heart count comes from the server; the realtime
-            // player sync converges the scoreboard shortly after.
-            if (data.lives <= 0) {
+            const lives = data.lives;
+            // Apply the authoritative heart count IMMEDIATELY from the response
+            // instead of waiting for the realtime push — this is the fastest
+            // possible sync path (~1 RTT). Stamp with Date.now() so the
+            // updatedAt-ordered merge in handlePlayersUpdate keeps it.
+            const myPlayerUid = currentPlayer.uid;
+            setPlayers((prevPlayers) =>
+              prevPlayers.map((p) =>
+                p.uid === myPlayerUid
+                  ? {
+                      ...p,
+                      lives,
+                      combo: typeof data.combo === "number" ? data.combo : p.combo,
+                      updatedAt: Date.now(),
+                    }
+                  : p
+              )
+            );
+            if (lives <= 0) {
               setHasAnswered(true);
               setFeedback({
                 message: "💀 BẠN ĐÃ HẾT TIM! Màn chọn đã bị khóa. Hãy quan sát trận đấu.",
@@ -730,7 +749,7 @@ export function MultiplayerWordBlast({
               });
             } else {
               setFeedback({
-                message: `❌ Sai rồi! -1 tim (Còn ${data.lives}❤️)`,
+                message: `❌ Sai rồi! -1 tim (Còn ${lives}❤️)`,
                 tone: "wrong",
               });
               window.setTimeout(() => setFeedback(null), 1200);
@@ -762,8 +781,6 @@ export function MultiplayerWordBlast({
           const f = floats[num - 1];
           setShot(opt.id);
           if (f) {
-            setReticlePos({ x: f.x, y: f.y });
-            setReticleActive(true);
             if (fieldRef.current) {
               setAim(getAngleToTarget(f.x, f.y, fieldRef.current));
             }
@@ -971,31 +988,11 @@ export function MultiplayerWordBlast({
           </div>
         )}
 
-        {/* Field with Cannon, Laser Guide, Sliding Reticle, Targets */}
+        {/* Field with Cannon, Laser Guide, Targets (mouse-following reticle removed for performance) */}
         <div
           ref={fieldRef}
           className={styles.field}
           data-paused={isFinished || isEliminated}
-          onPointerMove={(event) => {
-            const bounds = event.currentTarget.getBoundingClientRect();
-            const mouseX = event.clientX - bounds.left;
-            const mouseY = event.clientY - bounds.top;
-            const cannonCenterX = bounds.width / 2;
-            const cannonBottomY = bounds.height - 25;
-            const mouseXPercent = (mouseX / bounds.width) * 100;
-            const mouseYPercent = (mouseY / bounds.height) * 100;
-
-            if (hoveredOptionId === null) {
-              setAim((Math.atan2(mouseX - cannonCenterX, cannonBottomY - mouseY) * 180) / Math.PI);
-              setReticlePos({ x: mouseXPercent, y: mouseYPercent });
-              setReticleActive(true);
-            }
-          }}
-          onPointerLeave={() => {
-            if (hoveredOptionId === null) {
-              setReticleActive(false);
-            }
-          }}
         >
           {isEliminated ? (
             <div className="relative w-full h-full flex flex-col items-center justify-center p-6 text-center select-none bg-red-950/20 backdrop-blur-sm z-20">
@@ -1062,8 +1059,6 @@ export function MultiplayerWordBlast({
                     onClick={() => {
                       if (isDisabled) return;
                       setShot(opt.id);
-                      setReticlePos({ x: pos.x, y: pos.y });
-                      setReticleActive(true);
                       if (pos && fieldRef.current) {
                         setAim(getAngleToTarget(pos.x, pos.y, fieldRef.current));
                       }
@@ -1072,8 +1067,6 @@ export function MultiplayerWordBlast({
                     onPointerEnter={() => {
                       if (!isDisabled && !isEliminated) {
                         setHoveredOptionId(opt.id);
-                        setReticlePos({ x: pos.x, y: pos.y });
-                        setReticleActive(true);
                         if (pos && fieldRef.current) {
                           setAim(getAngleToTarget(pos.x, pos.y, fieldRef.current));
                         }
@@ -1100,32 +1093,9 @@ export function MultiplayerWordBlast({
             </>
           )}
 
-          {/* Dynamic Sliding Crosshair Reticle */}
-          {reticlePos && !isEliminated && !isFinished && (
-            <div
-              className={styles.slidingReticle}
-              style={{
-                left: `${reticlePos.x}%`,
-                top: `${reticlePos.y}%`,
-                opacity: reticleActive ? 1 : 0,
-                transform: `translate(-50%, -50%) scale(${hoveredOptionId !== null ? 1.25 : 1})`,
-              }}
-              aria-hidden="true"
-            >
-              <svg viewBox="0 0 40 40" fill="none">
-                <path d="M6 14V6H14" stroke="#5cd9ff" strokeWidth="2.5" strokeLinecap="round" />
-                <path d="M26 6H34V14" stroke="#5cd9ff" strokeWidth="2.5" strokeLinecap="round" />
-                <path d="M34 26V34H26" stroke="#5cd9ff" strokeWidth="2.5" strokeLinecap="round" />
-                <path d="M14 34H6V26" stroke="#5cd9ff" strokeWidth="2.5" strokeLinecap="round" />
-                <circle cx="20" cy="20" r="7" stroke="#5cd9ff" strokeWidth="1.5" />
-                <line x1="20" y1="9" x2="20" y2="15" stroke="#5cd9ff" strokeWidth="1.5" />
-                <line x1="20" y1="25" x2="20" y2="31" stroke="#5cd9ff" strokeWidth="1.5" />
-                <line x1="9" y1="20" x2="15" y2="20" stroke="#5cd9ff" strokeWidth="1.5" />
-                <line x1="25" y1="20" x2="31" y2="20" stroke="#5cd9ff" strokeWidth="1.5" />
-                <circle cx="20" cy="20" r="2" fill="#5cd9ff" />
-              </svg>
-            </div>
-          )}
+          {/* Crosshair reticle removed for performance (see tweak/battle-performance) */}
+
+          {/* Aim Laser Guide */}
 
           {/* Aim Laser Guide */}
           {hoveredFloat && !isEliminated && !isFinished && (
