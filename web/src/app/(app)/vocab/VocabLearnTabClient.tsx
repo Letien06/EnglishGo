@@ -42,7 +42,10 @@ export default function VocabLearnTabClient({ groupId, userUid, initialCatalog =
     async function load() {
       if (initialCatalog?.cards.length && !userUid) return;
       try {
-        const catalogJson = await fetchWithTimeout("/api/dautoeic/vocab/catalog", { cache: "no-store", signal: controller.signal }, 8_000)
+        // The catalog API can take several seconds on a cold start (Drive
+        // snapshot download + per-user progress scan), so allow a generous
+        // timeout before falling back to the "progress unavailable" notice.
+        const catalogJson = await fetchWithTimeout("/api/dautoeic/vocab/catalog", { cache: "no-store", signal: controller.signal }, 20_000)
             .then((response) => response.json() as Promise<ApiEnvelope<DauToeicVocabCatalogView>>)
             .catch(() => null);
         if (cancelled) return;

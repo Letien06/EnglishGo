@@ -74,11 +74,27 @@ function buildVocabularyIndex(snapshot: VocabularySnapshot) {
 
 let vocabularyIndex: { key: string; promise: Promise<ReturnType<typeof buildVocabularyIndex>> } | undefined;
 
+async function loadVocabularyIndexWithRetry(): Promise<ReturnType<typeof buildVocabularyIndex>> {
+  // The snapshot is assembled from many Google Drive chunk downloads; a single
+  // transient chunk failure should not fail the whole page. Retry a couple of
+  // times (partial chunks stay cached) before surfacing the error.
+  let lastError: unknown;
+  for (let attempt = 0; attempt < 3; attempt++) {
+    try {
+      const snapshot = await readDriveMaterial<VocabularySnapshot>(`${DAUTOEIC_SOURCE_VERSION}__vocabulary__all`);
+      return buildVocabularyIndex(vocabularySnapshotSchema.parse(snapshot));
+    } catch (error) {
+      lastError = error;
+      if (attempt < 2) await new Promise((resolve) => setTimeout(resolve, 500 * (attempt + 1)));
+    }
+  }
+  throw lastError;
+}
+
 async function driveVocabularyIndex() {
   const key = contentCacheKey();
   if (vocabularyIndex?.key !== key) {
-    const promise = readDriveMaterial<VocabularySnapshot>(`${DAUTOEIC_SOURCE_VERSION}__vocabulary__all`)
-      .then((snapshot) => buildVocabularyIndex(vocabularySnapshotSchema.parse(snapshot)));
+    const promise = loadVocabularyIndexWithRetry();
     vocabularyIndex = { key, promise };
     void promise.catch(() => { if (vocabularyIndex?.promise === promise) vocabularyIndex = undefined; });
   }
@@ -469,10 +485,14 @@ async function progressStatsForSetIds(
   const wanted = new Set(setIds);
   const stats = new Map<number, ProgressStats>();
   if (!uid || !wanted.size) return stats;
+  // Only fetch the fields used for stats to keep the payload small: a full
+  // collection scan without projection gets slower as the user studies more
+  // words and can exceed the client's fetch timeout on /vocab.
   const snap = await adminDb
     .collection("users")
     .doc(uid)
     .collection(PROGRESS)
+    .select("setId", "status", "nextReviewAtMillis")
     .get();
   const now = Date.now();
   for (const doc of snap.docs) {
