@@ -111,8 +111,15 @@ describe("vocabulary uses the verified Drive bundle", () => {
     await expect(source.syncDautoeicVocabTest("vocab-test", "wrong-part")).rejects.toMatchObject({ status: 404 });
     await expect(source.findDriveVocabWords(source.dautoeicVocabSetId("vocab-test"), "wrong-part")).rejects.toMatchObject({ status: 404 });
     mocks.key++;
-    mocks.drive.mockRejectedValueOnce(new Error("Missing snapshot"));
+    // A single transient chunk failure is retried and then succeeds.
+    mocks.drive.mockRejectedValueOnce(new Error("Transient chunk failure"));
+    await expect(source.getVocabularyCatalog()).resolves.toMatchObject({ tests: [{ testId: "vocab-test" }] });
+    // A persistently missing snapshot still surfaces the error instead of
+    // silently falling back to the upstream.
+    mocks.key++;
+    mocks.drive.mockRejectedValue(new Error("Missing snapshot"));
     await expect(source.getVocabularyCatalog()).rejects.toThrow("Missing snapshot");
+    mocks.drive.mockResolvedValue(vocabularyFixture());
     await expect(source.getVocabularyCatalog()).resolves.toMatchObject({ tests: [{ testId: "vocab-test" }] });
     expect(fetch).not.toHaveBeenCalled();
   });
