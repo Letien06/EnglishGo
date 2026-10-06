@@ -596,7 +596,14 @@ export function MultiplayerWordBlast({
               }
             })
             .catch(() => {});
-          return 0;
+          // Optimistic reset: the next question is about to start, so restart
+          // the countdown immediately instead of parking at 0s. Without this,
+          // the timer sits at "Còn 0 giây" and then visually jumps back up
+          // (e.g. 0s -> 10s) when the server's roundStartedAt arrives and the
+          // effect above re-syncs from it. The server response still re-syncs
+          // via roundStartedAt (a small downward correction), and a "finished"
+          // status swaps in the summary screen anyway.
+          return QUESTION_DURATION;
         }
         return prev - 1;
       });
@@ -825,7 +832,7 @@ export function MultiplayerWordBlast({
           <p className="text-[var(--muted)] mb-8 font-medium">
             {allEliminated
               ? "Toàn bộ người chơi đã hết tim — Trận đấu kết thúc!"
-              : `Phòng: ${roomCode} · Hoàn thành ${room.words.length} câu hỏi`}
+              : `Phòng: ${roomCode} · Đã chơi ${displayedIndex + 1}/${room.words.length} câu`}
           </p>
 
           {/* Winner banner */}

@@ -1,4 +1,5 @@
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { act } from "react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { MultiplayerWordBlast } from "./MultiplayerWordBlast";
 
@@ -114,6 +115,49 @@ describe("MultiplayerWordBlast", () => {
     });
   });
 
+  it("optimistically restarts the timer when it expires instead of parking at 0s", async () => {
+    vi.useFakeTimers();
+    const fetchMock = vi.fn(async (url: string) => {
+      if (url.includes("/api/vocab/game-room/next")) {
+        return new Response(
+          JSON.stringify({
+            success: true,
+            data: { currentIndex: 1, status: "playing", roundStartedAt: Date.now() },
+          }),
+          { status: 200 }
+        );
+      }
+      return new Response(JSON.stringify({ success: true, data: {} }), { status: 200 });
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    render(
+      <MultiplayerWordBlast
+        roomCode="BLST99"
+        initialRoom={mockRoom}
+        initialPlayers={mockPlayers}
+        currentUserId="user-1"
+        muted={true}
+        onExit={vi.fn()}
+      />
+    );
+
+    // 7s countdown ticks down, then the client fires /next at expiry.
+    // (No waitFor: testing-library's polling hangs under fake timers.)
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(7100);
+    });
+
+    expect(fetchMock).toHaveBeenCalledWith(
+      "/api/vocab/game-room/next",
+      expect.objectContaining({ method: "POST" })
+    );
+
+    // Timer must restart at 7s immediately (optimistic reset) rather than
+    // sticking at 0s and jumping back up when the server responds.
+    expect(screen.getByText("⏳ 7s")).toBeInTheDocument();
+  });
+
   it("renders countdown screen when room is in countdown status", () => {
     const countdownRoom = {
       ...mockRoom,
@@ -165,6 +209,11 @@ describe("MultiplayerWordBlast", () => {
 
     expect(screen.getByText(/Tổng kết trận đấu!/i)).toBeInTheDocument();
     expect(screen.getByText(/👑 Người chiến thắng/i)).toBeInTheDocument();
+
+    // BUG-11: the summary must show questions actually played (displayedIndex + 1),
+    // not the room total, when a match ends early.
+    expect(screen.getByText(/Đã chơi 1\/4 câu/i)).toBeInTheDocument();
+    expect(screen.queryByText(/Hoàn thành \d+ câu hỏi/)).not.toBeInTheDocument();
 
     const rematchBtn = screen.getByRole("button", { name: /Quay lại phòng chơi tiếp/i });
     fireEvent.click(rematchBtn);
