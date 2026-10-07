@@ -3,6 +3,7 @@ import { FieldValue } from "firebase-admin/firestore";
 import { BadRequest, NotFound, Forbidden } from "@/lib/api/response";
 import type { AppUser } from "@/types";
 import { COLLECTIONS } from "@/lib/firestore/collections";
+import { arcadeCountdownMs, WORD_BLAST_QUESTION_MS, wordBlastQuestionMs } from "@/lib/word-blast-timing";
 
 export const generateRoomCode = () => {
   const chars = "ABCDEFGHJKMNPQRSTUVWXYZ23456789";
@@ -171,7 +172,7 @@ export const startGame = async (user: AppUser, code: string) => {
     const playersRef = roomRef.collection("players");
     const playersSnapshot = await transaction.get(playersRef);
 
-    const countdownDuration = 5000;
+    const countdownDuration = arcadeCountdownMs(room.gameMode === "rain" ? "rain" : "blast");
     const now = Date.now();
     const countdownEndsAt = now + countdownDuration;
 
@@ -202,6 +203,7 @@ export const startGame = async (user: AppUser, code: string) => {
       words: shuffledWords,
       currentIndex: 0,
       roundStartedAt: countdownEndsAt,
+      ...(!isRain ? { questionDurationMs: WORD_BLAST_QUESTION_MS } : {}),
       questionAnswers: {},
       lastWinner: FieldValue.delete(),
       updatedAt: Date.now(),
@@ -226,6 +228,7 @@ export const startGame = async (user: AppUser, code: string) => {
 
     return {
       countdownEndsAt,
+      ...(!isRain ? { questionDurationMs: WORD_BLAST_QUESTION_MS } : {}),
       roundStartedAt: countdownEndsAt,
       words: shuffledWords,
       activeDrops: isRain ? initialDrops : [],
@@ -304,11 +307,10 @@ export const submitAnswer = async (
       // QUESTION_DURATION previously existed only on the client, so a slow request
       // could still score after the timer hit 0s. Rain mode has per-drop lifetimes
       // instead, so it is intentionally excluded here.
-      // NOTE: keep in sync with QUESTION_DURATION in MultiplayerWordBlast.tsx (7s).
-      const QUESTION_DURATION_MS = 7 * 1000;
+      const QUESTION_DURATION_MS = wordBlastQuestionMs(room.questionDurationMs);
       const roundStartedAt =
         typeof room.roundStartedAt === "number" ? room.roundStartedAt : 0;
-      if (roundStartedAt > 0 && now - roundStartedAt > QUESTION_DURATION_MS) {
+      if (roundStartedAt > 0 && now - roundStartedAt >= QUESTION_DURATION_MS) {
         return { skipped: true, reason: "Time expired" };
       }
     }
@@ -511,9 +513,21 @@ export const advanceQuestion = async (user: AppUser, code: string, questionIndex
     }
 
     const playersSnapshot = await transaction.get(roomRef.collection("players"));
+    if (room.gameMode !== "rain") {
+      const player = playersSnapshot.docs.find((doc) => doc.id === user.uid || doc.data().uid === user.uid);
+      if (!player) throw Forbidden("You are not a player in this room");
+      const now = Date.now();
+      const startedAt = typeof room.roundStartedAt === "number" ? room.roundStartedAt : room.countdownEndsAt;
+      const activePlayers = playersSnapshot.docs.filter((doc) => (doc.data().lives ?? 3) > 0);
+      const answers = room.questionAnswers ?? {};
+      const allAnswered = activePlayers.length > 0 && activePlayers.every((doc) => answers[doc.id ?? doc.data().uid]);
+      if (typeof startedAt === "number" && (now < startedAt || (!allAnswered && now < startedAt + wordBlastQuestionMs(room.questionDurationMs)))) {
+        return { currentIndex: room.currentIndex, status: room.status, roundStartedAt: startedAt };
+      }
+    }
     const anyAlive = playersSnapshot.docs.some((d) => (d.data().lives ?? 3) > 0);
 
-    let nextIndex = room.currentIndex + 1;
+    const nextIndex = room.currentIndex + 1;
     let newStatus = room.status === "countdown" ? "playing" : room.status;
 
     if (!anyAlive || nextIndex >= room.words.length) {

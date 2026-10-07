@@ -43,6 +43,7 @@ const mockRoom = {
   status: "playing" as const,
   words,
   currentIndex: 0,
+  questionDurationMs: 5000,
 };
 
 afterEach(() => {
@@ -142,10 +143,12 @@ describe("MultiplayerWordBlast", () => {
       />
     );
 
-    // 7s countdown ticks down, then the client fires /next at expiry.
+    await act(async () => { await vi.advanceTimersByTimeAsync(4900); });
+    expect(fetchMock.mock.calls.some(([url]) => url.includes("/api/vocab/game-room/next"))).toBe(false);
+    // 5s countdown ticks down, then the client fires /next at expiry.
     // (No waitFor: testing-library's polling hangs under fake timers.)
     await act(async () => {
-      await vi.advanceTimersByTimeAsync(7100);
+      await vi.advanceTimersByTimeAsync(200);
     });
 
     expect(fetchMock).toHaveBeenCalledWith(
@@ -153,16 +156,16 @@ describe("MultiplayerWordBlast", () => {
       expect.objectContaining({ method: "POST" })
     );
 
-    // Timer must restart at 7s immediately (optimistic reset) rather than
+    // Timer must restart at 5s immediately (optimistic reset) rather than
     // sticking at 0s and jumping back up when the server responds.
-    expect(screen.getByText("⏳ 7s")).toBeInTheDocument();
+    expect(screen.getByText("⏳ 5s")).toBeInTheDocument();
   });
 
   it("renders countdown screen when room is in countdown status", () => {
     const countdownRoom = {
       ...mockRoom,
       status: "countdown" as const,
-      countdownEndsAt: Date.now() + 5000,
+      countdownEndsAt: Date.now() + 3000,
     };
 
     render(

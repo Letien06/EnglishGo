@@ -1058,6 +1058,7 @@ export async function findStudyHistory(
 export async function recordStudyHistory(
   uid: string,
   input: {
+    requestId?: string;
     setId: number;
     externalTestId?: string | null;
     externalPartId?: string | null;
@@ -1072,9 +1073,11 @@ export async function recordStudyHistory(
   },
 ): Promise<{ id: string }> {
   requireUid(uid);
-  await enforceDailyActionLimit(uid, "vocab-history", 200);
+  if (input.requestId !== undefined && !/^[A-Za-z0-9_-]{1,128}$/.test(input.requestId)) {
+    throw BadRequest("Invalid history request ID");
+  }
   const finishedAtMillis = Date.now();
-  const id = `${finishedAtMillis}-${randomInt(1000, 9999)}`;
+  const id = input.requestId ? `request-${input.requestId}` : `${finishedAtMillis}-${randomInt(1000, 9999)}`;
   const source = input.externalTestId || input.externalPartId ? "DAUTOEIC" : "LOCAL";
   const data: VocabStudyHistoryDoc = {
     id,
@@ -1093,9 +1096,8 @@ export async function recordStudyHistory(
   };
   if (input.externalTestId) data.externalTestId = input.externalTestId;
   if (input.externalPartId) data.externalPartId = input.externalPartId;
-  await historyCollection(uid).doc(id).set(data);
-  await recordStudyActivity(uid, {
-    module: "vocab",
+  const activity = {
+    module: "vocab" as const,
     activityType: "vocab_game",
     sourceId: input.externalPartId ?? input.externalTestId ?? input.setId,
     occurredAtMillis: finishedAtMillis,
@@ -1103,7 +1105,46 @@ export async function recordStudyHistory(
       && input.startedAtMillis > 0 && input.startedAtMillis <= finishedAtMillis
       && finishedAtMillis - input.startedAtMillis <= 86_400_000
       ? Math.floor((finishedAtMillis - input.startedAtMillis) / 1000) : null,
-  }).catch(() => undefined);
+  };
+  const historyRef = historyCollection(uid).doc(id);
+  if (input.requestId) {
+    // History and accounting commit together. A lost HTTP response can be
+    // replayed without awarding XP or study time a second time.
+    const requestFingerprint = createHash("sha256").update(JSON.stringify([
+      data.setId, data.externalTestId ?? null, data.externalPartId ?? null,
+      data.title, data.mode, input.startedAtMillis ?? null, data.totalWords,
+      data.correctWords, data.wrongWords, data.accuracy, data.score,
+    ])).digest("hex");
+    const existing = await historyRef.get();
+    if (existing.exists) {
+      if (existing.data()?.requestFingerprint !== requestFingerprint) {
+        throw BadRequest("History request ID was reused with different results");
+      }
+      invalidateLearnerActivityCaches(uid);
+      return { id };
+    }
+    await enforceDailyActionLimit(uid, "vocab-history", 200);
+    const userRef = adminDb.collection("users").doc(uid);
+    await adminDb.runTransaction(async (tx) => {
+      const saved = await tx.get(historyRef);
+      if (saved.exists) {
+        if (saved.data()?.requestFingerprint !== requestFingerprint) {
+          throw BadRequest("History request ID was reused with different results");
+        }
+        return;
+      }
+      const [daySnap, userSnap] = await Promise.all([
+        tx.get(studyActivityDayRef(uid, finishedAtMillis)), tx.get(userRef),
+      ]);
+      tx.set(historyRef, { ...data, requestFingerprint });
+      writeStudyActivityInTransaction(tx, uid, activity, daySnap, userSnap.data() ?? {});
+    });
+    invalidateLearnerActivityCaches(uid);
+  } else {
+    await enforceDailyActionLimit(uid, "vocab-history", 200);
+    await historyRef.set(data);
+    await recordStudyActivity(uid, activity).catch(() => undefined);
+  }
   return { id };
 }
 

@@ -156,23 +156,20 @@ export default function ListenPracticeClient({
   }, [currentIndex, updatePracticeUrl]);
 
   useEffect(() => {
+    const modifierCandidates = new Set<string>();
+    const clearCandidates = () => modifierCandidates.clear();
     const handleKeyDown = (event: KeyboardEvent) => {
-      if (isTypingTarget(event.target)) return;
-      if (event.ctrlKey && audioRef.current) {
-        event.preventDefault();
-        if (audioRef.current.paused) {
-          audioRef.current.play().catch(() => undefined);
-        } else {
-          audioRef.current.pause();
+      if (isTypingTarget(event.target)) { clearCandidates(); return; }
+      if (event.key === "Control" || event.key === "Shift") {
+        if (event.altKey || event.metaKey || (event.key === "Control" && event.shiftKey) || (event.key === "Shift" && event.ctrlKey)) {
+          clearCandidates();
+        } else if (!event.repeat) {
+          modifierCandidates.add(event.key);
         }
         return;
       }
-      if (event.shiftKey && audioRef.current) {
-        event.preventDefault();
-        rewindAudio(audioRef.current, 3);
-        replayCountRef.current += 1;
-        return;
-      }
+      clearCandidates();
+      if (event.ctrlKey || event.shiftKey || event.altKey || event.metaKey) return;
       if (event.key === "Tab" && (activeMode === "fill" || activeMode === "flip")) {
         const firstQuestion = item.questions[0];
         if (!firstQuestion) return;
@@ -180,8 +177,31 @@ export default function ListenPracticeClient({
         revealNextWords(firstQuestion, partNum, activeMode, activeAssist, revealedMap, setRevealedMap, 1);
       }
     };
+    const handleKeyUp = (event: KeyboardEvent) => {
+      const standalone = modifierCandidates.delete(event.key);
+      if (!standalone || isTypingTarget(event.target) || event.ctrlKey || event.shiftKey || event.altKey || event.metaKey || !audioRef.current) return;
+      if (event.key === "Control") {
+        if (audioRef.current.paused) {
+          audioRef.current.play().catch(() => undefined);
+        } else {
+          audioRef.current.pause();
+        }
+        return;
+      }
+      if (event.key === "Shift") {
+        rewindAudio(audioRef.current, 3);
+        replayCountRef.current += 1;
+        return;
+      }
+    };
     document.addEventListener("keydown", handleKeyDown);
-    return () => document.removeEventListener("keydown", handleKeyDown);
+    document.addEventListener("keyup", handleKeyUp);
+    window.addEventListener("blur", clearCandidates);
+    return () => {
+      document.removeEventListener("keydown", handleKeyDown);
+      document.removeEventListener("keyup", handleKeyUp);
+      window.removeEventListener("blur", clearCandidates);
+    };
   }, [activeAssist, activeMode, item, partNum, revealedMap]);
 
   const goTo = useCallback((index: number, options: { play?: boolean } = {}) => {

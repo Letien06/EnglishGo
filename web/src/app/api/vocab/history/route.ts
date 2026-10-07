@@ -7,6 +7,7 @@ import { requireUser, requireUserForRead } from "@/lib/auth/session";
 import * as vocab from "@/lib/services/vocab";
 
 const historySchema = z.object({
+  requestId: z.string().regex(/^[A-Za-z0-9_-]{1,128}$/).optional(),
   setId: z.coerce.number().int().positive(),
   externalTestId: z.string().trim().optional().nullable(),
   externalPartId: z.string().trim().optional().nullable(),

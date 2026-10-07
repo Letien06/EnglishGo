@@ -9,6 +9,29 @@ type Progress = { summary: DictationProgressSummary | null; segments: DictationS
 type Mask = 30 | 50 | 100;
 type GuestProgress = { index?: number; mask?: Mask; completedIds?: string[]; masteredIds?: string[] };
 
+async function requestData<T>(url: string, init?: RequestInit): Promise<T> {
+  const controller = new AbortController();
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  try {
+    return await Promise.race([
+      (async () => {
+        const response = await fetch(url, { ...init, signal: controller.signal });
+        const body = await response.json();
+        if (!response.ok || !body.success || body.data == null) throw new Error(body.error || "Không thể kết nối. Vui lòng thử lại.");
+        return body.data as T;
+      })(),
+      new Promise<never>((_, reject) => {
+        timer = setTimeout(() => {
+          reject(new Error("Yêu cầu mất quá nhiều thời gian. Vui lòng thử lại."));
+          controller.abort();
+        }, 20_000);
+      }),
+    ]);
+  } finally {
+    if (timer) clearTimeout(timer);
+  }
+}
+
 export default function DictationLessonClient({ lesson, initialProgress, isAuthenticated }: { lesson: DictationLessonView; initialProgress: Progress; isAuthenticated: boolean }) {
   const initialIndex = Math.max(0, Math.min(lesson.segments.length - 1, (initialProgress?.summary?.lastSegmentIndex ?? 1) - 1));
   const guestState = () => {
@@ -24,6 +47,10 @@ export default function DictationLessonClient({ lesson, initialProgress, isAuthe
     return [30, 50, 100].includes(saved?.mask ?? 0) ? saved!.mask! : initialProgress?.summary?.lastMaskPercent ?? 30;
   });
   const [prompt, setPrompt] = useState<DictationPrompt | null>(null);
+  const [promptError, setPromptError] = useState<string | null>(null);
+  const [promptRetry, setPromptRetry] = useState(0);
+  const [actionError, setActionError] = useState<string | null>(null);
+  const viewGeneration = useRef(0);
   const [blankAnswers, setBlankAnswers] = useState<Record<string, string>>({});
   const [blankFeedback, setBlankFeedback] = useState<Record<string, "CORRECT" | "MISSING" | "WRONG">>({});
   const [checkingBlankId, setCheckingBlankId] = useState<string | null>(null);
@@ -109,12 +136,11 @@ export default function DictationLessonClient({ lesson, initialProgress, isAuthe
   useEffect(() => {
     if (!active) return;
     let cancelled = false;
-    fetch(`/api/dictation/lessons/${lesson.id}/segments/${active.id}/prompt?maskPercent=${mask}`)
-      .then((response) => response.json())
-      .then((response) => { if (!cancelled && response.success) setPrompt(response.data); })
-      .catch(() => { if (!cancelled) setPrompt(null); })
+    requestData<DictationPrompt>(`/api/dictation/lessons/${lesson.id}/segments/${active.id}/prompt?maskPercent=${mask}`)
+      .then((data) => { if (!cancelled) { setPrompt(data); setPromptError(null); } })
+      .catch((reason: unknown) => { if (!cancelled) setPromptError(reason instanceof Error ? reason.message : "Không thể tải câu nghe. Vui lòng thử lại."); });
     return () => { cancelled = true; };
-  }, [active, lesson.id, mask]);
+  }, [active, lesson.id, mask, promptRetry]);
 
   useEffect(() => {
     const key = `englishweb:dictation-progress:v1:${lesson.id}`;
@@ -128,12 +154,22 @@ export default function DictationLessonClient({ lesson, initialProgress, isAuthe
       autoAdvanceRef.current = null;
     }
     pauseSegment();
+    viewGeneration.current += 1;
+    setSubmitting(false); setCheckingBlankId(null); setActionError(null); setPromptError(null);
+    if (target === index && loadingPrompt) setPromptRetry((value) => value + 1);
     pendingAutoplayRef.current = Boolean(options?.autoplay && target !== index);
     setIndex(target);
     setResult(null); setBlankAnswers({}); setBlankFeedback({}); setFullAnswer(""); setHints(0); setReplays(0);
     if (options?.autoplay && target === index) playSegment(false);
-  }, [index, lesson.segments.length, pauseSegment, playSegment]);
-  const changeMask = useCallback((next: Mask) => { setMask(next); setResult(null); setBlankAnswers({}); setBlankFeedback({}); setFullAnswer(""); setHints(0); }, []);
+  }, [index, lesson.segments.length, loadingPrompt, pauseSegment, playSegment]);
+  const changeMask = useCallback((next: Mask) => {
+    if (next === mask) return;
+    viewGeneration.current += 1;
+    if (autoAdvanceRef.current !== null) window.clearTimeout(autoAdvanceRef.current);
+    autoAdvanceRef.current = null;
+    setSubmitting(false); setCheckingBlankId(null); setActionError(null); setPromptError(null);
+    setMask(next); setResult(null); setBlankAnswers({}); setBlankFeedback({}); setFullAnswer(""); setHints(0);
+  }, [mask]);
   const togglePlayback = useCallback(() => { if (isPlaying) pauseSegment(); else playSegment(); }, [isPlaying, pauseSegment, playSegment]);
   const rewindSegment = useCallback(() => { if (!active) return; playerCommand("seekTo", [Math.max(active.startSeconds, active.startSeconds - 3), true]); }, [active, playerCommand]);
 
@@ -159,45 +195,52 @@ export default function DictationLessonClient({ lesson, initialProgress, isAuthe
   }, [active, playSegment]);
 
   const submit = async () => {
-    if (!active || submitting) return;
+    if (!active || submitting || loadingPrompt) return;
+    const generation = viewGeneration.current;
     setSubmitting(true);
+    setActionError(null);
     try {
-      const response = await fetch(`/api/dictation/lessons/${lesson.id}/segments/${active.id}/attempt`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ maskPercent: mask, blankAnswers: mask === 100 ? null : blankAnswers, fullAnswer: mask === 100 ? fullAnswer : null, replayCount: replays, hintCount: hints, elapsedSeconds: 0 }) });
-      const body = await response.json();
-      if (body.success) {
-        setResult(body.data);
+      const data = await requestData<DictationAttemptResult>(`/api/dictation/lessons/${lesson.id}/segments/${active.id}/attempt`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ maskPercent: mask, blankAnswers: mask === 100 ? null : blankAnswers, fullAnswer: mask === 100 ? fullAnswer : null, replayCount: replays, hintCount: hints, elapsedSeconds: 0 }) });
+      if (data.isCompleted) setCompletedIds((items) => new Set([...items, active.id]));
+      if (data.isMastered) setMasteredIds((items) => new Set([...items, active.id]));
+      if (generation === viewGeneration.current) {
+        setResult(data);
         if (prompt?.inputMode === "BLANKS") {
           const blanks = prompt.prompt.filter((token): token is Extract<typeof token, { kind: "blank" }> => token.kind === "blank");
-          setBlankFeedback(Object.fromEntries(blanks.map((blank, blankIndex) => [blank.blankId, body.data.feedbackTokens[blankIndex]?.state ?? "MISSING"])));
+          setBlankFeedback(Object.fromEntries(blanks.map((blank, blankIndex) => [blank.blankId, data.feedbackTokens[blankIndex]?.state === "CORRECT" ? "CORRECT" : data.feedbackTokens[blankIndex]?.state === "MISSING" ? "MISSING" : "WRONG"])));
         }
-        if (body.data.isCompleted) setCompletedIds((items) => new Set([...items, active.id]));
-        if (body.data.isMastered) setMasteredIds((items) => new Set([...items, active.id]));
-        if (body.data.isCompleted && autoNext && index < lesson.segments.length - 1) {
+        if (data.isCompleted && autoNext && index < lesson.segments.length - 1) {
           if (autoAdvanceRef.current !== null) window.clearTimeout(autoAdvanceRef.current);
           autoAdvanceRef.current = window.setTimeout(() => {
             autoAdvanceRef.current = null;
-            goTo(index + 1, { autoplay: true });
+            if (generation === viewGeneration.current) goTo(index + 1, { autoplay: true });
           }, 850);
         }
       }
-    } finally { setSubmitting(false); }
+    } catch (reason) {
+      if (generation === viewGeneration.current) setActionError(reason instanceof Error ? reason.message : "Không thể chấm câu nghe. Vui lòng thử lại.");
+    } finally { if (generation === viewGeneration.current) setSubmitting(false); }
   };
 
   useEffect(() => () => {
+    viewGeneration.current += 1;
     if (autoAdvanceRef.current !== null) window.clearTimeout(autoAdvanceRef.current);
   }, []);
 
   const checkBlank = async (blankId: string) => {
-    if (!active || mask === 100 || checkingBlankId) return;
+    if (!active || mask === 100 || checkingBlankId || loadingPrompt) return;
+    const generation = viewGeneration.current;
     setCheckingBlankId(blankId);
+    setActionError(null);
     try {
-      const response = await fetch(`/api/dictation/lessons/${lesson.id}/segments/${active.id}/check`, {
+      const data = await requestData<{ state: "CORRECT" | "MISSING" | "WRONG" }>(`/api/dictation/lessons/${lesson.id}/segments/${active.id}/check`, {
         method: "POST", headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ maskPercent: mask, blankId, answer: blankAnswers[blankId] ?? "" }),
       });
-      const body = await response.json();
-      if (body.success) setBlankFeedback((value) => ({ ...value, [blankId]: body.data.state }));
-    } finally { setCheckingBlankId(null); }
+      if (generation === viewGeneration.current) setBlankFeedback((value) => ({ ...value, [blankId]: data.state }));
+    } catch (reason) {
+      if (generation === viewGeneration.current) setActionError(reason instanceof Error ? reason.message : "Không thể kiểm tra ô này. Vui lòng thử lại.");
+    } finally { if (generation === viewGeneration.current) setCheckingBlankId(null); }
   };
 
   const showHint = () => {
@@ -217,9 +260,9 @@ export default function DictationLessonClient({ lesson, initialProgress, isAuthe
         <section className="space-y-5"><article className="overflow-hidden rounded-2xl bg-black shadow-lg"><div className="aspect-video"><iframe ref={frameRef} onLoad={initialisePlayer} title={lesson.title} className="h-full w-full" src={`${lesson.embedUrl}?enablejsapi=1&playsinline=1&rel=0&controls=0&disablekb=1&fs=0&cc_load_policy=0&iv_load_policy=3`} allow="autoplay; encrypted-media; picture-in-picture" /></div></article>
           <article className="rounded-2xl bg-white p-5 shadow-sm sm:p-6"><div className="flex flex-wrap items-center justify-between gap-3"><div><p className="text-xs font-extrabold uppercase tracking-wide text-primary">Đoạn {active.index}/{lesson.segments.length}</p><h1 className="text-xl font-extrabold text-ink">{lesson.title}</h1><p className="mt-1 text-sm font-semibold text-muted">{formatTime(active.startSeconds)} – {formatTime(active.endSeconds)} · Video tự dừng khi hết đoạn</p>{active.speaker && <p className="text-sm text-muted">{active.speaker}</p>}</div><div className="flex flex-wrap gap-2"><button type="button" onClick={togglePlayback} className="rounded-xl bg-primary px-4 py-2 text-sm font-extrabold text-gold-ink">{isPlaying ? "❚❚ Dừng" : "▶ Nghe đoạn này"}</button><button type="button" onClick={() => goTo(index + 1, { autoplay: true })} disabled={index >= lesson.segments.length - 1} title="Phát đoạn kế và tự dừng khi hết đoạn" className="rounded-xl border border-cyan-500 px-4 py-2 text-sm font-extrabold text-cyan-800 disabled:cursor-not-allowed disabled:border-slate-200 disabled:text-slate-400">▶ Nghe tiếp</button><button type="button" onClick={rewindSegment} className="rounded-xl border border-line px-3 py-2 text-sm font-bold text-ink">↶ Đầu đoạn</button><select value={rate} onChange={(event) => { const next = Number(event.target.value); setRate(next); playerCommand("setPlaybackRate", [next]); }} className="rounded-xl border border-line px-3 text-sm font-bold"><option value={0.75}>0.75x</option><option value={1}>1x</option><option value={1.25}>1.25x</option></select></div></div>
             <div className="mt-5 flex flex-wrap gap-2" aria-label="Mức che">{([30, 50, 100] as Mask[]).map((value) => <button key={value} type="button" onClick={() => changeMask(value)} className={`rounded-lg px-3 py-2 text-sm font-extrabold ${mask === value ? "bg-cyan-600 text-white" : "bg-slate-100 text-ink"}`}>Che {value}%</button>)}</div>
-            <div className="mt-5 rounded-xl border border-line bg-slate-50 p-4">{loadingPrompt ? <p className="text-muted">Đang chuẩn bị câu nghe...</p> : prompt?.inputMode === "FULL_TEXT" ? <textarea value={fullAnswer} onChange={(event) => setFullAnswer(event.target.value)} onKeyDown={(event) => { if (event.key === "Enter" && !event.shiftKey) { event.preventDefault(); submit(); } }} placeholder="Nghe và gõ toàn bộ câu..." rows={4} className="w-full resize-y rounded-xl border border-slate-300 bg-white p-3 text-base outline-none focus:ring-2 focus:ring-cyan-500" autoFocus /> : <div className="flex flex-wrap items-center gap-x-1 gap-y-3">{prompt?.prompt.map((token, tokenIndex) => token.kind === "blank" ? <span key={token.blankId} className="inline-flex items-center gap-1"><input value={blankAnswers[token.blankId] ?? ""} onChange={(event) => { const blankId = token.blankId; setBlankAnswers((value) => ({ ...value, [blankId]: event.target.value.replace(/^_+/, "") })); setBlankFeedback((value) => { const next = { ...value }; delete next[blankId]; return next; }); }} onKeyDown={(event) => { if (event.key === "Enter") { event.preventDefault(); checkBlank(token.blankId); } }} style={{ width: `${Math.max(72, token.length * 12)}px` }} className={`h-9 rounded-lg border bg-white px-2 text-center outline-none focus:ring-2 focus:ring-cyan-500 ${blankFeedback[token.blankId] === "CORRECT" ? "border-emerald-500" : blankFeedback[token.blankId] === "WRONG" ? "border-red-500" : blankFeedback[token.blankId] === "MISSING" ? "border-amber-500" : "border-cyan-300"}`} aria-label="Điền từ còn thiếu" /><button type="button" onClick={() => checkBlank(token.blankId)} disabled={checkingBlankId !== null} title="Kiểm tra ô này" className="rounded-md border border-line bg-white px-2 py-1 text-xs font-extrabold text-ink disabled:opacity-50">{checkingBlankId === token.blankId ? "..." : "✓"}</button></span> : <span key={`${token.kind}-${tokenIndex}`} className={token.kind === "text" ? "font-semibold text-ink" : "whitespace-pre-wrap"}>{token.value}</span>)}</div>}</div>
+            <div className="mt-5 rounded-xl border border-line bg-slate-50 p-4">{loadingPrompt ? promptError ? <div role="alert"><p className="text-sm font-semibold text-red-700">{promptError}</p><button type="button" onClick={() => { setPromptError(null); setPromptRetry((value) => value + 1); }} className="mt-3 rounded-lg border border-line bg-white px-3 py-2 text-sm font-bold text-ink">Tải lại câu nghe</button></div> : <p className="text-muted">Đang chuẩn bị câu nghe...</p> : prompt?.inputMode === "FULL_TEXT" ? <textarea value={fullAnswer} onChange={(event) => setFullAnswer(event.target.value)} onKeyDown={(event) => { if (event.key === "Enter" && !event.shiftKey) { event.preventDefault(); submit(); } }} placeholder="Nghe và gõ toàn bộ câu..." rows={4} className="w-full resize-y rounded-xl border border-slate-300 bg-white p-3 text-base outline-none focus:ring-2 focus:ring-cyan-500" autoFocus /> : <div className="flex flex-wrap items-center gap-x-1 gap-y-3">{prompt?.prompt.map((token, tokenIndex) => token.kind === "blank" ? <span key={token.blankId} className="inline-flex items-center gap-1"><input value={blankAnswers[token.blankId] ?? ""} onChange={(event) => { const blankId = token.blankId; setBlankAnswers((value) => ({ ...value, [blankId]: event.target.value.replace(/^_+/, "") })); setBlankFeedback((value) => { const next = { ...value }; delete next[blankId]; return next; }); }} onKeyDown={(event) => { if (event.key === "Enter") { event.preventDefault(); checkBlank(token.blankId); } }} style={{ width: `${Math.max(72, token.length * 12)}px` }} className={`h-9 rounded-lg border bg-white px-2 text-center outline-none focus:ring-2 focus:ring-cyan-500 ${blankFeedback[token.blankId] === "CORRECT" ? "border-emerald-500" : blankFeedback[token.blankId] === "WRONG" ? "border-red-500" : blankFeedback[token.blankId] === "MISSING" ? "border-amber-500" : "border-cyan-300"}`} aria-label="Điền từ còn thiếu" /><button type="button" onClick={() => checkBlank(token.blankId)} disabled={checkingBlankId !== null} title="Kiểm tra ô này" className="rounded-md border border-line bg-white px-2 py-1 text-xs font-extrabold text-ink disabled:opacity-50">{checkingBlankId === token.blankId ? "..." : "✓"}</button></span> : <span key={`${token.kind}-${tokenIndex}`} className={token.kind === "text" ? "font-semibold text-ink" : "whitespace-pre-wrap"}>{token.value}</span>)}</div>}</div>
             <div className="mt-4 flex flex-wrap items-center gap-3"><button type="button" onClick={submit} disabled={submitting || loadingPrompt} className="rounded-xl bg-ink px-5 py-2.5 text-sm font-extrabold text-white disabled:opacity-50">{submitting ? "Đang chấm..." : mask === 100 ? "Kiểm tra toàn bộ (Enter)" : "Kiểm tra tất cả ô"}</button>{mask !== 100 && <><span className="text-xs font-semibold text-muted">Ấn ✓ cạnh mỗi ô để kiểm tra riêng.</span><button type="button" onClick={showHint} className="rounded-xl border border-line px-4 py-2.5 text-sm font-bold text-ink">Gợi ý</button></>}<button type="button" onClick={() => setAutoNext((value) => !value)} className={`rounded-xl border px-4 py-2.5 text-sm font-bold ${autoNext ? "border-cyan-500 bg-cyan-50 text-cyan-800" : "border-line text-ink"}`}>Tự động tiếp: {autoNext ? "Bật" : "Tắt"}</button>{completed && <span className="text-sm font-bold text-emerald-700">✓ Đã hoàn thành</span>}</div>
-            {result && <Feedback result={result} />}</article>
+            {actionError && <p role="alert" className="mt-4 rounded-xl border border-red-200 bg-red-50 p-3 text-sm font-semibold text-red-700">{actionError} Câu trả lời vẫn được giữ lại; bạn có thể bấm kiểm tra để thử lại.</p>}{result && <Feedback result={result} />}</article>
         </section>
         <aside className="rounded-2xl bg-white p-4 shadow-sm"><div className="mb-3 flex items-center justify-between"><h2 className="font-extrabold text-ink">Tiến độ</h2><span className="text-sm font-bold text-primary">{completedIds.size}/{lesson.segments.length}</span></div><p className="mb-3 text-xs text-muted">Chọn đoạn để phát ngay từ đầu đoạn.</p><div className="max-h-[65dvh] space-y-2 overflow-y-auto pr-1">{lesson.segments.map((segment, segmentIndex) => { const item = progressBySegment.get(segment.id); const activeClass = segmentIndex === index ? "border-cyan-500 bg-cyan-50" : "border-transparent bg-slate-50 hover:bg-slate-100"; return <button type="button" key={segment.id} onClick={() => goTo(segmentIndex, { autoplay: true })} className={`flex w-full items-center gap-3 rounded-xl border p-3 text-left ${activeClass}`}><span className={`h-3 w-3 shrink-0 rounded-full ${masteredIds.has(segment.id) || item?.masteredAtMillis ? "bg-emerald-500" : completedIds.has(segment.id) || item?.completedAtMillis ? "bg-cyan-500" : "bg-slate-300"}`} /><span className="min-w-0 flex-1"><b className="block text-sm text-ink">#{segment.index}</b><span className="text-xs text-muted">{formatTime(segment.startSeconds)} – {formatTime(segment.endSeconds)}</span></span></button>; })}</div></aside>
       </div>

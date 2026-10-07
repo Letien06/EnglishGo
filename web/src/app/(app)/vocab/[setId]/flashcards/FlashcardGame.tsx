@@ -28,6 +28,7 @@ import type {
 import useDialogFocus from "@/components/useDialogFocus";
 import { ClientRequestTimeoutError, fetchWithTimeout } from "@/lib/client-request";
 import { consolidateVocabGameAnswers } from "@/lib/vocab-game-results";
+import { matchesVocabAnswer, uniqueQuizAnswers } from "@/lib/vocab-quiz";
 import { useVocabReviewQueue } from "@/lib/vocab-review-queue";
 import { englishExampleForSpeech, findBestEnglishVoice } from "@/lib/vocab-speech";
 import type { VocabularyRoundResult } from "@/lib/vocab-arcade";
@@ -111,12 +112,24 @@ interface FeedbackState {
   item: VocabWordCard;
 }
 
+interface FrozenRoundSubmission {
+  reviews: ReviewMutation[];
+  confirmedChunks: number;
+  history: { setId: number; externalTestId?: string | null; externalPartId?: string | null; title: string; mode: string; startedAtMillis: number; totalWords: number; correctWords: number; wrongWords: number; accuracy: number; score: number; requestId: string };
+}
+
 interface VocabGameDraftPayload {
   index: number;
   score: number;
   attempts: number;
   answers: AnswerRecord[];
   updatedAtMillis: number;
+  reviewRequestId?: string;
+  historyRequestId?: string;
+  startedAtMillis?: number;
+  showResult?: boolean;
+  reviewsSaved?: boolean;
+  submission?: FrozenRoundSubmission;
 }
 
 interface ModeTone {
@@ -196,14 +209,8 @@ function ModeLoading() {
 /*  Helpers                                                            */
 /* ================================================================== */
 
-function normalize(value: string | undefined): string {
-  return String(value || "")
-    .toLowerCase()
-    .normalize("NFD")
-    .replace(/[\u0300-\u036f]/g, "")
-    .replace(/[^a-z0-9\s]/g, " ")
-    .replace(/\s+/g, " ")
-    .trim();
+function roundRequestId(): string {
+  return globalThis.crypto?.randomUUID?.() ?? `round-${Date.now()}-${Math.random().toString(36).slice(2)}`;
 }
 
 function shuffle<T>(items: T[]): T[] {
@@ -269,13 +276,13 @@ type ReviewMutation = {
   mastered?: true;
 };
 
-async function submitReviewBatch(reviews: ReviewMutation[]): Promise<number> {
+async function submitReviewBatch(reviews: ReviewMutation[], requestId: string): Promise<number> {
   const res = await fetchWithTimeout(
     "/api/vocab/reviews/batch",
     {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ reviews }),
+      body: JSON.stringify({ reviews, requestId }),
     },
     10_000,
     { flow: "vocab_review_batch" },
@@ -293,6 +300,12 @@ function parseGameDraft(raw: string | null): VocabGameDraftPayload | null {
       attempts: typeof parsed.attempts === "number" ? parsed.attempts : 0,
       answers: Array.isArray(parsed.answers) ? parsed.answers : [],
       updatedAtMillis: typeof parsed.updatedAtMillis === "number" ? parsed.updatedAtMillis : 0,
+      reviewRequestId: typeof parsed.reviewRequestId === "string" && /^[A-Za-z0-9_-]{1,128}$/.test(parsed.reviewRequestId) ? parsed.reviewRequestId : undefined,
+      historyRequestId: typeof parsed.historyRequestId === "string" && /^[A-Za-z0-9_-]{1,128}$/.test(parsed.historyRequestId) ? parsed.historyRequestId : undefined,
+      startedAtMillis: typeof parsed.startedAtMillis === "number" && Number.isFinite(parsed.startedAtMillis) ? parsed.startedAtMillis : undefined,
+      showResult: parsed.showResult === true,
+      reviewsSaved: parsed.reviewsSaved === true,
+      submission: parsed.submission && Array.isArray(parsed.submission.reviews) && parsed.submission.history && typeof parsed.submission.history.requestId === "string" ? parsed.submission : undefined,
     };
   } catch {
     return null;
@@ -1174,14 +1187,21 @@ function PlaySurface({
 
   const timerRef = useRef<number | null>(null);
   const draftTimerRef = useRef<number | null>(null);
+  const draftWriteRef = useRef<Promise<unknown>>(Promise.resolve());
   const hydratedDraftRef = useRef(false);
   const reviewsSavedRef = useRef(false);
+  const submissionRef = useRef<FrozenRoundSubmission | undefined>(undefined);
+  const [initialRequestIds] = useState(() => ({ review: roundRequestId(), history: roundRequestId() }));
+  const requestIdsRef = useRef(initialRequestIds);
   const draftStorageKey = `englishgo-vocab-draft-${setId}-${externalPartId ?? "all"}-${mode}-${quizMode}`;
 
-  const activeMode: PlayMode = useMemo(() => {
+  const requestedMode: PlayMode = useMemo(() => {
     if (mode !== "mixed") return mode;
     return (["flashcard", "quiz", "typing", "listening"] as PlayMode[])[index % 4];
   }, [mode, index]);
+  const quizAnswerValues = useMemo(() => uniqueQuizAnswers(words.map((item) => quizMode === "wordMeaning" ? item.meaning : item.word)), [words, quizMode]);
+  const quizNeedsRecall = requestedMode === "quiz" && quizAnswerValues.length < 2;
+  const activeMode: PlayMode = quizNeedsRecall ? "typing" : requestedMode;
 
   const word = words[index] ?? words[0];
   const resultAnswers = useMemo(
@@ -1202,13 +1222,19 @@ function PlaySurface({
       attempts,
       answers,
       updatedAtMillis: Date.now(),
+      reviewRequestId: requestIdsRef.current.review,
+      historyRequestId: requestIdsRef.current.history,
+      startedAtMillis: startedAtRef.current,
+      showResult,
+      reviewsSaved: reviewsSavedRef.current,
+      submission: submissionRef.current,
     };
     return JSON.stringify(payload);
-  }, [answers, attempts, index, score]);
+  }, [answers, attempts, index, score, showResult]);
 
   const saveDraftToServer = useCallback(async (payload: string) => {
     if (!isAuthenticated) return;
-    await fetch("/api/vocab/game-draft", {
+    const write = draftWriteRef.current.catch(() => undefined).then(() => fetchWithTimeout("/api/vocab/game-draft", {
       method: "PUT",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
@@ -1218,7 +1244,9 @@ function PlaySurface({
         externalPartId,
         payload,
       }),
-    }).catch(() => undefined);
+    }, 3_000).catch(() => undefined));
+    draftWriteRef.current = write;
+    await write;
   }, [externalPartId, isAuthenticated, mode, quizMode, setId]);
 
   const applyDraft = useCallback((draft: VocabGameDraftPayload) => {
@@ -1229,18 +1257,30 @@ function PlaySurface({
     setAttempts(Math.max(0, draft.attempts));
     setCorrect(draft.answers.filter((answer) => answer.correct).length);
     setAnswers(draft.answers);
+    requestIdsRef.current = {
+      review: draft.reviewRequestId ?? requestIdsRef.current.review,
+      history: draft.historyRequestId ?? requestIdsRef.current.history,
+    };
+    if (draft.startedAtMillis != null) startedAtRef.current = draft.startedAtMillis;
+    reviewsSavedRef.current = draft.reviewsSaved === true;
+    submissionRef.current = draft.submission;
+    setShowResult(draft.showResult === true);
+    hydratedDraftRef.current = true;
     resetCardState();
   }, [showResult, words.length]);
 
   useEffect(() => {
-    if (localRound) return;
+    if (hydratedDraftRef.current) return;
     let cancelled = false;
     const localDraft = parseGameDraft(window.localStorage.getItem(draftStorageKey));
-    if (localDraft) {
+    if (localDraft && (!localRound || localDraft.showResult)) {
       window.setTimeout(() => {
         if (!cancelled) applyDraft(localDraft);
       }, 0);
-      hydratedDraftRef.current = true;
+    }
+    if (localRound) {
+      if (!localDraft?.showResult) hydratedDraftRef.current = true;
+      return () => { cancelled = true; };
     }
     if (!isAuthenticated) {
       hydratedDraftRef.current = true;
@@ -1278,7 +1318,7 @@ function PlaySurface({
     if (localRound || !hydratedDraftRef.current) return;
     const payload = makeDraftPayload();
     window.localStorage.setItem(draftStorageKey, payload);
-    if (showResult) return;
+    if (showResult) { void saveDraftToServer(payload); return; }
     if (draftTimerRef.current) window.clearTimeout(draftTimerRef.current);
     draftTimerRef.current = window.setTimeout(() => {
       void saveDraftToServer(payload);
@@ -1314,13 +1354,10 @@ function PlaySurface({
     if (activeMode !== "quiz") return [] as string[];
     const valueOf = (w: VocabWordCard) =>
       quizMode === "wordMeaning" ? w.meaning : w.word;
-    const pool = words
-      .map(valueOf)
-      .filter(Boolean)
-      .filter((v) => v !== quizCorrect);
+    const pool = quizAnswerValues.filter((value) => !matchesVocabAnswer(value, valueOf(word), "english"));
     return shuffle([quizCorrect, ...shuffle(pool).slice(0, 3)]).slice(0, 4);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [activeMode, quizMode, index, words]);
+  }, [activeMode, quizMode, index, quizAnswerValues]);
 
   /* ---- Matching board ---- */
   useEffect(() => {
@@ -1472,6 +1509,9 @@ function PlaySurface({
     setShowResult(false);
     setSaveError("");
     reviewsSavedRef.current = false;
+    submissionRef.current = undefined;
+    requestIdsRef.current = { review: roundRequestId(), history: roundRequestId() };
+    window.localStorage.removeItem(draftStorageKey);
     if (activeMode === "matching") {
       setMatchedIds([]);
       setLives(5);
@@ -1486,6 +1526,7 @@ function PlaySurface({
 
   /* ---- Expected answer / hints ---- */
   function expectedAnswer(): string {
+    if (quizNeedsRecall) return word.word;
     if (activeMode === "typing") return reverse ? word.word : word.meaning;
     return reverse || activeMode === "listening" ? word.word : word.meaning;
   }
@@ -1512,13 +1553,8 @@ function PlaySurface({
 
   /* ---- Checks ---- */
   function answerMatches(input: string, expected: string): boolean {
-    const actual = normalize(input);
-    const target = normalize(expected);
-    return (
-      !!actual &&
-      (actual === target ||
-        (!reverse && target.includes(actual) && actual.length >= 3))
-    );
+    return matchesVocabAnswer(input, expected,
+      quizNeedsRecall || reverse || activeMode === "listening" ? "english" : "meaning");
   }
 
   function checkTyped() {
@@ -1644,24 +1680,8 @@ function PlaySurface({
     setSaving(true);
     setSaveError("");
     try {
+      window.localStorage.setItem(draftStorageKey, makeDraftPayload());
       const outcomes = consolidateVocabGameAnswers(answers);
-      if (!reviewsSavedRef.current && outcomes.length > 0) {
-        const status = await submitReviewBatch(
-          outcomes.map(({ answer, needsReview }) => needsReview
-            ? { wordId: answer.id, quality: 2 }
-            : localRound ? { wordId: answer.id, quality: 4 } : { wordId: answer.id, mastered: true }),
-        );
-        if (status !== 200 && status !== 204) {
-          setSaving(false);
-          setSaveError(
-            status === 401
-              ? "Bạn cần đăng nhập để lưu tiến độ học."
-              : "Chưa lưu được tiến độ. Kiểm tra kết nối rồi thử lại.",
-          );
-          return;
-        }
-        reviewsSavedRef.current = true;
-      }
       const answered = outcomes.length || attempts;
       const correctWords = resultAnswers.filter((answer) => answer.correct).length;
       const wrongWords = resultAnswers.length - correctWords;
@@ -1669,7 +1689,7 @@ function PlaySurface({
         ? Math.round((correctWords / answered) * 100)
         : 0;
       const modeLabel = modeLabelFor(mode, quizMode);
-      const historyPayload = {
+      const proposedHistory = {
         setId,
         externalTestId,
         externalPartId,
@@ -1681,7 +1701,44 @@ function PlaySurface({
         wrongWords,
         accuracy,
         score,
+        requestId: requestIdsRef.current.history,
       };
+      if (!submissionRef.current) {
+        submissionRef.current = {
+          reviews: outcomes.map(({ answer, needsReview }) => needsReview
+            ? { wordId: answer.id, quality: 2 }
+            : localRound ? { wordId: answer.id, quality: 4 } : { wordId: answer.id, mastered: true }),
+          confirmedChunks: 0,
+          history: proposedHistory,
+        };
+      }
+      const submission = submissionRef.current;
+      const persistSubmission = () => {
+        const payload = makeDraftPayload();
+        window.localStorage.setItem(draftStorageKey, payload);
+
+      };
+      persistSubmission();
+      if (!localRound) await saveDraftToServer(makeDraftPayload());
+      if (!reviewsSavedRef.current) {
+        const chunkCount = Math.ceil(submission.reviews.length / 100);
+        for (let chunkIndex = submission.confirmedChunks; chunkIndex < chunkCount; chunkIndex++) {
+          const status = await submitReviewBatch(
+            submission.reviews.slice(chunkIndex * 100, (chunkIndex + 1) * 100),
+            `${requestIdsRef.current.review.slice(0, 115)}-${chunkIndex}`,
+          );
+          if (status !== 200 && status !== 204) {
+            setSaving(false);
+            setSaveError(status === 401 ? "Bạn cần đăng nhập để lưu tiến độ học." : "Chưa lưu được tiến độ. Kiểm tra kết nối rồi thử lại.");
+            return;
+          }
+          submission.confirmedChunks = chunkIndex + 1;
+          persistSubmission();
+        }
+        reviewsSavedRef.current = true;
+        persistSubmission();
+      }
+      const historyPayload = submission.history;
       const historyRes = await fetchWithTimeout(
         "/api/vocab/history",
         {
@@ -1701,7 +1758,8 @@ function PlaySurface({
         );
         return;
       }
-      if (!localRound) window.localStorage.removeItem(draftStorageKey);
+      await draftWriteRef.current;
+      window.localStorage.removeItem(draftStorageKey);
       const draftParams = new URLSearchParams({
         setId: String(setId),
         mode,
@@ -1714,13 +1772,13 @@ function PlaySurface({
         3_000,
       ).catch(() => undefined);
       onFinish({
-        mode: modeLabel,
-        accuracy,
-        score,
-        startedAtMillis: startedAtRef.current,
+        mode: historyPayload.mode,
+        accuracy: historyPayload.accuracy,
+        score: historyPayload.score,
+        startedAtMillis: historyPayload.startedAtMillis,
         totalWords: historyPayload.totalWords,
-        correctWords,
-        wrongWords,
+        correctWords: historyPayload.correctWords,
+        wrongWords: historyPayload.wrongWords,
       });
     } catch (reason) {
       setSaving(false);
@@ -1861,7 +1919,7 @@ function PlaySurface({
             ? `Đã ghép ${matchedIds.length} / ${matchWords.length}`
             : `Câu ${index + 1} / ${words.length}`}
         </strong>
-        {(activeMode === "flashcard" || activeMode === "typing") && (
+        {(activeMode === "flashcard" || activeMode === "typing") && !quizNeedsRecall && (
           <label className="ml-auto flex items-center gap-2 text-xs font-semibold text-ink2">
             <span>{reverse ? "VN→EN" : "EN→VN"}</span>
             <input
@@ -1902,6 +1960,7 @@ function PlaySurface({
       </section>
 
       {/* Body per mode */}
+      {quizNeedsRecall && <p className="mx-auto max-w-3xl text-center text-sm text-muted" role="status">Chưa đủ đáp án khác nhau để trắc nghiệm. Nhìn nghĩa và gõ từ tiếng Anh để luyện nhớ.</p>}
       {activeMode === "flashcard" && (
         <FlashcardBody
           word={word}
@@ -1946,7 +2005,7 @@ function PlaySurface({
       {activeMode === "typing" && (
         <TypingBody
           word={word}
-          reverse={reverse}
+          reverse={quizNeedsRecall || reverse}
           typed={typed}
           onType={setTyped}
           flipped={flipped}

@@ -81,8 +81,10 @@ export function blastOptions(word: VocabWordCard, pool: VocabWordCard[], random 
   return shuffleVocabulary([word, ...shuffleVocabulary(distractors, random).slice(0, 3)], random);
 }
 
-export function arcadeDuration(index: number): number {
-  return Math.max(8_000, 18_000 - Math.floor(index / 2) * 1_000);
+export function arcadeDuration(index: number, mode: VocabularyArcadeMode = "rain"): number {
+  return mode === "blast"
+    ? Math.max(6_000, 10_000 - Math.floor(index / 2) * 1_000)
+    : Math.max(8_000, 18_000 - Math.floor(index / 2) * 1_000);
 }
 
 export function rainHint(word: string, elapsedFraction: number): string {
@@ -145,7 +147,7 @@ export function arcadeReducer(state: ArcadeState, action: ArcadeAction): ArcadeS
   if (state.phase !== "playing" || state.paused || state.lives <= 0) return state;
   const word = state.words[state.index];
   if (!word) return state;
-  const duration = arcadeDuration(state.index);
+  const duration = arcadeDuration(state.index, state.mode);
   if (action.type === "tick") {
     if (state.untimed) return state;
     const elapsed = Math.min(duration, state.elapsed + Math.max(0, action.delta));

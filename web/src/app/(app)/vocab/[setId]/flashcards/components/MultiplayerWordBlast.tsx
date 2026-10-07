@@ -12,6 +12,7 @@ import { MultiplayerScoreboard } from "./MultiplayerScoreboard";
 import { MultiplayerCountdown } from "./MultiplayerCountdown";
 import styles from "../vocabulary.module.css";
 import { subscribeGameRoom } from "@/lib/game-room-subscription";
+import { wordBlastQuestionMs } from "@/lib/word-blast-timing";
 
 interface GamePlayer {
   uid: string;
@@ -36,6 +37,7 @@ interface GameRoomData {
   words: VocabWordCard[];
   currentIndex: number;
   roundStartedAt?: number;
+  questionDurationMs?: number;
   lastWinner?: {
     uid: string;
     displayName: string;
@@ -240,7 +242,7 @@ export function MultiplayerWordBlast({
     }
   }, [isFinished, finalized]);
 
-  const QUESTION_DURATION = 7; // 7 seconds per question
+  const QUESTION_DURATION = wordBlastQuestionMs(room.questionDurationMs) / 1000;
   const [timeLeft, setTimeLeft] = useState(QUESTION_DURATION);
 
   // Mirror of the latest room state for use inside setTimeout callbacks.
@@ -322,7 +324,8 @@ export function MultiplayerWordBlast({
           prev.status === data.status &&
           prev.currentIndex === data.currentIndex &&
           prev.roundStartedAt === data.roundStartedAt &&
-          prev.countdownEndsAt === data.countdownEndsAt
+          prev.countdownEndsAt === data.countdownEndsAt &&
+          prev.questionDurationMs === data.questionDurationMs
         ) {
           return prev;
         }
@@ -474,6 +477,7 @@ export function MultiplayerWordBlast({
   }, [
     room.lastWinner,
     room.currentIndex,
+    QUESTION_DURATION,
     roundWinner,
     displayedIndex,
     myUid,
@@ -483,7 +487,7 @@ export function MultiplayerWordBlast({
     floats,
   ]);
 
-  // Timer countdown: 7s per question with server round synchronization
+  // Use the stored room deadline so active legacy rooms retain their timing.
   useEffect(() => {
     // BUG-7c: an eliminated player must not keep calling /next and pushing
     // questions forward for the whole room.
@@ -531,7 +535,7 @@ export function MultiplayerWordBlast({
     }, 1000);
 
     return () => window.clearInterval(interval);
-  }, [displayedIndex, isFinished, isCountdown, isEliminated, roundWinner, roomCode, room.roundStartedAt]);
+  }, [displayedIndex, isFinished, isCountdown, isEliminated, roundWinner, roomCode, room.roundStartedAt, QUESTION_DURATION]);
 
   // Floating animation loop
   useEffect(() => {

@@ -1,18 +1,23 @@
 "use client";
 
 import { useEffect, useReducer, useRef, useState } from "react";
+import dynamic from "next/dynamic";
+import { fetchWithTimeout } from "@/lib/client-request";
 import type { VocabWordCard } from "@/types/vocab";
 import { arcadeDuration, arcadeReducer, arcadeWords, createArcadeState, createFloatingTargets, rainHint, tickFloatingTarget, type ArcadeState, type FloatingTarget, type VocabularyArcadeMode, type VocabularyRoundResult } from "@/lib/vocab-arcade";
+import { arcadeCountdownMs } from "@/lib/word-blast-timing";
 import useVocabularyAudio from "../useVocabularyAudio";
 import VocabularyRain from "./VocabularyRain";
 import styles from "../vocabulary.module.css";
 
 import { GameModeSelector } from "../components/GameModeSelector";
 import { GameLobby } from "../components/GameLobby";
-import { MultiplayerWordBlast } from "../components/MultiplayerWordBlast";
-import { MultiplayerVocabularyRain } from "../components/MultiplayerVocabularyRain";
-import { getClientAuth } from "@/lib/firebase/client";
-import { subscribeGameRoom } from "@/lib/game-room-subscription";
+const MultiplayerWordBlast = dynamic(() => import("../components/MultiplayerWordBlast").then((module) => module.MultiplayerWordBlast), { loading: MultiplayerLoading });
+const MultiplayerVocabularyRain = dynamic(() => import("../components/MultiplayerVocabularyRain").then((module) => module.MultiplayerVocabularyRain), { loading: MultiplayerLoading });
+
+function MultiplayerLoading() {
+  return <div role="status" className="grid min-h-[50vh] place-items-center rounded-2xl border border-line bg-surface p-8 text-muted">Đang tải trò chơi...</div>;
+}
 
 export default function VocabularyArcade({
   words,
@@ -45,14 +50,10 @@ export default function VocabularyArcade({
     initialRoomCode ? "lobby" : enableMultiplayer ? "mode-select" : "solo"
   );
   const [roomCode, setRoomCode] = useState<string>(() => initialRoomCode || "");
-  const [currentUserId, setCurrentUserId] = useState<string>(() => {
-    if (initialCurrentUserId) return initialCurrentUserId;
-    try {
-      return getClientAuth().currentUser?.uid || "";
-    } catch {
-      return "";
-    }
-  });
+  const [currentUserId, setCurrentUserId] = useState(initialCurrentUserId);
+  const [roomError, setRoomError] = useState("");
+  const roomOperation = useRef(0);
+  useEffect(() => () => { roomOperation.current += 1; }, []);
 
   useEffect(() => {
     if (initialCurrentUserId) setCurrentUserId(initialCurrentUserId);
@@ -84,25 +85,18 @@ export default function VocabularyArcade({
     );
   };
 
-  // Fetch authenticated session user ID only when multiplayer is enabled
+  // Create/join responses normally supply identity. Only recover it when a
+  // lobby needs it, rather than sending two requests on every solo visit.
   useEffect(() => {
-    if (!enableMultiplayer) return;
-    try {
-      fetch("/api/auth/session")
-        .then((r) => r.json())
-        .then((res) => {
-          if (res?.data?.uid) setCurrentUserId(res.data.uid);
-        })
-        .catch(() => {});
-
-      fetch("/api/app/session")
-        .then((r) => r.json())
-        .then((res) => {
-          if (res?.data?.user?.uid) setCurrentUserId(res.data.user.uid);
-        })
-        .catch(() => {});
-    } catch {}
-  }, [enableMultiplayer]);
+    if (view !== "lobby" || currentUserId || !isAuthenticated) return;
+    const controller = new AbortController();
+    void fetchWithTimeout("/api/app/session", { signal: controller.signal }, 10_000)
+      .then(async (response) => response.ok ? response.json() : null)
+      .then((res) => {
+        if (!controller.signal.aborted && res?.data?.user?.uid) setCurrentUserId(res.data.user.uid);
+      }).catch(() => undefined);
+    return () => controller.abort();
+  }, [view, currentUserId, isAuthenticated]);
 
   // Handle URL room param if someone opens link with ?room=XYZ
   useEffect(() => {
@@ -117,19 +111,38 @@ export default function VocabularyArcade({
     }
   }, [initialRoomCode]);
 
-  // Lobby realtime syncing via Firestore listener and polling fallback
+  // Realtime SDK and multiplayer UI are loaded only after entering a room.
+  // Warm the match UI in the lobby, before its short countdown begins.
   useEffect(() => {
     if (view !== "lobby" || !roomCode) return;
-
-    return subscribeGameRoom<any, any>(roomCode, {
-      room: (data) => {
-        setLobbyRoom(data);
-        if (data.status === "playing" || data.status === "countdown") setView("multiplayer");
-      },
-      players: (players) => setLobbyPlayers(players),
-      identity: setCurrentUserId,
+    let cancelled = false;
+    let unsubscribe: (() => void) | undefined;
+    void import("@/lib/game-room-subscription").then(({ subscribeGameRoom }) => {
+      if (cancelled) return;
+      setRoomError("");
+      unsubscribe = subscribeGameRoom<any, any>(roomCode, {
+        room: (data) => {
+          if (cancelled) return;
+          setLobbyRoom(data);
+          if (data.status === "playing" || data.status === "countdown") setView("multiplayer");
+        },
+        players: (players) => { if (!cancelled) setLobbyPlayers(players); },
+        identity: (uid) => { if (!cancelled) setCurrentUserId(uid); },
+      });
+    }).catch(() => {
+      if (!cancelled) setRoomError("Chưa tải được phòng. Kiểm tra kết nối rồi vào phòng lại.");
     });
+    return () => { cancelled = true; unsubscribe?.(); };
   }, [view, roomCode]);
+
+  useEffect(() => {
+    if (view !== "lobby") return;
+    const actualMode = lobbyRoom?.gameMode || mode;
+    const match = actualMode === "rain"
+      ? import("../components/MultiplayerVocabularyRain")
+      : import("../components/MultiplayerWordBlast");
+    void match.catch(() => undefined);
+  }, [view, lobbyRoom?.gameMode, mode]);
 
   const handleCreateRoom = async () => {
     if (!isAuthenticated) {
@@ -203,6 +216,7 @@ export default function VocabularyArcade({
   };
 
   const handleStartGame = async () => {
+    const operation = roomOperation.current;
     try {
       const res = await fetch("/api/vocab/game-room/start", {
         method: "POST",
@@ -210,6 +224,7 @@ export default function VocabularyArcade({
         body: JSON.stringify({ code: roomCode }),
       });
       const json = await res.json();
+      if (operation !== roomOperation.current) return;
       if (!res.ok || !json.success) {
         alert(json.error || "Không thể bắt đầu game");
         return;
@@ -217,7 +232,8 @@ export default function VocabularyArcade({
       setLobbyRoom((prev: any) => ({
         ...prev,
         status: "countdown",
-        countdownEndsAt: json.data?.countdownEndsAt || Date.now() + 5000,
+        countdownEndsAt: json.data?.countdownEndsAt || Date.now() + arcadeCountdownMs(prev.gameMode || mode),
+        questionDurationMs: json.data?.questionDurationMs,
         roundStartedAt: json.data?.roundStartedAt || json.data?.countdownEndsAt,
         words: json.data?.words && json.data.words.length > 0 ? json.data.words : prev.words,
         activeDrops: json.data?.activeDrops,
@@ -229,12 +245,14 @@ export default function VocabularyArcade({
       );
       setView("multiplayer");
     } catch {
+      if (operation !== roomOperation.current) return;
       alert("Lỗi khi bắt đầu game");
     }
   };
 
   const handleLeaveRoom = () => {
     if (isLeavingRoom) return;
+    roomOperation.current += 1;
     setIsLeavingRoom(true);
     // BUG-6: leave the lobby UI immediately (optimistic) — the old code awaited
     // the network request first, so on a cold-start the button looked dead and
@@ -278,6 +296,8 @@ export default function VocabularyArcade({
     const isHost = lobbyRoom?.hostId === currentUserId;
     const canStart = lobbyPlayers.length >= 2;
     return (
+      <div className="space-y-3">
+      {roomError && <p role="alert" className="rounded-xl bg-danger-soft p-3 text-sm text-danger">{roomError}</p>}
       <GameLobby
         roomCode={roomCode}
         gameMode={mode}
@@ -289,6 +309,7 @@ export default function VocabularyArcade({
         onLeave={handleLeaveRoom}
         isLeaving={isLeavingRoom}
       />
+      </div>
     );
   }
 
@@ -390,7 +411,7 @@ export default function VocabularyArcade({
           : "Nhiều nghĩa tiếng Việt đang rơi! Gõ đúng từ tiếng Anh để tự bắt lấy. Đúng liên tiếp để tăng combo."}
       </p>
       <ul className="space-y-2 text-sm text-ink2">
-        <li>{effectiveCount} từ mỗi lượt · 3 mạng · tốc độ tăng sau mỗi 2 từ.</li>
+        <li>{effectiveCount} từ mỗi lượt · 3 mạng · {mode === "blast" ? "10 giây mỗi từ, giảm dần còn 6 giây sau mỗi 2 từ." : "tốc độ tăng sau mỗi 2 từ."}</li>
         <li>
           {mode === "blast"
             ? "Chọn sai hoặc để từ chạm vạch: mất 1 mạng."
@@ -547,7 +568,7 @@ function ArcadeRound({ initialState, muted, suspended, onComplete, onExit, onRes
   const [showGameOver, setShowGameOver] = useState(false);
   const { speakWord, stop } = useVocabularyAudio();
   const word = state.words[state.index];
-  const duration = arcadeDuration(state.index);
+  const duration = arcadeDuration(state.index, state.mode);
   const fraction = Math.min(1, state.elapsed / duration);
   const done = state.lives <= 0 || state.index + 1 >= state.words.length;
 

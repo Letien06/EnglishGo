@@ -32,6 +32,13 @@ function mockSoundContext() {
 }
 
 describe("arcade interaction", () => {
+  it("does not request identity or room data on the solo selection screen", () => {
+    const fetcher = vi.fn();
+    vi.stubGlobal("fetch", fetcher);
+    render(<VocabularyArcade words={words} mode="blast" muted enableMultiplayer isAuthenticated currentUserId="learner" onComplete={vi.fn()} onExit={vi.fn()} />);
+    expect(screen.getByRole("button", { name: /chơi 1 mình/i })).toBeInTheDocument();
+    expect(fetcher).not.toHaveBeenCalled();
+  });
   it("plays a celebration chime without pronouncing a correct Word Blast answer", () => {
     vi.useFakeTimers();
     const { context, oscillator } = mockSoundContext();

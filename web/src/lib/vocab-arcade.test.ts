@@ -24,6 +24,16 @@ describe("vocabulary arcade rules", () => {
     expect(arcadePoints("rain", 0.8, 99)).toBe(20);
     expect(arcadePoints("blast", 0.8, 99)).toBe(10);
   });
+  it("uses shorter Word Blast rounds while retaining Rain timing", () => {
+    expect(arcadeDuration(0, "blast")).toBe(10000);
+    expect(arcadeDuration(1, "blast")).toBe(10000);
+    expect(arcadeDuration(2, "blast")).toBe(9000);
+    expect(arcadeDuration(100, "blast")).toBe(6000);
+    const blast = createArcadeState("blast", words);
+    expect(arcadeReducer(blast, { type: "tick", delta: 9999 }).phase).toBe("playing");
+    expect(arcadeReducer(blast, { type: "tick", delta: 10000 })).toMatchObject({ phase: "feedback", lives: 2 });
+    expect(arcadeReducer(createArcadeState("rain", words), { type: "tick", delta: 10000 }).phase).toBe("playing");
+  });
   it("records a timeout exactly once and ignores ticks while paused or untimed", () => {
     const initial = createArcadeState("rain", words);
     const paused = arcadeReducer(initial, { type: "pause", paused: true });

@@ -33,7 +33,7 @@ export function GameModeSelector({
           <div className="text-5xl mb-4 group-hover:scale-110 transition-transform">👤</div>
           <h2 className="text-2xl font-bold mb-2 text-[var(--ink)]">Chơi 1 mình</h2>
           <p className="text-[var(--muted)] text-center text-sm font-medium">
-            Thử thách phản xạ bản thân, không giới hạn thời gian
+            Thử thách phản xạ, có thể tắt giới hạn thời gian
           </p>
         </button>
 
