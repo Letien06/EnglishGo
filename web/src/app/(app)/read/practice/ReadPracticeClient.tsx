@@ -9,6 +9,7 @@ import { invalidateLearningLevels, setActiveLearnerId } from "@/lib/client-learn
 import PracticeHeader from "../../_components/PracticeHeader";
 import { usePracticeResume } from "@/lib/use-practice-resume";
 import { parseReadingOptionTranslations } from "@/lib/reading-translations";
+import { parseVocabularyEntries, vocabularyRowsText } from "@/lib/practice-vocabulary";
 import type {
   DauToeicDifficultySession,
   DauToeicPracticeItem,
@@ -27,14 +28,6 @@ interface Props {
 }
 
 type PracticeMode = "normal" | "bilingual";
-type VocabularyEntry = {
-  id: string;
-  word: string;
-  meaning: string;
-  partOfSpeech: string | undefined;
-  level: string | undefined;
-  raw: string;
-};
 type MyVocabSet = { id: number; title: string };
 
 const modes: Array<[PracticeMode, string, string]> = [
@@ -604,6 +597,7 @@ function VocabularyStudyBlock({
   const [loadingSets, setLoadingSets] = useState(true);
 
   useEffect(() => {
+    if (entries.length === 0) return;
     let active = true;
     (async () => {
       try {
@@ -622,7 +616,7 @@ function VocabularyStudyBlock({
     return () => {
       active = false;
     };
-  }, []);
+  }, [entries.length]);
 
   const allSelected = entries.length > 0 && selected.size === entries.length;
 
@@ -645,9 +639,7 @@ function VocabularyStudyBlock({
     setSaving(true);
     setStatus("");
     try {
-      const rowsText = targets
-        .map((entry) => `${entry.word}, ${entry.meaning.replace(/[\r\n]+/g, " ").trim()}`)
-        .join("\n");
+      const rowsText = vocabularyRowsText(targets);
       const payload = await postTool(`/api/vocab/my-sets/${setId}`, {
         action: "manual",
         rowsText,
@@ -663,8 +655,17 @@ function VocabularyStudyBlock({
     }
   };
 
+  if (entries.length === 0) {
+    return (
+      <section aria-label="Từ vựng nên học" className="rounded-2xl border border-warning-line bg-warning-soft p-4 text-warning-ink">
+        <strong className="text-base">Từ vựng nên học</strong>
+        <p className="mt-2 text-sm">Chưa có từ vựng hợp lệ cho câu này.</p>
+      </section>
+    );
+  }
+
   return (
-    <section className="overflow-hidden rounded-2xl border border-warning-line bg-warning-soft text-warning-ink">
+    <section aria-label="Từ vựng nên học" className="overflow-hidden rounded-2xl border border-warning-line bg-warning-soft text-warning-ink">
       <div className="flex items-center justify-between gap-3 border-b border-warning-line px-4 py-3">
         <div className="flex items-center gap-3">
           <span className="inline-flex h-7 w-7 items-center justify-center rounded-full bg-warning-soft text-sm font-extrabold text-warning-ink">
@@ -731,11 +732,12 @@ function VocabularyStudyBlock({
             <label key={entry.id} className="flex cursor-pointer items-start gap-3 px-4 py-4">
               <input
                 type="checkbox"
+                aria-label={`Chọn từ ${entry.word}`}
                 checked={selected.has(entry.id)}
                 onChange={() => toggleEntry(entry.id)}
                 className="mt-1 h-5 w-5 rounded border-warning-line"
               />
-              <span className="min-w-0 flex-1">
+              <span className="min-w-0 flex-1 [overflow-wrap:anywhere]">
                 <span className="flex flex-wrap items-center gap-2">
                   <strong className="text-base text-ink">{entry.word}</strong>
                   {entry.partOfSpeech && <em className="text-sm text-warning-ink">({entry.partOfSpeech})</em>}
@@ -827,41 +829,6 @@ function readingInstruction(partNum: number) {
   return "Read the passage and choose the best answer.";
 }
 
-
-function parseVocabularyEntries(value: string): VocabularyEntry[] {
-  const parts = value
-    .replace(/\r/g, "\n")
-    .split(/\n+|;+/g)
-    .map((part) => part.trim().replace(/^[-•]\s*/, ""))
-    .filter(Boolean);
-
-  const source = parts.length > 0 ? parts : [value.trim()].filter(Boolean);
-
-  return source.map((raw, index) => {
-    const colonMatch = raw.match(/^(.+?)(?:\s*[:：–-]\s+)(.+)$/);
-    const compactMatch = raw.match(/^([A-Za-z][A-Za-z'’\-\s]*?)(?:\s*\(([^)]+)\))?\s+(.+)$/);
-    const match = colonMatch || compactMatch;
-    const word = firstText(match?.[1], raw.split(/\s+/)[0]);
-    const partOfSpeech = colonMatch ? undefined : firstText(match?.[2]);
-    let meaning = firstText(colonMatch ? match?.[2] : match?.[3], raw.replace(word, ""));
-    let level: string | undefined;
-
-    const levelMatch = meaning.match(/^(A1|A2|B1|B2|C1|C2)\s+(.+)$/i);
-    if (levelMatch) {
-      level = levelMatch[1].toUpperCase();
-      meaning = levelMatch[2].trim();
-    }
-
-    return {
-      id: `${word.toLowerCase().replace(/[^a-z0-9]+/g, "-")}-${index}`,
-      word,
-      meaning: meaning || raw,
-      partOfSpeech,
-      level,
-      raw,
-    };
-  });
-}
 
 function firstText(...values: Array<string | null | undefined>) {
   const value = values.find((candidate) => candidate && String(candidate).trim().length > 0);
