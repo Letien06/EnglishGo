@@ -9,7 +9,10 @@ import {
   type PracticeLeaderboardPeriod,
   type PracticeLeaderboardScope,
 } from "@/lib/services/leaderboard";
-import { getStudyStreakLeaderboard, type StudyStreakLeaderboardEntry } from "@/lib/services/study-activity";
+import { getStoredStudyStreakSummary, getStudyStreak, getStudyStreakLeaderboard, type StudyStreakLeaderboardEntry } from "@/lib/services/study-activity";
+
+import StudyStreakSync from "@/components/StudyStreakSync";
+import { reconcileLearnerStreak } from "@/lib/study-streak-leaderboard";
 
 export const dynamic = "force-dynamic";
 
@@ -25,12 +28,20 @@ export default async function LeaderboardPage({ searchParams }: Props) {
   const period = tab === "weekly" ? "WEEKLY" : normalizeLeaderboardPeriod(singleValue(sp.period));
   const scope = tab === "weekly" ? "EXAM" : scopeForTab(tab);
 
-  const [streakEntries, practiceEntries] = tab === "streak"
-    ? [await getStudyStreakLeaderboard(100), [] as PracticeLeaderboardEntry[]]
-    : [[] as StudyStreakLeaderboardEntry[], await getPracticeLeaderboard(scope, period, 100)];
+  const [cachedStreakEntries, practiceEntries, currentStreak] = await Promise.all([
+    tab === "streak" ? getStudyStreakLeaderboard(100) : Promise.resolve([] as StudyStreakLeaderboardEntry[]),
+    tab !== "streak" ? getPracticeLeaderboard(scope, period, 100) : Promise.resolve([] as PracticeLeaderboardEntry[]),
+    tab === "streak" && user
+      ? getStoredStudyStreakSummary(user.uid).then((summary) => summary ?? getStudyStreak(user.uid))
+      : Promise.resolve(null),
+  ]);
+  const streakEntries = currentStreak && user
+    ? reconcileLearnerStreak(cachedStreakEntries, user, currentStreak)
+    : cachedStreakEntries;
 
   return (
     <main className="app-canvas leaderboard-page min-h-[calc(100dvh-4rem)] bg-bg px-5 py-8 lg:px-8">
+      {currentStreak && user && <StudyStreakSync uid={user.uid} summary={currentStreak} />}
       <section className="leaderboard-shell mx-auto max-w-6xl space-y-5">
         <header className="leaderboard-summary flex flex-wrap items-end justify-between gap-4">
           <div>

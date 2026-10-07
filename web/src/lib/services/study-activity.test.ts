@@ -6,7 +6,7 @@ function reference(path: string): { path: string; doc: (id: string) => ReturnTyp
   return { path, doc: (id) => reference(`${path}/${id}`), collection: (name) => reference(`${path}/${name}`) };
 }
 vi.mock("next/cache", () => ({ unstable_cache: (callback: unknown) => callback }));
-vi.mock("./learner-cache", () => ({ invalidateLearnerActivityCaches: vi.fn(), studyStreakCacheTag: vi.fn() }));
+vi.mock("./learner-cache", () => ({ invalidateLearnerActivityCaches: vi.fn(), studyStreakCacheTag: vi.fn(), STUDY_STREAK_LEADERBOARD_CACHE_TAG: "study-streak-leaderboard" }));
 vi.mock("@/lib/firestore/db", () => ({ adminDb: {
   collection: (name: string) => reference(name),
   runTransaction: async (callback: (tx: unknown) => Promise<void>) => {

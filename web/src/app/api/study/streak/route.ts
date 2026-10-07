@@ -5,9 +5,10 @@ import {
   claimStudyStreakMilestone,
   getStoredStudyStreakSummary,
   getStudyStreak,
+  type StudyStreakSummary,
 } from "@/lib/services/study-activity";
 
-export const GET = withErrorHandling(async () => {
+export const GET = withErrorHandling<StudyStreakSummary & { authenticated: boolean }>(async () => {
   const user = await getCurrentUserForRead();
   if (!user) {
     return ok({

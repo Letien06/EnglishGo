@@ -36,7 +36,7 @@ vi.mock("@/lib/firestore/db", () => ({ adminDb: {
 } }));
 vi.mock("./rate-limit", () => ({ enforceDailyActionLimit: state.rateLimit }));
 vi.mock("next/cache", () => ({ unstable_cache: (callback: unknown) => callback }));
-vi.mock("./learner-cache", () => ({ invalidateLearnerActivityCaches: vi.fn(), studyStreakCacheTag: vi.fn() }));
+vi.mock("./learner-cache", () => ({ invalidateLearnerActivityCaches: vi.fn(), studyStreakCacheTag: vi.fn(), STUDY_STREAK_LEADERBOARD_CACHE_TAG: "study-streak-leaderboard" }));
 import { recordStudyHistory } from "./vocab";
 
 const session = {

@@ -2,10 +2,11 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { dashboardDateKey, dashboardRange, defaultDashboardPreferences, isDashboardDate } from "@/lib/dashboard-model";
 import { aggregateDashboardMetrics, dashboardPreferencesSchema, getDashboardStats, getDashboardView, metricsFromDailySummary, preferencesFromProfile, updateDashboardPreferences } from "./dashboard";
 
-const mocks = vi.hoisted(() => ({ profile: vi.fn(), daily: vi.fn(), range: vi.fn(), where: vi.fn(), set: vi.fn(), invalidateProfile: vi.fn(), invalidateLearner: vi.fn(), collection: vi.fn() }));
+const mocks = vi.hoisted(() => ({ profile: vi.fn(), daily: vi.fn(), range: vi.fn(), where: vi.fn(), set: vi.fn(), invalidateProfile: vi.fn(), invalidateLearner: vi.fn(), collection: vi.fn(), streak: vi.fn() }));
 vi.mock("@/lib/auth/session", () => ({ invalidateCurrentUserProfileCache: mocks.invalidateProfile }));
 vi.mock("./learner-cache", () => ({ dashboardCacheTag: (uid: string) => `dashboard:${uid}`, invalidateLearnerActivityCaches: mocks.invalidateLearner }));
 vi.mock("@/lib/server-cache", () => ({ readServerCache: (reader: () => Promise<unknown>) => reader() }));
+vi.mock("./study-activity", () => ({ getStudyStreak: mocks.streak }));
 vi.mock("@/lib/firestore/db", () => {
   const query = { where: (...args: unknown[]) => { mocks.where(...args); return query; }, orderBy: () => query, get: mocks.range };
   const daily = { ...query, doc: (key: string) => ({ get: () => mocks.daily(key) }) };
@@ -18,6 +19,7 @@ beforeEach(() => {
   mocks.profile.mockResolvedValue({ exists: true, data: () => ({}) });
   mocks.daily.mockResolvedValue({ exists: false, data: () => undefined });
   mocks.range.mockResolvedValue({ docs: [] });
+  mocks.streak.mockResolvedValue({ streakDays: 0, studiedToday: false, todayActivityCount: 0, todayDateKey: dashboardDateKey() });
 });
 
 describe("dashboard contract and preferences", () => {
@@ -68,13 +70,21 @@ describe("dashboard measured metrics", () => {
     expect(aggregateDashboardMetrics([])).toMatchObject({ reading: 0, vocab: 0, studySeconds: null, speaking: null });
   });
   it("loads the initial view with two document reads and leaves unavailable longest streak null", async () => {
-    mocks.profile.mockResolvedValue({ data: () => ({ studyTodayDateKey: dashboardDateKey(), studyStreakDays: 3, totalStudyXp: 100, vocabDueWords: 8 }) });
+    mocks.profile.mockResolvedValue({ data: () => ({ studyTodayDateKey: dashboardDateKey(), studyStreakDays: 3, studyStudiedToday: true, studyTodayActivityCount: 2, studyStreakUpdatedAtMillis: Date.now(), lastStudyActivityAtMillis: Date.now(), totalStudyXp: 100, vocabDueWords: 8 }) });
     const result = await getDashboardView("learner", "Lan");
     expect(result).toMatchObject({ greetingName: "Lan", streakDays: 3, longestStreakDays: null, totalXp: 100, dueVocabWords: 8 });
     expect(result.stats).toEqual(result.today);
     expect(mocks.profile).toHaveBeenCalledOnce();
     expect(mocks.daily).toHaveBeenCalledOnce();
     expect(mocks.range).not.toHaveBeenCalled();
+    expect(mocks.streak).not.toHaveBeenCalled();
+  });
+  it("replaces an incoherent stored streak with the actual history while preserving the longest run", async () => {
+    mocks.profile.mockResolvedValue({ data: () => ({ studyTodayDateKey: dashboardDateKey(), studyStreakDays: 9, studyStudiedToday: false, studyStreakUpdatedAtMillis: Date.now(), lastStudyActivityAtMillis: Date.now(), studyLongestStreakDays: 12 }) });
+    mocks.streak.mockResolvedValue({ streakDays: 1, studiedToday: true, todayActivityCount: 2, todayDateKey: dashboardDateKey() });
+    const result = await getDashboardView("learner");
+    expect(result).toMatchObject({ streakDays: 1, longestStreakDays: 12 });
+    expect(mocks.streak).toHaveBeenCalledWith("learner");
   });
   it("queries only daily aggregates in the requested range and propagates read failures", async () => {
     await getDashboardStats("learner", "custom", "2026-01-01", "2026-01-05");

@@ -1,3 +1,5 @@
+import { coherentProfileStudyStreak } from "@/lib/study-streak";
+import { getStudyStreak } from "./study-activity";
 import { FieldValue } from "firebase-admin/firestore";
 import { z } from "zod";
 import { adminDb } from "@/lib/firestore/db";
@@ -74,12 +76,9 @@ export async function getDashboardView(uid: string, greetingName?: string): Prom
     const [profileSnapshot, todaySnapshot] = await Promise.all([userRef.get(), userRef.collection("dailySummaries").doc(todayDateKey).get()]);
     const profile = profileSnapshot.data() ?? {};
     const today = metricsFromDailySummary(todaySnapshot.exists ? todaySnapshot.data() : undefined);
-    const yesterday = new Date(`${todayDateKey}T00:00:00Z`);
-    yesterday.setUTCDate(yesterday.getUTCDate() - 1);
-    const lastDate = profile.studyTodayDateKey;
-    const activeStreak = lastDate === todayDateKey || lastDate === yesterday.toISOString().slice(0, 10);
+    const streak = coherentProfileStudyStreak(profile, todayDateKey) ?? await getStudyStreak(uid);
     const dueVocabWords = number(profile.vocabDueWords);
-    return { greetingName: greetingName || (typeof profile.displayName === "string" ? profile.displayName : "Bạn"), todayDateKey, preferences: preferencesFromProfile(profile), today, stats: today, streakDays: activeStreak ? number(profile.studyStreakDays) ?? 0 : 0, longestStreakDays: number(profile.studyLongestStreakDays), totalXp: number(profile.totalStudyXp) ?? 0, ...(dueVocabWords !== null ? { dueVocabWords } : {}) };
+    return { greetingName: greetingName || (typeof profile.displayName === "string" ? profile.displayName : "Bạn"), todayDateKey, preferences: preferencesFromProfile(profile), today, stats: today, streakDays: streak.streakDays, longestStreakDays: number(profile.studyLongestStreakDays), totalXp: number(profile.totalStudyXp) ?? 0, ...(dueVocabWords !== null ? { dueVocabWords } : {}) };
   }, ["dashboard-view", uid, todayDateKey, greetingName ?? ""], { revalidate: 60, tags: [dashboardCacheTag(uid)] });
 }
 

@@ -43,7 +43,7 @@ vi.mock("./dautoeic-vocab", () => ({
 }));
 vi.mock("./rate-limit", () => ({ enforceDailyActionLimit: vi.fn() }));
 vi.mock("next/cache", () => ({ unstable_cache: (callback: unknown) => callback }));
-vi.mock("./learner-cache", () => ({ invalidateLearnerActivityCaches: vi.fn(), studyStreakCacheTag: vi.fn() }));
+vi.mock("./learner-cache", () => ({ invalidateLearnerActivityCaches: vi.fn(), studyStreakCacheTag: vi.fn(), STUDY_STREAK_LEADERBOARD_CACHE_TAG: "study-streak-leaderboard" }));
 import { reviewBatch } from "./vocab";
 
 describe("reviewBatch retry safety", () => {

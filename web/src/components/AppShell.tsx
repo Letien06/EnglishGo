@@ -197,7 +197,7 @@ export default function AppShell({ children }: { children: ReactNode }) {
             <PwaInstallPrompt />
             <HeaderJoinRoomButton />
             <span className="hidden h-9 w-[4.5rem] shrink-0 sm:inline-flex" data-streak-slot>
-              {authenticated ? <StudyStreakBadge className="w-full justify-center tabular-nums" initialStreak={bootstrap?.streak ?? null} /> : !bootstrap ? <span aria-hidden="true" className="h-full w-full rounded-xl border border-line bg-surface-soft opacity-50" /> : null}
+              {authenticated ? <StudyStreakBadge uid={session ? session.user?.uid ?? null : bootstrap?.user?.uid ?? null} className="w-full justify-center tabular-nums" initialStreak={session?.user?.uid && session.user.uid !== bootstrap?.user?.uid ? null : bootstrap?.streak ?? null} /> : !bootstrap ? <span aria-hidden="true" className="h-full w-full rounded-xl border border-line bg-surface-soft opacity-50" /> : null}
             </span>
             <ThemeToggle className="!hidden border border-line bg-surface-soft text-ink xl:!inline-flex" />
             <Link

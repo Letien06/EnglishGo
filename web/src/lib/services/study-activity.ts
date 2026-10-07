@@ -2,7 +2,8 @@ import { FieldValue } from "firebase-admin/firestore";
 import { unstable_cache } from "next/cache";
 import { adminDb } from "@/lib/firestore/db";
 import { readServerCache } from "@/lib/server-cache";
-import { invalidateLearnerActivityCaches, studyStreakCacheTag } from "./learner-cache";
+import { invalidateLearnerActivityCaches, studyStreakCacheTag, STUDY_STREAK_LEADERBOARD_CACHE_TAG } from "./learner-cache";
+import { coherentProfileStudyStreak, normalizeStudyStreak } from "@/lib/study-streak";
 
 const ACTIVITY_COLLECTION = "studyActivity";
 const DAILY_SUMMARY_COLLECTION = "dailySummaries";
@@ -26,6 +27,7 @@ export interface StudyActivityInput {
 }
 
 export interface StudyStreakSummary {
+  lastActivityAtMillis?: number | null;
   streakDays: number;
   studiedToday: boolean;
   todayActivityCount: number;
@@ -280,7 +282,7 @@ export async function getStudyStreak(uid: string): Promise<StudyStreakSummary> {
 
   return readServerCache(
     () => readStudyStreak(uid),
-    ["learner-study-streak", uid],
+    ["learner-study-streak", uid, dateKeyForMillis(Date.now())],
     { revalidate: 60, tags: [studyStreakCacheTag(uid)] },
   );
 }
@@ -292,14 +294,15 @@ async function readStudyStreak(uid: string): Promise<StudyStreakSummary> {
     .limit(STREAK_LOOKBACK_LIMIT)
     .get();
 
-  const byDate = new Map<string, { activityCount: number; modules: StudyModule[] }>();
+  const byDate = new Map<string, { activityCount: number; modules: StudyModule[]; lastActivityAtMillis: number | null }>();
   for (const doc of snap.docs) {
     const data = doc.data();
     const dateKey = typeof data.dateKey === "string" ? data.dateKey : doc.id;
-    if (!dateKey) continue;
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(dateKey) || (numberValue(data.activityCount) ?? 0) <= 0) continue;
     byDate.set(dateKey, {
       activityCount: typeof data.activityCount === "number" ? data.activityCount : 0,
       modules: parseModules(data.modules),
+      lastActivityAtMillis: numberValue(data.lastActivityAtMillis),
     });
   }
 
@@ -311,6 +314,7 @@ async function readStudyStreak(uid: string): Promise<StudyStreakSummary> {
   if (!today) {
     expected = addDaysToDateKey(todayKey, -1);
   }
+  const latestActiveDay = byDate.get(expected);
 
   while (byDate.has(expected)) {
     streakDays++;
@@ -323,6 +327,7 @@ async function readStudyStreak(uid: string): Promise<StudyStreakSummary> {
     todayActivityCount: today?.activityCount ?? 0,
     todayModules: today?.modules ?? [],
     todayDateKey: todayKey,
+    lastActivityAtMillis: latestActiveDay?.lastActivityAtMillis ?? null,
   };
 }
 
@@ -335,7 +340,7 @@ export async function getStoredStudyStreakSummary(
   const safeMaxAgeMs = Math.max(0, Math.trunc(maxAgeMs));
   return readServerCache(
     () => readStoredStudyStreakSummary(uid, safeMaxAgeMs),
-    ["learner-stored-study-streak", uid, String(safeMaxAgeMs)],
+    ["learner-stored-study-streak", uid, dateKeyForMillis(Date.now()), String(safeMaxAgeMs)],
     { revalidate: 60, tags: [studyStreakCacheTag(uid)] },
   );
 }
@@ -350,19 +355,13 @@ async function readStoredStudyStreakSummary(
 
   const data = snap.data() ?? {};
   const todayKey = dateKeyForMillis(Date.now());
-  const summaryDateKey = stringValue(data.studyTodayDateKey);
-  const updatedAtMillis = numberValue(data.studyStreakUpdatedAtMillis);
-  if (summaryDateKey !== todayKey) return null;
-  if (updatedAtMillis == null || Date.now() - updatedAtMillis > maxAgeMs) {
-    return null;
-  }
+  const current = coherentProfileStudyStreak(data, todayKey, Date.now(), maxAgeMs);
+  if (!current) return null;
 
   return {
-    streakDays: numberValue(data.studyStreakDays) ?? 0,
-    studiedToday: data.studyStudiedToday === true,
-    todayActivityCount: numberValue(data.studyTodayActivityCount) ?? 0,
-    todayModules: parseModules(data.studyTodayModules),
-    todayDateKey: todayKey,
+    ...current,
+    lastActivityAtMillis: numberValue(data.lastStudyActivityAtMillis),
+    todayModules: current.studiedToday ? parseModules(data.studyTodayModules) : [],
   };
 }
 
@@ -391,33 +390,49 @@ export async function refreshStudyStreakSummary(
 export async function getStudyStreakLeaderboard(
   limit = 100,
 ): Promise<StudyStreakLeaderboardEntry[]> {
-  return cachedStudyStreakLeaderboard(Math.max(1, Math.min(100, Math.trunc(limit))));
+  return cachedStudyStreakLeaderboard(Math.max(1, Math.min(100, Math.trunc(limit))), dateKeyForMillis(Date.now()));
 }
 
 const cachedStudyStreakLeaderboard = unstable_cache(
-  async (safeLimit: number): Promise<StudyStreakLeaderboardEntry[]> => {
-  const todayKey = dateKeyForMillis(Date.now());
-  const snap = await adminDb
-    .collection("users")
-    .orderBy("studyStreakDays", "desc")
-    .limit(safeLimit)
-    .get();
-
-  const entries = snap.docs.map((doc) => {
+  async (safeLimit: number, todayKey: string): Promise<StudyStreakLeaderboardEntry[]> => {
+  const entries: StudyStreakLeaderboardEntry[] = [];
+  let cursor: FirebaseFirestore.QueryDocumentSnapshot | undefined;
+  let cutoffStreak: number | undefined;
+  let reachedCutoff = false;
+  while (true) {
+    let query = adminDb.collection("users").orderBy("studyStreakDays", "desc").limit(100);
+    if (cursor) query = query.startAfter(cursor);
+    const snap = await query.get();
+    for (const doc of snap.docs) {
       const data = doc.data();
-      const isToday = stringValue(data.studyTodayDateKey) === todayKey;
-      return {
+      const rawStreak = numberValue(data.studyStreakDays) ?? 0;
+      if (rawStreak <= 0 || (cutoffStreak !== undefined && rawStreak < cutoffStreak)) {
+        reachedCutoff = true;
+        break;
+      }
+      const current = normalizeStudyStreak(data, todayKey);
+      if (current.streakDays <= 0) continue;
+      entries.push({
         rank: 0,
         uid: doc.id,
         displayName: stringValue(data.displayName),
         email: stringValue(data.email),
         avatarUrl: stringValue(data.avatarUrl),
-        streakDays: numberValue(data.studyStreakDays) ?? 0,
-        studiedToday: isToday && data.studyStudiedToday === true,
-        todayActivityCount: isToday ? numberValue(data.studyTodayActivityCount) ?? 0 : 0,
+        streakDays: current.streakDays,
+        studiedToday: current.studiedToday,
+        todayActivityCount: current.todayActivityCount,
         lastActivityAtMillis: numberValue(data.lastStudyActivityAtMillis),
-      };
-    });
+      });
+    }
+    if (reachedCutoff || snap.docs.length < 100) break;
+    if (entries.length >= safeLimit) {
+      cutoffStreak = entries.map((entry) => entry.streakDays).sort((a, b) => b - a)[safeLimit - 1];
+    }
+    cursor = snap.docs[snap.docs.length - 1];
+    const lastRawStreak = numberValue(cursor.data().studyStreakDays) ?? 0;
+    // Read through ties so the activity/name ordering includes the whole cutoff group.
+    if (lastRawStreak <= 0 || (cutoffStreak !== undefined && lastRawStreak < cutoffStreak)) break;
+  }
 
   return entries
     .filter((entry) => entry.streakDays > 0)
@@ -430,7 +445,7 @@ const cachedStudyStreakLeaderboard = unstable_cache(
     .map((entry, index) => ({ ...entry, rank: index + 1 }));
   },
   ["study-streak-leaderboard"],
-  { revalidate: 60 },
+  { revalidate: 60, tags: [STUDY_STREAK_LEADERBOARD_CACHE_TAG] },
 );
 
 function activityCollection(uid: string) {

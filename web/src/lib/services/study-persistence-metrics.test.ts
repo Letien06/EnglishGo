@@ -18,7 +18,7 @@ function reference(path: string): Ref {
   };
 }
 vi.mock("next/cache", () => ({ unstable_cache: (callback: unknown) => callback, revalidateTag: vi.fn() }));
-vi.mock("./learner-cache", () => ({ invalidateLearnerActivityCaches: vi.fn(), invalidateProgressReportCache: vi.fn(), studyStreakCacheTag: vi.fn() }));
+vi.mock("./learner-cache", () => ({ invalidateLearnerActivityCaches: vi.fn(), invalidateProgressReportCache: vi.fn(), studyStreakCacheTag: vi.fn(), STUDY_STREAK_LEADERBOARD_CACHE_TAG: "study-streak-leaderboard" }));
 vi.mock("./rate-limit", () => ({ enforceDailyActionLimit: vi.fn(async () => undefined) }));
 vi.mock("./gemini", () => ({ generateJson: vi.fn(async () => { throw new Error("Use deterministic grading fallback"); }) }));
 vi.mock("./content-quality", () => ({ recordContentQualityAttempt: vi.fn(async () => undefined) }));
