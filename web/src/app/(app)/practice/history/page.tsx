@@ -1,7 +1,9 @@
 import Link from "next/link";
-import AppTopbar from "@/components/AppTopbar";
+import PracticePageHeading from "../PracticePageHeading";
+import styles from "../../listen/_components/listening.module.css";
 import { requireUserForRead } from "@/lib/auth/session";
 import { getHistory } from "@/lib/services/practice";
+import { formatPracticeLabel } from "@/lib/practice-label";
 
 export const dynamic = "force-dynamic";
 
@@ -16,10 +18,9 @@ export default async function PracticeHistoryPage({ searchParams }: Props) {
   const history = await getHistory(user.uid, 10, cursor);
 
   return (
-    <>
-      <AppTopbar pageTitle="Lịch sử làm bài" pageSubtitle="Xem lại đáp án đã nộp" userName={user.displayName} userEmail={user.email} />
-      <main className="flex-1 overflow-y-auto px-4 py-6 lg:px-8">
-        <section className="rounded-xl bg-surface border border-line overflow-hidden">
+      <main className={`${styles.dashboard} w-full min-w-0 flex-1 space-y-6`}>
+        <PracticePageHeading title="Lịch sử làm bài" subtitle="Xem lại kết quả và đáp án của những bài đã nộp." showCatalogLink />
+        <section className="rounded-xl bg-surface border border-line overflow-x-auto">
           {history.items.length === 0 ? (
             <div className="p-8 text-center text-muted">Chưa có bài làm nào đã nộp.</div>
           ) : (
@@ -39,7 +40,7 @@ export default async function PracticeHistoryPage({ searchParams }: Props) {
                 {history.items.map((attempt) => (
                   <tr key={attempt.attemptId} className="border-t border-line">
                     <td className="p-3 text-ink">
-                      <div className="font-bold">{attempt.title}</div>
+                      <div className="font-bold">{formatPracticeLabel(attempt.title)}</div>
                       <div className="text-xs text-muted">{attempt.correctCount}/{attempt.questionCount} câu đúng</div>
                     </td>
                     <td className="p-3 text-muted">{attempt.mode === "exam" ? "Đề đầy đủ" : partLabel(attempt.parts)}</td>
@@ -82,7 +83,6 @@ export default async function PracticeHistoryPage({ searchParams }: Props) {
           </div>
         )}
       </main>
-    </>
   );
 }
 

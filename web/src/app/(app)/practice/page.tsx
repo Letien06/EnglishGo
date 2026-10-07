@@ -1,8 +1,8 @@
 import Link from "next/link";
-import AppTopbar from "@/components/AppTopbar";
-import { getCurrentUserForRead } from "@/lib/auth/session";
 import { findTests } from "@/lib/services/practice";
 import PracticeTestLauncher from "./PracticeTestLauncher";
+import PracticePageHeading from "./PracticePageHeading";
+import styles from "../listen/_components/listening.module.css";
 
 export const dynamic = "force-dynamic";
 
@@ -13,30 +13,21 @@ interface Props {
 export default async function PracticePage({ searchParams }: Props) {
   const sp = await searchParams;
   const cursor = typeof sp.cursor === "string" ? sp.cursor : null;
-  const [user, tests] = await Promise.all([
-    getCurrentUserForRead(),
-    findTests(
-      sp.type as string | undefined,
-      sp.difficulty as string | undefined,
-      cursor,
-      10,
-    ),
-  ]);
+  const tests = await findTests(
+    sp.type as string | undefined,
+    sp.difficulty as string | undefined,
+    cursor,
+    10,
+  );
 
   return (
-    <>
-      <AppTopbar
-        pageTitle="Practice"
-        pageSubtitle="Full tests, mini tests, and TOEIC part practice"
-        userName={user?.displayName}
-        userEmail={user?.email}
-      />
-      <main className="app-canvas practice-page flex-1 space-y-6 overflow-y-auto px-4 py-6 lg:px-8">
+      <main className={`${styles.dashboard} w-full min-w-0 flex-1 space-y-6`}>
+        <PracticePageHeading title="Luyện đề TOEIC" subtitle="Thi thử trọn bộ hoặc luyện từng Part, theo nhịp học của bạn." />
         <PracticeTestLauncher tests={tests.items} />
 
         {tests.items.length === 0 && (
           <section className="practice-empty-state p-8 rounded-xl bg-surface border border-line text-center text-muted">
-            No tests found.
+            Chưa có đề thi phù hợp.
           </section>
         )}
 
@@ -46,11 +37,10 @@ export default async function PracticePage({ searchParams }: Props) {
               href={`/practice?cursor=${encodeURIComponent(tests.nextCursor)}`}
               className="practice-next-link px-4 py-2 rounded-lg bg-surface border border-line text-sm font-semibold text-ink"
             >
-              Next
+              Trang tiếp
             </Link>
           </div>
         )}
       </main>
-    </>
   );
 }

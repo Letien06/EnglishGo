@@ -1,10 +1,12 @@
 import Link from "next/link";
-import AppTopbar from "@/components/AppTopbar";
+import PracticePageHeading from "../../PracticePageHeading";
+import styles from "../../../listen/_components/listening.module.css";
 import { requireUserForRead } from "@/lib/auth/session";
 import { getAttemptReview } from "@/lib/services/practice";
 import type { PracticeSkillBreakdown } from "@/lib/services/practice";
 import ReviewBackGuard from "../ReviewBackGuard";
 import ReportQuestionButton from "./ReportQuestionButton";
+import { formatPracticeLabel } from "@/lib/practice-label";
 
 export const dynamic = "force-dynamic";
 
@@ -24,15 +26,15 @@ export default async function PracticeReviewPage({ params }: Props) {
   return (
     <>
       <ReviewBackGuard />
-      <AppTopbar pageTitle="Kết quả bài thi" pageSubtitle={attempt.title} userName={user.displayName} userEmail={user.email} />
-      <main className="flex-1 overflow-y-auto bg-white px-4 py-8 lg:px-8">
+      <main className={`${styles.dashboard} w-full min-w-0 flex-1 space-y-6`}>
+        <PracticePageHeading title="Kết quả bài thi" subtitle={formatPracticeLabel(attempt.title)} />
         <div className="mx-auto max-w-4xl space-y-6">
           <section className="text-center">
             <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-full bg-sky-100 text-2xl font-extrabold text-sky-600">
               ✓
             </div>
-            <h1 className="mt-4 text-2xl font-extrabold text-ink">Hoàn thành bài thi!</h1>
-            <p className="mt-1 text-sm text-muted">{attempt.title}</p>
+            <h2 className="mt-4 text-2xl font-extrabold text-ink">Hoàn thành bài thi!</h2>
+            <p className="mt-1 text-sm text-muted">{formatPracticeLabel(attempt.title)}</p>
           </section>
 
           <section className="rounded-xl border border-line bg-surface p-8 text-center shadow-sm">

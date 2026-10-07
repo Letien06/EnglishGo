@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import type { PracticeTestCard } from "@/lib/services/practice";
 import useDialogFocus from "@/components/useDialogFocus";
+import { formatPracticeLabel } from "@/lib/practice-label";
 
 const PARTS = [
   { part: 1, label: "Part 1", group: "LISTENING", questions: 6, minutes: 4 },
@@ -143,9 +144,9 @@ export default function PracticeTestLauncher({ tests }: Props) {
         {tests.map((test) => (
           <article key={test.id} className="premium-card premium-card--interactive practice-test-card p-5">
             <header className="space-y-1">
-              <h2 className="font-bold text-ink">{test.title}</h2>
+              <h2 className="font-bold text-ink">{formatPracticeLabel(test.title)}</h2>
               <p className="text-xs text-muted">
-                {test.type} / Difficulty {test.difficulty ?? "Any"}
+                {formatPracticeLabel(test.type)} · {test.difficulty == null ? "Mọi mức độ" : `Độ khó ${test.difficulty}`}
               </p>
             </header>
             <div className="mt-4 flex gap-3 text-sm text-muted">
@@ -188,7 +189,7 @@ export default function PracticeTestLauncher({ tests }: Props) {
             <header className="flex items-start justify-between gap-4">
               <div>
                 <h2 id="practice-launcher-title" className="text-xl font-extrabold text-ink">Chọn chế độ</h2>
-                <p className="mt-1 text-sm text-muted">{selectedTest.title}</p>
+                <p className="mt-1 text-sm text-muted">{formatPracticeLabel(selectedTest.title)}</p>
               </div>
               <button
                 type="button"
