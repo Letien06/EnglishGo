@@ -82,7 +82,7 @@ function Account() {
   </div>;
 }
 
-function History() {
+export function HistoryLoadingRows() {
   return <div aria-hidden="true" className="overflow-hidden rounded-xl border border-line bg-surface"><div className="flex gap-4 border-b border-line bg-surface-soft p-3">{Array.from({ length: 6 }, (_, index) => <Block key={index} className="h-5 flex-1" />)}</div>{Array.from({ length: 6 }, (_, index) => <div key={index} className="flex items-center gap-4 border-b border-line p-3 last:border-b-0"><div className="flex-[2]"><Block className="h-4 w-4/5" /><Block className="mt-2 h-3 w-2/3" /></div><Block className="h-5 flex-1" /><Block className="h-5 flex-1" /><Block className="hidden h-5 flex-1 sm:block" /><Block className="h-5 flex-1" /></div>)}</div>;
 }
 
@@ -98,7 +98,7 @@ export default function PageLoadingSkeleton({ variant = "generic" }: { variant?:
     {topbar && <Topbar title={topbar[0]} subtitle={topbar[1]} />}
     <main aria-busy="true" className={`${styles.page} app-canvas flex-1 overflow-y-auto ${variant === "leaderboard" ? "leaderboard-page px-5 py-8 lg:px-8" : variant === "account" ? "account-page px-5 py-8 sm:py-12" : "px-4 py-6 lg:px-8"}`}>
       <p role="status" className="sr-only">Đang tải dữ liệu…</p>
-      {variant === "hub" || variant === "progress" ? <Dashboard variant={variant} /> : variant === "leaderboard" ? <Board /> : variant === "account" ? <Account /> : variant === "history" ? <History /> : <Lists variant={variant} />}
+      {variant === "hub" || variant === "progress" ? <Dashboard variant={variant} /> : variant === "leaderboard" ? <Board /> : variant === "account" ? <Account /> : variant === "history" ? <HistoryLoadingRows /> : <Lists variant={variant} />}
     </main>
   </>;
 }
