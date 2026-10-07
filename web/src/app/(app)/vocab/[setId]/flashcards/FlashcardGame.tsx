@@ -42,6 +42,7 @@ interface Props {
   practiceOptions: VocabSetCard[];
   loadExtrasInBackground?: boolean;
   reviewMode: boolean;
+  studyIntent?: "continue" | "review";
   isAuthenticated: boolean;
   currentUserId?: string;
   loginHref: string;
@@ -309,6 +310,7 @@ export default function FlashcardGame({
   initialMode,
   practiceOptions,
   loadExtrasInBackground = false,
+  studyIntent = "continue",
   isAuthenticated,
   currentUserId = "",
   loginHref,
@@ -503,9 +505,24 @@ export default function FlashcardGame({
 
   function selectWorkspaceTab(next: WorkspaceTab) {
     if (screen === "play") { setPendingTab(next); return; }
+    if (next === "learn" && workspaceTab !== "learn" && !words.some((word) => !word.mastered)) {
+      openStudy("continue");
+      return;
+    }
+    if (studyIntent === "review" && next !== "learn") {
+      const params = new URLSearchParams({ mode: "menu", tab: next, mastery: "all", order: "ordered", amount: "all" });
+      if (session.set.externalPartId) params.set("partId", session.set.externalPartId);
+      router.push(`/vocab/${setId}/flashcards?${params}`);
+      return;
+    }
     setQuizChooser(false);
     setWorkspaceTab(next);
     setScreen("hub");
+  }
+
+  function openStudy(intent: "continue" | "review") {
+    const params = new URLSearchParams({ mode: "menu", tab: "learn", intent, order: intent === "review" ? "oldest" : "ordered", amount: "all" });
+    router.push(`/vocab/${setId}/flashcards?${params}`);
   }
 
   function applyFilters(next: {
@@ -579,7 +596,7 @@ export default function FlashcardGame({
       </div>
       </header>
       <div className={styles.workspaceBody} data-sidebar={sidebarOpen}>
-      {sidebarOpen && <div id="vocab-part-sidebar"><VocabularySidebar key={session.set.externalTestId ?? setId} testId={isAuthenticated ? session.set.externalTestId : undefined} partId={session.set.externalPartId} title={session.set.title} count={words.length} tab={workspaceTab} ready={partsReady} onNavigate={(href) => { if (screen === "play") setPendingHref(href); else router.push(href); }} /></div>}
+      {sidebarOpen && <div id="vocab-part-sidebar"><VocabularySidebar key={session.set.externalTestId ?? setId} testId={isAuthenticated ? session.set.externalTestId : undefined} partId={session.set.externalPartId} title={session.set.title} count={words.length} tab={workspaceTab} studyIntent={studyIntent} ready={partsReady} onNavigate={(href) => { if (screen === "play") setPendingHref(href); else router.push(href); }} /></div>}
       <div id="vocab-workspace-panel" className={styles.workspaceContent} role="tabpanel" aria-labelledby={`vocab-tab-${workspaceTab}`}>
 
       {screen === "hub" && (
@@ -593,6 +610,9 @@ export default function FlashcardGame({
           selectedAmount={selectedAmount}
           isAuthenticated={isAuthenticated}
           loginHref={loginHref}
+          studyIntent={studyIntent}
+          onReview={() => openStudy("review")}
+          onContinue={() => openStudy("continue")}
           muted={muted}
           history={history}
           quizChooser={quizChooser}
@@ -625,6 +645,9 @@ export default function FlashcardGame({
           currentUserId={currentUserId}
           loginHref={loginHref}
           roomCode={roomParam || undefined}
+          studyIntent={studyIntent}
+          onReview={() => openStudy("review")}
+          onContinue={() => openStudy("continue")}
           onExit={goHub}
           onFinish={(record) => {
             recordHistory(record);
@@ -698,11 +721,17 @@ function Hub({
   onSelectTab,
   onRecordRound,
   onJoinRoom,
+  studyIntent,
+  onReview,
+  onContinue,
 }: {
   tab: WorkspaceTab;
   onSelectTab?: (tab: WorkspaceTab) => void;
   onRecordRound?: (record: any) => void;
   onJoinRoom?: (code: string) => void;
+  studyIntent: "continue" | "review";
+  onReview: () => void;
+  onContinue: () => void;
   words: VocabWordCard[];
   setId: number;
   practiceOptions: VocabSetCard[];
@@ -774,6 +803,7 @@ function Hub({
           options={[
             { value: "random", label: "Ngẫu nhiên" },
             { value: "ordered", label: "Theo thứ tự" },
+            { value: "oldest", label: "Lâu chưa ôn trước" },
           ]}
         />
         <FilterSelect
@@ -789,6 +819,14 @@ function Hub({
       </section>
       </details>
 
+      {tab === "learn" && (
+        <div className="flex flex-wrap items-center gap-2" role="group" aria-label="Chọn học tiếp hoặc ôn lại">
+          <button type="button" className={`${styles.button} ${studyIntent === "continue" ? styles.primary : ""}`} aria-pressed={studyIntent === "continue"} onClick={onContinue}>Học tiếp</button>
+          <button type="button" className={`${styles.button} ${studyIntent === "review" ? styles.primary : ""}`} aria-pressed={studyIntent === "review"} onClick={onReview}>Ôn lại từ đã thuộc</button>
+          <p className="text-xs text-muted">{studyIntent === "review" ? "Từ đến hạn trước, rồi đến từ lâu chưa ôn." : "Tiếp tục từ chưa thuộc theo thứ tự các phần."}</p>
+        </div>
+      )}
+
       {tab === "view" ? (
         <WordExplorer
           words={words}
@@ -797,6 +835,10 @@ function Hub({
       ) : tab === "learn" ? (
         <ContextLearning
           words={words}
+          isAuthenticated={isAuthenticated}
+          studyIntent={studyIntent}
+          onReview={onReview}
+          onContinue={onContinue}
           onComplete={(result) => {
             const correctCount = result.answers.filter((a) => a.correct).length;
             const accuracy =
@@ -1052,6 +1094,9 @@ function PlaySurface({
   roomCode,
   onExit,
   onFinish,
+  studyIntent,
+  onReview,
+  onContinue,
 }: {
   words: VocabWordCard[];
   setId: number;
@@ -1067,6 +1112,9 @@ function PlaySurface({
   loginHref: string;
   roomCode?: string;
   onExit: () => void;
+  studyIntent: "continue" | "review";
+  onReview: () => void;
+  onContinue: () => void;
   onFinish: (record: {
     mode: string;
     accuracy: number;
@@ -1747,7 +1795,7 @@ function PlaySurface({
     setShowResult(true);
   }
 
-  if (mode === "learn") return <ContextLearning words={words} onComplete={completeLocalRound} onExit={onExit} />;
+  if (mode === "learn") return <ContextLearning words={words} isAuthenticated={isAuthenticated} studyIntent={studyIntent} persistAnswers={false} onReview={onReview} onContinue={onContinue} onComplete={completeLocalRound} onExit={onExit} />;
   if (mode === "blast" || mode === "rain") {
     return (
       <VocabularyArcade

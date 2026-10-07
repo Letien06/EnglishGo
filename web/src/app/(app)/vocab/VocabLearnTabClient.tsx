@@ -22,6 +22,10 @@ type LearnState =
   | { status: "ready"; catalog: DauToeicVocabCatalogView | null; fallbackSets: VocabSetCard[] }
   | { status: "error"; catalog: null; fallbackSets: VocabSetCard[] };
 
+function studyHref(setId: number, intent: "continue" | "review") {
+  return `/vocab/${setId}/flashcards?mode=menu&tab=learn&intent=${intent}&order=${intent === "review" ? "oldest" : "ordered"}&amount=all`;
+}
+
 export default function VocabLearnTabClient({ groupId, userUid, initialCatalog = null }: {
   groupId?: string; userUid?: string; initialCatalog?: DauToeicVocabCatalogView | null;
 }) {
@@ -114,8 +118,9 @@ export default function VocabLearnTabClient({ groupId, userUid, initialCatalog =
     if (ready && sort === "progress") visible.sort((left, right) => right.masteredWords / (right.wordCount || 1) - left.masteredWords / (left.wordCount || 1));
     if (sort === "words") visible.sort((left, right) => left.wordCount - right.wordCount);
     const totals = cards.reduce((sum, card) => ({ words: sum.words + card.wordCount, mastered: sum.mastered + card.masteredWords, due: sum.due + card.dueWords }), { words: 0, mastered: 0, due: 0 });
-    const resume = ready ? cards.find((card) => card.dueWords > 0) ?? cards.find((card) => status(card) === "learning") : undefined;
-    const next = resume ?? cards[0];
+    const resume = ready ? cards.find((card) => status(card) === "learning") : undefined;
+    const next = resume ?? (ready ? cards.find((card) => status(card) !== "complete") ?? cards.find((card) => card.masteredWords > 0) : cards[0]);
+    const nextIntent = ready && next && status(next) === "complete" ? "review" : "continue";
     const statusLabel = { new: "Mới", learning: "Đang học", complete: "Đã thuộc" };
     const filters = [{ id: "all", label: "Tất cả" }, { id: "new", label: "Chưa học" }, { id: "learning", label: "Đang học" }, { id: "complete", label: "Đã thuộc" }, { id: "due", label: "Cần ôn" }];
     function clearFilters() { setFilter("all"); setQuery(""); }
@@ -143,7 +148,7 @@ export default function VocabLearnTabClient({ groupId, userUid, initialCatalog =
           >
             <span><strong>{ready ? totals.due : "—"}</strong> cần ôn</span>
           </button>
-          {next && <Link className={`${vocabStyles.button} ${vocabStyles.primary}`} href={`/vocab/dautoeic/${encodeURIComponent(next.id)}?tab=learn`}>{resume ? "Tiếp tục học" : "Bắt đầu học"} →</Link>}
+          {next && <Link className={`${vocabStyles.button} ${vocabStyles.primary}`} href={studyHref(next.internalSetId, nextIntent)}>{nextIntent === "review" ? "Ôn lại" : resume ? "Tiếp tục học" : "Bắt đầu học"} →</Link>}
         </div>
       </div>
       <div className={styles.sectionLabel}><span className={styles.eyebrow}>01 / CHỌN BỘ ĐỀ</span><span>Một ít mỗi ngày, nhớ lâu hơn</span></div>
@@ -170,12 +175,18 @@ export default function VocabLearnTabClient({ groupId, userUid, initialCatalog =
         <p className={styles.resultCount} aria-live="polite">Hiển thị {visible.length}/{cards.length} bộ từ</p>
         <div className={vocabStyles.catalogGrid}>{visible.map((card) => {
           const percent = card.wordCount > 0 ? Math.min(100, Math.round(card.masteredWords / card.wordCount * 100)) : 0;
+          const complete = ready && status(card) === "complete";
           return <article key={card.id} className={vocabStyles.catalogCard}>
             <div className={vocabStyles.catalogTop}><span>{card.setName}</span><small>{ready ? statusLabel[status(card)] : "Sẵn sàng học"}</small></div>
             <h3>{card.title}</h3>
             <p>{ready && card.masteredWords > 0 ? `${card.masteredWords}/${card.wordCount} từ đã thuộc` : `${card.wordCount} từ vựng`}{ready && card.dueWords > 0 && <b> · {card.dueWords} cần ôn</b>}</p>
             <div className={vocabStyles.progress} role="progressbar" aria-label={`Từ đã thuộc: ${card.title}`} aria-valuemin={0} aria-valuemax={100} aria-valuenow={ready ? percent : undefined}><span style={{ transform: `scaleX(${ready ? percent / 100 : 0})` }} /></div>
-            <footer className={vocabStyles.catalogActions}>{([{ tab: "view", label: "Xem từ", icon: "book" }, { tab: "learn", label: "Học", icon: "spark" }, { tab: "play", label: "Chơi", icon: "arrow" }] as const).map((action) => <Link key={action.tab} href={`/vocab/dautoeic/${encodeURIComponent(card.id)}?tab=${action.tab}`} data-overdelay="Đang mở bộ từ vựng..." data-action={action.tab}><Icon name={action.icon} />{action.label}</Link>)}</footer>
+            <footer className={vocabStyles.catalogActions}>
+              <Link href={`/vocab/dautoeic/${encodeURIComponent(card.id)}?tab=view`} data-action="view"><Icon name="book" />Xem từ</Link>
+              <Link href={studyHref(card.internalSetId, complete ? "review" : "continue")} data-overdelay="Đang mở bộ từ vựng..." data-action="learn"><Icon name="spark" />{complete ? "Ôn lại" : ready && status(card) === "learning" ? "Học tiếp" : "Học"}</Link>
+              {ready && card.masteredWords > 0 && !complete && <Link href={studyHref(card.internalSetId, "review")} data-action="review"><Icon name="book" />Ôn lại</Link>}
+              <Link href={`/vocab/dautoeic/${encodeURIComponent(card.id)}?tab=play`} data-action="play"><Icon name="arrow" />Chơi</Link>
+            </footer>
           </article>;
         })}</div>
         {!visible.length && (
@@ -211,7 +222,7 @@ export default function VocabLearnTabClient({ groupId, userUid, initialCatalog =
                 </p>
               </div>
             </div>
-            <div className={vocabStyles.catalogActions}>{([{ tab: "view", label: "Xem từ" }, { tab: "learn", label: "Học" }, { tab: "play", label: "Chơi" }] as const).map((action) => <Link key={action.tab} data-action={action.tab} href={`/vocab/${set.id}/flashcards?mode=menu&tab=${action.tab}&mastery=all&amount=all`}>{action.label}</Link>)}</div>
+            <div className={vocabStyles.catalogActions}>{([{ tab: "view", label: "Xem từ" }, { tab: "learn", label: "Học" }, { tab: "play", label: "Chơi" }] as const).map((action) => <Link key={action.tab} data-action={action.tab} href={action.tab === "learn" ? studyHref(set.id, "continue") : `/vocab/${set.id}/flashcards?mode=menu&tab=${action.tab}&mastery=all&amount=all`}>{action.label}</Link>)}</div>
           </article>
         ))}
       </section>

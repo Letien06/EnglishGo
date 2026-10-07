@@ -774,6 +774,74 @@ export async function getSession(setId: number): Promise<VocabSetSession> {
   };
 }
 
+/** Read-only entry point for continuing a set or reviewing its mastered words. */
+export async function getStudyEntrySession(
+  setId: number,
+  uid: string | null,
+  intent: "continue" | "review",
+  externalPartId?: string,
+): Promise<VocabSetSession> {
+  if (intent === "review") requireUid(uid);
+  const set = await findPublishedSet(setId);
+  if (!set) throw NotFound("Set not found");
+  const [words, progress] = await Promise.all([
+    wordsForSet(setId),
+    uid ? progressForSet(uid, setId) : [],
+  ]);
+  const progressByWordId = new Map(progress.map((item) => [item.wordId, item]));
+  const isMastered = (word: VocabWordDoc) => progressByWordId.get(word.id)?.status === "MASTERED";
+  // Drive lookup supplies ordered parts. Preserve their order while ensuring
+  // words within each part follow the source ordering, including Firestore sets.
+  const parts = new Map<string | undefined, VocabWordDoc[]>();
+  for (const word of words) {
+    const partWords = parts.get(word.externalPartId) ?? [];
+    partWords.push(word);
+    parts.set(word.externalPartId, partWords);
+  }
+  for (const partWords of parts.values()) {
+    partWords.sort((left, right) => (left.externalOrderIndex ?? 0) - (right.externalOrderIndex ?? 0));
+  }
+  const partRank = (partWords: VocabWordDoc[]) => {
+    const name = partWords[0]?.externalPartName?.trim().toUpperCase();
+    return name === "LC" ? 0 : name === "RC" ? 1 : 2;
+  };
+  const orderedParts = [...parts].sort((left, right) => partRank(left[1]) - partRank(right[1]));
+  const requestedPartId = externalPartId?.trim() || undefined;
+  if (requestedPartId && !parts.has(requestedPartId)) throw NotFound("Vocabulary part not found");
+  let selectedPartId = requestedPartId;
+  let scopedWords: VocabWordDoc[];
+  if (intent === "continue") {
+    const selectedPart = requestedPartId
+      ? [requestedPartId, parts.get(requestedPartId)!] as const
+      : orderedParts.find(([, partWords]) => partWords.some((word) => !isMastered(word)))
+        ?? orderedParts[0];
+    selectedPartId = selectedPart?.[0];
+    scopedWords = selectedPart?.[1] ?? [];
+  } else {
+    scopedWords = requestedPartId ? parts.get(requestedPartId)! : orderedParts.flatMap(([, partWords]) => partWords);
+  }
+  const masteredWords = scopedWords.filter(isMastered).length;
+  let sessionWords = scopedWords;
+  if (intent === "review") {
+    const now = Date.now();
+    sessionWords = orderWordsForReview(scopedWords.filter(isMastered), progressByWordId, now);
+  }
+  const partName = selectedPartId ? scopedWords[0]?.externalPartName : undefined;
+  return {
+    set: {
+      id: set.id,
+      title: partName ? `${set.title} - ${partName}` : set.title,
+      topic: set.topic,
+      sourceType: set.sourceType,
+      externalTestId: set.externalTestId,
+      externalPartId: selectedPartId,
+    },
+    words: sessionWords.map((word) => toWordCard(word, isMastered(word))),
+    masteredWords,
+    totalWords: scopedWords.length,
+  };
+}
+
 export async function getFilteredSession(
   setId: number,
   uid: string | null,
@@ -802,6 +870,8 @@ export async function getFilteredSession(
 
   if (order === "random") {
     filtered = shuffleArray([...filtered]);
+  } else if (order === "oldest") {
+    filtered = orderWordsForReview(filtered, progressByWordId, now);
   }
 
   const total = filtered.length;
@@ -855,6 +925,8 @@ export async function getFilteredSessionForPart(
 
   if (order === "random") {
     filtered = shuffleArray([...filtered]);
+  } else if (order === "oldest") {
+    filtered = orderWordsForReview(filtered, progressByWordId, now);
   }
 
   const total = filtered.length;
@@ -1871,6 +1943,22 @@ function excludeExistingWords(
   return suggestedWords
     .filter((w) => !existingSet.has(w.toLowerCase()))
     .slice(0, limit);
+}
+
+function orderWordsForReview(
+  words: VocabWordDoc[],
+  progressByWordId: Map<number, VocabProgressDoc>,
+  now: number,
+): VocabWordDoc[] {
+  return [...words].sort((left, right) => {
+    const leftProgress = progressByWordId.get(left.id);
+    const rightProgress = progressByWordId.get(right.id);
+    const dueDifference = Number(rightProgress != null && isDueProgress(rightProgress, now))
+      - Number(leftProgress != null && isDueProgress(leftProgress, now));
+    const leftReviewed = leftProgress?.lastReviewedAtMillis ?? Number.NEGATIVE_INFINITY;
+    const rightReviewed = rightProgress?.lastReviewedAtMillis ?? Number.NEGATIVE_INFINITY;
+    return dueDifference || (leftReviewed === rightReviewed ? 0 : leftReviewed - rightReviewed);
+  });
 }
 
 function matchesMastery(

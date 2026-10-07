@@ -14,6 +14,11 @@ interface ContextLearningProps {
   onExit: () => void;
   onNavigateTab?: (tab: "view" | "learn" | "play") => void;
   activeTab?: "view" | "learn" | "play";
+  studyIntent?: "continue" | "review";
+  onReview?: () => void;
+  onContinue?: () => void;
+  persistAnswers?: boolean;
+  isAuthenticated?: boolean;
 }
 
 function FallbackIllustration({ word }: { word: string }) {
@@ -58,38 +63,44 @@ export default function ContextLearning({
   onExit,
   onNavigateTab,
   activeTab = "learn",
+  studyIntent = "continue",
+  onReview,
+  onContinue,
+  persistAnswers = true,
+  isAuthenticated = true,
 }: ContextLearningProps) {
-  const [masteredSet, setMasteredSet] = useState<Set<number>>(() => new Set());
-  const [filterMode, setFilterMode] = useState<FilterMode>("all");
+  const [masteryOverrides, setMasteryOverrides] = useState<Map<number, boolean>>(() => new Map());
+  const [filterMode, setFilterMode] = useState<FilterMode>(studyIntent === "review" ? "all" : "unmastered");
   const [showWordDrawer, setShowWordDrawer] = useState(false);
   const [drawerQuery, setDrawerQuery] = useState("");
   const [drawerFilter, setDrawerFilter] = useState<FilterMode>("all");
 
   const isWordMastered = useCallback(
-    (w: VocabWordCard) => Boolean(w.mastered || masteredSet.has(w.id)),
-    [masteredSet]
+    (w: VocabWordCard) => masteryOverrides.get(w.id) ?? Boolean(w.mastered),
+    [masteryOverrides]
   );
 
   const activeWords = useMemo(() => {
     if (filterMode === "unmastered") {
       const list = words.filter((w) => !isWordMastered(w));
-      return list.length > 0 ? list : words;
+      return list;
     }
     if (filterMode === "mastered") {
       const list = words.filter((w) => isWordMastered(w));
-      return list.length > 0 ? list : words;
+      return list;
     }
     return words;
   }, [words, filterMode, isWordMastered]);
 
-  const [index, setIndex] = useState(() => {
-    const firstUnmastered = words.findIndex((w) => !w.mastered);
-    return firstUnmastered >= 0 ? firstUnmastered : 0;
-  });
+  // Keep the selected identity stable when other words leave the filtered deck.
+  const [cursor, setCursor] = useState<{ id: number | undefined; index: number }>(() => ({ id: activeWords[0]?.id, index: 0 }));
+  const setIndex = useCallback((index: number) => {
+    setCursor({ id: activeWords[index]?.id, index });
+  }, [activeWords]);
 
   const [resumeNotice, setResumeNotice] = useState<string | null>(() => {
     const firstUnmastered = words.findIndex((w) => !w.mastered);
-    if (firstUnmastered > 0 && firstUnmastered < words.length) {
+    if (studyIntent === "continue" && firstUnmastered > 0 && firstUnmastered < words.length) {
       return `Đang tiếp tục từ từ chưa học (#${firstUnmastered + 1}: ${words[firstUnmastered].word})`;
     }
     return null;
@@ -109,10 +120,16 @@ export default function ContextLearning({
   const [reportNotice, setReportNotice] = useState<string | null>(null);
 
   const finished = useRef(false);
+  const [sessionFinished, setSessionFinished] = useState(false);
+  const saving = useRef(false);
+  const retrySave = useRef<(() => void) | null>(null);
+  const [isSaving, setIsSaving] = useState(false);
+  const [saveError, setSaveError] = useState<string | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const { speak, speakWord, stop } = useVocabularyAudio();
 
-  const safeIndex = Math.min(index, Math.max(0, activeWords.length - 1));
+  const selectedIndex = activeWords.findIndex((item) => item.id === cursor.id);
+  const safeIndex = selectedIndex >= 0 ? selectedIndex : Math.min(cursor.index, Math.max(0, activeWords.length - 1));
   const word = activeWords[safeIndex];
   const isCurrentMastered = word ? isWordMastered(word) : false;
 
@@ -123,10 +140,19 @@ export default function ContextLearning({
   const step: VocabularyStudyStep | undefined = steps[stepIndex] || steps[0];
 
   const handleSelectFilterMode = (mode: FilterMode) => {
+    if (saving.current || retrySave.current) return;
+    if (sessionFinished) {
+      setAnswers([]);
+      setPoints(0);
+      setResumeNotice(null);
+    }
+    finished.current = false;
+    setSessionFinished(false);
     stop();
     setFilterMode(mode);
-    setIndex(0);
+    setCursor({ id: undefined, index: 0 });
     setStepIndex(0);
+    setForgotten(false);
     setFlipped(false);
     setTyped("");
     setFeedback(null);
@@ -134,6 +160,7 @@ export default function ContextLearning({
   };
 
   const handlePrevWord = useCallback(() => {
+    if (saving.current || retrySave.current) return;
     if (safeIndex > 0) {
       stop();
       setIndex(safeIndex - 1);
@@ -144,9 +171,10 @@ export default function ContextLearning({
       setFeedback(null);
       setSkipTyping(false);
     }
-  }, [safeIndex, stop]);
+  }, [safeIndex, stop, setIndex]);
 
   const handleNextWord = useCallback(() => {
+    if (saving.current || retrySave.current) return;
     if (safeIndex + 1 < activeWords.length) {
       stop();
       setIndex(safeIndex + 1);
@@ -157,10 +185,11 @@ export default function ContextLearning({
       setFeedback(null);
       setSkipTyping(false);
     }
-  }, [safeIndex, activeWords.length, stop]);
+  }, [safeIndex, activeWords.length, stop, setIndex]);
 
   const handleJumpToWord = useCallback(
     (targetWordId: number) => {
+      if (saving.current || retrySave.current) return;
       stop();
       let targetIdx = activeWords.findIndex((w) => w.id === targetWordId);
       if (targetIdx === -1) {
@@ -168,7 +197,7 @@ export default function ContextLearning({
         targetIdx = words.findIndex((w) => w.id === targetWordId);
       }
       if (targetIdx >= 0) {
-        setIndex(targetIdx);
+        setCursor({ id: targetWordId, index: targetIdx });
         setForgotten(false);
         setStepIndex(0);
         setFlipped(false);
@@ -182,33 +211,53 @@ export default function ContextLearning({
   );
 
   const handleToggleMasteredInList = useCallback(
-    (targetWord: VocabWordCard, e: React.MouseEvent) => {
+    async function toggleMasteredInList(targetWord: VocabWordCard, e: React.MouseEvent) {
       e.stopPropagation();
+      if (saving.current) return;
       const currentlyMastered = isWordMastered(targetWord);
       const nextMastered = !currentlyMastered;
-      if (nextMastered) {
-        setMasteredSet((prev) => new Set(prev).add(targetWord.id));
-      } else {
-        setMasteredSet((prev) => {
-          const next = new Set(prev);
-          next.delete(targetWord.id);
-          return next;
-        });
+      saving.current = true;
+      setIsSaving(true);
+      setSaveError(null);
+      try {
+        if (isAuthenticated) {
+          const response = await fetch("/api/vocab/reviews/batch", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ reviews: [nextMastered
+              ? { wordId: targetWord.id, mastered: true }
+              : { wordId: targetWord.id, quality: 1 }] }),
+          });
+          if (!response.ok) throw new Error("Mastery save failed");
+        }
+        retrySave.current = null;
+      } catch {
+        retrySave.current = () => { void toggleMasteredInList(targetWord, e); };
+        setSaveError("Chưa lưu được tiến độ. Vui lòng thử lại.");
+        setShowWordDrawer(false);
+        return;
+      } finally {
+        saving.current = false;
+        setIsSaving(false);
       }
-      fetch("/api/vocab/reviews/batch", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          reviews: [{ wordId: targetWord.id, mastered: nextMastered }],
-        }),
-      }).catch(() => {});
+      if (targetWord.id === word?.id) {
+        stop();
+        setForgotten(false);
+        setStepIndex(0);
+        setFlipped(false);
+        setTyped("");
+        setFeedback(null);
+        setSkipTyping(false);
+      }
+      setMasteryOverrides((prev) => new Map(prev).set(targetWord.id, nextMastered));
     },
-    [isWordMastered]
+    [isWordMastered, word?.id, stop, isAuthenticated]
   );
 
   // Auto-pronounce word or phrase when entering step or on demand
   const handleNextStep = useCallback(
     (next: number) => {
+      if (saving.current || retrySave.current) return;
       stop();
       setStepIndex(next);
       setFlipped(false);
@@ -229,11 +278,39 @@ export default function ContextLearning({
   );
 
   const handleAdvanceWord = useCallback(
-    (quality?: number, markMastered?: boolean) => {
-      if (finished.current || !word) return;
+    async function advanceWord(quality?: number, markMastered?: boolean) {
+      if (finished.current || saving.current || !word) return;
       stop();
 
-      const isCorrect = markMastered || (quality !== undefined && quality >= 3 && !forgotten);
+      const reviewQuality = quality ?? (studyIntent === "review" ? 4 : undefined);
+      const effectiveQuality = forgotten && reviewQuality !== undefined ? Math.min(reviewQuality, 2) : reviewQuality;
+
+      // Keep the card available for retry until the server confirms this answer.
+      if (isAuthenticated && persistAnswers && (markMastered || effectiveQuality !== undefined)) {
+        saving.current = true;
+        setIsSaving(true);
+        setSaveError(null);
+        try {
+          const response = await fetch("/api/vocab/reviews/batch", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ reviews: [markMastered
+              ? { wordId: word.id, mastered: true }
+              : { wordId: word.id, quality: effectiveQuality }] }),
+          });
+          if (!response.ok) throw new Error("Review save failed");
+          retrySave.current = null;
+        } catch {
+          retrySave.current = () => { void advanceWord(quality, markMastered); };
+          setSaveError("Chưa lưu được tiến độ. Vui lòng thử lại.");
+          return;
+        } finally {
+          saving.current = false;
+          setIsSaving(false);
+        }
+      }
+
+      const isCorrect = Boolean(markMastered || ((quality ?? (studyIntent === "review" ? 4 : 0)) >= 3 && !forgotten));
       const nextAnswers: VocabularyRoundAnswer[] = [
         ...answers,
         {
@@ -245,26 +322,14 @@ export default function ContextLearning({
       ];
 
       if (markMastered) {
-        setMasteredSet((prev) => new Set(prev).add(word.id));
-      }
-
-      // Persist review to server in background if markMastered is specified
-      if (markMastered) {
-        fetch("/api/vocab/reviews/batch", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            reviews: [
-              { wordId: word.id, mastered: true },
-            ],
-          }),
-        }).catch(() => {});
+        setMasteryOverrides((prev) => new Map(prev).set(word.id, true));
       }
 
       setPoints((prev) => prev + (isCorrect ? 10 : 2));
 
       if (safeIndex + 1 >= activeWords.length) {
         finished.current = true;
+        setSessionFinished(true);
         onComplete({
           answers: nextAnswers,
           score: nextAnswers.filter((a) => a.correct).length * 10,
@@ -280,12 +345,13 @@ export default function ContextLearning({
         setSkipTyping(false);
       }
     },
-    [word, answers, forgotten, typed, safeIndex, activeWords.length, onComplete, stop]
+    [word, answers, forgotten, typed, safeIndex, activeWords.length, onComplete, stop, setIndex, studyIntent, persistAnswers, isAuthenticated]
   );
 
   // Keyboard controls
   useEffect(() => {
     function handleKeyDown(event: KeyboardEvent) {
+      if (saving.current) return;
       const activeEl = document.activeElement;
       const isInput = activeEl?.tagName === "INPUT" || activeEl?.tagName === "TEXTAREA";
 
@@ -329,10 +395,19 @@ export default function ContextLearning({
     return list;
   }, [words, drawerFilter, drawerQuery, isWordMastered]);
 
-  if (!word || !step) {
+  if (sessionFinished || !word || !step) {
     return (
       <section className="p-8 text-center text-white" aria-label="Học theo ngữ cảnh">
-        <p className="text-xl font-bold mb-3">Chưa có từ để học.</p>
+        <p className="text-xl font-bold mb-3">{filterMode === "unmastered" && activeWords.length === 0 && words.length > 0 ? "Bạn đã thuộc tất cả từ trong phần này." : sessionFinished ? studyIntent === "review" ? "Đã hoàn thành phiên ôn." : "Đã hoàn thành phiên học." : studyIntent === "review" && words.length === 0 ? "Chưa có từ đã thuộc để ôn." : "Chưa có từ phù hợp để học."}</p>
+        {filterMode === "unmastered" && words.length > 0 && onReview && (
+          <button className={styles.button} onClick={onReview}>Ôn tập từ đã thuộc</button>
+        )}
+        {onContinue && (
+          <button className={styles.button} onClick={onContinue}>Học tiếp bộ này</button>
+        )}
+        {words.length > 0 && (
+          <button className={styles.button} onClick={() => handleSelectFilterMode("all")}>Xem tất cả từ</button>
+        )}
         <button className={styles.button} onClick={onExit}>
           Quay lại danh sách
         </button>
@@ -358,6 +433,17 @@ export default function ContextLearning({
 
   return (
     <div className={styles.dauStudyWrapper} aria-label="Học từ vựng TOEIC">
+      {isSaving && <p role="status">Đang lưu tiến độ…</p>}
+      {saveError && (
+        <div role="alert" className="text-amber-300">
+          {saveError} <button className={styles.button} onClick={() => retrySave.current?.()}>Thử lưu lại</button>
+        </div>
+      )}
+      {studyIntent === "review" && (
+        <div className="px-3 py-2 text-sm text-slate-300">
+          <strong className="text-white">Ôn lại</strong> · Ưu tiên từ đến hạn, sau đó từ được ôn lâu nhất.
+        </div>
+      )}
       {/* Top Header / View Navigation */}
       <div className={styles.dauTopHeader}>
         <div className="flex items-center gap-3">
@@ -495,12 +581,12 @@ export default function ContextLearning({
             <button
               type="button"
               onClick={() => {
-                setIndex(0);
+                handleSelectFilterMode("unmastered");
                 setResumeNotice(null);
               }}
               className="text-cyan-300 underline font-bold hover:text-white"
             >
-              Học từ đầu (#1)
+              Về từ chưa thuộc đầu tiên
             </button>
             <button
               type="button"

@@ -34,7 +34,7 @@ describe("vocabulary loading", () => {
     expect(screen.getAllByRole("article")).toHaveLength(1);
     expect(screen.getByRole("heading", { name: "Test C" })).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "Cần ôn" }));
-    expect(screen.getByRole("link", { name: "Học" })).toHaveAttribute("href", "/vocab/dautoeic/learning?tab=learn");
+    expect(screen.getByRole("link", { name: "Học tiếp" })).toHaveAttribute("href", "/vocab/123/flashcards?mode=menu&tab=learn&intent=continue&order=ordered&amount=all");
     fireEvent.click(screen.getByRole("button", { name: "Tất cả" }));
     fireEvent.change(screen.getByRole("combobox"), { target: { value: "progress" } });
     expect(screen.getAllByRole("article")[0]).toHaveTextContent("Test C");
@@ -62,7 +62,7 @@ describe("vocabulary loading", () => {
     render(<VocabLearnTabClient initialCatalog={catalog} userUid="learner" />);
     expect(screen.getByRole("heading", { name: "Test 1" })).toBeInTheDocument();
     expect(screen.getByRole("link", { name: "Xem từ" })).toHaveAttribute("href", "/vocab/dautoeic/source-test?tab=view");
-    expect(screen.getByRole("link", { name: "Học" })).toHaveAttribute("href", "/vocab/dautoeic/source-test?tab=learn");
+    expect(screen.getByRole("link", { name: "Học" })).toHaveAttribute("href", "/vocab/123/flashcards?mode=menu&tab=learn&intent=continue&order=ordered&amount=all");
     expect(screen.getByRole("link", { name: "Chơi" })).toHaveAttribute("href", "/vocab/dautoeic/source-test?tab=play");
     expect(screen.getByText("Đang tải tiến độ...")).toBeInTheDocument();
     expect(fetch).toHaveBeenCalledTimes(1);

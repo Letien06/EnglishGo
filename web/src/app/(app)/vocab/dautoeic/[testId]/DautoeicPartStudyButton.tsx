@@ -27,7 +27,8 @@ export default function DautoeicPartStudyButton({ testId, partId, setId, ready =
   const [error, setError] = useState<string | null>(null);
   const loading = state !== "idle";
   const tabQuery = tab ? `&tab=${tab}` : "";
-  const destination = `/vocab/${setId}/flashcards?mode=menu&partId=${encodeURIComponent(partId)}&mastery=all&order=ordered&amount=all${tabQuery}`;
+  const activityQuery = tab === "learn" || !tab ? "&intent=continue" : "";
+  const destination = `/vocab/${setId}/flashcards?mode=menu&partId=${encodeURIComponent(partId)}&mastery=all&order=ordered&amount=all${tabQuery}${activityQuery}`;
 
   async function startStudy() {
     if (loading) return;
@@ -51,7 +52,7 @@ export default function DautoeicPartStudyButton({ testId, partId, setId, ready =
       const syncedSetId = payload?.data?.setId ?? setId;
       setState("navigating");
       router.push(
-        `/vocab/${syncedSetId}/flashcards?mode=menu&partId=${encodeURIComponent(partId)}&mastery=all&order=ordered&amount=all${tabQuery}`,
+        `/vocab/${syncedSetId}/flashcards?mode=menu&partId=${encodeURIComponent(partId)}&mastery=all&order=ordered&amount=all${tabQuery}${activityQuery}`,
       );
     } catch (reason) {
       setState("idle");

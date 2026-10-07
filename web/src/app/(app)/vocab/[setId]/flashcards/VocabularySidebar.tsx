@@ -5,9 +5,10 @@ import type { DauToeicVocabPartSummary } from "@/types/dautoeic";
 import { fetchWithTimeout } from "@/lib/client-request";
 import styles from "./vocabulary.module.css";
 
-export default function VocabularySidebar({ testId, partId, title, count, tab, ready = false, onNavigate }: {
+export default function VocabularySidebar({ testId, partId, title, count, tab, studyIntent = "continue", ready = false, onNavigate }: {
   testId?: string; partId?: string; title: string; count: number;
   tab: "view" | "learn" | "play"; ready?: boolean; onNavigate: (href: string) => void;
+  studyIntent?: "continue" | "review";
 }) {
   const [parts, setParts] = useState<DauToeicVocabPartSummary[]>([]);
   const [failed, setFailed] = useState(false);
@@ -28,7 +29,7 @@ export default function VocabularySidebar({ testId, partId, title, count, tab, r
     <h1>{title}</h1>
     <p>{parts.length ? `${parts.length} phần · ${parts.reduce((sum, part) => sum + part.wordCount, 0)} từ` : `${count} từ sẵn sàng`}</p>
     <nav>{parts.map((part, index) => <button key={part.id} aria-label={`${part.name} · ${part.wordCount} từ`} aria-current={part.id === partId ? "page" : undefined} disabled={!part.wordCount} onClick={() => {
-      if (part.id !== partId) onNavigate(ready ? `/vocab/${part.internalSetId}/flashcards?mode=menu&tab=${tab}&partId=${encodeURIComponent(part.id)}&mastery=all&order=ordered&amount=all` : `/vocab/dautoeic/${encodeURIComponent(testId!)}?tab=${tab}`);
+      if (part.id !== partId) onNavigate(ready ? `/vocab/${part.internalSetId}/flashcards?mode=menu&tab=${tab}&partId=${encodeURIComponent(part.id)}&mastery=all&order=ordered&amount=all${tab === "learn" ? `&intent=${studyIntent}` : ""}` : `/vocab/dautoeic/${encodeURIComponent(testId!)}?tab=${tab}`);
     }}><span>{index + 1}</span><strong>{part.name}</strong><small>{part.wordCount}</small></button>)}</nav>
     {testId && !parts.length && <p className="text-xs" role="status">{failed ? "Chưa tải được các phần. Bạn vẫn học được bộ hiện tại." : "Đang tải danh sách phần..."}</p>}
     <div className={styles.sidebarTip}><strong>Mỗi ngày một chút</strong><p>Xem từ → học trong câu → chơi để nhớ lâu.</p></div>

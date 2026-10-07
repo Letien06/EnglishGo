@@ -8,15 +8,16 @@ import { isDriveContentEnabled } from "@/lib/services/dautoeic-drive";
 
 interface Props {
   params: Promise<{ testId: string }>;
-  searchParams: Promise<{ tab?: string }>;
+  searchParams: Promise<{ tab?: string; intent?: string }>;
 }
 
 export default async function DautoeicVocabTestPage({ params, searchParams }: Props) {
   const { testId } = await params;
-  const { tab: requestedTab } = await searchParams;
+  const { tab: requestedTab, intent: requestedIntent } = await searchParams;
   const tab = requestedTab === "view" || requestedTab === "learn" || requestedTab === "play" ? requestedTab : undefined;
   const user = await getCurrentUserForRead();
-  const currentPath = `/vocab/dautoeic/${encodeURIComponent(testId)}${tab ? `?tab=${tab}` : ""}`;
+  const intent = requestedIntent === "review" ? "review" : "continue";
+  const currentPath = `/vocab/dautoeic/${encodeURIComponent(testId)}${tab ? `?tab=${tab}${requestedIntent === "review" ? "&intent=review" : ""}` : ""}`;
 
   if (!user) {
     redirect(`/login?redirect=${encodeURIComponent(currentPath)}`);
@@ -25,6 +26,9 @@ export default async function DautoeicVocabTestPage({ params, searchParams }: Pr
   const view = await dautoeicVocab.getDautoeicVocabTestView(testId);
   const firstPart = view.parts.find((part) => part.wordCount > 0);
   if (tab && firstPart && isDriveContentEnabled()) {
+    if (tab === "learn") {
+      redirect(`/vocab/${firstPart.internalSetId}/flashcards?mode=menu&tab=learn&intent=${intent}&order=ordered&amount=all`);
+    }
     redirect(`/vocab/${firstPart.internalSetId}/flashcards?mode=menu&tab=${tab}&partId=${encodeURIComponent(firstPart.id)}&mastery=all&order=ordered&amount=all`);
   }
 

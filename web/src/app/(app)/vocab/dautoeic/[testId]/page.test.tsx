@@ -17,8 +17,11 @@ beforeEach(() => {
   vi.mocked(getDautoeicVocabTestView).mockResolvedValue({ test: { name: "Test 1" }, setName: "2026", parts: [{ id: "empty", wordCount: 0 }, { id: "lc", wordCount: 80, internalSetId: 123 }] } as Awaited<ReturnType<typeof getDautoeicVocabTestView>>);
 });
 describe("direct vocabulary activities", () => {
-  it.each(["view", "learn", "play"])("opens the first non-empty part on the requested %s tab", async (tab) => {
+  it.each(["view", "play"])("opens the first non-empty part on the requested %s tab", async (tab) => {
     await expect(Page({ params: Promise.resolve({ testId: "source" }), searchParams: Promise.resolve({ tab }) })).rejects.toThrow(`REDIRECT:/vocab/123/flashcards?mode=menu&tab=${tab}&partId=lc&mastery=all&order=ordered&amount=all`);
+  });
+  it("delegates learning to progress-based part selection instead of pinning LC", async () => {
+    await expect(Page({ params: Promise.resolve({ testId: "source" }), searchParams: Promise.resolve({ tab: "learn" }) })).rejects.toThrow("REDIRECT:/vocab/123/flashcards?mode=menu&tab=learn&intent=continue&order=ordered&amount=all");
   });
   it("preserves activity through the login redirect", async () => {
     vi.mocked(getCurrentUserForRead).mockResolvedValue(null);

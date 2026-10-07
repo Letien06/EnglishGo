@@ -8,6 +8,7 @@ import { getCurrentUserForRead } from "@/lib/auth/session";
 import * as vocab from "@/lib/services/vocab";
 import FlashcardGame from "./FlashcardGame";
 import { isDriveContentEnabled } from "@/lib/services/dautoeic-drive";
+import { redirect } from "next/navigation";
 
 interface Props {
   params: Promise<{ setId: string }>;
@@ -30,8 +31,15 @@ export default async function FlashcardsPage({ params, searchParams }: Props) {
   const order = (sp.order as string) ?? undefined;
   const amount = (sp.amount as string) ?? undefined;
   const partId = (sp.partId as string) ?? undefined;
+  const intent = !room && (sp.intent === "continue" || sp.intent === "review") ? sp.intent : undefined;
+  if (intent === "review" && !user) {
+    const destination = `/vocab/${id}/flashcards?mode=menu&tab=learn&intent=review${partId ? `&partId=${encodeURIComponent(partId)}` : ""}`;
+    redirect(`/login?redirect=${encodeURIComponent(destination)}`);
+  }
 
-  const sessionPromise = partId
+  const sessionPromise = intent
+    ? vocab.getStudyEntrySession(id, uid, intent, partId)
+    : partId
     ? vocab.getFilteredSessionForPart(
         id,
         uid,
@@ -58,6 +66,7 @@ export default async function FlashcardsPage({ params, searchParams }: Props) {
   if (order) returnParams.set("order", order);
   if (amount) returnParams.set("amount", amount);
   if (partId) returnParams.set("partId", partId);
+  if (intent) returnParams.set("intent", intent);
   const returnPath = `/vocab/${id}/flashcards?${returnParams.toString()}`;
 
   const session = await sessionPromise;
@@ -72,13 +81,14 @@ export default async function FlashcardsPage({ params, searchParams }: Props) {
       partsReady={isDriveContentEnabled()}
       practiceOptions={[]}
       loadExtrasInBackground
-      reviewMode={false}
+      reviewMode={intent === "review"}
+      studyIntent={intent ?? (mastery === "mastered" || mastery === "due" ? "review" : "continue")}
       isAuthenticated={Boolean(user)}
       currentUserId={uid}
       loginHref={`/login?redirect=${encodeURIComponent(returnPath)}`}
-      selectedMastery={mastery ?? "learning"}
-      selectedOrder={order ?? "random"}
-      selectedAmount={amount ?? "20"}
+      selectedMastery={intent === "review" ? "mastered" : intent === "continue" ? "all" : mastery ?? "learning"}
+      selectedOrder={intent === "review" ? "oldest" : intent === "continue" ? "ordered" : order ?? "random"}
+      selectedAmount={intent ? "all" : amount ?? "20"}
     />
   );
 }

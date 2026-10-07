@@ -28,8 +28,8 @@
 .catalogCard h3 { font-size: 20px; font-weight: 800; margin-top: 16px; color: var(--ink); }
 .catalogCard p { color: var(--muted); font-size: 12px; margin-block: 6px 18px; }
 .catalogCard p b { color: var(--warning-ink); font-weight: 600; }
-.catalogActions { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 6px; margin-top: 18px; }
-.catalogActions a { display: flex; justify-content: center; align-items: center; gap: 5px; min-height: 44px; border: 1px solid var(--line); border-radius: 9px; font-size: 12px; font-weight: 750; color: var(--ink2); }
+.catalogActions { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 18px; }
+.catalogActions a { display: flex; flex: 1 0 70px; justify-content: center; align-items: center; gap: 5px; min-height: 44px; border: 1px solid var(--line); border-radius: 9px; font-size: 12px; font-weight: 750; color: var(--ink2); }
 .catalogActions svg { width: 14px; height: 14px; }
 .catalogActions a[data-action="learn"] { background: var(--primary); border-color: var(--primary); color: var(--gold-ink); }
 .catalogActions a[data-action="play"] { border-color: var(--teal-line); background: var(--teal-soft); color: var(--teal-ink); }
