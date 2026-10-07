@@ -17,7 +17,6 @@ import { useVocabReviewQueue } from "@/lib/vocab-review-queue";
 const StudyStreakCelebration = dynamic(() => import("./StudyStreakCelebration"), { ssr: false });
 
 const navItems = [
-  { href: "/progress", icon: "progress", label: "Tiến bộ", color: "text-primary" },
   { href: "/hub", icon: "home", label: "Trang chủ", color: "text-primary" },
   { href: "/listen", icon: "listen", label: "Nghe", color: "text-plum" },
   { href: "/read", icon: "read", label: "Đọc", color: "text-azure" },

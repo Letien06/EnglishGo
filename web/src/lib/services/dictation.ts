@@ -4,6 +4,8 @@ import { adminDb } from "@/lib/firestore/db";
 import { COLLECTIONS } from "@/lib/firestore/collections";
 import { mergeTranscriptCues, parseTranscript } from "@/lib/parsers/transcript";
 import { buildPrompt, gradeDictationAttempt, type MaskPercent } from "@/lib/services/dictation-grading";
+import { studyActivityDayRef, writeStudyActivityInTransaction } from "./study-activity";
+import { invalidateLearnerActivityCaches } from "./learner-cache";
 import type {
   DictationAttemptRequest,
   DictationAttemptResult,
@@ -363,7 +365,7 @@ export async function resetLessonProgress(uid: string, lessonId: string): Promis
 async function saveProgress(uid: string, lesson: DictationLesson, segment: DictationSegment, request: DictationAttemptRequest, answer: string, score: number, passed: boolean, masteredNow: boolean, mask: MaskPercent) {
   const summaryRef = userLessonRef(uid, lesson.id);
   const segmentRef = summaryRef.collection("segments").doc(segment.id);
-  await adminDb.runTransaction(async (tx) => {
+  const recordedCompletion = await adminDb.runTransaction(async (tx) => {
     const [summarySnap, segmentSnap] = await Promise.all([tx.get(summaryRef), tx.get(segmentRef)]);
     const old = segmentSnap.exists ? toSegmentProgress(lesson.id, segment.id, segmentSnap.data()) : null;
     const wasCompleted = Boolean(old?.completedAtMillis);
@@ -376,6 +378,12 @@ async function saveProgress(uid: string, lesson: DictationLesson, segment: Dicta
     const summary = summarySnap.exists ? toSummary(lesson.id, summarySnap.data()) : null;
     const completedCount = Math.min(lesson.segmentCount, (summary?.completedCount ?? 0) + completedDelta);
     const masteredCount = Math.min(lesson.segmentCount, (summary?.masteredCount ?? 0) + masteredDelta);
+    const firstLessonCompletion = lesson.segmentCount > 0 && completedDelta > 0
+      && (summary?.completedCount ?? 0) < lesson.segmentCount && completedCount === lesson.segmentCount
+      && !summary?.completedAtMillis;
+    const completionAccounting = firstLessonCompletion
+      ? await Promise.all([tx.get(studyActivityDayRef(uid, now)), tx.get(adminDb.collection("users").doc(uid))])
+      : null;
     tx.set(segmentRef, {
       lessonId: lesson.id, segmentId: segment.id, segmentIndex: segment.index,
       attemptCount: (old?.attemptCount ?? 0) + 1,
@@ -391,10 +399,18 @@ async function saveProgress(uid: string, lesson: DictationLesson, segment: Dicta
       lessonId: lesson.id, lessonTitleSnapshot: lesson.title, sourceNameSnapshot: lesson.sourceName,
       levelSnapshot: lesson.level, segmentCountSnapshot: lesson.segmentCount, completedCount, masteredCount,
       lastSegmentIndex: segment.index, lastMaskPercent: mask, startedAtMillis: summary?.startedAtMillis ?? now,
-      lastStudiedAtMillis: now, completedAtMillis: completedCount === lesson.segmentCount ? now : null,
+      lastStudiedAtMillis: now, completedAtMillis: completedCount === lesson.segmentCount ? summary?.completedAtMillis ?? now : null,
       updatedAtMillis: now, updatedAt: FieldValue.serverTimestamp(),
     }, { merge: true });
+    if (completionAccounting) {
+      writeStudyActivityInTransaction(tx, uid, {
+        module: "video", activityType: "dictation_lesson_completed", metric: "video", quantity: 1,
+        sourceId: lesson.id, occurredAtMillis: now,
+      }, completionAccounting[0], completionAccounting[1].data() ?? {});
+    }
+    return firstLessonCompletion;
   });
+  if (recordedCompletion) invalidateLearnerActivityCaches(uid);
 }
 
 async function requirePublishedLesson(lessonId: string) { const lesson = await getLesson(lessonId); if (lesson.status !== "PUBLISHED") throw NotFound("Bai nghe khong ton tai."); return lesson; }

@@ -11,13 +11,18 @@ const STUDY_TIME_ZONE = "Asia/Ho_Chi_Minh";
 const SUMMARY_MAX_AGE_MS = 60 * 60 * 1000;
 const STREAK_MILESTONE_STARTERS = new Set([1, 3, 7]);
 
-export type StudyModule = "listening" | "reading" | "practice" | "vocab";
+export type StudyModule = "listening" | "reading" | "practice" | "vocab" | "writing" | "video";
+export type StudyMetric = StudyModule;
+const COUNT_METRICS: StudyMetric[] = ["listening", "reading", "practice", "vocab", "writing", "video"];
 
 export interface StudyActivityInput {
   module: StudyModule;
   activityType: string;
   sourceId?: string | number | null;
   occurredAtMillis?: number | null;
+  metric?: StudyMetric;
+  quantity?: number;
+  durationSeconds?: number | null;
 }
 
 export interface StudyStreakSummary {
@@ -61,106 +66,166 @@ export async function recordStudyActivity(
   const now = input.occurredAtMillis ?? Date.now();
   const dateKey = dateKeyForMillis(now);
   const ref = activityCollection(uid).doc(dateKey);
-  const dailyRef = dailySummaryCollection(uid).doc(dateKey);
   const userRef = adminDb.collection("users").doc(uid);
-  const sourceId = input.sourceId == null ? null : String(input.sourceId);
-  const xp = xpForActivity(input.module);
 
   await adminDb.runTransaction(async (tx) => {
-    const [snap, userSnap] = await Promise.all([
-      tx.get(ref),
-      tx.get(userRef),
-    ]);
-    const current = snap.data() as
-      | { firstActivityAtMillis?: number; activityCount?: number }
-      | undefined;
-    const userData = userSnap.data() ?? {};
-    const previousDateKey = stringValue(userData.studyTodayDateKey);
-    const previousStreak = numberValue(userData.studyStreakDays) ?? 0;
-    const sameDay = previousDateKey === dateKey;
-    const continuedFromYesterday = previousDateKey === addDaysToDateKey(dateKey, -1);
-    const startedNewStreak = !sameDay && !continuedFromYesterday;
-    const streakDays = sameDay
-      ? Math.max(1, previousStreak)
-      : continuedFromYesterday
-        ? previousStreak + 1
-        : 1;
-    const todayActivityCount = sameDay
-      ? (numberValue(userData.studyTodayActivityCount) ?? 0) + 1
-      : 1;
-    const todayModules = sameDay
-      ? [...new Set([...parseModules(userData.studyTodayModules), input.module])]
-      : [input.module];
-    const previousTodayModuleCounts = sameDay
-      ? parseModuleCounts(userData.studyTodayModuleCounts)
-      : parseModuleCounts(null);
-    const todayModuleCounts = {
-      ...previousTodayModuleCounts,
-      [input.module]: previousTodayModuleCounts[input.module] + 1,
-    };
-    const todayXp = sameDay
-      ? (numberValue(userData.studyTodayXp) ?? 0) + xp
-      : xp;
-
-    tx.set(
-      ref,
-      {
-        dateKey,
-        activityCount: FieldValue.increment(1),
-        modules: FieldValue.arrayUnion(input.module),
-        activityTypes: FieldValue.arrayUnion(input.activityType),
-        ...(sourceId ? { sourceIds: FieldValue.arrayUnion(sourceId) } : {}),
-        firstActivityAtMillis: current?.firstActivityAtMillis ?? now,
-        lastActivityAtMillis: now,
-        updatedAt: FieldValue.serverTimestamp(),
-        ...(snap.exists ? {} : { createdAt: FieldValue.serverTimestamp() }),
-      },
-      { merge: true },
-    );
-    tx.set(
-      dailyRef,
-      {
-        dateKey,
-        totalActivityCount: FieldValue.increment(1),
-        xp: FieldValue.increment(xp),
-        [`moduleCounts.${input.module}`]: FieldValue.increment(1),
-        [`activityTypeCounts.${input.activityType}`]: FieldValue.increment(1),
-        modules: FieldValue.arrayUnion(input.module),
-        lastActivityAtMillis: now,
-        updatedAt: FieldValue.serverTimestamp(),
-        createdAt: FieldValue.serverTimestamp(),
-      },
-      { merge: true },
-    );
-    tx.set(
-      userRef,
-      {
-        totalStudyXp: FieldValue.increment(xp),
-        [`studyModuleTotals.${input.module}`]: FieldValue.increment(1),
-        studyStreakDays: streakDays,
-        studyStudiedToday: true,
-        studyTodayActivityCount: todayActivityCount,
-        studyTodayModules: todayModules,
-        studyTodayModuleCounts: todayModuleCounts,
-        studyTodayXp: todayXp,
-        studyTodayDateKey: dateKey,
-        studyStreakUpdatedAtMillis: now,
-        lastStudyActivityAtMillis: now,
-        ...(startedNewStreak ? { studyStreakMilestonesSeen: [] } : {}),
-        updatedAt: FieldValue.serverTimestamp(),
-      },
-      { merge: true },
-    );
+    const [snap, userSnap] = await Promise.all([tx.get(ref), tx.get(userRef)]);
+    writeStudyActivityInTransaction(tx, uid, input, snap, userSnap.data() ?? {});
   });
 
   invalidateLearnerActivityCaches(uid);
 
 }
 
-/**
- * Atomically reserves the current milestone so the celebration is shown only
- * once per streak, even if the learner has the app open in multiple tabs.
- */
+/** Compose accounting writes with an existing transaction to keep retries atomic. */
+export function studyActivityDayRef(uid: string, occurredAtMillis: number) {
+  return activityCollection(uid).doc(dateKeyForMillis(occurredAtMillis));
+}
+
+export function writeStudyActivityInTransaction(
+  tx: FirebaseFirestore.Transaction,
+  uid: string,
+  input: StudyActivityInput,
+  snap: FirebaseFirestore.DocumentSnapshot,
+  userData: Record<string, unknown>,
+): void {
+  const now = input.occurredAtMillis ?? Date.now();
+  const dateKey = dateKeyForMillis(now);
+  const ref = activityCollection(uid).doc(dateKey);
+  const dailyRef = dailySummaryCollection(uid).doc(dateKey);
+  const userRef = adminDb.collection("users").doc(uid);
+  const sourceId = input.sourceId == null ? null : String(input.sourceId);
+  const xp = xpForActivity(input.module);
+  const current = snap.data() as
+    | { firstActivityAtMillis?: number; activityCount?: number; metricsVersion?: number; metricsSinceMillis?: number; metricsIncomplete?: boolean }
+    | undefined;
+  const previousDateKey = stringValue(userData.studyTodayDateKey);
+  const previousStreak = numberValue(userData.studyStreakDays) ?? 0;
+  const sameDay = previousDateKey === dateKey;
+  const continuedFromYesterday = previousDateKey === addDaysToDateKey(dateKey, -1);
+  const startedNewStreak = !sameDay && !continuedFromYesterday;
+  const streakDays = sameDay
+    ? Math.max(1, previousStreak)
+    : continuedFromYesterday
+      ? previousStreak + 1
+      : 1;
+  const todayActivityCount = sameDay
+    ? (numberValue(userData.studyTodayActivityCount) ?? 0) + 1
+    : 1;
+  const todayModules = sameDay
+    ? [...new Set([...parseModules(userData.studyTodayModules), input.module])]
+    : [input.module];
+  const previousTodayModuleCounts = sameDay
+    ? parseModuleCounts(userData.studyTodayModuleCounts)
+    : parseModuleCounts(null);
+  const todayModuleCounts = {
+    ...previousTodayModuleCounts,
+    [input.module]: previousTodayModuleCounts[input.module] + 1,
+  };
+  const todayXp = sameDay
+    ? (numberValue(userData.studyTodayXp) ?? 0) + xp
+    : xp;
+  const metricDelta: Record<string, number> = {};
+  if (input.metric && COUNT_METRICS.includes(input.metric)) {
+    metricDelta[input.metric] = Math.max(0, Math.trunc(numberValue(input.quantity) ?? 1));
+  }
+  const duration = numberValue(input.durationSeconds);
+  if (duration != null && duration >= 0) metricDelta.studySeconds = Math.trunc(duration);
+  const blankCounts = Object.fromEntries(COUNT_METRICS.map((metric) => [metric, 0]));
+  const dailyMetrics = {
+    ...(current?.metricsVersion === 1 ? {} : blankCounts),
+    ...Object.fromEntries(Object.entries(metricDelta).map(([metric, quantity]) => [metric, FieldValue.increment(quantity)])),
+  };
+  const lifetimeMetrics = {
+    ...(userData.studyMetricsVersion === 1 ? {} : blankCounts),
+    ...Object.fromEntries(Object.entries(metricDelta).map(([metric, quantity]) => [metric, FieldValue.increment(quantity)])),
+  };
+  const previousTodayMetrics = sameDay && userData.studyTodayMetricsSinceMillis != null
+    ? recordValue(userData.studyTodayMetrics) : blankCounts;
+  const todayMetrics = {
+    ...previousTodayMetrics,
+    ...(!sameDay && metricDelta.studySeconds == null ? { studySeconds: FieldValue.delete() } : {}),
+    ...Object.fromEntries(Object.entries(metricDelta).map(([metric, quantity]) => [metric, (numberValue(previousTodayMetrics[metric]) ?? 0) + quantity])),
+  };
+  const metricsIncomplete = current?.metricsIncomplete === true
+    || (current?.metricsVersion !== 1 && (current?.activityCount ?? 0) > 0);
+  const todayMetricsIncomplete = sameDay && (userData.studyTodayMetricsIncomplete === true
+    || (userData.studyTodayMetricsSinceMillis == null && (numberValue(userData.studyTodayActivityCount) ?? 0) > 0));
+  const storedModuleTotals = recordValue(userData.studyModuleTotals);
+  const migratedModuleTotals = Object.fromEntries(COUNT_METRICS.flatMap((module) => {
+    const legacyCount = numberValue(userData[`studyModuleTotals.${module}`]);
+    return numberValue(storedModuleTotals[module]) == null && legacyCount != null ? [[module, legacyCount]] : [];
+  }));
+
+  tx.set(
+    ref,
+    {
+      dateKey,
+      activityCount: FieldValue.increment(1),
+      metricsVersion: 1,
+      metricsSinceMillis: current?.metricsSinceMillis ?? now,
+      metricsIncomplete,
+      modules: FieldValue.arrayUnion(input.module),
+      activityTypes: FieldValue.arrayUnion(input.activityType),
+      ...(sourceId ? { sourceIds: FieldValue.arrayUnion(sourceId) } : {}),
+      firstActivityAtMillis: current?.firstActivityAtMillis ?? now,
+      lastActivityAtMillis: now,
+      updatedAt: FieldValue.serverTimestamp(),
+      ...(snap.exists ? {} : { createdAt: FieldValue.serverTimestamp() }),
+    },
+    { merge: true },
+  );
+  tx.set(
+    dailyRef,
+    {
+      dateKey,
+      totalActivityCount: FieldValue.increment(1),
+      xp: FieldValue.increment(xp),
+      moduleCounts: { [input.module]: FieldValue.increment(1) },
+      activityTypeCounts: { [input.activityType]: FieldValue.increment(1) },
+      metrics: dailyMetrics,
+      metricsVersion: 1,
+      metricsSinceMillis: current?.metricsSinceMillis ?? now,
+      metricsIncomplete,
+      modules: FieldValue.arrayUnion(input.module),
+      lastActivityAtMillis: now,
+      updatedAt: FieldValue.serverTimestamp(),
+      createdAt: FieldValue.serverTimestamp(),
+    },
+    { merge: true },
+  );
+  tx.set(
+    userRef,
+    {
+      totalStudyXp: FieldValue.increment(xp),
+      studyModuleTotals: {
+        ...migratedModuleTotals,
+        [input.module]: (numberValue(storedModuleTotals[input.module])
+          ?? numberValue(userData[`studyModuleTotals.${input.module}`]) ?? 0) + 1,
+      },
+      totalStudyMetrics: lifetimeMetrics,
+      studyMetricsVersion: 1,
+      studyMetricsSinceMillis: numberValue(userData.studyMetricsSinceMillis) ?? now,
+      studyTodayMetrics: todayMetrics,
+      studyTodayMetricsSinceMillis: sameDay ? numberValue(userData.studyTodayMetricsSinceMillis) ?? now : now,
+      studyTodayMetricsIncomplete: todayMetricsIncomplete,
+      studyLongestStreakDays: Math.max(numberValue(userData.studyLongestStreakDays) ?? 0, previousStreak, streakDays),
+      studyStreakDays: streakDays,
+      studyStudiedToday: true,
+      studyTodayActivityCount: todayActivityCount,
+      studyTodayModules: todayModules,
+      studyTodayModuleCounts: todayModuleCounts,
+      studyTodayXp: todayXp,
+      studyTodayDateKey: dateKey,
+      studyStreakUpdatedAtMillis: now,
+      lastStudyActivityAtMillis: now,
+      ...(startedNewStreak ? { studyStreakMilestonesSeen: [] } : {}),
+      updatedAt: FieldValue.serverTimestamp(),
+    },
+    { merge: true },
+  );
+}
+
 export async function claimStudyStreakMilestone(uid: string): Promise<number | null> {
   if (!uid?.trim()) return null;
 
@@ -396,6 +461,8 @@ function emptyDailySummary(dateKey = dateKeyForMillis(Date.now())): StudyDailySu
       reading: 0,
       practice: 0,
       vocab: 0,
+      writing: 0,
+      video: 0,
     },
   };
 }
@@ -407,6 +474,8 @@ function parseModuleCounts(value: unknown): Record<StudyModule, number> {
     reading: numberValue(data.reading) ?? 0,
     practice: numberValue(data.practice) ?? 0,
     vocab: numberValue(data.vocab) ?? 0,
+    writing: numberValue(data.writing) ?? 0,
+    video: numberValue(data.video) ?? 0,
   };
 }
 
@@ -416,7 +485,7 @@ function parseModules(value: unknown): StudyModule[] {
     item === "listening" ||
     item === "reading" ||
     item === "practice" ||
-    item === "vocab",
+    item === "vocab" || item === "writing" || item === "video",
   );
 }
 
@@ -426,6 +495,8 @@ function xpForActivity(module: StudyModule): number {
     reading: 10,
     practice: 20,
     vocab: 5,
+    writing: 0,
+    video: 0,
   }[module];
 }
 
@@ -454,6 +525,10 @@ function addDaysToDateKey(dateKey: string, days: number): string {
 
 function stringValue(value: unknown): string | null {
   return typeof value === "string" && value.trim() ? value.trim() : null;
+}
+
+function recordValue(value: unknown): Record<string, unknown> {
+  return value && typeof value === "object" ? value as Record<string, unknown> : {};
 }
 
 function numberValue(value: unknown): number | null {

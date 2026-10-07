@@ -11,11 +11,12 @@ const mocks = vi.hoisted(() => ({
   testSession: vi.fn(),
   set: vi.fn(),
   award: vi.fn(),
+  activity: vi.fn(),
 }));
 
 vi.mock("next/cache", () => ({ unstable_cache: (callback: unknown) => callback, revalidateTag: vi.fn() }));
 vi.mock("./leaderboard", () => ({ recordSkillQuestionLeaderboard: mocks.award }));
-vi.mock("./study-activity", () => ({ recordStudyActivity: vi.fn().mockResolvedValue(undefined) }));
+vi.mock("./study-activity", () => ({ recordStudyActivity: mocks.activity }));
 vi.mock("./dautoeic", () => ({ listDifficultyLevels: mocks.levels, listReadingDifficultyLevels: mocks.levels, getDifficultySession: mocks.session, getReadingDifficultySession: mocks.session }));
 vi.mock("./test-part-practice", () => ({ getTestPartSession: mocks.testSession }));
 vi.mock("../firestore/db", () => ({
@@ -61,6 +62,7 @@ beforeEach(() => {
   mocks.levels.mockResolvedValue([]);
   mocks.set.mockResolvedValue(undefined);
   mocks.award.mockResolvedValue(undefined);
+  mocks.activity.mockResolvedValue(undefined);
   mocks.testSession.mockResolvedValue({ items: [{ id: "passage", sourceLevel: 3, questions: [{ id: "q1", correctAnswer: "B" }, { id: "q2", correctAnswer: "A" }] }] });
 });
 
@@ -97,12 +99,21 @@ describe("progress scoped to an exam test part", () => {
     await service.recordProgress("learner", { ...request, level: 4 });
     expect(mocks.set).toHaveBeenCalledWith(expect.objectContaining({ testId: "test-one", correctAnswer: "B", correct: true, sourceLevel: 3, score: 30 }), { merge: true });
     expect(mocks.award).toHaveBeenCalledWith(expect.objectContaining({ level: 3 }));
+    expect(mocks.activity).toHaveBeenCalledWith("learner", expect.objectContaining({ metric: "listening", quantity: 1, durationSeconds: 1 }));
   });
 
   it("does not award points when a client spoofs the correct answer", async () => {
     await service.recordProgress("learner", { ...request, selectedAnswer: "A", correctAnswer: "A" });
     expect(mocks.set).toHaveBeenCalledWith(expect.objectContaining({ correct: false, correctAnswer: "B", score: 0 }), { merge: true });
     expect(mocks.award).not.toHaveBeenCalled();
+    expect(mocks.activity).toHaveBeenCalledWith("learner", expect.objectContaining({ metric: "listening", quantity: 1 }));
+  });
+
+  it("counts a reading answer as a question without substituting lesson or test totals", async () => {
+    const readingService = createLearningToolService({ module: "reading", minPart: 5, maxPart: 7,
+      progressCollection: "readingProgress", notesCollection: "notes", favoritesCollection: "favorites", vocabBasketCollection: "vocabBasket" });
+    await readingService.recordProgress("learner", { ...request, part: 5, selectedAnswer: "A" });
+    expect(mocks.activity).toHaveBeenCalledWith("learner", expect.objectContaining({ module: "reading", metric: "reading", quantity: 1, durationSeconds: 1 }));
   });
 
   it("preserves the original Part 1 scoring when its source difficulty differs", async () => {

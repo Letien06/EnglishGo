@@ -340,6 +340,9 @@ export function createLearningToolService(
         recordStudyActivity(uid, {
           module: config.module,
           activityType: "answer",
+          metric: config.module,
+          quantity: 1,
+          durationSeconds: request.elapsedSeconds,
           sourceId: questionId,
           occurredAtMillis: now,
         }).catch(() => undefined),

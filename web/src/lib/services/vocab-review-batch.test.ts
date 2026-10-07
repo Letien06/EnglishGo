@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import { mergeFirestoreWrite } from "@/test/firestore-merge";
 
 const mocks = vi.hoisted(() => ({
   docs: new Map<string, Record<string, unknown>>(), writes: vi.fn(), getAll: vi.fn(),
@@ -28,7 +29,7 @@ vi.mock("@/lib/firestore/db", () => ({ adminDb: {
       if (mocks.failCommit) throw new Error("Commit failed");
       if (commit) for (const [reference, data] of staged) {
         mocks.writes(reference, data);
-        mocks.docs.set(reference.path, { ...mocks.docs.get(reference.path), ...data });
+        mocks.docs.set(reference.path, mergeFirestoreWrite(mocks.docs.get(reference.path) ?? {}, data));
       }
       return result;
     };
@@ -41,9 +42,8 @@ vi.mock("./dautoeic-vocab", () => ({
   findDriveVocabWords: vi.fn(), listDriveVocabSets: vi.fn(),
 }));
 vi.mock("./rate-limit", () => ({ enforceDailyActionLimit: vi.fn() }));
-vi.mock("./study-activity", () => ({
-  getStoredStudyStreakSummary: vi.fn(), getStudyStreak: vi.fn(), recordStudyActivity: vi.fn(),
-}));
+vi.mock("next/cache", () => ({ unstable_cache: (callback: unknown) => callback }));
+vi.mock("./learner-cache", () => ({ invalidateLearnerActivityCaches: vi.fn(), studyStreakCacheTag: vi.fn() }));
 import { reviewBatch } from "./vocab";
 
 describe("reviewBatch retry safety", () => {
@@ -58,16 +58,18 @@ describe("reviewBatch retry safety", () => {
   it("replays a committed response without applying SM-2 again or looking up words", async () => {
     const first = await reviewBatch("learner", [{ wordId: 1, quality: 4 }], "retry-1");
     expect(mocks.docs.get("users/learner/userVocabProgress/1")?.repetitions).toBe(1);
+    expect(mocks.docs.get("users/learner")).toMatchObject({ totalStudyMetrics: { vocab: 1 }, studyTodayMetrics: { vocab: 1 }, totalStudyXp: 5 });
     const marker = mocks.docs.get("users/learner/vocabReviewRequests/retry-1");
     expect(marker).toMatchObject({ responses: first, expiresAt: expect.any(Date) });
     const writes = mocks.writes.mock.calls.length;
     mocks.words.mockRejectedValue(new Error("Material unavailable after original commit"));
     expect(await reviewBatch("learner", [{ wordId: 1, quality: 4 }], "retry-1")).toEqual(first);
     expect(mocks.writes).toHaveBeenCalledTimes(writes);
+    expect(mocks.docs.get("users/learner")).toMatchObject({ totalStudyMetrics: { vocab: 1 }, totalStudyXp: 5 });
     expect(mocks.words).toHaveBeenCalledTimes(1);
     expect(mocks.getAll).toHaveBeenCalledTimes(1);
     expect(mocks.getAll.mock.calls[0].map((item: Ref) => item.path)).toEqual([
-      "users/learner", "users/learner/userVocabProgress/1",
+      "users/learner", expect.stringContaining("users/learner/studyActivity/"), "users/learner/userVocabProgress/1",
     ]);
   });
 
@@ -96,7 +98,15 @@ describe("reviewBatch retry safety", () => {
     await reviewBatch("learner", [{ wordId: 1, quality: 4 }]);
     await reviewBatch("learner", [{ wordId: 1, quality: 4 }]);
     expect(mocks.docs.get("users/learner/userVocabProgress/1")?.repetitions).toBe(2);
+    expect(mocks.docs.get("users/learner")).toMatchObject({ totalStudyMetrics: { vocab: 2 }, totalStudyXp: 10 });
     expect([...mocks.docs.keys()].some((path) => path.includes("vocabReviewRequests"))).toBe(false);
     await expect(reviewBatch("learner", [{ wordId: 1, quality: 4 }], "invalid/path")).rejects.toMatchObject({ status: 400 });
+  });
+
+  it("counts distinct reviewed words instead of one batch event or duplicate word IDs", async () => {
+    mocks.words.mockResolvedValue(new Map([1, 2].map((id) => [id, { id, setId: 12, status: "PUBLISHED" }])));
+    const responses = await reviewBatch("learner", [{ wordId: 1, quality: 4 }, { wordId: 1, quality: 5 }, { wordId: 2, mastered: true }], "two-words");
+    expect(responses).toHaveLength(2);
+    expect(mocks.docs.get("users/learner")).toMatchObject({ totalStudyMetrics: { vocab: 2 }, studyTodayMetrics: { vocab: 2 }, totalStudyXp: 5, studyTodayActivityCount: 1 });
   });
 });

@@ -41,7 +41,8 @@ import {
 } from "./gemini";
 import { enrichCandidatePronunciation, enrichWithDictionary } from "./dictionary";
 import { parseImportFile, parseDelimitedWords } from "@/lib/parsers/vocab-import";
-import { getStoredStudyStreakSummary, getStudyStreak, recordStudyActivity } from "./study-activity";
+import { getStoredStudyStreakSummary, getStudyStreak, recordStudyActivity, studyActivityDayRef, writeStudyActivityInTransaction } from "./study-activity";
+import { invalidateLearnerActivityCaches } from "./learner-cache";
 import { enforceDailyActionLimit } from "./rate-limit";
 import { findDriveVocabSet, findDriveVocabWords, findDriveVocabWordsByIds, listDriveVocabSets } from "./dautoeic-vocab";
 
@@ -1098,6 +1099,10 @@ export async function recordStudyHistory(
     activityType: "vocab_game",
     sourceId: input.externalPartId ?? input.externalTestId ?? input.setId,
     occurredAtMillis: finishedAtMillis,
+    durationSeconds: input.startedAtMillis != null && Number.isFinite(input.startedAtMillis)
+      && input.startedAtMillis > 0 && input.startedAtMillis <= finishedAtMillis
+      && finishedAtMillis - input.startedAtMillis <= 86_400_000
+      ? Math.floor((finishedAtMillis - input.startedAtMillis) / 1000) : null,
   }).catch(() => undefined);
   return { id };
 }
@@ -1444,6 +1449,8 @@ export async function review(
   await recordStudyActivity(uid, {
     module: "vocab",
     activityType: "vocab_review",
+    metric: "vocab",
+    quantity: 1,
     sourceId: wordId,
     occurredAtMillis: updated.lastReviewedAtMillis,
   }).catch(() => undefined);
@@ -1500,9 +1507,10 @@ export async function reviewBatch(
     : null;
   const progressRefs = requested.map((reviewInput) =>
     userRef.collection(PROGRESS).doc(String(reviewInput.wordId)));
+  const activityRef = studyActivityDayRef(uid, now);
   let wordsLookup: Promise<Map<number, VocabWordDoc>> | undefined;
 
-  return adminDb.runTransaction(async (tx) => {
+  const result = await adminDb.runTransaction(async (tx) => {
     if (requestRef) {
       const requestSnap = await tx.get(requestRef);
       if (requestSnap.exists) {
@@ -1515,7 +1523,7 @@ export async function reviewBatch(
     for (const reviewInput of requested) {
       if (!wordsById.has(reviewInput.wordId)) throw NotFound("Word not found");
     }
-    const [userSnap, ...progressSnaps] = await tx.getAll(userRef, ...progressRefs);
+    const [userSnap, activitySnap, ...progressSnaps] = await tx.getAll(userRef, activityRef, ...progressRefs);
     const userData = userSnap.data() ?? {};
     const nextProgressItems: VocabProgressDoc[] = [];
     let masteredDelta = 0;
@@ -1556,6 +1564,10 @@ export async function reviewBatch(
       nextDueAtMillis: nextSummaryDueAtMillis(userData, nextProgressItems),
       now,
     });
+    writeStudyActivityInTransaction(tx, uid, {
+      module: "vocab", activityType: "vocab_review_batch", metric: "vocab",
+      quantity: requested.length, occurredAtMillis: now,
+    }, activitySnap, userData);
     if (requestRef) {
       tx.set(requestRef, {
         fingerprint,
@@ -1568,6 +1580,8 @@ export async function reviewBatch(
     }
     return responses;
   });
+  invalidateLearnerActivityCaches(uid);
+  return result;
 }
 
 /* ------------------------------------------------------------------ */
@@ -1766,6 +1780,8 @@ export async function markMastered(
   await recordStudyActivity(uid, {
     module: "vocab",
     activityType: "vocab_mastered",
+    metric: "vocab",
+    quantity: 1,
     sourceId: wordId,
     occurredAtMillis: now,
   }).catch(() => undefined);

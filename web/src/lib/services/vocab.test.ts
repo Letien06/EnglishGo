@@ -71,6 +71,19 @@ describe("recordStudyHistory", () => {
       score: 300,
     }));
   });
+
+  it("records plausible vocabulary session time and omits invalid or ancient timestamps", async () => {
+    const { recordStudyHistory } = await import("./vocab");
+    const { recordStudyActivity } = await import("./study-activity");
+    const now = Date.now();
+    const session = { setId: 12, title: "Session", mode: "Quiz", totalWords: 5, correctWords: 3, wrongWords: 2, accuracy: 60, score: 30 };
+    await recordStudyHistory("user-1", { ...session, startedAtMillis: now - 90000 });
+    expect(recordStudyActivity).toHaveBeenLastCalledWith("user-1", expect.objectContaining({ durationSeconds: 90 }));
+    for (const startedAtMillis of [0, -1, Number.NaN, Number.POSITIVE_INFINITY, now - 86400001, now + 1]) {
+      await recordStudyHistory("user-1", { ...session, startedAtMillis });
+      expect(recordStudyActivity).toHaveBeenLastCalledWith("user-1", expect.objectContaining({ durationSeconds: null }));
+    }
+  });
 });
 
 describe("vocabDayStartForMillis", () => {

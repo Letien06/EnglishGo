@@ -575,6 +575,10 @@ export async function submit(
       activityType: config.mode === "exam" ? "practice_exam_submit" : "practice_part_submit",
       sourceId: attemptId,
       occurredAtMillis: submittedAtMillis,
+      metric: "practice",
+      quantity: answerKey.questions.length - unansweredCount,
+      durationSeconds: numberValue(draftSnap.get("startedAtMillis")) != null && !expired
+        ? Math.floor(elapsedMillis / 1000) : null,
     }).catch(() => undefined),
   ]);
   invalidateProgressReportCache(user.uid);

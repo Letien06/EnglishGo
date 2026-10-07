@@ -5,10 +5,10 @@ const mocks = vi.hoisted(() => ({
   drive: vi.fn(), key: 0, rows: [] as Record<string, unknown>[],
   collection: vi.fn(), writes: vi.fn(), getAll: vi.fn(),
 }));
-vi.mock("next/cache", () => ({ unstable_cache: (callback: unknown) => callback }));
+vi.mock("next/cache", () => ({ unstable_cache: (callback: unknown) => callback, revalidateTag: vi.fn() }));
 vi.mock("./dautoeic-drive", () => ({ isDriveContentEnabled: () => true, contentCacheKey: () => `vocab-${mocks.key}`, readDriveMaterial: mocks.drive }));
 vi.mock("./rate-limit", () => ({ enforceDailyActionLimit: vi.fn() }));
-vi.mock("./study-activity", () => ({ recordStudyActivity: vi.fn(async () => undefined), getStoredStudyStreakSummary: vi.fn(), getStudyStreak: vi.fn() }));
+vi.mock("./study-activity", async (importOriginal) => ({ ...await importOriginal<typeof import("./study-activity")>(), recordStudyActivity: vi.fn(async () => undefined), getStoredStudyStreakSummary: vi.fn(), getStudyStreak: vi.fn() }));
 vi.mock("@/lib/firestore/db", () => ({ adminDb: {
   collection: mocks.collection, getAll: mocks.getAll,
   runTransaction: async (run: (transaction: unknown) => unknown) => run({ get: async () => ({ exists: false, data: () => ({}) }), getAll: async (...refs: unknown[]) => refs.map(() => ({ exists: false, data: () => ({}) })), set: mocks.writes }),
@@ -86,6 +86,9 @@ describe("vocabulary uses the verified Drive bundle", () => {
     expect(mocks.writes).toHaveBeenCalledWith(expect.objectContaining({ path: `users/learner/userVocabProgress/${wordId}` }), expect.objectContaining({ wordId, setId: source.dautoeicVocabSetId("vocab-test"), status: "MASTERED" }), { merge: true });
     await expect(vocab.review("learner", wordId, 4)).resolves.toMatchObject({ wordId });
     await expect(vocab.markMastered("learner", wordId)).resolves.toMatchObject({ newStatus: "MASTERED" });
+    const { recordStudyActivity } = await import("./study-activity");
+    expect(recordStudyActivity).toHaveBeenCalledWith("learner", expect.objectContaining({ activityType: "vocab_review", metric: "vocab", quantity: 1 }));
+    expect(recordStudyActivity).toHaveBeenCalledWith("learner", expect.objectContaining({ activityType: "vocab_mastered", metric: "vocab", quantity: 1 }));
     expect(mocks.getAll).not.toHaveBeenCalled();
   });
 

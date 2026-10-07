@@ -1,4 +1,5 @@
 import { FieldValue } from "firebase-admin/firestore";
+import { recordStudyActivity } from "./study-activity";
 import { revalidateTag, unstable_cache } from "next/cache";
 import { BadRequest, NotFound } from "@/lib/api/response";
 import { adminDb } from "@/lib/firestore/db";
@@ -598,6 +599,10 @@ export async function submitWritingAttempt(user: AppUser | null, input: WritingA
     createdAt: FieldValue.serverTimestamp(),
   };
   const ref = await adminDb.collection("users").doc(user.uid).collection(ATTEMPTS_COLLECTION).add(data);
+  await recordStudyActivity(user.uid, {
+    module: "writing", activityType: "writing_graded_submission", metric: "writing", quantity: 1,
+    sourceId: ref.id, occurredAtMillis: now, durationSeconds: elapsedSeconds,
+  }).catch(() => undefined);
   return { id: ref.id, ...data };
 }
 
