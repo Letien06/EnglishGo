@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import WritingPracticeLoading from "./loading";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   WRITING_PART_ONE_GRAMMAR_CATEGORY_LABELS,
@@ -324,7 +325,7 @@ export default function WritingPracticeClient({ promptId }: { promptId: string }
   }
 
   if (loading) {
-    return <main className="app-canvas min-h-dvh px-4 py-6 sm:px-6 lg:px-8"><div className="mx-auto grid max-w-7xl gap-5 lg:grid-cols-[minmax(0,1fr)_minmax(380px,0.9fr)]"><div className="h-[38rem] animate-pulse rounded-3xl border border-line bg-surface-soft" /><div className="h-[38rem] animate-pulse rounded-3xl border border-line bg-surface-soft" /></div></main>;
+    return <WritingPracticeLoading />;
   }
 
   if (!prompt || error) {

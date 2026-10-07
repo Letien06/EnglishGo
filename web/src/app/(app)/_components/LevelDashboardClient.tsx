@@ -258,26 +258,14 @@ function cacheLevels(skill: LearningSkill, part: number, levels: DauToeicDifficu
 
 function SkeletonGrid() {
   return (
-    <div className="study-level-grid">
+    <div className="study-level-grid" role="status" aria-label="Đang tải nhóm bài luyện tập" aria-busy="true">
       {Array.from({ length: 4 }).map((_, i) => (
-        <div
-          key={i}
-          className="premium-card h-52 animate-pulse border-l-4 border-l-slate-200 p-5"
-        >
-          <div className="mb-4 flex items-center gap-4">
-            <div className="h-10 w-10 rounded-lg bg-slate-200" />
-            <div className="flex-1 space-y-2">
-              <div className="h-4 w-2/3 rounded bg-slate-200" />
-              <div className="h-3 w-1/2 rounded bg-slate-100" />
-            </div>
-          </div>
-          <div className="h-1 rounded-full bg-slate-100" />
-          <div className="mt-4 grid grid-cols-3 gap-2">
-            <div className="h-8 rounded-md bg-slate-100" />
-            <div className="h-8 rounded-md bg-slate-100" />
-            <div className="h-8 rounded-md bg-slate-100" />
-          </div>
-        </div>
+        <article key={i} className="study-level-card study-level-card--loading" aria-hidden="true">
+          <header><span className="study-level-number study-skeleton" /><div className="study-level-placeholder"><div className="study-skeleton study-level-placeholder-title" /><div className="study-skeleton study-level-placeholder-line" /></div></header>
+          <div className="study-level-progress"><div className="study-skeleton study-level-placeholder-line" /><div className="study-skeleton study-level-placeholder-track" /></div>
+          <div className="study-level-stats">{[1, 2, 3].map((stat) => <span className="study-skeleton study-level-placeholder-stat" key={stat} />)}</div>
+          <footer><span className="study-skeleton study-level-placeholder-button" /></footer>
+        </article>
       ))}
     </div>
   );

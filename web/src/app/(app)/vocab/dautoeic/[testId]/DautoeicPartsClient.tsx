@@ -32,7 +32,7 @@ export default function DautoeicPartsClient({ testId, parts, ready, tab }: {
         <div className="mt-4 h-2 overflow-hidden rounded-full bg-surface-soft">
           <span className="block h-full rounded-full bg-primary" style={{ width: `${percent}%` }} />
         </div>
-        <div className="mt-2 flex flex-wrap gap-x-3 gap-y-1 text-xs font-bold text-muted" aria-live="polite">
+        <div className="mt-2 flex min-h-9 flex-wrap content-start gap-x-3 gap-y-1 text-xs font-bold tabular-nums text-muted" aria-live="polite">
           {current ? <><span>{current.masteredWords}/{part.wordCount} từ đã thuộc</span>{current.dueWords > 0 && <span className="text-danger-ink">{current.dueWords} cần ôn</span>}</>
             : <span>{failed ? "Chưa tải được tiến độ. Bạn vẫn có thể vào học." : "Đang tải tiến độ..."}</span>}
         </div>

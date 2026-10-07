@@ -11,6 +11,11 @@
 .sidebar nav button { display: flex; align-items: center; text-align: left; gap: 10px; min-height: 48px; padding: 10px; border: 1px solid transparent; border-radius: 12px; font-size: 14px; }
 .sidebar nav button > span { display: grid; place-items: center; width: 28px; height: 28px; border-radius: 8px; background: var(--surface-soft); }
 .sidebar nav button small { margin-left: auto; color: var(--muted); }
+.sidebarMeta { min-height: 18px; font-variant-numeric: tabular-nums; }
+.sidebar nav.sidebarParts { min-height: 102px; align-content: start; }
+.sidebarPartsPlaceholder { min-height: 102px; border-radius: 12px; background: var(--surface-soft); }
+.sidebarStatus { min-height: 38px; font-size: 12px; line-height: 18px; }
+@media (max-width: 900px) { .sidebar nav.sidebarParts { min-height: 48px; } .sidebarPartsPlaceholder { min-height: 48px; min-width: 100%; } }
 .sidebar nav button[aria-current] { background: var(--info-soft); border-color: var(--info-line); color: var(--info-ink); }
 .sidebar nav button[aria-current] > span { background: var(--primary); color: var(--gold-ink); }
 .sidebarTip { padding: 16px; border-radius: 16px; background: var(--teal-soft); border: 1px solid var(--teal-line); font-size: 12px; }
@@ -21,14 +26,21 @@
 .catalogIntro h2 { font-size: clamp(24px, 3vw, 32px); font-weight: 800; letter-spacing: -.03em; color: var(--ink); margin-block: 8px; }
 .catalogIntro p { color: var(--muted); font-size: 14px; }
 .catalogSummary { display: flex; flex-wrap: wrap; align-items: center; gap: 24px; font-size: 11px; color: var(--muted); }
-.catalogSummary strong { display: block; color: var(--ink); font-size: 24px; font-variant-numeric: tabular-nums; }
+.catalogSummary strong { display: block; min-width: 5ch; color: var(--ink); font-size: 24px; font-variant-numeric: tabular-nums; }
+.catalogSummaryAction { min-width: 148px; justify-content: center; }
 .catalogCard { min-width: 0; border: 1px solid var(--line); border-radius: 18px; padding: 20px; background: var(--surface); box-shadow: 0 2px 3px #00000008, 0 8px 24px #00000006; }
-.catalogTop { display: flex; align-items: center; justify-content: space-between; gap: 8px; font-size: 10px; color: var(--muted); }
+.catalogTop { display: flex; align-items: center; justify-content: space-between; gap: 8px; min-height: 26px; font-size: 10px; color: var(--muted); }
+.catalogTop small { min-width: 84px; text-align: right; }
 .catalogTop > span { border-radius: 6px; background: var(--info-soft); color: var(--info-ink); padding: 4px 8px; font-weight: 800; }
-.catalogCard h3 { font-size: 20px; font-weight: 800; margin-top: 16px; color: var(--ink); }
-.catalogCard p { color: var(--muted); font-size: 12px; margin-block: 6px 18px; }
+.catalogCard h3 { min-height: 56px; font-size: 20px; line-height: 28px; font-weight: 800; margin-top: 16px; color: var(--ink); }
+.catalogCard p { min-height: 36px; color: var(--muted); font-size: 12px; line-height: 18px; margin-block: 6px 18px; font-variant-numeric: tabular-nums; }
 .catalogCard p b { color: var(--warning-ink); font-weight: 600; }
-.catalogActions { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 18px; }
+.catalogActions { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 6px; margin-top: 18px; }
+.catalogActionSlot { display: block; min-height: 44px; border-radius: 9px; }
+.catalogStatus { min-height: 40px; display: flex; align-items: center; color: var(--muted); font-size: 12px; line-height: 18px; }
+.catalogStatus p { margin: 0; }
+.catalogPlaceholder, .catalogGroupPlaceholder { display: block; background: var(--surface-soft); border-radius: 8px; }
+.catalogGroupPlaceholder { width: 88px; height: 44px; }
 .catalogActions a { display: flex; flex: 1 0 70px; justify-content: center; align-items: center; gap: 5px; min-height: 44px; border: 1px solid var(--line); border-radius: 9px; font-size: 12px; font-weight: 750; color: var(--ink2); }
 .catalogActions svg { width: 14px; height: 14px; }
 .catalogActions a[data-action="learn"] { background: var(--primary); border-color: var(--primary); color: var(--gold-ink); }

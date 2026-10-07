@@ -4,6 +4,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { DauToeicPartTest } from "@/types/dautoeic";
 import { setActiveLearnerId } from "@/lib/client-learning-progress-cache";
 import ListeningDashboard from "./ListeningDashboard";
+import ListeningLoading from "./ListeningLoading";
 
 vi.mock("@/components/IntentLink", () => ({ default: ({ children, ...props }: React.ComponentProps<"a">) => <a {...props}>{children}</a> }));
 vi.mock("next/link", () => ({ useLinkStatus: () => ({ pending: false }) }));
@@ -19,6 +20,29 @@ beforeEach(() => { vi.stubGlobal("React", React); window.localStorage.clear(); v
 afterEach(() => { cleanup(); vi.unstubAllGlobals(); });
 
 describe("listening dashboard UI", () => {
+  it("uses the complete reading dashboard shell while its catalog loads", () => {
+    render(<ListeningLoading skill="reading" />);
+    expect(screen.getByRole("main")).toHaveAttribute("aria-busy", "true");
+    expect(screen.getByRole("heading", { name: "Luyện đọc." })).toBeInTheDocument();
+    expect(within(screen.getByRole("navigation", { name: "Các phần luyện đọc" })).getAllByRole("link")).toHaveLength(3);
+    expect(screen.getByRole("searchbox")).toBeInTheDocument();
+    expect(screen.getByRole("status", { name: "Đang tải bài luyện tập" })).toBeInTheDocument();
+    expect(screen.queryByText("Part này chưa có bài đọc")).not.toBeInTheDocument();
+    expect(screen.queryByRole("navigation", { name: "Các phần luyện nghe" })).not.toBeInTheDocument();
+    expect(fetch).not.toHaveBeenCalled();
+  });
+
+  it("keeps the progress status and resume metadata slots mounted after data arrives", () => {
+    const { rerender } = render(<ListeningDashboard {...defaults} progressReady={false} />);
+    const noticeSlot = screen.getByRole("status").parentElement;
+    const hero = screen.getByRole("region", { name: "Tổng quan luyện nghe" });
+    const resumeSource = hero.querySelector('span[aria-hidden="true"]');
+    rerender(<ListeningDashboard {...defaults} />);
+    expect(noticeSlot).toBeInTheDocument();
+    expect(screen.queryByText("Đang tải tiến độ cá nhân. Bạn có thể bắt đầu bài ngay.")).not.toBeInTheDocument();
+    expect(screen.getByText("Bộ đề 1 · Đã làm 2/6 câu")).toBeInTheDocument();
+    expect(screen.getByText("Bộ đề 1 · Đã làm 2/6 câu")).toBe(resumeSource);
+  });
   it("renders Reading Parts and keeps the reading reset endpoint", async () => {
     vi.stubGlobal("confirm", vi.fn(() => true));
     vi.mocked(fetch).mockResolvedValue({ ok: true, json: async () => ({ success: true }) } as Response);

@@ -37,7 +37,7 @@
 .study-section-heading h2 span { padding: 0 6px; color: var(--primary); font-weight: 400; }
 .study-total { flex-shrink: 0; padding: 7px 11px; border: 1px solid var(--line); border-radius: 8px; font-size: 11px; color: var(--study-muted); font-variant-numeric: tabular-nums; }
 .study-level-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; }
-.study-level-card { padding: 20px; border: 1px solid var(--line); border-top: 3px solid var(--study-accent-line); border-radius: 16px; background: linear-gradient(145deg, var(--surface), color-mix(in srgb, var(--study-accent-soft) 36%, var(--surface))); box-shadow: var(--elevation-1); }
+.study-level-card { min-height: 262px; padding: 20px; border: 1px solid var(--line); border-top: 3px solid var(--study-accent-line); border-radius: 16px; background: linear-gradient(145deg, var(--surface), color-mix(in srgb, var(--study-accent-soft) 36%, var(--surface))); box-shadow: var(--elevation-1); }
 .study-level-card header { justify-content: flex-start; gap: 12px; }
 .study-level-number { display: grid; place-items: center; flex-shrink: 0; width: 42px; height: 46px; border-radius: 10px; background: var(--study-accent-soft); color: var(--study-accent); font-size: 19px; font-weight: 700; letter-spacing: -.05em; }
 .study-level-card :is(h3, h4) { font-size: 16px; font-weight: 800; line-height: 1.4; }
@@ -67,6 +67,12 @@
 .study-skeleton-tabs { height: 78px; margin-bottom: 28px; }
 .study-skeleton-card { height: 230px; background: var(--surface); border: 1px solid var(--line); border-radius: 16px; padding: 24px; }
 .study-skeleton-line { height: 14px; margin: 14px 0; max-width: 75%; }
+.study-level-placeholder { flex: 1; }
+.study-level-placeholder-title { width: 65%; height: 22px; }
+.study-level-placeholder-line { width: 45%; height: 16px; margin-top: 4px; }
+.study-level-placeholder-track { height: 4px; margin-top: 10px; }
+.study-level-placeholder-stat { height: 16px; width: 50px; }
+.study-level-placeholder-button { height: 42px; width: 134px; margin-left: auto; }
 .skill-workspace { color: var(--ink); background: var(--bg); }
 .skill-workspace .practice-toolbar { display: flex; align-items: center; gap: 16px; position: sticky; top: 0; z-index: 40; min-height: 72px; padding: 12px 24px; background: var(--surface); color: var(--ink); border-bottom: 1px solid var(--line); box-shadow: none; }
 .practice-back { display: grid; place-items: center; flex-shrink: 0; width: 40px; height: 40px; border: 1px solid var(--line); border-radius: 10px; color: var(--ink); text-decoration: none; }
@@ -76,6 +82,14 @@
 .practice-title h1 { font-size: 14px; font-weight: 800; white-space: nowrap; }
 .practice-title .practice-test-name { display: inline; color: inherit; font: inherit; margin: 0; white-space: normal; }
 .practice-title .practice-set-name { font-size: 10px; line-height: 1.4; margin: 2px 0 0; }
+.practice-placeholder-label { width: 100px; height: 12px; margin-block: 4px; }
+.practice-placeholder-title { width: min(220px, 40vw); height: 18px; }
+.practice-placeholder-control { width: 80px; height: 38px; }
+.practice-placeholder-instruction { width: 80%; height: 42px; margin-bottom: 20px; }
+.practice-placeholder-audio { height: 54px; width: 100%; }
+.practice-placeholder-source { height: 280px; width: 100%; margin-top: 20px; }
+.practice-placeholder-question { height: 48px; width: 75%; margin-bottom: 20px; }
+.practice-placeholder-answer { height: 54px; width: 100%; margin-top: 12px; }
 @media (min-width: 1100px) {
   .study-test-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
 }

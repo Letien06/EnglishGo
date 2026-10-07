@@ -1,4 +1,3 @@
-import type { CSSProperties } from "react";
 import Link from "@/components/IntentLink";
 import ResetLevelButton from "@/components/ResetLevelButton";
 import { invalidateLearningLevels } from "@/lib/client-learning-progress-cache";
@@ -16,11 +15,11 @@ export function ListeningProgressRing({ percent, label, ready = true }: { percen
   </div>;
 }
 
-export default function ListeningTestCard({ test, index, progressReady, metadata }: { test: DauToeicPartTest; index: number; progressReady: boolean; metadata?: ListeningTestMetadata }) {
+export default function ListeningTestCard({ test, progressReady, metadata }: { test: DauToeicPartTest; index: number; progressReady: boolean; metadata?: ListeningTestMetadata }) {
   const skill = test.part >= 5 ? "reading" : "listening";
   const progress = testProgress(test);
   const cta = progress.status === "complete" ? "Ôn lại" : progress.status === "learning" ? "Học tiếp" : "Bắt đầu";
-  return <article className={styles.card} data-status={progressReady ? progress.status : "unknown"} style={{ "--card-delay": `${Math.min(index, 5) * 35}ms` } as CSSProperties} aria-label={`${test.testName} - ${test.setName}`}>
+  return <article className={styles.card} data-status={progressReady ? progress.status : "unknown"} aria-label={`${test.testName} - ${test.setName}`}>
     <div className={styles.cardTop}><span className={styles.cardLabel}>LUYỆN {skill === "reading" ? "ĐỌC" : "NGHE"} · PART {test.part}</span><span className={styles.badge} data-status={progressReady ? progress.status : "unknown"}><span />{progressReady ? STATUS_LABELS[progress.status] : "Chưa có tiến độ"}</span></div>
     <div className={styles.cardHeading}><div><h4>{test.testName}</h4><p>{progressReady ? `${progress.done}/${progress.total} đã học` : "Mở bài mà không cần chờ"}</p></div><ListeningProgressRing percent={progress.percent} ready={progressReady} label={`Tiến độ ${test.testName} - ${test.setName}`} /></div>
     <div className={styles.answerStats}>

@@ -197,7 +197,9 @@ export default function AppShell({ children }: { children: ReactNode }) {
             <MobileNavigationMenu />
             <PwaInstallPrompt />
             <HeaderJoinRoomButton />
-            {authenticated && <StudyStreakBadge className="hidden sm:inline-flex" initialStreak={bootstrap?.streak ?? null} />}
+            <span className="hidden h-9 w-[4.5rem] shrink-0 sm:inline-flex" data-streak-slot>
+              {authenticated ? <StudyStreakBadge className="w-full justify-center tabular-nums" initialStreak={bootstrap?.streak ?? null} /> : !bootstrap ? <span aria-hidden="true" className="h-full w-full rounded-xl border border-line bg-surface-soft opacity-50" /> : null}
+            </span>
             <ThemeToggle className="!hidden border border-line bg-surface-soft text-ink xl:!inline-flex" />
             <Link
               href="/account"

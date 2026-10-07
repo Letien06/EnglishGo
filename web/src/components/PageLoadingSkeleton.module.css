@@ -1,0 +1,35 @@
+.page {
+  min-height: calc(100dvh - 4.25rem);
+}
+
+.block {
+  display: block;
+  flex-shrink: 0;
+  border-radius: 0.5rem;
+  background: color-mix(in srgb, var(--ink3) 14%, var(--surface-soft));
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .block {
+    animation: breathe 1.6s ease-in-out infinite;
+  }
+}
+
+@keyframes breathe {
+  50% { opacity: 0.55; }
+}
+
+.boardRow {
+  display: grid;
+  grid-template-columns: 88px minmax(0, 1fr) 112px;
+  align-items: center;
+  gap: 1rem;
+  padding: 1rem 1.25rem;
+}
+
+@media (max-width: 640px) {
+  .boardRow {
+    grid-template-columns: 40px minmax(0, 1fr) 64px;
+    gap: 0.5rem;
+  }
+}

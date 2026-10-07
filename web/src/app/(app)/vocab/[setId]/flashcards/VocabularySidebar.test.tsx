@@ -1,9 +1,23 @@
-import { fireEvent, render, screen } from "@testing-library/react";
+import { act, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import VocabularySidebar from "./VocabularySidebar";
 
 afterEach(() => vi.unstubAllGlobals());
 describe("part sidebar", () => {
+  it("keeps navigation and status space mounted while part metadata arrives", async () => {
+    let resolveParts!: (value: Response) => void;
+    vi.stubGlobal("fetch", vi.fn(() => new Promise((resolve) => { resolveParts = resolve; })));
+    render(<VocabularySidebar testId="test" title="Test" count={80} tab="learn" onNavigate={vi.fn()} />);
+    const nav = screen.getByRole("navigation");
+    const statusSlot = screen.getByText("Đang tải danh sách phần...").parentElement;
+    expect(nav).toHaveAttribute("aria-busy", "true");
+    expect(nav.querySelector('[aria-hidden="true"]')).toBeInTheDocument();
+    await act(async () => { resolveParts(new Response(JSON.stringify({ success: true, data: { parts: [{ id: "lc", name: "LC", wordCount: 80, internalSetId: 123 }, { id: "rc", name: "RC", wordCount: 80, internalSetId: 123 }] } }))); });
+    expect(screen.getByRole("navigation")).toBe(nav);
+    expect(nav).toHaveAttribute("aria-busy", "false");
+    expect(statusSlot).toBeInTheDocument();
+    expect(statusSlot).toBeEmptyDOMElement();
+  });
   it("preserves activity and part selection without changing progress", async () => {
     const fetcher = vi.fn().mockResolvedValue(new Response(JSON.stringify({ success: true, data: { parts: [
       { id: "lc", name: "LC", wordCount: 80, internalSetId: 123 },

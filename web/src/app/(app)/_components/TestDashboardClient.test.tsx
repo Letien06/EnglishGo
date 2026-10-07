@@ -1,8 +1,8 @@
 import React from "react";
-import { act, cleanup, render, screen, waitFor, within } from "@testing-library/react";
+import { act, cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { AuthenticatedSessionProvider } from "@/components/AuthenticatedSessionContext";
-import { setActiveLearnerId } from "@/lib/client-learning-progress-cache";
+import { invalidateLearningLevels, setActiveLearnerId } from "@/lib/client-learning-progress-cache";
 import type { DauToeicPartTest } from "@/types/dautoeic";
 import TestDashboardClient from "./TestDashboardClient";
 
@@ -25,6 +25,28 @@ beforeEach(() => {
 afterEach(() => { cleanup(); vi.unstubAllGlobals(); });
 
 describe("test selection dashboard", () => {
+  it("keeps loaded progress and the filtered cards in place during refresh and failure", async () => {
+    setActiveLearnerId("refresh-learner");
+    let resolveRefresh!: (value: unknown) => void;
+    const fetcher = vi.fn().mockResolvedValueOnce({
+      ok: true, json: async () => ({ success: true, data: { uid: "refresh-learner", tests: [{ ...tests[0], done: 2, correct: 2, nextIndex: 2 }, tests[1]] } }),
+    }).mockImplementationOnce(() => new Promise((resolve) => { resolveRefresh = resolve; }));
+    vi.stubGlobal("fetch", fetcher);
+    render(<Dashboard authenticated />);
+    await screen.findByRole("link", { name: "Học tiếp Test 1 - Vol 1" });
+    fireEvent.click(screen.getByRole("button", { name: "Đang học 1" }));
+    const card = screen.getByRole("article", { name: "Test 1 - Vol 1" });
+    act(() => invalidateLearningLevels("listening", [1]));
+    await waitFor(() => expect(fetcher).toHaveBeenCalledTimes(2));
+    expect(screen.getAllByRole("article")).toHaveLength(1);
+    expect(screen.getByRole("article", { name: "Test 1 - Vol 1" })).toBe(card);
+    expect(screen.getByRole("button", { name: "Đang học 1" })).toHaveAttribute("aria-pressed", "true");
+    expect(screen.getByRole("link", { name: "Học tiếp Test 1 - Vol 1" })).toHaveAttribute("href", expect.stringContaining("q=2"));
+    await act(async () => resolveRefresh({ ok: false, json: async () => ({ success: false }) }));
+    expect(screen.getByRole("article", { name: "Test 1 - Vol 1" })).toBe(card);
+    expect(screen.getByRole("status", { name: "Trạng thái tiến độ" })).toHaveTextContent("Chưa cập nhật");
+    expect(screen.getAllByRole("article")).toHaveLength(1);
+  });
   it("shares the new dashboard with reading while preserving practice routes", async () => {
     render(<AuthenticatedSessionProvider authenticated={false}><TestDashboardClient skill="reading" part={5} initialTests={tests.map((test) => ({ ...test, part: 5 }))} initialError={false} /></AuthenticatedSessionProvider>);
     expect(screen.getByRole("link", { name: "Bắt đầu Test 1 - Vol 1" })).toHaveAttribute("href", "/read/practice?part=part5&testId=vol1-test1&mode=normal&q=0");

@@ -3,11 +3,12 @@
 import Image from "next/image";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
-import { useEffect, useMemo, useState, type CSSProperties } from "react";
+import { useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
 import { LearningHero, LearningTip, LearningEmpty } from "../_components/LearningDashboardUI";
 import Icon from "../listen/_components/ListeningIcon";
 import { ListeningProgressRing } from "../listen/_components/ListeningTestCard";
-import { ListeningGridSkeleton } from "../listen/_components/ListeningLoading";
+import { WritingGridSkeleton } from "./WritingLoading";
+import { WRITING_PARTS as PARTS } from "./WritingLibraryParts";
 import styles from "../listen/_components/listening.module.css";
 import { useAuthenticatedSession } from "@/components/AuthenticatedSessionContext";
 import {
@@ -18,40 +19,6 @@ import {
   type WritingPartOneGrammarCategory,
   type WritingPromptCard as WritingPromptCardSummary,
 } from "@/types/writing";
-
-const PARTS: Array<{
-  id: WritingPart;
-  eyebrow: string;
-  title: string;
-  description: string;
-  icon: string;
-  gradient: string;
-}> = [
-  {
-    id: 1,
-    eyebrow: "Part 1 · Picture",
-    title: "Viết câu theo tranh",
-    description: "Dùng đủ hai từ khóa, đúng ngữ pháp và sát bối cảnh ảnh.",
-    icon: "✦",
-    gradient: "from-azure to-celadon",
-  },
-  {
-    id: 2,
-    eyebrow: "Part 2 · Email",
-    title: "Trả lời email công việc",
-    description: "Xử lý đúng yêu cầu, rõ giọng điệu và bố cục chuyên nghiệp.",
-    icon: "✉",
-    gradient: "from-plum to-azure",
-  },
-  {
-    id: 3,
-    eyebrow: "Part 3 · Opinion essay",
-    title: "Bài luận nêu quan điểm",
-    description: "Lập luận có dẫn chứng, tổ chức ý và dùng tiếng Anh thuyết phục.",
-    icon: "▤",
-    gradient: "from-terracotta to-primary",
-  },
-];
 
 type ApiEnvelope<T> = { success?: boolean; data?: T; error?: string };
 type ActivePartOneCategory = WritingPartOneGrammarCategory | "all";
@@ -182,6 +149,22 @@ export default function WritingLibraryClient() {
   const [latestScores, setLatestScores] = useState<Record<string, PromptScore>>({});
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [loadedPart, setLoadedPart] = useState<WritingPart | null>(null);
+  const [scoresLoadedPart, setScoresLoadedPart] = useState<WritingPart | null>(null);
+  const [scoresAuthenticated, setScoresAuthenticated] = useState(authenticated);
+  const promptCache = useRef(new Map<WritingPart, WritingPromptCardSummary[]>());
+  const scoreCache = useRef(new Map<WritingPart, Record<string, PromptScore>>());
+  const initialLoading = loading && loadedPart !== part;
+
+  // Reset private state as authentication changes, before painting another
+  // session. Public prompt snapshots can remain available on this mount.
+  if (scoresAuthenticated !== authenticated) {
+    setScoresAuthenticated(authenticated);
+    setLatestScores({});
+    setScoresLoadedPart(null);
+    setScoreStatus("loading");
+    setStatusFilter("all");
+  }
 
   useEffect(() => {
     let cancelled = false;
@@ -195,12 +178,13 @@ export default function WritingLibraryClient() {
       .then((next) => {
         if (!cancelled) {
           setPrompts(next);
+          promptCache.current.set(part, next);
+          setLoadedPart(part);
           setError(null);
         }
       })
       .catch((reason: unknown) => {
         if (!cancelled) {
-          setPrompts([]);
           setError(reason instanceof Error ? reason.message : "Không thể tải thư viện đề viết.");
         }
       })
@@ -212,7 +196,10 @@ export default function WritingLibraryClient() {
   }, [part, reloadKey]);
 
   useEffect(() => {
-    if (!authenticated) return;
+    if (!authenticated) {
+      scoreCache.current.clear();
+      return;
+    }
 
     let cancelled = false;
 
@@ -226,10 +213,16 @@ export default function WritingLibraryClient() {
         return normalizeAttempts(unwrap(body));
       })
       .then((attempts) => {
-        if (!cancelled) { setLatestScores(scoreByPromptId(attempts)); setScoreStatus("ready"); }
+        if (!cancelled) {
+          const scores = scoreByPromptId(attempts);
+          scoreCache.current.set(part, scores);
+          setLatestScores(scores);
+          setScoresLoadedPart(part);
+          setScoreStatus("ready");
+        }
       })
       .catch(() => {
-        if (!cancelled) { setLatestScores({}); setScoreStatus("error"); }
+        if (!cancelled) setScoreStatus("error");
       });
 
     return () => { cancelled = true; };
@@ -241,8 +234,11 @@ export default function WritingLibraryClient() {
     setError(null);
     setTag("all");
     setPartOneCategory("all");
-    setLatestScores({});
-    setScoreStatus("loading");
+    setPrompts(promptCache.current.get(nextPart) ?? []);
+    setLoadedPart(promptCache.current.has(nextPart) ? nextPart : null);
+    setLatestScores(scoreCache.current.get(nextPart) ?? {});
+    setScoreStatus(scoreCache.current.has(nextPart) ? "ready" : "loading");
+    setScoresLoadedPart(scoreCache.current.has(nextPart) ? nextPart : null);
     setStatusFilter("all");
     setPart(nextPart);
   }
@@ -271,7 +267,7 @@ export default function WritingLibraryClient() {
       return (!normalizedQuery || haystack.includes(normalizedQuery)) && matchesPartOneCategory && matchesTag && (statusFilter === "all" || (authenticated && Boolean(latestScores[prompt.id])));
     }).sort((left, right) => sort === "duration" ? left.timeLimitMinutes - right.timeLimitMinutes : 0);
   }, [part, partOneCategory, prompts, query, tag, sort, statusFilter, latestScores, authenticated]);
-  const scoresReady = authenticated && scoreStatus === "ready";
+  const scoresReady = authenticated && scoresLoadedPart === part;
   const scoredPrompts = prompts.filter((prompt) => latestScores[prompt.id]);
   const nextPrompt = prompts.find((prompt) => !latestScores[prompt.id]) ?? prompts[0];
   const average = scoredPrompts.length ? Math.round(scoredPrompts.reduce((sum, prompt) => {
@@ -282,10 +278,10 @@ export default function WritingLibraryClient() {
   return <main className={styles.dashboard}>
     <span className={styles.eyebrow}>KHÔNG GIAN LUYỆN TẬP</span>
     <header className={styles.intro}><div><h1>Luyện viết<span>.</span></h1><p>Từng ý tưởng nhỏ. Từng câu viết tốt hơn.</p></div><Link className={styles.dictationLink} href="/writing/history"><Icon name="clock" />Lịch sử bài viết<Icon name="arrow" /></Link></header>
-    <LearningHero icon="pen" title="Biến ý tưởng thành câu chữ." description={loading ? "Chọn một dạng bài. Viết, nhận phản hồi và thử lại." : nextPrompt ? `Bài gợi ý · ${nextPrompt.titleVi || nextPrompt.title}` : "Khám phá đề viết theo tranh, email và bài luận."}
-      href={!loading && nextPrompt ? `/writing/practice/${encodeURIComponent(nextPrompt.id)}` : undefined} cta="Bắt đầu luyện viết" note="Một bài viết, một bước tiến"
+    <LearningHero icon="pen" title="Biến ý tưởng thành câu chữ." description={initialLoading ? "Chọn một dạng bài. Viết, nhận phản hồi và thử lại." : nextPrompt ? `Bài gợi ý · ${nextPrompt.titleVi || nextPrompt.title}` : "Khám phá đề viết theo tranh, email và bài luận."}
+      href={!initialLoading && nextPrompt ? `/writing/practice/${encodeURIComponent(nextPrompt.id)}` : undefined} cta="Bắt đầu luyện viết" note="Một bài viết, một bước tiến"
       stats={[
-        { label: "Đề luyện viết", value: loading || error ? "—" : prompts.length, unit: "đề", detail: `Trong Part ${part} đang chọn`, icon: "document" },
+        { label: "Đề luyện viết", value: loadedPart !== part ? "—" : prompts.length, unit: "đề", detail: `Trong Part ${part} đang chọn`, icon: "document" },
         { label: "Đề đã chấm", value: scoresReady ? scoredPrompts.length : "—", detail: "Trong 30 lượt gần nhất của Part", icon: "check" },
         { label: "Điểm AI TB", value: scoresReady && average !== null ? average : "—", unit: "%", detail: "Điểm mới nhất mỗi đề / điểm tối đa", icon: "target" },
       ]} />
@@ -293,8 +289,8 @@ export default function WritingLibraryClient() {
     <nav className={styles.parts} data-columns="3" aria-label="Chọn dạng bài viết">{PARTS.map((item) => <button key={item.id} type="button" className={styles.part} onClick={() => choosePart(item.id)} aria-pressed={item.id === part}>
       <span className={styles.partIcon}><Icon name={item.id === 1 ? "image" : item.id === 2 ? "reply" : "pen"} /></span><span className={styles.partText}><span>PART {item.id}</span><strong>{item.title}</strong><small>{item.description}</small></span>
     </button>)}</nav>
-    <section className={styles.library} aria-label="Thư viện đề viết">
-      <div className={styles.libraryHeading}><div><span className={styles.eyebrow}>02 / BÀI LUYỆN CỦA BẠN</span><h2>{labelForPart(part)}</h2></div><p className={styles.catalogTotal}><strong>{loading ? "—" : prompts.length}</strong> đề viết</p></div>
+    <section className={styles.library} aria-label="Thư viện đề viết" aria-busy={loading}>
+      <div className={styles.libraryHeading}><div><span className={styles.eyebrow}>02 / BÀI LUYỆN CỦA BẠN</span><h2>{labelForPart(part)}</h2></div><p className={styles.catalogTotal}><strong>{initialLoading ? "—" : prompts.length}</strong> đề viết</p></div>
       <div className={styles.toolbar}>
         <div className={styles.filters} aria-label="Lọc bài đã chấm">
           <button type="button" aria-pressed={statusFilter === "all"} onClick={() => setStatusFilter("all")}>Tất cả</button>
@@ -311,10 +307,11 @@ export default function WritingLibraryClient() {
         <FilterChip active={tag === "all"} onClick={() => setTag("all")}>Tất cả</FilterChip>{tags.map((item) => <FilterChip key={item} active={tag === item} onClick={() => setTag(item)}>{item}</FilterChip>)}
       </div></details>}
       {authenticated && scoreStatus === "error" && <p className={styles.notice} role="status">Chưa tải được điểm cá nhân. Bạn vẫn có thể mở đề và luyện viết.</p>}
-      <p className={styles.resultCount} aria-live="polite">{loading ? "Đang tải đề viết..." : `Hiển thị ${filteredPrompts.length}/${prompts.length} đề`}</p>
-      {loading ? <ListeningGridSkeleton /> : error ? <div className={styles.empty} role="alert"><Icon name="document" /><h3>Chưa tải được thư viện đề</h3><p>{error}</p><button className={styles.primaryButton} type="button" onClick={retryLoad}>Thử lại<Icon name="reset" /></button></div>
+      <p className={styles.resultCount} aria-live="polite">{initialLoading ? "Đang tải đề viết..." : loading ? "Đang cập nhật đề viết..." : `Hiển thị ${filteredPrompts.length}/${prompts.length} đề`}</p>
+      {error && loadedPart === part && <p className={styles.notice} role="status">Chưa cập nhật được thư viện. Bạn vẫn có thể luyện các đề đã tải. <button type="button" onClick={retryLoad}>Thử lại</button></p>}
+      {initialLoading ? <WritingGridSkeleton part={part} /> : error && loadedPart !== part ? <div className={styles.empty} role="alert"><Icon name="document" /><h3>Chưa tải được thư viện đề</h3><p>{error}</p><button className={styles.primaryButton} type="button" onClick={retryLoad}>Thử lại<Icon name="reset" /></button></div>
         : !filteredPrompts.length ? <LearningEmpty title="Chưa có đề phù hợp" description="Thử đổi từ khóa hoặc bỏ bộ lọc để xem thêm đề." onReset={clearFilters} />
-        : <div className={styles.grid}>{filteredPrompts.map((prompt, index) => <WritingPromptCard key={prompt.id} index={index} prompt={prompt} latestScore={scoresReady ? latestScores[prompt.id] : undefined} />)}</div>}
+        : <div className={styles.grid}>{filteredPrompts.map((prompt, index) => <WritingPromptCard key={prompt.id} index={index} prompt={prompt} scoresReady={!authenticated || scoresReady} scoreError={authenticated && scoreStatus === "error" && !scoresReady} latestScore={scoresReady ? latestScores[prompt.id] : undefined} />)}</div>}
       <p className={styles.caption}>Điểm AI là ước tính học tập, không phải điểm ETS chính thức. Thống kê chỉ gồm đề trong thư viện xuất hiện ở 30 lượt nộp gần nhất của Part; không phải toàn bộ lịch sử.</p>
     </section>
     <LearningTip title="Mẹo luyện viết">Viết bản đầu tiên bằng ý của bạn, rồi đối chiếu phản hồi AI. Mỗi lần viết lại, tập trung sửa một điểm: ngữ pháp, từ vựng hoặc cách tổ chức ý.</LearningTip>
@@ -330,13 +327,13 @@ function GrammarCategoryChip({ active, count, onClick, children }: { active: boo
   return <button type="button" onClick={onClick} aria-pressed={active} className={`inline-flex items-center gap-2 rounded-xl border px-3 py-2 text-xs font-extrabold transition-[border-color,background-color,transform] duration-150 ease-out active:scale-[0.97] ${active ? "border-primary bg-primary text-gold-ink shadow-sm" : "border-line bg-surface-soft text-ink2 hover:border-primary/35 hover:bg-surface"}`}><span>{children}</span>{" "}<span className={`rounded-md px-1.5 py-0.5 text-[10px] ${active ? "bg-white/20 text-inherit" : "bg-primary/10 text-primary"}`}>{count} câu</span></button>;
 }
 
-function WritingPromptCard({ prompt, latestScore, index }: { prompt: WritingPromptCardSummary; latestScore?: PromptScore; index: number }) {
+function WritingPromptCard({ prompt, latestScore, scoresReady, scoreError, index }: { prompt: WritingPromptCardSummary; latestScore?: PromptScore; scoresReady: boolean; scoreError: boolean; index: number }) {
   const grammarCategory = grammarCategoryForPrompt(prompt);
   const percent = latestScore && latestScore.maxScore > 0 ? Math.min(100, Math.max(0, Math.round(latestScore.score / latestScore.maxScore * 100))) : 0;
   return <article className={styles.card} style={{ "--card-delay": `${Math.min(index, 5) * 35}ms` } as CSSProperties}>
     {prompt.part === 1 && prompt.thumbnailUrl && <div className={styles.cardImage}><Image src={prompt.thumbnailUrl} alt={prompt.imageAlt || prompt.title} fill sizes="(max-width: 640px) 100vw, (max-width: 1050px) 50vw, 33vw" loading="lazy" className="object-cover" /></div>}
     <div className={styles.cardTop}><span className={styles.cardLabel}>LUYỆN VIẾT · PART {prompt.part}</span><span className={styles.badge} data-status={latestScore ? "complete" : "new"}><span />{latestScore ? "Đã chấm gần đây" : "Đề luyện viết"}</span></div>
-    <div className={styles.cardHeading}><div><h3>{prompt.title}</h3>{prompt.titleVi && <p>{prompt.titleVi}</p>}<p>{latestScore ? `Điểm AI: ${latestScore.score}/${latestScore.maxScore}` : "Chưa có điểm gần đây"}</p></div><ListeningProgressRing percent={percent} ready={Boolean(latestScore)} label={`Điểm AI so với tối đa: ${prompt.title}`} /></div>
+    <div className={styles.cardHeading}><div><h3>{prompt.title}</h3>{prompt.titleVi && <p>{prompt.titleVi}</p>}<p>{latestScore ? `Điểm AI: ${latestScore.score}/${latestScore.maxScore}` : scoresReady ? "Chưa có điểm gần đây" : scoreError ? "Chưa tải được điểm" : "Đang tải điểm cá nhân…"}</p></div><ListeningProgressRing percent={percent} ready={Boolean(latestScore)} label={`Điểm AI so với tối đa: ${prompt.title}`} /></div>
     <p className={styles.cardDescription}>{prompt.summary}</p>
     <div className={styles.answerStats}>{prompt.requiredTerms?.slice(0, 3).map((term) => <span key={term} data-tone="good"><i />{term}</span>)}</div>
     <div className={styles.metadata}><span><Icon name="clock" />{prompt.timeLimitMinutes} phút</span><span><Icon name="bars" />{{ BEGINNER: "Cơ bản", INTERMEDIATE: "Trung cấp", ADVANCED: "Nâng cao" }[prompt.difficulty]}</span>{grammarCategory && <span>{WRITING_PART_ONE_GRAMMAR_CATEGORY_LABELS[grammarCategory]}</span>}{prompt.tags?.slice(0, 2).map((tag) => <span key={tag}>#{tag}</span>)}</div>

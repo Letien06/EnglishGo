@@ -27,11 +27,11 @@ export default function VocabularySidebar({ testId, partId, title, count, tab, s
     <button className={styles.backLink} onClick={() => onNavigate("/vocab?tab=learn")}>← Thư viện từ vựng</button>
     <span className={styles.eyebrow}>BỘ TỪ ĐANG HỌC</span>
     <h1>{title}</h1>
-    <p>{parts.length ? `${parts.length} phần · ${parts.reduce((sum, part) => sum + part.wordCount, 0)} từ` : `${count} từ sẵn sàng`}</p>
-    <nav>{parts.map((part, index) => <button key={part.id} aria-label={`${part.name} · ${part.wordCount} từ`} aria-current={part.id === partId ? "page" : undefined} disabled={!part.wordCount} onClick={() => {
+    <p className={styles.sidebarMeta}>{parts.length ? `${parts.length} phần · ${parts.reduce((sum, part) => sum + part.wordCount, 0)} từ` : `${count} từ sẵn sàng`}</p>
+    <nav className={testId ? styles.sidebarParts : undefined} aria-busy={Boolean(testId && !parts.length && !failed)}>{testId && !parts.length && !failed && <div className={styles.sidebarPartsPlaceholder} aria-hidden="true" />}{parts.map((part, index) => <button key={part.id} aria-label={`${part.name} · ${part.wordCount} từ`} aria-current={part.id === partId ? "page" : undefined} disabled={!part.wordCount} onClick={() => {
       if (part.id !== partId) onNavigate(ready ? `/vocab/${part.internalSetId}/flashcards?mode=menu&tab=${tab}&partId=${encodeURIComponent(part.id)}&mastery=all&order=ordered&amount=all${tab === "learn" ? `&intent=${studyIntent}` : ""}` : `/vocab/dautoeic/${encodeURIComponent(testId!)}?tab=${tab}`);
     }}><span>{index + 1}</span><strong>{part.name}</strong><small>{part.wordCount}</small></button>)}</nav>
-    {testId && !parts.length && <p className="text-xs" role="status">{failed ? "Chưa tải được các phần. Bạn vẫn học được bộ hiện tại." : "Đang tải danh sách phần..."}</p>}
+    {testId && <div className={styles.sidebarStatus}>{!parts.length && <p role="status">{failed ? "Chưa tải được các phần. Bạn vẫn học được bộ hiện tại." : "Đang tải danh sách phần..."}</p>}</div>}
     <div className={styles.sidebarTip}><strong>Mỗi ngày một chút</strong><p>Xem từ → học trong câu → chơi để nhớ lâu.</p></div>
   </aside>;
 }

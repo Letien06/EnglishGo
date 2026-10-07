@@ -30,7 +30,13 @@ export default function TestDashboardClient({ skill, part, initialTests, initial
       const key = `${skill}:${part}:${uid}`;
       if (isLearningLevelsDirty(skill, part, uid)) progressCache.delete(key);
       const cached = uid ? progressCache.get(key) : undefined;
-      setView({ uid, tests: cached ?? initialTests, resolved: Boolean(cached) });
+      // Refresh the same learner in place; replacing their progress with public
+      // metadata would reset filters and move the visible cards while fetching.
+      setView((previous) => cached
+        ? { uid, tests: cached, resolved: true }
+        : uid && previous.uid === uid
+          ? previous
+          : { uid, tests: initialTests, resolved: false });
       setProgressError(false);
       if (!uid) return;
       const request = new AbortController();

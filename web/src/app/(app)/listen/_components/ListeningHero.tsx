@@ -5,12 +5,13 @@ import { practiceHref, resumePosition, summarizeTests, testProgress, type StudyS
 import useListeningStreak from "./useListeningStreak";
 import styles from "./listening.module.css";
 
-export default function ListeningHero({ tests, part, skill = "listening", authenticated, progressReady }: {
+export default function ListeningHero({ tests, part, skill = "listening", authenticated, progressReady, catalogLoading = false }: {
   tests: DauToeicPartTest[];
   part: number;
   skill?: StudySkill;
   authenticated: boolean;
   progressReady: boolean;
+  catalogLoading?: boolean;
 }) {
   const label = skill === "listening" ? "nghe" : "đọc";
   const icon = skill === "listening" ? "headphones" : "book";
@@ -25,7 +26,7 @@ export default function ListeningHero({ tests, part, skill = "listening", authen
       <span className={styles.eyebrow}><span className={styles.liveDot} /> MỖI NGÀY, TIẾN MỘT CHÚT</span>
       <h2>{resume ? "Tiếp tục nhịp học của bạn" : `Một bài ${label}, thêm tự tin.`}</h2>
       <p>{resume ? `${resume.testName} · Part ${part} · ${resumePosition(resume)}` : "Không cần học thật nhiều. Chỉ cần bắt đầu và đều đặn."}</p>
-      {resume && <span className={styles.resumeSource}>{resume.setName} · Đã làm {resume.done}/{resume.questionCount} câu</span>}
+      <span className={styles.resumeSource} aria-hidden={!resume || undefined}>{resume ? `${resume.setName} · Đã làm ${resume.done}/${resume.questionCount} câu` : "\u00a0"}</span>
       <div className={styles.resumeActions}>
         {next ? <Link className={styles.primaryButton} href={practiceHref(next)} aria-label={resume ? `Tiếp tục học ${resume.testName} - ${resume.setName}` : `Bắt đầu bài ${label} được gợi ý`}>
           <ListeningIcon name={icon} />{resume ? "Tiếp tục học" : `Bắt đầu luyện ${label}`}<ListeningIcon name="arrow" />
@@ -34,7 +35,7 @@ export default function ListeningHero({ tests, part, skill = "listening", authen
       </div>
     </div>
     <dl className={styles.stats}>
-      <div className={styles.stat} data-tone="teal"><dt><span className={styles.statIcon}><ListeningIcon name="check" /></span>Câu đã làm</dt><dd>{progressReady ? summary.done : "—"}<span> / {summary.total}</span></dd><p>Trong Part {part} đang chọn</p></div>
+      <div className={styles.stat} data-tone="teal"><dt><span className={styles.statIcon}><ListeningIcon name="check" /></span>Câu đã làm</dt><dd>{progressReady ? summary.done : "—"}<span> / {catalogLoading ? "—" : summary.total}</span></dd><p>Trong Part {part} đang chọn</p></div>
       <div className={styles.stat} data-tone="blue"><dt><span className={styles.statIcon}><ListeningIcon name="target" /></span>Độ chính xác</dt><dd>{progressReady && summary.accuracy !== null ? summary.accuracy : "—"}<span> %</span></dd><p>{progressReady && summary.accuracy !== null ? "Tính trên câu đã trả lời" : "Sẽ hiện khi có kết quả"}</p></div>
       <div className={styles.stat} data-tone="gold"><dt><span className={styles.statIcon}><ListeningIcon name="flame" /></span>Chuỗi học</dt><dd>{streak ? streak.streakDays : "—"}<span> ngày</span></dd><p>{streak ? streak.studiedToday ? "Hôm nay đã học. Giữ nhịp nhé!" : "Học hôm nay để giữ chuỗi" : authenticated ? "Chưa có dữ liệu chuỗi học" : "Đăng nhập để giữ chuỗi"}</p></div>
     </dl>

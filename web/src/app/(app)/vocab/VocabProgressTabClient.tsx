@@ -108,11 +108,11 @@ export default function VocabProgressTabClient() {
           </Link>
         </div>
         <div className="mt-5 grid gap-4 md:grid-cols-2">
-          <div className="rounded-xl bg-[var(--info-soft)] p-4">
+          <div className="min-h-40 rounded-xl bg-[var(--info-soft)] p-4">
             <p className="text-sm font-extrabold text-[var(--info-ink)]">Ôn tập</p>
             <p className="mt-2 text-3xl font-extrabold text-ink">{payload.dueWords} <span className="text-sm text-muted">từ</span></p>
           </div>
-          <div className="rounded-xl bg-[var(--success-soft)] p-4">
+          <div className="min-h-40 rounded-xl bg-[var(--success-soft)] p-4">
             <p className="text-sm font-extrabold text-[var(--success-ink)]">Từ mới</p>
             <p className="mt-2 text-3xl font-extrabold text-ink">{payload.studiedWordsToday}<span className="text-sm text-muted">/{dailyGoal} từ</span></p>
             <div className="mt-3 h-2 overflow-hidden rounded-full bg-surface">
@@ -193,8 +193,16 @@ export default function VocabProgressTabClient() {
 
 function ProgressSkeleton() {
   return (
-    <section className="space-y-5">
-      <article className="h-48 animate-pulse rounded-2xl border border-line bg-surface p-5 shadow-sm" />
+    <section className="space-y-5" role="status" aria-label="Đang tải tiến độ từ vựng" aria-busy="true">
+      <article className="rounded-2xl border border-line bg-surface p-5 shadow-sm" aria-hidden="true">
+        <div className="flex flex-wrap items-center justify-between gap-4">
+          <div><h2 className="text-xl font-extrabold text-ink">Mục tiêu hôm nay</h2><div className="mt-1 h-5 w-56 rounded bg-surface-soft" /></div>
+          <div className="h-9 w-36 rounded-full bg-surface-soft" />
+        </div>
+        <div className="mt-5 grid gap-4 md:grid-cols-2">
+          {[1, 2].map((id) => <div key={id} className="min-h-40 rounded-xl bg-surface-soft p-4"><div className="h-5 w-20 rounded bg-surface" /><div className="mt-2 h-9 w-32 rounded bg-surface" /></div>)}
+        </div>
+      </article>
       <section className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
         {Array.from({ length: 4 }).map((_, index) => (
           <article key={index} className="h-24 animate-pulse rounded-2xl border border-line bg-surface p-4 shadow-sm" />

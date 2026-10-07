@@ -110,9 +110,16 @@ export default function VocabMyTab({ uid, folderId, folderSearch }: Props) {
 
   if (loading) {
     return (
-      <div className="text-center py-16 text-muted animate-pulse">
-        Đang tải...
-      </div>
+      <section className="space-y-6" role="status" aria-label="Đang tải bộ từ của tôi" aria-busy="true">
+        <article className="rounded-2xl border border-line bg-surface p-6" aria-hidden="true">
+          <div className="flex flex-wrap items-center justify-between gap-4">
+            <div><h2 className="text-xl font-bold text-ink">Bộ từ của tôi</h2><p className="text-sm text-muted">Quản lý, tạo mới và nhập từ vựng</p></div>
+            <div className="h-5 w-32 rounded bg-surface-soft" />
+          </div>
+        </article>
+        <div className="flex flex-wrap gap-2" aria-hidden="true"><div className="h-10 w-32 rounded-lg bg-surface-soft" /><div className="h-10 w-32 rounded-lg bg-surface-soft" /><div className="h-10 w-28 rounded-lg bg-surface-soft" /></div>
+        <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3" aria-hidden="true">{Array.from({ length: 6 }, (_, id) => <article key={id} className="min-h-48 rounded-2xl border border-line bg-surface p-5"><div className="h-11 w-11 rounded-xl bg-surface-soft" /><div className="mt-4 h-6 w-3/4 rounded bg-surface-soft" /><div className="mt-3 h-4 w-1/2 rounded bg-surface-soft" /><div className="mt-5 h-10 rounded-full bg-surface-soft" /></article>)}</div>
+      </section>
     );
   }
 

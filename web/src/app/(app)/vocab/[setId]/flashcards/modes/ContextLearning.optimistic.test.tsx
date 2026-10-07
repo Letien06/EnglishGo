@@ -2,6 +2,7 @@ import React, { useEffect } from "react";
 import { act, cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import { useVocabReviewQueue } from "@/lib/vocab-review-queue";
+import type { VocabularyRoundResult } from "@/lib/vocab-arcade";
 import ContextLearning from "./ContextLearning";
 
 vi.mock("../useVocabularyAudio", () => ({ default: () => ({ speak: vi.fn(), speakWord: vi.fn(), stop: vi.fn() }) }));
@@ -12,7 +13,7 @@ const words = [
   { id: 2, word: "banana", meaning: "chuối", mastered: false },
   { id: 3, word: "cherry", meaning: "anh đào", mastered: false },
 ];
-function RootOverlay({ onComplete }: { onComplete: ReturnType<typeof vi.fn> }) {
+function RootOverlay({ onComplete }: { onComplete: (result: VocabularyRoundResult) => void }) {
   const queue = useVocabReviewQueue(uid, true);
   const { reconcile } = queue;
   useEffect(() => { reconcile(words); }, [reconcile]);

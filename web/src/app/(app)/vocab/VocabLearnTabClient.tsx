@@ -7,7 +7,7 @@ import type { VocabSetCard } from "@/types/vocab";
 import { LearningTip, LearningEmpty } from "../_components/LearningDashboardUI";
 import Icon from "../listen/_components/ListeningIcon";
 import vocabStyles from "./[setId]/flashcards/vocabulary.module.css";
-import { ListeningGridSkeleton } from "../listen/_components/ListeningLoading";
+import VocabCatalogSkeleton from "./VocabCatalogSkeleton";
 import styles from "../listen/_components/listening.module.css";
 import { fetchWithTimeout, recordNextPaint } from "@/lib/client-request";
 
@@ -148,7 +148,7 @@ export default function VocabLearnTabClient({ groupId, userUid, initialCatalog =
           >
             <span><strong>{ready ? totals.due : "—"}</strong> cần ôn</span>
           </button>
-          {next && <Link className={`${vocabStyles.button} ${vocabStyles.primary}`} href={studyHref(next.internalSetId, nextIntent)}>{nextIntent === "review" ? "Ôn lại" : resume ? "Tiếp tục học" : "Bắt đầu học"} →</Link>}
+          {next && <Link className={`${vocabStyles.button} ${vocabStyles.primary} ${vocabStyles.catalogSummaryAction}`} href={studyHref(next.internalSetId, nextIntent)}>{nextIntent === "review" ? "Ôn lại" : resume ? "Tiếp tục học" : "Bắt đầu học"} →</Link>}
         </div>
       </div>
       <div className={styles.sectionLabel}><span className={styles.eyebrow}>01 / CHỌN BỘ ĐỀ</span><span>Một ít mỗi ngày, nhớ lâu hơn</span></div>
@@ -171,7 +171,9 @@ export default function VocabLearnTabClient({ groupId, userUid, initialCatalog =
           </div>
           <div className={styles.tools}><label className={styles.search}><Icon name="search" /><input aria-label="Tìm bộ từ" placeholder="Tìm tên bộ từ..." value={query} onChange={(event) => setQuery(event.target.value)} /></label><label className={styles.sort}><span>Sắp xếp</span><select aria-label="Sắp xếp bộ từ" value={sort} onChange={(event) => setSort(event.target.value)}><option value="catalog">Theo thư viện</option><option value="progress" disabled={!ready}>Tiến độ cao nhất</option><option value="words">Ít từ trước</option></select></label></div>
         </div>
-        {!ready && <p className={styles.notice} role="status">{progressStatus === "loading" ? "Đang tải tiến độ..." : "Chưa tải được tiến độ. Bạn vẫn có thể vào học ngay."}</p>}
+        <div className={vocabStyles.catalogStatus}>
+          {!ready && <p role="status">{progressStatus === "loading" ? "Đang tải tiến độ..." : "Chưa tải được tiến độ. Bạn vẫn có thể vào học ngay."}</p>}
+        </div>
         <p className={styles.resultCount} aria-live="polite">Hiển thị {visible.length}/{cards.length} bộ từ</p>
         <div className={vocabStyles.catalogGrid}>{visible.map((card) => {
           const percent = card.wordCount > 0 ? Math.min(100, Math.round(card.masteredWords / card.wordCount * 100)) : 0;
@@ -184,7 +186,7 @@ export default function VocabLearnTabClient({ groupId, userUid, initialCatalog =
             <footer className={vocabStyles.catalogActions}>
               <Link href={`/vocab/dautoeic/${encodeURIComponent(card.id)}?tab=view`} data-action="view"><Icon name="book" />Xem từ</Link>
               <Link href={studyHref(card.internalSetId, complete ? "review" : "continue")} data-overdelay="Đang mở bộ từ vựng..." data-action="learn"><Icon name="spark" />{complete ? "Ôn lại" : ready && status(card) === "learning" ? "Học tiếp" : "Học"}</Link>
-              {ready && card.masteredWords > 0 && !complete && <Link href={studyHref(card.internalSetId, "review")} data-action="review"><Icon name="book" />Ôn lại</Link>}
+              {ready && card.masteredWords > 0 && !complete ? <Link href={studyHref(card.internalSetId, "review")} data-action="review"><Icon name="book" />Ôn lại</Link> : <span className={vocabStyles.catalogActionSlot} aria-hidden="true" />}
               <Link href={`/vocab/dautoeic/${encodeURIComponent(card.id)}?tab=play`} data-action="play"><Icon name="arrow" />Chơi</Link>
             </footer>
           </article>;
@@ -238,7 +240,7 @@ export default function VocabLearnTabClient({ groupId, userUid, initialCatalog =
 }
 
 function LearnSkeleton() {
-  return <ListeningGridSkeleton />;
+  return <VocabCatalogSkeleton />;
 }
 
 function EmptyPanel({ title, description }: { title: string; description: string }) {
