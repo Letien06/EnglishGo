@@ -19,11 +19,12 @@ const reviewSchema = z.union([
 
 const batchSchema = z.object({
   reviews: z.array(reviewSchema).min(1).max(100),
+  requestId: z.string().regex(/^[A-Za-z0-9_-]{1,128}$/).optional(),
 });
 
 export const POST = withErrorHandling(async (req) => {
   const user = await requireUser();
   const body = await parseBody(req, batchSchema);
-  const reviews = await vocab.reviewBatch(user.uid, body.reviews);
+  const reviews = await vocab.reviewBatch(user.uid, body.reviews, body.requestId);
   return ok({ reviews });
 });

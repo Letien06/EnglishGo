@@ -28,6 +28,7 @@ import type {
 import useDialogFocus from "@/components/useDialogFocus";
 import { ClientRequestTimeoutError, fetchWithTimeout } from "@/lib/client-request";
 import { consolidateVocabGameAnswers } from "@/lib/vocab-game-results";
+import { useVocabReviewQueue } from "@/lib/vocab-review-queue";
 import { englishExampleForSpeech, findBestEnglishVoice } from "@/lib/vocab-speech";
 import type { VocabularyRoundResult } from "@/lib/vocab-arcade";
 import WordExplorer from "./WordExplorer";
@@ -319,7 +320,13 @@ export default function FlashcardGame({
   selectedAmount = "20",
 }: Props) {
   const router = useRouter();
-  const words = session.words;
+  const reviewSync = useVocabReviewQueue(currentUserId, isAuthenticated);
+  const { masteryByWordId, reconcile } = reviewSync;
+  const words = useMemo(() => session.words.map((word) => {
+    const mastered = masteryByWordId.get(word.id);
+    return mastered === undefined ? word : { ...word, mastered };
+  }), [session.words, masteryByWordId]);
+  useEffect(() => { reconcile(session.words); }, [session.words, reconcile]);
   const setId = session.set.id;
 
   const [roomParam, setRoomParam] = useState<string | null>(() => {
@@ -520,7 +527,8 @@ export default function FlashcardGame({
     setScreen("hub");
   }
 
-  function openStudy(intent: "continue" | "review") {
+  async function openStudy(intent: "continue" | "review") {
+    if (reviewSync.pendingCount > 0 && !(await reviewSync.flush())) return;
     const params = new URLSearchParams({ mode: "menu", tab: "learn", intent, order: intent === "review" ? "oldest" : "ordered", amount: "all" });
     router.push(`/vocab/${setId}/flashcards?${params}`);
   }
@@ -598,6 +606,12 @@ export default function FlashcardGame({
       <div className={styles.workspaceBody} data-sidebar={sidebarOpen}>
       {sidebarOpen && <div id="vocab-part-sidebar"><VocabularySidebar key={session.set.externalTestId ?? setId} testId={isAuthenticated ? session.set.externalTestId : undefined} partId={session.set.externalPartId} title={session.set.title} count={words.length} tab={workspaceTab} studyIntent={studyIntent} ready={partsReady} onNavigate={(href) => { if (screen === "play") setPendingHref(href); else router.push(href); }} /></div>}
       <div id="vocab-workspace-panel" className={styles.workspaceContent} role="tabpanel" aria-labelledby={`vocab-tab-${workspaceTab}`}>
+      {reviewSync.error && (
+        <aside role="alert" className="mb-3 flex flex-wrap items-center gap-2 text-xs text-muted">
+          <span>{reviewSync.error}</span>
+          <button type="button" className={styles.button} onClick={reviewSync.retry}>Thử lưu lại</button>
+        </aside>
+      )}
 
       {screen === "hub" && (
         <Hub
@@ -609,6 +623,7 @@ export default function FlashcardGame({
           selectedOrder={selectedOrder}
           selectedAmount={selectedAmount}
           isAuthenticated={isAuthenticated}
+          currentUserId={currentUserId}
           loginHref={loginHref}
           studyIntent={studyIntent}
           onReview={() => openStudy("review")}
@@ -707,6 +722,7 @@ function Hub({
   selectedOrder,
   selectedAmount,
   isAuthenticated,
+  currentUserId,
   loginHref,
   muted,
   history,
@@ -739,6 +755,7 @@ function Hub({
   selectedOrder: string;
   selectedAmount: string;
   isAuthenticated: boolean;
+  currentUserId?: string;
   loginHref: string;
   muted: boolean;
   history: HistoryEntry[];
@@ -836,6 +853,7 @@ function Hub({
         <ContextLearning
           words={words}
           isAuthenticated={isAuthenticated}
+          currentUserId={currentUserId}
           studyIntent={studyIntent}
           onReview={onReview}
           onContinue={onContinue}
@@ -1795,7 +1813,7 @@ function PlaySurface({
     setShowResult(true);
   }
 
-  if (mode === "learn") return <ContextLearning words={words} isAuthenticated={isAuthenticated} studyIntent={studyIntent} persistAnswers={false} onReview={onReview} onContinue={onContinue} onComplete={completeLocalRound} onExit={onExit} />;
+  if (mode === "learn") return <ContextLearning words={words} isAuthenticated={isAuthenticated} currentUserId={currentUserId} studyIntent={studyIntent} persistAnswers={false} onReview={onReview} onContinue={onContinue} onComplete={completeLocalRound} onExit={onExit} />;
   if (mode === "blast" || mode === "rain") {
     return (
       <VocabularyArcade

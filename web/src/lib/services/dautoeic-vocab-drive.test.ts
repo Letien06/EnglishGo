@@ -11,7 +11,7 @@ vi.mock("./rate-limit", () => ({ enforceDailyActionLimit: vi.fn() }));
 vi.mock("./study-activity", () => ({ recordStudyActivity: vi.fn(async () => undefined), getStoredStudyStreakSummary: vi.fn(), getStudyStreak: vi.fn() }));
 vi.mock("@/lib/firestore/db", () => ({ adminDb: {
   collection: mocks.collection, getAll: mocks.getAll,
-  runTransaction: async (run: (transaction: unknown) => unknown) => run({ get: async () => ({ exists: false, data: () => ({}) }), set: mocks.writes }),
+  runTransaction: async (run: (transaction: unknown) => unknown) => run({ get: async () => ({ exists: false, data: () => ({}) }), getAll: async (...refs: unknown[]) => refs.map(() => ({ exists: false, data: () => ({}) })), set: mocks.writes }),
 } }));
 
 import * as source from "./dautoeic-vocab";

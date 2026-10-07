@@ -1,11 +1,20 @@
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import ContextLearning from "./ContextLearning";
 
 vi.mock("../useVocabularyAudio", () => ({ default: () => ({ speak: vi.fn(), speakWord: vi.fn(), stop: vi.fn() }) }));
 
+const queue = vi.hoisted(() => ({ enqueue: vi.fn(), pendingReviews: [], masteryByWordId: new Map<number, boolean>(), pendingCount: 0, error: null as string | null, retry: vi.fn(), isSaving: false, reconcile: vi.fn(), flush: vi.fn().mockResolvedValue(true) }));
+vi.mock("@/lib/vocab-review-queue", () => ({ useVocabReviewQueue: () => queue }));
+
 describe("context learning", () => {
   beforeEach(() => {
+    queue.enqueue.mockReset();
+    queue.retry.mockReset();
+    queue.masteryByWordId = new Map();
+    queue.error = null;
+    queue.pendingCount = 0;
+    queue.isSaving = false;
     vi.stubGlobal("fetch", vi.fn().mockResolvedValue({ ok: true }));
   });
   it("offers word, phrase, example and typing steps without extra requests", async () => {
@@ -126,9 +135,7 @@ describe("context learning", () => {
     expect(fetch).not.toHaveBeenCalled();
     fireEvent.click(screen.getByTitle("Đã thuộc từ này"));
     await waitFor(() => expect(screen.getByRole("button", { name: "Lật thẻ học" })).toHaveTextContent("apple"));
-    expect(fetch).toHaveBeenCalledWith("/api/vocab/reviews/batch", expect.objectContaining({
-      body: JSON.stringify({ reviews: [{ wordId: 3, quality: 4 }] }),
-    }));
+    expect(queue.enqueue).toHaveBeenCalledWith(expect.objectContaining({ wordId: 3, quality: 4 }));
   });
 
   it("keeps the current word stable when a preceding drawer word is mastered", async () => {
@@ -140,7 +147,7 @@ describe("context learning", () => {
     fireEvent.click(screen.getByRole("button", { name: "Từ tiếp →" }));
     fireEvent.click(screen.getByTitle("Mở danh sách toàn bộ từ và kiểm soát tiến độ"));
     fireEvent.click(screen.getAllByTitle("Đánh dấu đã thuộc")[1]);
-    await waitFor(() => expect(screen.queryByText("Đang lưu tiến độ…")).not.toBeInTheDocument());
+    expect(queue.enqueue).toHaveBeenCalledWith(expect.objectContaining({ wordId: 1, mastered: true }));
     fireEvent.click(screen.getByRole("button", { name: "Xong" }));
     expect(screen.getByRole("button", { name: "Lật thẻ học" })).toHaveTextContent("banana");
   });
@@ -149,12 +156,10 @@ describe("context learning", () => {
     render(<ContextLearning studyIntent="review" words={[{ id: 1, word: "apple", meaning: "táo", mastered: true }]} onComplete={vi.fn()} onExit={vi.fn()} />);
     fireEvent.click(screen.getByTitle("Mở danh sách toàn bộ từ và kiểm soát tiến độ"));
     fireEvent.click(screen.getByTitle("Bỏ đánh dấu đã thuộc"));
-    await waitFor(() => expect(screen.queryByText("Đang lưu tiến độ…")).not.toBeInTheDocument());
+    expect(queue.enqueue).toHaveBeenCalledWith(expect.objectContaining({ wordId: 1, quality: 1 }));
     fireEvent.click(screen.getByRole("button", { name: "Xong" }));
     expect(screen.getByText("CHƯA THUỘC")).toBeInTheDocument();
-    expect(fetch).toHaveBeenCalledWith("/api/vocab/reviews/batch", expect.objectContaining({
-      body: JSON.stringify({ reviews: [{ wordId: 1, quality: 1 }] }),
-    }));
+    expect(queue.enqueue).toHaveBeenCalledWith(expect.objectContaining({ wordId: 1, quality: 1 }));
   });
 
   it("defers answer persistence when a parent owns the round save", () => {
@@ -162,6 +167,7 @@ describe("context learning", () => {
     render(<ContextLearning studyIntent="review" persistAnswers={false} words={[{ id: 1, word: "apple", meaning: "táo", mastered: true }]} onComplete={onComplete} onExit={vi.fn()} />);
     fireEvent.click(screen.getByTitle("Đã thuộc từ này"));
     expect(fetch).not.toHaveBeenCalled();
+    expect(queue.enqueue).not.toHaveBeenCalled();
     expect(onComplete).toHaveBeenCalledWith({ score: 10, answers: [expect.objectContaining({ correct: true })] });
   });
 
@@ -196,32 +202,34 @@ describe("context learning", () => {
     expect(fetch).not.toHaveBeenCalled();
   });
 
-  it("keeps a failed review available and retries before completing", async () => {
-    vi.mocked(fetch).mockResolvedValueOnce({ ok: false } as Response);
+  it("advances immediately while saving is pending and retry does not change the next word", () => {
+    queue.enqueue.mockImplementation(() => new Promise(() => {}));
     const onComplete = vi.fn();
-    render(<ContextLearning studyIntent="review" words={[{ id: 1, word: "apple", meaning: "táo", mastered: true }]} onComplete={onComplete} onExit={vi.fn()} />);
-    fireEvent.click(screen.getByTitle("Đã thuộc từ này"));
+    const words = [{ id: 1, word: "apple", meaning: "táo", mastered: false }, { id: 2, word: "banana", meaning: "chuối", mastered: false }];
+    const { rerender } = render(<ContextLearning words={words} onComplete={onComplete} onExit={vi.fn()} />);
+    fireEvent.click(screen.getByTitle("Đánh dấu đã thuộc"));
+    expect(screen.getByRole("button", { name: "Lật thẻ học" })).toHaveTextContent("banana");
     expect(onComplete).not.toHaveBeenCalled();
-    expect(await screen.findByRole("alert")).toHaveTextContent("Chưa lưu được tiến độ");
-    expect(screen.getByRole("button", { name: "Lật thẻ học" })).toHaveTextContent("apple");
+    queue.pendingCount = 1;
+    queue.error = "Offline";
+    queue.retry();
+    rerender(<ContextLearning words={words} onComplete={onComplete} onExit={vi.fn()} />);
+    expect(screen.getByRole("button", { name: "Lật thẻ học" })).toHaveTextContent("banana");
     expect(onComplete).not.toHaveBeenCalled();
-    fireEvent.click(screen.getByRole("button", { name: "Thử lưu lại" }));
-    await waitFor(() => expect(onComplete).toHaveBeenCalledOnce());
-    expect(fetch).toHaveBeenCalledTimes(2);
-    expect(screen.queryByRole("alert")).not.toBeInTheDocument();
+    expect(queue.enqueue).toHaveBeenCalledOnce();
   });
 
-  it("ignores duplicate submissions while a review is saving", async () => {
-    let resolveSave!: (value: Response) => void;
-    vi.mocked(fetch).mockImplementationOnce(() => new Promise((resolve) => { resolveSave = resolve; }));
+  it("completes immediately and ignores a duplicate click on the captured final-word button", () => {
+    queue.enqueue.mockImplementation(() => new Promise(() => {}));
     const onComplete = vi.fn();
     render(<ContextLearning studyIntent="review" words={[{ id: 1, word: "apple", meaning: "táo", mastered: true }]} onComplete={onComplete} onExit={vi.fn()} />);
-    fireEvent.click(screen.getByTitle("Đã thuộc từ này"));
-    fireEvent.click(screen.getByTitle("Đã thuộc từ này"));
-    expect(fetch).toHaveBeenCalledOnce();
-    expect(onComplete).not.toHaveBeenCalled();
-    resolveSave({ ok: true } as Response);
-    await waitFor(() => expect(onComplete).toHaveBeenCalledOnce());
+    const mark = screen.getByTitle("Đã thuộc từ này");
+    fireEvent.click(mark);
+    fireEvent.click(mark);
+    expect(queue.enqueue).toHaveBeenCalledOnce();
+    expect(onComplete).toHaveBeenCalledOnce();
+    queue.retry();
+    expect(onComplete).toHaveBeenCalledOnce();
   });
 
   it("finishes the final review with visible completion actions", async () => {
@@ -244,6 +252,7 @@ describe("context learning", () => {
     fireEvent.click(screen.getByTitle("Đánh dấu đã thuộc"));
     expect(onComplete).toHaveBeenCalledOnce();
     expect(fetch).not.toHaveBeenCalled();
+    expect(queue.enqueue).not.toHaveBeenCalled();
   });
 
   it("starts a fresh round after viewing all words from completion", () => {
@@ -274,5 +283,35 @@ describe("context learning", () => {
     fireEvent.click(screen.getByRole("button", { name: "Về từ chưa thuộc đầu tiên" }));
     expect(screen.getByRole("button", { name: "Lật thẻ học" })).toHaveTextContent("banana");
     expect(fetch).not.toHaveBeenCalled();
+  });
+
+  it("keeps the next cursor stable through queue acknowledgement and stale server flags", () => {
+    const words = [
+      { id: 1, word: "apple", meaning: "táo", mastered: false },
+      { id: 2, word: "banana", meaning: "chuối", mastered: false },
+      { id: 3, word: "cherry", meaning: "anh đào", mastered: false },
+    ];
+    const onComplete = vi.fn();
+    const { rerender } = render(<ContextLearning words={words} onComplete={onComplete} onExit={vi.fn()} />);
+    fireEvent.click(screen.getByTitle("Đánh dấu đã thuộc"));
+    expect(screen.getByRole("button", { name: "Lật thẻ học" })).toHaveTextContent("banana");
+    queue.masteryByWordId = new Map([[1, true]]);
+    rerender(<ContextLearning words={words} onComplete={onComplete} onExit={vi.fn()} />);
+    expect(screen.getByRole("button", { name: "Lật thẻ học" })).toHaveTextContent("banana");
+    queue.masteryByWordId = new Map();
+    rerender(<ContextLearning words={words.map((word) => ({ ...word }))} onComplete={onComplete} onExit={vi.fn()} />);
+    expect(screen.getByRole("button", { name: "Lật thẻ học" })).toHaveTextContent("banana");
+    fireEvent.click(screen.getByRole("button", { name: "Chưa thuộc (2)" }));
+    expect(screen.getByRole("button", { name: "Lật thẻ học" })).toHaveTextContent("banana");
+  });
+
+  it("updates drawer mastery immediately without waiting for a save", () => {
+    queue.enqueue.mockImplementation(() => new Promise(() => {}));
+    render(<ContextLearning studyIntent="review" words={[{ id: 1, word: "apple", meaning: "táo", mastered: true }]} onComplete={vi.fn()} onExit={vi.fn()} />);
+    fireEvent.click(screen.getByTitle("Mở danh sách toàn bộ từ và kiểm soát tiến độ"));
+    fireEvent.click(screen.getByTitle("Bỏ đánh dấu đã thuộc"));
+    expect(within(screen.getByRole("dialog", { name: "Danh sách từ vựng" })).getByTitle("Đánh dấu đã thuộc")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Xong" }));
+    expect(screen.getByText("CHƯA THUỘC")).toBeInTheDocument();
   });
 });

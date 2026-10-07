@@ -12,6 +12,7 @@ import MobileNavigationMenu from "./MobileNavigationMenu";
 import PwaInstallPrompt from "./PwaInstallPrompt";
 import HeaderJoinRoomButton from "./HeaderJoinRoomButton";
 import { clearActiveLearnerCache, setActiveLearnerId } from "@/lib/client-learning-progress-cache";
+import { useVocabReviewQueue } from "@/lib/vocab-review-queue";
 
 const StudyStreakCelebration = dynamic(() => import("./StudyStreakCelebration"), { ssr: false });
 
@@ -108,6 +109,7 @@ export default function AppShell({ children }: { children: ReactNode }) {
   const [session, setSession] = useState<AppSession | null>(() => cachedSession ?? null);
   const authenticated = bootstrap?.authenticated === true;
   const sessionAuthenticated = session?.authenticated === true;
+  useVocabReviewQueue(session?.user?.uid, sessionAuthenticated);
   const isPracticeWorkspace =
     pathname.startsWith("/listen/practice") ||
     pathname.startsWith("/read/practice") ||

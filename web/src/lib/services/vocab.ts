@@ -10,7 +10,7 @@ import { adminDb } from "@/lib/firestore/db";
 import { cache } from "react";
 import { vocabularyDetails } from "@/lib/vocab-content";
 import { FieldValue } from "firebase-admin/firestore";
-import { randomInt } from "crypto";
+import { createHash, randomInt } from "crypto";
 import { BadRequest, Forbidden, NotFound, Unauthorized } from "@/lib/api/response";
 import type {
   VocabSetDoc,
@@ -1469,8 +1469,12 @@ export type VocabBatchReviewInput = {
 export async function reviewBatch(
   uid: string,
   reviews: VocabBatchReviewInput[],
+  requestId?: string,
 ): Promise<VocabReviewResponse[]> {
   requireUid(uid);
+  if (requestId !== undefined && !/^[A-Za-z0-9_-]{1,128}$/.test(requestId)) {
+    throw BadRequest("Review request ID is invalid");
+  }
   const uniqueReviews = new Map<number, VocabBatchReviewInput>();
   for (const reviewInput of reviews) {
     const wordId = Math.trunc(reviewInput.wordId);
@@ -1488,23 +1492,30 @@ export async function reviewBatch(
   if (!requested.length) return [];
   if (requested.length > 100) throw BadRequest("Too many words in one review session");
 
-  const wordsById = await wordsByIds(requested.map((reviewInput) => reviewInput.wordId));
-  for (const reviewInput of requested) {
-    if (!wordsById.has(reviewInput.wordId)) {
-      throw NotFound("Word not found");
-    }
-  }
-
   const now = Date.now();
   const userRef = adminDb.collection("users").doc(uid);
+  const requestRef = requestId ? userRef.collection("vocabReviewRequests").doc(requestId) : null;
+  const fingerprint = requestRef
+    ? createHash("sha256").update(JSON.stringify(requested)).digest("hex")
+    : null;
   const progressRefs = requested.map((reviewInput) =>
     userRef.collection(PROGRESS).doc(String(reviewInput.wordId)));
+  let wordsLookup: Promise<Map<number, VocabWordDoc>> | undefined;
 
   return adminDb.runTransaction(async (tx) => {
-    const [userSnap, ...progressSnaps] = await Promise.all([
-      tx.get(userRef),
-      ...progressRefs.map((ref) => tx.get(ref)),
-    ]);
+    if (requestRef) {
+      const requestSnap = await tx.get(requestRef);
+      if (requestSnap.exists) {
+        const saved = requestSnap.data()!;
+        if (saved.fingerprint !== fingerprint) throw BadRequest("Review request ID has already been used for different reviews");
+        return saved.responses as VocabReviewResponse[];
+      }
+    }
+    const wordsById = await (wordsLookup ??= wordsByIds(requested.map((reviewInput) => reviewInput.wordId)));
+    for (const reviewInput of requested) {
+      if (!wordsById.has(reviewInput.wordId)) throw NotFound("Word not found");
+    }
+    const [userSnap, ...progressSnaps] = await tx.getAll(userRef, ...progressRefs);
     const userData = userSnap.data() ?? {};
     const nextProgressItems: VocabProgressDoc[] = [];
     let masteredDelta = 0;
@@ -1545,6 +1556,16 @@ export async function reviewBatch(
       nextDueAtMillis: nextSummaryDueAtMillis(userData, nextProgressItems),
       now,
     });
+    if (requestRef) {
+      tx.set(requestRef, {
+        fingerprint,
+        responses,
+        createdAtMillis: now,
+        // Timestamp is ready for an optional Firestore TTL policy; until then
+        // keep the marker so even a late retry cannot apply SM-2 twice.
+        expiresAt: new Date(now + 30 * 24 * 60 * 60 * 1000),
+      });
+    }
     return responses;
   });
 }
