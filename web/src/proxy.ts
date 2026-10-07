@@ -106,6 +106,10 @@ function rateLimitPolicy(request: NextRequest): EdgeRateLimitPolicy {
   } else if (pathname === "/api/dautoeic/vocab/catalog") {
     group = "public-catalog";
     limit = envLimit("RATE_LIMIT_CATALOG_PER_MIN", 600);
+  } else if (pathname === "/api/vocab/game-room/answer" && request.method === "POST") {
+    // Five racers may each flush one batch per second behind the same IP.
+    group = authenticated ? "vocab-race" : "public-vocab-race";
+    limit = authenticated ? envLimit("RATE_LIMIT_VOCAB_RACE_PER_MIN", 360) : 30;
   } else if (["GET", "HEAD", "OPTIONS"].includes(request.method)) {
     group = authenticated ? "authenticated-read" : "public-read";
     limit = envLimit(

@@ -4,6 +4,8 @@ import { BadRequest, NotFound, Forbidden } from "@/lib/api/response";
 import type { AppUser } from "@/types";
 import { COLLECTIONS } from "@/lib/firestore/collections";
 import { arcadeCountdownMs, WORD_BLAST_QUESTION_MS, wordBlastQuestionMs } from "@/lib/word-blast-timing";
+import { randomUUID } from "node:crypto";
+import { advanceRacePlayer, createRacePlayer, type RaceEvent, type RacePlayer, type RaceRoom } from "@/lib/vocab-race";
 
 export const generateRoomCode = () => {
   const chars = "ABCDEFGHJKMNPQRSTUVWXYZ23456789";
@@ -38,6 +40,7 @@ export const createRoom = async (
   }
 
   const roomData = {
+    raceVersion: 2,
     code,
     hostId: user.uid,
     gameMode,
@@ -85,19 +88,20 @@ export const joinRoom = async (user: AppUser, code: string) => {
     }
     
     const room = roomDoc.data()!;
+    const playersRef = roomRef.collection("players");
+    const playerRef = playersRef.doc(user.uid);
+    const playerDoc = await transaction.get(playerRef);
+    if (playerDoc.exists) return { gameMode: room.gameMode, vocabSetId: room.vocabSetId };
     if (room.status !== "waiting") {
       throw BadRequest("Game already started or finished");
     }
     
-    const playersRef = roomRef.collection("players");
     const playersSnapshot = await transaction.get(playersRef);
     
     if (playersSnapshot.size >= room.maxPlayers) {
       throw BadRequest("Room is full");
     }
     
-    const playerRef = playersRef.doc(user.uid);
-    const playerDoc = await transaction.get(playerRef);
     if (!playerDoc.exists) {
       transaction.set(playerRef, {
         uid: user.uid,
@@ -138,6 +142,10 @@ export const leaveRoom = async (user: AppUser, code: string) => {
     transaction.delete(playerRef);
     
     const room = roomDoc.data()!;
+    const survivors = playersSnapshot.docs.filter(doc => doc.id !== user.uid);
+    if (room.raceVersion === 2 && room.status !== "waiting" && survivors.length > 0 && survivors.every(doc => ["finished", "eliminated"].includes(doc.data().status))) {
+      transaction.update(roomRef, { status: "finished", finishedAt: Date.now() });
+    }
     if (room.hostId === user.uid) {
       const remainingPlayers = playersSnapshot.docs.filter(doc => doc.id !== user.uid);
       
@@ -168,6 +176,9 @@ export const startGame = async (user: AppUser, code: string) => {
     if (room.status !== "waiting") {
       throw BadRequest("Game already started");
     }
+    if (!Array.isArray(room.words) || room.words.length === 0) {
+      throw BadRequest("Add vocabulary words before starting the race");
+    }
     
     const playersRef = roomRef.collection("players");
     const playersSnapshot = await transaction.get(playersRef);
@@ -175,6 +186,8 @@ export const startGame = async (user: AppUser, code: string) => {
     const countdownDuration = arcadeCountdownMs(room.gameMode === "rain" ? "rain" : "blast");
     const now = Date.now();
     const countdownEndsAt = now + countdownDuration;
+    const runId = randomUUID();
+    const matchEndsAt = countdownEndsAt + 120000;
 
     const shuffledWords = [...(room.words || [])];
     for (let i = shuffledWords.length - 1; i > 0; i--) {
@@ -198,6 +211,10 @@ export const startGame = async (user: AppUser, code: string) => {
     }
 
     transaction.update(roomRef, {
+      raceVersion: 2,
+      runId,
+      matchEndsAt,
+      rainDropDurationMs: 13000,
       status: "countdown",
       countdownEndsAt,
       words: shuffledWords,
@@ -215,18 +232,17 @@ export const startGame = async (user: AppUser, code: string) => {
         : {}),
     });
 
-    playersSnapshot.docs.forEach((doc) => {
-      transaction.update(doc.ref, {
-        status: "playing",
-        score: 0,
-        lives: 3,
-        combo: 0,
-        answers: [],
-        updatedAt: Date.now(),
-      });
-    });
+    const raceRoom = { ...room, raceVersion: 2, runId, status: "countdown", countdownEndsAt, matchEndsAt, words: shuffledWords, questionDurationMs: WORD_BLAST_QUESTION_MS, serverNow: now, updatedAt: now } as RaceRoom;
+    const players = playersSnapshot.docs.map(doc => ({ ...doc.data(), ...createRacePlayer({ ...doc.data(), uid: doc.id }, raceRoom), updatedAt: now }));
+    playersSnapshot.docs.forEach((doc, index) => transaction.update(doc.ref, { ...players[index], finishedAt: FieldValue.delete(), answers: [] }));
 
     return {
+      raceVersion: 2,
+      runId,
+      matchEndsAt,
+      serverNow: now,
+      room: raceRoom,
+      players,
       countdownEndsAt,
       ...(!isRain ? { questionDurationMs: WORD_BLAST_QUESTION_MS } : {}),
       roundStartedAt: countdownEndsAt,
@@ -251,9 +267,73 @@ export const getRoomPlayers = async (code: string) => {
 };
 
 export const getRoomWithPlayers = async (code: string) => {
-  const room = await getRoom(code);
+  let room = await getRoom(code);
+  const now = Date.now();
+  if (room?.raceVersion === 2 && room.status !== "waiting" && room.status !== "finished" && now >= room.matchEndsAt + 15000) {
+    const roomRef = adminDb.collection(COLLECTIONS.gameRooms).doc(code);
+    await adminDb.runTransaction(async transaction => {
+      const snapshot = await transaction.get(roomRef);
+      const current = snapshot.data();
+      if (current && current.runId === room?.runId && current.status !== "finished" && now >= current.matchEndsAt + 15000) {
+        const players = await transaction.get(roomRef.collection("players"));
+        players.docs.forEach(doc => {
+          if (!["finished", "eliminated"].includes(doc.data().status)) transaction.update(doc.ref, { status: "finished", finishedAt: current.matchEndsAt, updatedAt: now });
+        });
+        transaction.update(roomRef, { status: "finished", finishedAt: current.matchEndsAt });
+      }
+    });
+    room = await getRoom(code);
+  }
   const players = await getRoomPlayers(code);
-  return { room, players };
+  return { room, players, serverNow: now };
+};
+
+/** A batch changes only its authenticated player's progression. */
+export const submitRaceEvents = async (user: AppUser, code: string, runId: string, events: RaceEvent[]) => {
+  if (!events.length || events.length > 20) throw BadRequest("Invalid event batch");
+  const roomRef = adminDb.collection(COLLECTIONS.gameRooms).doc(code);
+  const playerRef = roomRef.collection("players").doc(user.uid);
+  return adminDb.runTransaction(async transaction => {
+    const roomDoc = await transaction.get(roomRef);
+    const playerDoc = await transaction.get(playerRef);
+    if (!roomDoc.exists) throw NotFound("Room not found");
+    if (!playerDoc.exists) throw Forbidden("You are not a player in this room");
+    const room = roomDoc.data()!;
+    let player = playerDoc.data()! as RacePlayer;
+    const now = Date.now();
+    const response = (skipped = false, reason?: string) => ({ player, revision: player.revision, runId: room.runId, status: room.status, serverNow: now, ...(skipped ? { skipped, reason } : {}) });
+    if (room.raceVersion !== 2 || room.runId !== runId || player.runId !== runId) return response(true, "Race changed");
+    if (room.status === "waiting" || room.status === "finished") return response(true, "Race is not active");
+    if (now < room.countdownEndsAt) return response(true, "Countdown is active");
+    if (now >= room.matchEndsAt + 15000) return response(true, "Race deadline passed");
+    const original = player;
+    for (const event of events) {
+      if (!Number.isSafeInteger(event.seq) || event.seq < 1 || !Number.isSafeInteger(event.questionIndex) || event.questionIndex < 0 || !Number.isFinite(event.at)) throw BadRequest("Invalid race event");
+      if (event.seq <= player.revision) continue;
+      if (event.seq !== player.revision + 1) throw BadRequest("Race event sequence gap");
+      if (!["answer", "timeout", "finish"].includes(event.type) || (event.type !== "finish" && event.questionIndex >= room.words.length)) throw BadRequest("Invalid question index");
+      if (event.at < room.countdownEndsAt || event.at > now + 2000 || event.at > room.matchEndsAt) throw BadRequest("Invalid event time");
+      if (event.type === "finish" && (event.at < room.matchEndsAt || now < room.matchEndsAt)) throw BadRequest("Race has not ended");
+      try {
+        player = advanceRacePlayer(player, event, room.words, room.gameMode, room.questionDurationMs ?? WORD_BLAST_QUESTION_MS);
+      } catch (error) {
+        if (error instanceof RangeError) throw BadRequest(error.message);
+        throw error;
+      }
+    }
+    const terminal = ["finished", "eliminated"].includes(player.status);
+    let finished = false;
+    if (terminal && !["finished", "eliminated"].includes(original.status)) {
+      const players = await transaction.get(roomRef.collection("players"));
+      finished = players.docs.every(doc => doc.id === user.uid || ["finished", "eliminated"].includes(doc.data().status));
+    }
+    if (player !== original) transaction.update(playerRef, { ...player, updatedAt: now });
+    if (finished) {
+      transaction.update(roomRef, { status: "finished", finishedAt: now });
+      room.status = "finished";
+    }
+    return response(player.revision === original.revision, player.revision === original.revision ? "Already processed" : undefined);
+  });
 };
 
 export const submitAnswer = async (
@@ -279,6 +359,7 @@ export const submitAnswer = async (
     // 2. IN-MEMORY VALIDATION
     const room = roomDoc.data()!;
     const player = playerDoc.data()!;
+    if (room.raceVersion === 2) return { skipped: true, reason: "Use race events", player, runId: room.runId, revision: player.revision, status: room.status, serverNow: Date.now() };
     const now = Date.now();
 
     let roomStatus = room.status;
@@ -503,6 +584,11 @@ export const advanceQuestion = async (user: AppUser, code: string, questionIndex
     if (!roomDoc.exists) throw NotFound("Room not found");
 
     const room = roomDoc.data()!;
+    if (room.raceVersion === 2) {
+      const playerDoc = await transaction.get(roomRef.collection("players").doc(user.uid));
+      if (!playerDoc.exists) throw Forbidden("You are not a player in this room");
+      return { skipped: true, reason: "Use race events", player: playerDoc.data(), runId: room.runId, status: room.status, serverNow: Date.now() };
+    }
     if (room.status !== "playing" && room.status !== "countdown") return { status: room.status };
     if (room.currentIndex !== questionIndex) {
       return {
@@ -565,6 +651,11 @@ export const expireRainDrop = async (
     if (!roomDoc.exists) throw NotFound("Room not found");
 
     const room = roomDoc.data()!;
+    if (room.raceVersion === 2) {
+      const playerDoc = await transaction.get(roomRef.collection("players").doc(user.uid));
+      if (!playerDoc.exists) throw Forbidden("You are not a player in this room");
+      return { skipped: true, reason: "Use race events", player: playerDoc.data(), runId: room.runId, status: room.status, serverNow: Date.now() };
+    }
     if (room.status !== "playing" && room.status !== "countdown") {
       return { status: room.status };
     }
@@ -640,6 +731,9 @@ export const resetRoomToLobby = async (user: AppUser, code: string) => {
 
     const playersSnapshot = await transaction.get(roomRef.collection("players"));
     const room = roomDoc.data()!;
+    if (room.hostId !== user.uid) throw Forbidden("Only the host can reset the room");
+    // A refreshed host must be able to migrate an old shared-round room.
+    if (room.raceVersion === 2 && room.status !== "waiting" && room.status !== "finished") throw BadRequest("Wait for the race to finish");
 
     if (room.status === "waiting") {
       return { status: "waiting", code };
@@ -653,6 +747,9 @@ export const resetRoomToLobby = async (user: AppUser, code: string) => {
 
     transaction.update(roomRef, {
       status: "waiting",
+      runId: FieldValue.delete(),
+      matchEndsAt: FieldValue.delete(),
+      finishedAt: FieldValue.delete(),
       currentIndex: 0,
       roundStartedAt: null,
       countdownEndsAt: null,
@@ -668,6 +765,15 @@ export const resetRoomToLobby = async (user: AppUser, code: string) => {
     playersSnapshot.docs.forEach((doc) => {
       transaction.update(doc.ref, {
         status: "waiting",
+        runId: FieldValue.delete(),
+        revision: 0,
+        currentIndex: 0,
+        correctCount: 0,
+        maxCombo: 0,
+        disabledAnswers: [],
+        activeDrops: [],
+        nextIndex: 0,
+        finishedAt: FieldValue.delete(),
         score: 0,
         lives: 3,
         combo: 0,

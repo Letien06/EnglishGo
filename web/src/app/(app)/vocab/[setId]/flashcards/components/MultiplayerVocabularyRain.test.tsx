@@ -1,178 +1,150 @@
-import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
-import { afterEach, describe, expect, it, vi } from "vitest";
+import React, { useSyncExternalStore } from "react";
+import { act, cleanup, fireEvent, render, screen } from "@testing-library/react";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { advanceRacePlayer, createRacePlayer, type RaceRoom, type RacePlayer } from "@/lib/vocab-race";
 import { MultiplayerVocabularyRain } from "./MultiplayerVocabularyRain";
 
-const vocabularyAudio = vi.hoisted(() => ({ speakWord: vi.fn(), stop: vi.fn() }));
-vi.mock("../useVocabularyAudio", () => ({ default: () => vocabularyAudio }));
+const mock = vi.hoisted(() => ({ hook: vi.fn(), subscribe: vi.fn() }));
+vi.mock("./useVocabRace", () => ({ useVocabRace: (...args: unknown[]) => mock.hook(...args) }));
+vi.mock("@/lib/game-room-subscription", () => ({ subscribeGameRoom: (...args: unknown[]) => mock.subscribe(...args) }));
+vi.mock("./MultiplayerCountdown", () => ({ MultiplayerCountdown: () => <p>Đếm ngược</p> }));
 
 const words = [
   { id: 1, word: "carry", meaning: "mang theo", mastered: false },
   { id: 2, word: "office", meaning: "văn phòng", mastered: false },
+  { id: 3, word: "invoice", meaning: "hóa đơn", mastered: false },
 ];
-
-const mockPlayers = [
-  {
-    uid: "user-1",
-    displayName: "Player 1",
-    photoURL: null,
-    isHost: true,
-    score: 30,
-    lives: 3,
-    combo: 1,
-    status: "playing" as const,
-  },
-  {
-    uid: "user-2",
-    displayName: "Player 2",
-    photoURL: null,
-    isHost: false,
-    score: 15,
-    lives: 2,
-    combo: 0,
-    status: "playing" as const,
-  },
+const room: RaceRoom = { code: "RAIN99", hostId: "user-1", gameMode: "rain", status: "playing", words, runId: "run-1", serverNow: 1000, countdownEndsAt: 1000, matchEndsAt: 121000 };
+const initialPlayers = [
+  createRacePlayer({ uid: "user-1", displayName: "Player 1" }, room),
+  createRacePlayer({ uid: "user-2", displayName: "Player 2" }, room),
 ];
-
-const mockRoom = {
-  code: "RAIN99",
-  hostId: "user-1",
-  gameMode: "rain" as const,
-  status: "playing" as const,
-  words,
-  currentIndex: 0,
+type View = {
+  room: RaceRoom; players: RacePlayer[]; player: RacePlayer; words: typeof words; now: number;
+  isCountdown: boolean; isFinished: boolean; isPlayerFinished: boolean; pendingCount: number;
+  isClockReady: boolean; clockError: string;
+  syncError: string | null; resetting: boolean; resetError: string | null;
+  submit: ReturnType<typeof vi.fn>; retrySync: ReturnType<typeof vi.fn>; returnToLobby: ReturnType<typeof vi.fn>;
 };
-
-afterEach(() => {
-  vi.useRealTimers();
-  vi.unstubAllGlobals();
-  vi.clearAllMocks();
+let snapshot: View;
+const listeners = new Set<() => void>();
+function update(changes: Partial<View>) {
+  snapshot = { ...snapshot, ...changes };
+  for (const listener of listeners) listener();
+}
+function useMockRace() {
+  return useSyncExternalStore((listener) => { listeners.add(listener); return () => { listeners.delete(listener); }; }, () => snapshot);
+}
+function mount(uid = "user-1") {
+  return render(<MultiplayerVocabularyRain roomCode="RAIN99" initialRoom={room} initialPlayers={initialPlayers} currentUserId={uid} muted={true} onExit={vi.fn()} onReturnToLobby={vi.fn()} />);
+}
+beforeEach(() => {
+  vi.useFakeTimers(); vi.stubGlobal("React", React);
+  mock.hook.mockImplementation(useMockRace);
+  const submit = vi.fn((event: { type: "answer" | "timeout" | "finish"; questionIndex: number; selected?: string }) => {
+    const player = advanceRacePlayer(snapshot.player, { ...event, at: snapshot.now, seq: snapshot.player.revision + 1 }, words, "rain");
+    update({ player, players: snapshot.players.map((value) => value.uid === player.uid ? player : value), isPlayerFinished: player.status !== "playing", pendingCount: snapshot.pendingCount + 1 });
+  });
+  snapshot = { room, players: initialPlayers, player: initialPlayers[0], words, now: 1000, isCountdown: false, isFinished: false, isPlayerFinished: false, pendingCount: 0, isClockReady: true, clockError: "", syncError: null, resetting: false, resetError: null, submit, retrySync: vi.fn(), returnToLobby: vi.fn(() => update({ resetError: "Không thể trở lại phòng." })) };
 });
-
-describe("MultiplayerVocabularyRain", () => {
-  it("renders the falling rain clue with meaning and scoreboard", () => {
-    render(
-      <MultiplayerVocabularyRain
-        roomCode="RAIN99"
-        initialRoom={mockRoom}
-        initialPlayers={mockPlayers}
-        currentUserId="user-1"
-        muted={true}
-        onExit={vi.fn()}
-      />
-    );
-
-    expect(screen.getByText("Mưa Từ Vựng — Đua Tốc Độ")).toBeInTheDocument();
-    expect(screen.getByText(/PHÒNG #RAIN99/i)).toBeInTheDocument();
+afterEach(() => { cleanup(); listeners.clear(); vi.useRealTimers(); vi.unstubAllGlobals(); vi.clearAllMocks(); });
+describe("independent multiplayer rain", () => {
+  it("keeps clock recovery and exit available during gated countdown", () => {
+    snapshot = { ...snapshot, isCountdown: true, isClockReady: false, clockError: "Chưa kết nối được đồng hồ trận đấu.", room: { ...room, countdownEndsAt: undefined } };
+    mount();
+    expect(screen.getByRole("alert")).toHaveTextContent(snapshot.clockError);
+    fireEvent.click(screen.getByRole("button", { name: "Thử đồng bộ lại" }));
+    expect(snapshot.retrySync).toHaveBeenCalledOnce();
+    expect(screen.getByRole("button", { name: "Rời phòng" })).toBeInTheDocument();
+    expect(screen.queryByRole("textbox")).not.toBeInTheDocument();
+  });
+  it("keeps optimistic personal progress when real subscription replays a stale revision", async () => {
+    const real = await vi.importActual<typeof import("./useVocabRace")>("./useVocabRace");
+    mock.hook.mockImplementation(real.useVocabRace);
+    mock.subscribe.mockReturnValue(() => {});
+    vi.setSystemTime(1000);
+    sessionStorage.clear();
+    const fetcher = vi.fn<(url: string, init?: RequestInit) => Promise<Response>>(() => new Promise<Response>(() => {}));
+    vi.stubGlobal("fetch", fetcher);
+    mount();
+    fireEvent.change(screen.getByRole("textbox"), { target: { value: "carry" } });
+    expect(screen.queryByText("mang theo")).not.toBeInTheDocument();
+    const handlers = mock.subscribe.mock.calls[0][1] as { players: (players: RacePlayer[]) => void };
+    act(() => handlers.players(initialPlayers));
+    expect(screen.queryByText("mang theo")).not.toBeInTheDocument();
+    act(() => { vi.advanceTimersByTime(250); });
+    expect(fetcher).toHaveBeenCalledWith("/api/vocab/game-room/answer", expect.objectContaining({ method: "POST" }));
+    expect(screen.getByText("hóa đơn")).toBeInTheDocument();
+    const body = JSON.parse(String(fetcher.mock.calls.find((call) => String(call[0]).endsWith("/answer"))?.[1]?.body));
+    expect(body.events).toEqual([expect.objectContaining({ type: "answer", questionIndex: 0, selected: "carry", seq: 1 })]);
+  });
+  it("renders only personal drops and keeps them unchanged after an opponent catch", () => {
+    mount();
     expect(screen.getByText("mang theo")).toBeInTheDocument();
-    expect(screen.getByPlaceholderText(/Gõ từ tiếng Anh tương ứng/)).toBeInTheDocument();
+    const opponent = advanceRacePlayer(initialPlayers[1], { seq: 1, type: "answer", questionIndex: 0, selected: "carry", at: 1000 }, words, "rain");
+    act(() => update({ players: [snapshot.player, opponent], room: { ...room, currentIndex: 2 } }));
+    expect(screen.getByText("mang theo")).toBeInTheDocument();
+    expect(screen.getByLabelText("Còn 3 mạng")).toBeInTheDocument();
+    expect(snapshot.submit).not.toHaveBeenCalled();
   });
-
-  it("submits correct word when player types matching English word", async () => {
-    const fetchMock = vi.fn(async (url: string) => {
-      if (url.includes("/api/vocab/game-room/answer")) {
-        return new Response(JSON.stringify({ success: true }), { status: 200 });
-      }
-      return new Response(JSON.stringify({ success: true, data: {} }), { status: 200 });
-    });
-    vi.stubGlobal("fetch", fetchMock);
-
-    render(
-      <MultiplayerVocabularyRain
-        roomCode="RAIN99"
-        initialRoom={mockRoom}
-        initialPlayers={mockPlayers}
-        currentUserId="user-1"
-        muted={true}
-        onExit={vi.fn()}
-      />
-    );
-
-    const input = screen.getByPlaceholderText(/Gõ từ tiếng Anh tương ứng/);
-    fireEvent.change(input, { target: { value: "carry" } });
-
-    await waitFor(() => {
-      expect(fetchMock).toHaveBeenCalledWith(
-        "/api/vocab/game-room/answer",
-        expect.objectContaining({
-          method: "POST",
-          body: JSON.stringify({
-            code: "RAIN99",
-            questionIndex: 0,
-            correct: true,
-            selected: "carry",
-          }),
-        })
-      );
-    });
-
-    expect(screen.getByText(/Chính xác! Bạn đã bắt được từ "carry"!/)).toBeInTheDocument();
+  it("catches its own word immediately while synchronization remains pending", () => {
+    mount();
+    fireEvent.change(screen.getByRole("textbox"), { target: { value: "carry" } });
+    expect(snapshot.submit).toHaveBeenCalledWith({ type: "answer", questionIndex: 0, selected: "carry" });
+    expect(screen.queryByText("mang theo")).not.toBeInTheDocument();
+    expect(snapshot.player.score).toBe(10);
+    expect(screen.getByText(/1 lượt đang đồng bộ/)).toBeInTheDocument();
+    expect(screen.getByRole("textbox")).toHaveValue("");
+    expect(snapshot.players[1]).toEqual(initialPlayers[1]);
+    act(() => update({ now: 1200 }));
+    expect(screen.getByText("hóa đơn")).toBeInTheDocument();
   });
-
-  it("locks input and shows elimination spectator screen when player has 0 lives", () => {
-    const eliminatedPlayers = [
-      { ...mockPlayers[0], lives: 0, status: "eliminated" as const },
-      { ...mockPlayers[1], lives: 2 },
-    ];
-
-    render(
-      <MultiplayerVocabularyRain
-        roomCode="RAIN99"
-        initialRoom={mockRoom}
-        initialPlayers={eliminatedPlayers}
-        currentUserId="user-1"
-        muted={true}
-        onExit={vi.fn()}
-      />
-    );
-
-    expect(screen.getByText(/BẠN ĐÃ HẾT TIM & BỊ LOẠI!/)).toBeInTheDocument();
-    expect(screen.queryByPlaceholderText(/Gõ từ tiếng Anh tương ứng/)).not.toBeInTheDocument();
-    expect(screen.getAllByText(/Player 2/).length).toBeGreaterThan(0);
+  it("expires only own active drops exactly once and never while eliminated", () => {
+    mount();
+    act(() => update({ now: 14000 }));
+    expect(snapshot.submit).toHaveBeenCalledTimes(1);
+    expect(snapshot.submit).toHaveBeenCalledWith({ type: "timeout", questionIndex: 0 });
+    expect(snapshot.player.lives).toBe(2);
+    expect(snapshot.players[1].lives).toBe(3);
+    act(() => update({ now: 14001 }));
+    expect(snapshot.submit).toHaveBeenCalledTimes(1);
+    act(() => update({ isPlayerFinished: true, player: { ...snapshot.player, lives: 0, status: "eliminated" }, now: 50000 }));
+    expect(snapshot.submit).toHaveBeenCalledTimes(1);
+    expect(screen.queryByRole("textbox")).not.toBeInTheDocument();
   });
-
-  it("renders victory podium and triggers rematch reset when clicking 'Quay lại phòng chơi tiếp'", async () => {
-    const finishedRoom = {
-      ...mockRoom,
-      status: "finished" as const,
-    };
-
-    const fetchMock = vi.fn(async (url: string) => {
-      if (url.includes("/api/vocab/game-room/reset")) {
-        return new Response(JSON.stringify({ success: true, status: "waiting" }), { status: 200 });
-      }
-      return new Response(JSON.stringify({ success: true, data: {} }), { status: 200 });
-    });
-    vi.stubGlobal("fetch", fetchMock);
-
-    const onReturnToLobby = vi.fn();
-    render(
-      <MultiplayerVocabularyRain
-        roomCode="RAIN99"
-        initialRoom={finishedRoom}
-        initialPlayers={mockPlayers}
-        currentUserId="user-1"
-        muted={true}
-        onExit={vi.fn()}
-        onReturnToLobby={onReturnToLobby}
-      />
-    );
-
+  it("waits for opponents after own last catch instead of ending the room", () => {
+    const player = { ...initialPlayers[0], activeDrops: [{ index: 2, lane: 0, spawnAt: 1000 }], nextIndex: 3 };
+    snapshot = { ...snapshot, player, players: [player, initialPlayers[1]] };
+    mount();
+    fireEvent.change(screen.getByRole("textbox"), { target: { value: "invoice" } });
+    expect(screen.getByText("Bạn đã hoàn thành lượt chơi!")).toBeInTheDocument();
+    expect(screen.getByText(/Đang chờ các đối thủ/)).toBeInTheDocument();
+    expect(screen.queryByText("TỔNG KẾT MƯA TỪ VỰNG")).not.toBeInTheDocument();
+    expect(screen.queryByRole("textbox")).not.toBeInTheDocument();
+  });
+  it("keeps typing mistakes local until submission, then resets only own combo", () => {
+    snapshot = { ...snapshot, player: { ...snapshot.player, combo: 4 } };
+    mount();
+    fireEvent.change(screen.getByRole("textbox"), { target: { value: "typo" } });
+    expect(snapshot.submit).not.toHaveBeenCalled();
+    fireEvent.click(screen.getByRole("button", { name: "Bắt từ" }));
+    expect(snapshot.player.combo).toBe(0);
+    expect(snapshot.player.lives).toBe(3);
+  });
+  it("shows sync errors with retry and keeps final results after reset fails", () => {
+    snapshot = { ...snapshot, isFinished: true, room: { ...room, status: "finished" }, syncError: "Mất kết nối" };
+    mount();
+    fireEvent.click(screen.getByRole("button", { name: "Thử đồng bộ lại" }));
+    expect(snapshot.retrySync).toHaveBeenCalledOnce();
+    fireEvent.click(screen.getByRole("button", { name: "Quay lại phòng chơi tiếp" }));
+    expect(screen.getByRole("alert")).toHaveTextContent("Không thể trở lại phòng.");
     expect(screen.getByText("TỔNG KẾT MƯA TỪ VỰNG")).toBeInTheDocument();
-    expect(screen.getByText(/Quán quân gõ nhanh/i)).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: /Quay lại phòng chơi tiếp/i })).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: /Rời phòng/i })).toBeInTheDocument();
-
-    fireEvent.click(screen.getByRole("button", { name: /Quay lại phòng chơi tiếp/i }));
-
-    await waitFor(() => {
-      expect(fetchMock).toHaveBeenCalledWith(
-        "/api/vocab/game-room/reset",
-        expect.objectContaining({
-          method: "POST",
-          body: JSON.stringify({ code: "RAIN99" }),
-        })
-      );
-      expect(onReturnToLobby).toHaveBeenCalledTimes(1);
-    });
+  });
+  it("shows exact ties and lets only host request rematch", () => {
+    snapshot = { ...snapshot, isFinished: true, room: { ...room, status: "finished" } };
+    mount("user-2");
+    expect(screen.getByText("Đồng quán quân")).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Quay lại phòng chơi tiếp" })).not.toBeInTheDocument();
+    expect(screen.getByText(/Đang chờ chủ phòng/)).toBeInTheDocument();
   });
 });

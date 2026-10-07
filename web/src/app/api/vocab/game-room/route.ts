@@ -40,10 +40,10 @@ export const GET = withErrorHandling(async (req) => {
 
   // If all players are eliminated, auto-finalize room to finished
   if (
-    data.room &&
+    data.room && data.room.raceVersion !== 2 &&
     data.room.status === "playing" &&
     data.players.length >= 1 &&
-    data.players.every((p: any) => (p.lives ?? 3) <= 0)
+    data.players.every(p => (p.lives ?? 3) <= 0)
   ) {
     const { adminDb } = await import("@/lib/firebase/admin");
     const { COLLECTIONS } = await import("@/lib/firestore/collections");

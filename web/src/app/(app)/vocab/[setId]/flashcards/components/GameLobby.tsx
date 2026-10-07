@@ -134,6 +134,7 @@ export function GameLobby({
           <p className="text-xs sm:text-sm text-[var(--ink2)] mt-5 text-center font-medium max-w-xs">
             Gửi mã hoặc quét QR cho bạn bè cùng vào. Tối đa 5 người / phòng.
           </p>
+          <p className="mt-3 text-sm text-[var(--ink2)]">Cùng bộ từ, mỗi người chơi lượt riêng. Trận 2 phút · 3 tim · mỗi câu đúng được 10 điểm × combo. Mỗi 3 câu đúng liên tiếp tăng một bậc, tối đa ×4; trả lời sai sẽ ngắt combo.</p>
         </div>
 
         {/* Right Panel */}

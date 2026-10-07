@@ -231,7 +231,12 @@ export default function VocabularyArcade({
       }
       setLobbyRoom((prev: any) => ({
         ...prev,
+        ...json.data?.room,
         status: "countdown",
+        raceVersion: json.data?.raceVersion,
+        runId: json.data?.runId,
+        matchEndsAt: json.data?.matchEndsAt,
+        serverNow: json.data?.serverNow,
         countdownEndsAt: json.data?.countdownEndsAt || Date.now() + arcadeCountdownMs(prev.gameMode || mode),
         questionDurationMs: json.data?.questionDurationMs,
         roundStartedAt: json.data?.roundStartedAt || json.data?.countdownEndsAt,
@@ -240,9 +245,7 @@ export default function VocabularyArcade({
         nextIndex: json.data?.nextIndex,
         currentIndex: 0,
       }));
-      setLobbyPlayers((prev) =>
-        prev.map((p) => ({ ...p, status: "playing", lives: 3, score: 0 }))
-      );
+      setLobbyPlayers((prev) => json.data?.players ?? prev.map((p) => ({ ...p, status: "playing", lives: 3, score: 0 })));
       setView("multiplayer");
     } catch {
       if (operation !== roomOperation.current) return;
@@ -300,7 +303,7 @@ export default function VocabularyArcade({
       {roomError && <p role="alert" className="rounded-xl bg-danger-soft p-3 text-sm text-danger">{roomError}</p>}
       <GameLobby
         roomCode={roomCode}
-        gameMode={mode}
+        gameMode={lobbyRoom?.gameMode || mode}
         players={lobbyPlayers}
         currentUserId={currentUserId}
         isHost={isHost}
@@ -318,7 +321,7 @@ export default function VocabularyArcade({
     const isRain = (lobbyRoom.gameMode || mode) === "rain";
     return isRain ? (
       <MultiplayerVocabularyRain
-        key={`multiplayer-rain-${roomCode}`}
+        key={`multiplayer-rain-${roomCode}-${lobbyRoom.runId ?? "legacy"}`}
         roomCode={roomCode}
         initialRoom={lobbyRoom}
         initialPlayers={lobbyPlayers}
@@ -340,7 +343,7 @@ export default function VocabularyArcade({
       />
     ) : (
       <MultiplayerWordBlast
-        key={`multiplayer-blast-${roomCode}`}
+        key={`multiplayer-blast-${roomCode}-${lobbyRoom.runId ?? "legacy"}`}
         roomCode={roomCode}
         initialRoom={lobbyRoom}
         initialPlayers={lobbyPlayers}

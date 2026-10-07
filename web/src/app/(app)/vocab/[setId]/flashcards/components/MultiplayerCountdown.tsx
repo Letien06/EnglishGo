@@ -14,6 +14,8 @@ interface MultiplayerCountdownProps {
   currentUserId: string;
   muted?: boolean;
   onFinish?: () => void;
+  now?: number;
+  clockPending?: boolean;
 }
 
 function playBeep(freq: number, duration = 0.12) {
@@ -42,14 +44,17 @@ export function MultiplayerCountdown({
   currentUserId,
   muted = false,
   onFinish,
+  now,
+  clockPending = false,
 }: MultiplayerCountdownProps) {
   const [secondsLeft, setSecondsLeft] = useState<number>(() => {
-    return Math.max(0, Math.ceil((countdownEndsAt - Date.now()) / 1000));
+    return Math.max(0, Math.ceil((countdownEndsAt - (now ?? Date.now())) / 1000));
   });
 
   useEffect(() => {
+    if (clockPending) return;
     const checkTimer = () => {
-      const remainingMs = countdownEndsAt - Date.now();
+      const remainingMs = countdownEndsAt - (now ?? Date.now());
       const s = Math.max(0, Math.ceil(remainingMs / 1000));
       setSecondsLeft((prev) => {
         if (s !== prev) {
@@ -71,7 +76,7 @@ export function MultiplayerCountdown({
     checkTimer();
     const interval = window.setInterval(checkTimer, 100);
     return () => window.clearInterval(interval);
-  }, [countdownEndsAt, muted, onFinish]);
+  }, [countdownEndsAt, muted, onFinish, now, clockPending]);
 
   const modeTitle = gameMode === "rain" ? "MƯA TỪ VỰNG" : "WORD BLAST";
 
@@ -93,12 +98,12 @@ export function MultiplayerCountdown({
         {modeTitle}
       </h2>
       <p className="relative z-10 text-xs sm:text-sm text-[var(--muted)] font-medium mb-6">
-        Máy chủ đang đồng bộ từ vựng & kết nối mọi người chơi...
+        Cùng bộ từ, mỗi người một lượt chơi. Đua điểm và giữ combo!
       </p>
 
       {/* Big Animated Countdown Number */}
       <div className="relative z-10 my-4 flex items-center justify-center w-36 h-36">
-        {secondsLeft > 0 ? (
+        {clockPending ? <span className="text-lg font-bold text-[var(--muted)]" role="status">Đang kết nối…</span> : secondsLeft > 0 ? (
           <div
             key={secondsLeft}
             className="text-7xl sm:text-8xl font-black font-mono text-transparent bg-clip-text bg-gradient-to-b from-amber-300 via-amber-400 to-amber-500 drop-shadow-[0_0_35px_rgba(251,191,36,0.6)] animate-[ping_0.9s_cubic-bezier(0,0,0.2,1)]"
@@ -116,8 +121,8 @@ export function MultiplayerCountdown({
       </div>
 
       <p className="relative z-10 text-sm font-bold text-amber-400 mt-2 mb-6">
-        {secondsLeft > 0
-          ? "Chuẩn bị phản xạ nhanh để cướp điểm!"
+        {clockPending ? "Đang lấy thời gian trận đấu." : secondsLeft > 0
+          ? "Chuẩn bị phản xạ nhanh và giữ combo!"
           : "Trận đấu chính thức bắt đầu!"}
       </p>
 
