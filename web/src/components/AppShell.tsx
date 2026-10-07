@@ -13,6 +13,7 @@ import PwaInstallPrompt from "./PwaInstallPrompt";
 import HeaderJoinRoomButton from "./HeaderJoinRoomButton";
 import { clearActiveLearnerCache, setActiveLearnerId } from "@/lib/client-learning-progress-cache";
 import { useVocabReviewQueue } from "@/lib/vocab-review-queue";
+import { useReadingProgressQueue } from "@/lib/reading-progress-queue";
 
 const StudyStreakCelebration = dynamic(() => import("./StudyStreakCelebration"), { ssr: false });
 
@@ -109,6 +110,7 @@ export default function AppShell({ children }: { children: ReactNode }) {
   const authenticated = bootstrap?.authenticated === true;
   const sessionAuthenticated = session?.authenticated === true;
   useVocabReviewQueue(session?.user?.uid, sessionAuthenticated);
+  useReadingProgressQueue(session?.user?.uid, sessionAuthenticated);
   const isPracticeWorkspace =
     pathname.startsWith("/listen/practice") ||
     pathname.startsWith("/read/practice") ||
@@ -116,8 +118,6 @@ export default function AppShell({ children }: { children: ReactNode }) {
     pathname.startsWith("/writing/practice");
 
   useEffect(() => {
-    if (isPracticeWorkspace) return;
-
     let cancelled = false;
     void loadAppSession().then((nextSession) => {
       if (cancelled) return;

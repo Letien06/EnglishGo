@@ -1,5 +1,5 @@
 import React from "react";
-import { cleanup, fireEvent, render, screen, within } from "@testing-library/react";
+import { act, cleanup, fireEvent, render, screen, within } from "@testing-library/react";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import type { DauToeicDifficultySession, DauToeicPracticeItem, DauToeicQuestion } from "@/types/dautoeic";
 import ReadPracticeClient from "./ReadPracticeClient";
@@ -23,9 +23,9 @@ function item(id: string, questions: DauToeicQuestion[], overrides: Partial<DauT
     audioUrl: null, imageUrl: null, transcript: null, translation: null, vocabulary: null, questions, ...overrides,
   };
 }
-function mount(items: DauToeicPracticeItem[], mode = "bilingual", part = 5) {
+function mount(items: DauToeicPracticeItem[], mode = "bilingual", part = 5, uid: string | null = null) {
   const session: DauToeicDifficultySession = { part, level: 1, title: "Practice", total: items.length, items };
-  return render(<ReadPracticeClient session={session} partId={`part${part}`} partNum={part} level={1} mode={mode} userLoggedIn={false} userUid={null} initialIndex={0} />);
+  return render(<ReadPracticeClient session={session} partId={`part${part}`} partNum={part} level={1} mode={mode} userLoggedIn={Boolean(uid)} userUid={uid} initialIndex={0} />);
 }
 beforeEach(() => {
   vi.useFakeTimers(); vi.stubGlobal("React", React);
@@ -34,6 +34,43 @@ beforeEach(() => {
   window.history.replaceState(null, "", "/read/practice?part=part5&level=1");
 });
 afterEach(() => { cleanup(); vi.useRealTimers(); vi.restoreAllMocks(); vi.unstubAllGlobals(); });
+
+it("grades offline immediately and retries the original authenticated answer after changing mode", async () => {
+  vi.spyOn(navigator, "onLine", "get").mockReturnValue(false);
+  const send = vi.mocked(fetch).mockImplementation(async (_url, init) => {
+    const body = JSON.parse(String(init?.body));
+    return { ok: true, json: async () => ({ success: true, data: { saved: true, authenticated: true, uid: body.expectedUid, requestId: body.requestId } }) } as Response;
+  });
+  mount([item("offline-item", [question("offline-question")])], "bilingual", 5, "reading-ui-offline");
+  fireEvent.click(screen.getByLabelText("Đáp án A"));
+  expect(screen.getByLabelText("Đáp án A")).toBeChecked();
+  expect(screen.getByRole("status")).toHaveTextContent("1 câu đang chờ lưu");
+  expect(send).not.toHaveBeenCalled();
+  fireEvent.click(screen.getByRole("button", { name: "Bình thường" }));
+  vi.spyOn(navigator, "onLine", "get").mockReturnValue(true);
+  fireEvent.click(screen.getByRole("button", { name: "Thử lưu lại" }));
+  await act(async () => { await vi.advanceTimersByTimeAsync(0); });
+  expect(send).toHaveBeenCalledTimes(1);
+  expect(JSON.parse(String(send.mock.calls[0][1]?.body))).toMatchObject({
+    expectedUid: "reading-ui-offline", requestId: expect.any(String), part: 5, level: 1,
+    itemId: "offline-item", questionId: "offline-question", selectedAnswer: "A", correctAnswer: "B", modeUsed: "bilingual",
+  });
+  expect(screen.queryByText(/câu đang chờ lưu/)).not.toBeInTheDocument();
+  expect(screen.getByLabelText("Đáp án A")).toBeChecked();
+});
+
+it("restores the newest queued answer when persisted keys enumerate in reverse order", () => {
+  vi.spyOn(navigator, "onLine", "get").mockReturnValue(false);
+  const uid = "reading-ui-ordered", prefix = `englishgo:reading-progress-queue:${uid}:`;
+  const action = { part: 5, level: 1, itemId: "ordered-item", questionId: "ordered-question", correctAnswer: "B", modeUsed: "normal", assistPercent: 0, elapsedSeconds: 1 };
+  for (const [queuedAt, selectedAnswer] of [[20, "A"], [10, "B"]] as const) {
+    const requestId = crypto.randomUUID();
+    localStorage.setItem(`${prefix}${requestId}`, JSON.stringify({ requestId, queuedAt, action: { ...action, selectedAnswer } }));
+  }
+  mount([item("ordered-item", [question("ordered-question")])], "normal", 5, uid);
+  expect(screen.getByLabelText("Đáp án A")).toBeChecked();
+  expect(screen.getByRole("status")).toHaveTextContent("2 câu đang chờ lưu");
+});
 
 it("shows the paired Vietnamese Part 5 sentence before answering and retains the answer across modes", () => {
   const translation = "Nhân viên rất hài lòng với lịch làm việc mới.";
@@ -53,7 +90,7 @@ it("shows the paired Vietnamese Part 5 sentence before answering and retains the
   fireEvent.click(screen.getByRole("button", { name: "Bình thường" }));
   fireEvent.click(screen.getByRole("button", { name: "Song ngữ" }));
   expect(screen.getByLabelText("Đáp án B")).toBeChecked();
-  expect(fetch).toHaveBeenCalledTimes(1);
+  expect(fetch).not.toHaveBeenCalled();
 });
 
 it("keeps normal mode untranslated until the legacy answer feedback is shown", () => {
@@ -153,5 +190,5 @@ it.each([6, 7])("shows the whole Part %i passage translation once before and aft
   expect(screen.getAllByText(translation)).toHaveLength(1);
   expect(screen.getAllByRole("region", { name: "Bản dịch đoạn đọc" })).toHaveLength(1);
   expect(screen.queryByText("Dịch nghĩa câu hỏi")).not.toBeInTheDocument();
-  expect(fetch).toHaveBeenCalledTimes(2);
+  expect(fetch).not.toHaveBeenCalled();
 });

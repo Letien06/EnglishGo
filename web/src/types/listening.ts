@@ -66,6 +66,9 @@ export interface ListeningVocabBasketDoc {
 /* ------------------------------------------------------------------ */
 
 export interface ProgressRequest {
+  requestId?: string | null;
+  expectedUid?: string | null;
+  answeredAtMillis?: number | null;
   testId?: string | null;
   part: number | null;
   level: number | null;
@@ -83,6 +86,8 @@ export interface ProgressResponse {
   saved: boolean;
   authenticated: boolean;
   correct: boolean;
+  requestId?: string;
+  uid?: string;
 }
 
 export interface ProgressSummary {

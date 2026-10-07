@@ -3,10 +3,14 @@ import { revalidateTag } from "next/cache";
 import { adminDb } from "../firestore/db";
 import { readServerCache } from "../server-cache";
 import { ApiError } from "../api/response";
-import { recordSkillQuestionLeaderboard } from "./leaderboard";
-import { recordStudyActivity, type StudyModule } from "./study-activity";
+import { type StudyModule } from "./study-activity";
+import { saveLearningProgress } from "./learning-progress-save";
+import { prepareLearningProgressProjection } from "./learning-progress-projection";
 import { getDifficultySession, getReadingDifficultySession, listDifficultyLevels, listReadingDifficultyLevels } from "./dautoeic";
 import { DAUTOEIC_LEVEL_COUNT } from "./dautoeic-source";
+import { createHash } from "node:crypto";
+import { logInfo } from "../logging";
+import { prepareLearningProgressProjectionReset, readLearningProgressProjection } from "./learning-progress-projection";
 import { getTestPartSession, type TestPartCatalogEntry } from "./test-part-practice";
 import type { DauToeicDifficultyLevel, DauToeicPartTest } from "../../types/dautoeic";
 import type {
@@ -78,16 +82,38 @@ export function createLearningToolService(
     testId?: string | null,
   ): Promise<ListeningProgressDoc[]> {
     if (part != null && testId) {
-      const [rows, session] = await Promise.all([cachedProgressRows(uid, [part]), getTestPartSession(testId, part)]);
+      const session = await getTestPartSession(testId, part);
       const questionIds = new Set(session.items.flatMap((item) => item.questions.map((question) => question.id)));
-      return rows.filter((row) => row.questionId && questionIds.has(row.questionId));
+      const rows = await targetedProgressRows(uid, part, "questionId", [...questionIds]);
+      return rows.filter((row) => row.part === part && row.questionId && questionIds.has(row.questionId));
     }
     if (part == null || level == null) return [];
-    const [rows, itemIds] = await Promise.all([
-      cachedProgressRows(uid, [part]),
-      currentLevelItemIds(part, level),
-    ]);
-    return rows.filter((row) => row.itemId && itemIds.has(row.itemId));
+    const itemIds = await currentLevelItemIds(part, level);
+    const rows = await targetedProgressRows(uid, part, "itemId", [...itemIds]);
+    return rows.filter((row) => row.part === part && row.itemId && itemIds.has(row.itemId));
+  }
+
+  async function targetedProgressRows(uid: string, part: number, field: "questionId" | "itemId", ids: string[]) {
+    const uniqueIds = [...new Set(ids)].sort();
+    if (!uniqueIds.length) return [];
+    const fingerprint = createHash("sha256").update(JSON.stringify(uniqueIds)).digest("hex");
+    return readServerCache(async () => {
+      const startedAt = Date.now();
+      let documentReads = 0;
+      const docs: FirebaseFirestore.QueryDocumentSnapshot[] = [];
+      // Single-field IN queries need no new composite index. Four concurrent chunks bound load.
+      for (let offset = 0; offset < uniqueIds.length; offset += 120) {
+        const snapshots = await Promise.all(Array.from({ length: Math.min(4, Math.ceil((uniqueIds.length - offset) / 30)) }, (_, index) =>
+          userCol(uid, config.progressCollection).where(field, "in", uniqueIds.slice(offset + index * 30, offset + (index + 1) * 30)).get(),
+        ));
+        docs.push(...snapshots.flatMap((snapshot) => snapshot.docs));
+        documentReads += snapshots.reduce((total, snapshot) => total + Math.max(1, snapshot.docs.length), 0);
+      }
+      if (process.env.NODE_ENV === "production") logInfo("learning_progress_read", { module: config.module, part, strategy: "selection", selectionCount: uniqueIds.length, returnedCount: docs.length, documentReads, durationMs: Date.now() - startedAt });
+      return docs.map(toProgressDoc);
+    }, ["learning-progress-selection-v1", config.module, uid, String(part), field, fingerprint], {
+      revalidate: PROGRESS_CACHE_SECONDS, tags: [progressCacheTag(uid, part)],
+    });
   }
 
   async function currentLevelItemIds(part: number, level: number): Promise<Set<string>> {
@@ -120,10 +146,8 @@ export function createLearningToolService(
     parts: number[],
   ): Promise<ListeningProgressDoc[]> {
     if (parts.length === 0) return [];
-    const snap = await userCol(uid, config.progressCollection)
-      .where("part", "in", parts)
-      .get();
-    return snap.docs.map(toProgressDoc);
+    const projected = await Promise.all(parts.map((part) => readLearningProgressProjection(uid, config.progressCollection, part)));
+    return projected.flat().map((data) => toProgressDoc({ data: () => data }));
   }
 
   function summarizeRows(
@@ -198,18 +222,28 @@ export function createLearningToolService(
       ? new Set((await getTestPartSession(testId, part)).items.flatMap((item) => item.questions.map((question) => question.id)))
       : await currentLevelItemIds(part, level);
     if (itemIds.size === 0) return;
-    const snap = await userCol(uid, config.progressCollection)
-      .where("part", "==", part)
-      .get();
-    const matchingDocs = snap.docs.filter((doc) => {
+    const field = testId ? "questionId" : "itemId";
+    const ids = [...itemIds];
+    const docs: FirebaseFirestore.QueryDocumentSnapshot[] = [];
+    for (let offset = 0; offset < ids.length; offset += 30) {
+      const snapshot = await userCol(uid, config.progressCollection).where(field, "in", ids.slice(offset, offset + 30)).get();
+      docs.push(...snapshot.docs);
+    }
+    const matchingDocs = docs.filter((doc) => {
       const row = toProgressDoc(doc);
       const itemId = testId ? row.questionId : row.itemId;
-      return itemId && itemIds.has(itemId);
+      return row.part === part && itemId && itemIds.has(itemId);
     });
-    for (let offset = 0; offset < matchingDocs.length; offset += 400) {
-      const batch = adminDb.batch();
-      for (const doc of matchingDocs.slice(offset, offset + 400)) batch.delete(doc.ref);
-      await batch.commit();
+    for (let offset = 0; offset < matchingDocs.length; offset += 200) {
+      const selected = matchingDocs.slice(offset, offset + 200);
+      await adminDb.runTransaction(async (tx) => {
+        const resetProjection = await prepareLearningProgressProjectionReset(tx, uid, config.progressCollection, part, selected.flatMap((doc) => {
+          const row = toProgressDoc(doc);
+          return row.questionId ? [row.questionId] : [];
+        }));
+        for (const doc of selected) tx.delete(doc.ref);
+        resetProjection();
+      });
     }
   }
 
@@ -291,33 +325,34 @@ export function createLearningToolService(
 
       if (!uid) return { saved: false, authenticated: false, correct: isCorrect };
 
-      validateProgressRequest(request, config);
-      let scoringLevel: number;
-      let correctAnswer = request.correctAnswer;
-      if (request.testId) {
-        const session = await getTestPartSession(request.testId, request.part!);
-        const item = session.items.find((entry) => entry.id === request.itemId?.trim());
-        const question = item?.questions.find((entry) => entry.id === request.questionId?.trim());
-        if (!item || !question) throw new ApiError("Question does not belong to this test part.", 400);
-        correctAnswer = question.correctAnswer;
-        if (!/^[A-D]$/.test(normalizeAnswer(correctAnswer)) || !/^[A-D]$/.test(normalizeAnswer(request.selectedAnswer))) throw new ApiError("Invalid answer.", 400);
-        isCorrect = normalizeAnswer(request.selectedAnswer) === normalizeAnswer(correctAnswer);
-        const levels = config.module === "listening" ? await listDifficultyLevels(request.part!) : await listReadingDifficultyLevels(request.part!);
-        const original = levels.find((entry) => entry.itemIds.includes(item.id));
-        scoringLevel = original
-          ? await scoringLevelFor({ ...request, level: original.level })
-          : item.sourceLevel ?? 1;
-      } else {
-        scoringLevel = await scoringLevelFor(request);
-      }
-      const questionId = request.questionId!.trim();
-      const now = Date.now();
-      const progressRef = userCol(uid, config.progressCollection).doc(questionId);
-
-      await progressRef.set(
-          {
+      const result = await saveLearningProgress({
+        uid, module: config.module, progressCollection: config.progressCollection, request,
+        prepareProjection: (tx, progress) => prepareLearningProgressProjection(tx, uid, config.progressCollection, progress),
+        resolveProgress: async () => {
+          validateProgressRequest(request, config);
+          let scoringLevel: number;
+          let correctAnswer = request.correctAnswer;
+          if (request.testId) {
+            const session = await getTestPartSession(request.testId, request.part!);
+            const item = session.items.find((entry) => entry.id === request.itemId?.trim());
+            const question = item?.questions.find((entry) => entry.id === request.questionId?.trim());
+            if (!item || !question) throw new ApiError("Question does not belong to this test part.", 400);
+            correctAnswer = question.correctAnswer;
+            if (!/^[A-D]$/.test(normalizeAnswer(correctAnswer)) || !/^[A-D]$/.test(normalizeAnswer(request.selectedAnswer))) throw new ApiError("Invalid answer.", 400);
+            isCorrect = normalizeAnswer(request.selectedAnswer) === normalizeAnswer(correctAnswer);
+            const levels = config.module === "listening" ? await listDifficultyLevels(request.part!) : await listReadingDifficultyLevels(request.part!);
+            const original = levels.find((entry) => entry.itemIds.includes(item.id));
+            scoringLevel = original
+              ? await scoringLevelFor({ ...request, level: original.level })
+              : item.sourceLevel ?? 1;
+          } else {
+            scoringLevel = await scoringLevelFor(request);
+          }
+          const questionId = request.questionId!.trim();
+          const now = Date.now();
+          return {
             source: "DAUTOEIC",
-            part: request.part,
+            part: request.part!,
             level: request.testId ? scoringLevel : request.level,
             testId: request.testId ?? null,
             sourceLevel: scoringLevel,
@@ -332,37 +367,14 @@ export function createLearningToolService(
             elapsedSeconds: Math.max(0, request.elapsedSeconds ?? 0),
             score: isCorrect ? scoringLevel * 10 : 0,
             completedAtMillis: now,
+            requestId: request.requestId ?? FieldValue.delete(),
+            answeredAtMillis: request.answeredAtMillis ?? FieldValue.delete(),
             updatedAt: FieldValue.serverTimestamp(),
-          },
-          { merge: true },
-        );
-      const followUpWrites: Promise<unknown>[] = [
-        recordStudyActivity(uid, {
-          module: config.module,
-          activityType: "answer",
-          metric: config.module,
-          quantity: 1,
-          durationSeconds: request.elapsedSeconds,
-          sourceId: questionId,
-          occurredAtMillis: now,
-        }).catch(() => undefined),
-      ];
-      if (isCorrect) {
-        followUpWrites.push(recordSkillQuestionLeaderboard({
-          uid,
-          module: config.module,
-          part: request.part!,
-          level: scoringLevel,
-          itemId: request.itemId!.trim(),
-          questionId,
-          correct: isCorrect,
-          occurredAtMillis: now,
-          elapsedMillis: Math.max(0, request.elapsedSeconds ?? 0) * 1000,
-        }).catch(() => undefined));
-      }
-      await Promise.all(followUpWrites);
+          };
+        },
+      });
       invalidateProgressCache(uid, request.part);
-      return { saved: true, authenticated: true, correct: isCorrect };
+      return result;
     },
 
     async saveNote(uid, request) {
@@ -503,7 +515,7 @@ function requirePartLevel(
   }
 }
 
-function toProgressDoc(doc: FirebaseFirestore.DocumentSnapshot): ListeningProgressDoc {
+function toProgressDoc(doc: Pick<FirebaseFirestore.DocumentSnapshot, "data">): ListeningProgressDoc {
   const data = doc.data() ?? {};
   return {
     source: str(data, "source"),

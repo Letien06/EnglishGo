@@ -5,9 +5,10 @@ import { decodeHTML } from "entities";
 import Link from "@/components/IntentLink";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { markVisited, routeKey } from "@/lib/nav/session-nav";
-import { invalidateLearningLevels, setActiveLearnerId } from "@/lib/client-learning-progress-cache";
+import { setActiveLearnerId } from "@/lib/client-learning-progress-cache";
 import PracticeHeader from "../../_components/PracticeHeader";
 import { usePracticeResume } from "@/lib/use-practice-resume";
+import { useReadingProgressQueue } from "@/lib/reading-progress-queue";
 import { parseReadingOptionTranslations } from "@/lib/reading-translations";
 import { parseVocabularyEntries, vocabularyRowsText } from "@/lib/practice-vocabulary";
 import type {
@@ -42,6 +43,7 @@ export default function ReadPracticeClient({
   level,
   mode,
   userUid,
+  userLoggedIn,
   initialIndex,
 }: Props) {
   const initialMode = normalizeMode(mode);
@@ -49,8 +51,16 @@ export default function ReadPracticeClient({
   const items = session.items;
   const [currentIndex, setCurrentIndex] = useState(initialIndex);
   const [answeredMap, setAnsweredMap] = useState<Record<string, string>>({});
-  const { markInteraction, resumeStatus } = usePracticeResume({ skill: "reading", uid: userUid, part: partNum, level, testId: session.testId, items, setAnswers: setAnsweredMap, setIndex: setCurrentIndex });
-  const [saveError, setSaveError] = useState("");
+  const progressQueue = useReadingProgressQueue(userUid, userLoggedIn);
+  const pendingAnswers = useMemo(() => {
+    const answers: Record<string, string> = {};
+    for (const action of progressQueue.pending) {
+      if (action.part === partNum && action.level === level && action.testId === session.testId && items.some((entry) => entry.id === action.itemId && entry.questions.some((question) => question.id === action.questionId))) answers[action.questionId] = action.selectedAnswer;
+    }
+    return answers;
+  }, [items, level, partNum, progressQueue.pending, session.testId]);
+  const { markInteraction, resumeStatus } = usePracticeResume({ skill: "reading", uid: userUid, part: partNum, level, testId: session.testId, items, setAnswers: setAnsweredMap, setIndex: setCurrentIndex, pendingAnswers });
+  const enqueueProgress = progressQueue.enqueue;
   const [showNote, setShowNote] = useState(false);
   const [auto, setAuto] = useState(false);
   const [elapsed, setElapsed] = useState(0);
@@ -66,6 +76,24 @@ export default function ReadPracticeClient({
   useEffect(() => {
     setActiveLearnerId(userUid);
   }, [userUid]);
+
+  useEffect(() => {
+    const pending = progressQueue.pending.filter((action) => action.part === partNum && action.level === level && action.testId === session.testId);
+    if (!pending.length) return;
+    // Restore answers from the external durable queue after client storage hydration.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setAnsweredMap((previous) => {
+      const restored = { ...previous };
+      let changed = false;
+      for (const action of [...pending].reverse()) {
+        if (!restored[action.questionId] && items.some((entry) => entry.id === action.itemId && entry.questions.some((question) => question.id === action.questionId))) {
+          restored[action.questionId] = action.selectedAnswer;
+          changed = true;
+        }
+      }
+      return changed ? restored : previous;
+    });
+  }, [items, level, partNum, progressQueue.pending, session.testId]);
 
   useEffect(() => {
     let firstFrame = 0;
@@ -143,7 +171,7 @@ export default function ReadPracticeClient({
     window.scrollTo({ top: 0, behavior: "smooth" });
   }, [items.length]);
 
-  const handleAnswer = useCallback(async (question: DauToeicQuestion, selected: string) => {
+  const handleAnswer = useCallback((question: DauToeicQuestion, selected: string) => {
     if (answeredMap[question.id]) return;
     const selectedAnswer = normalizeAnswer(selected);
     const correctAnswer = normalizeAnswer(question.correctAnswer);
@@ -158,39 +186,21 @@ export default function ReadPracticeClient({
       }, 450);
     }
 
-    try {
-      const response = await fetch("/api/reading/progress", {
-        method: "POST",
-        keepalive: true,
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          part: partNum,
-          level,
-          testId: session.testId,
-          itemId: item.id,
-          questionId: question.id,
-          selectedAnswer,
-          correctAnswer,
-          modeUsed: activeMode,
-          assistPercent: 0,
-          elapsedSeconds: elapsed,
-        }),
-      });
-      const payload = await response.json().catch(() => null) as {
-        success?: boolean;
-        data?: { saved?: boolean; authenticated?: boolean } | null;
-      } | null;
-      if (response.ok && payload?.success && payload.data?.saved && payload.data.authenticated) {
-        invalidateLearningLevels("reading", [partNum], userUid);
-      } else if (userUid) {
-        setSaveError("Chưa lưu được một số câu. Hãy kiểm tra kết nối trước khi rời bài.");
-      }
-    } catch {
-      if (userUid) setSaveError("Chưa lưu được một số câu. Hãy kiểm tra kết nối trước khi rời bài.");
-    }
+    enqueueProgress({
+      part: partNum,
+      level,
+      testId: session.testId,
+      itemId: item.id,
+      questionId: question.id,
+      selectedAnswer,
+      correctAnswer,
+      modeUsed: activeMode,
+      assistPercent: 0,
+      elapsedSeconds: elapsed,
+    });
 
 
-  }, [activeMode, answeredMap, auto, currentIndex, elapsed, goTo, item.id, item.questions, items.length, level, partNum, userUid, session.testId]);
+  }, [activeMode, answeredMap, auto, currentIndex, elapsed, enqueueProgress, goTo, item.id, item.questions, items.length, level, partNum, session.testId]);
 
   useEffect(() => () => {
     if (autoAdvanceRef.current !== null) window.clearTimeout(autoAdvanceRef.current);
@@ -221,7 +231,10 @@ export default function ReadPracticeClient({
   return (
     <main className="skill-workspace skill-workspace--read design-system min-h-dvh bg-surface" onPointerDownCapture={markInteraction} onKeyDownCapture={markInteraction}>
       <PracticeHeader skill="reading" partId={partId} part={partNum} level={level} testId={session.testId} testName={session.testName} setName={session.setName} grouped={session.grouping === "balanced"} modes={modes} activeMode={activeMode} onModeChange={(nextMode) => { if (nextMode === "normal" || nextMode === "bilingual") switchMode(nextMode); }} auto={auto} onToggleAuto={() => setAuto((value) => !value)} elapsed={formatElapsed(elapsed)} />
-      {(saveError || resumeStatus) && <div className="practice-save-status" role="status">{saveError || resumeStatus}</div>}
+      {(progressQueue.pendingCount > 0 || progressQueue.error || resumeStatus) && <div className="practice-save-status flex flex-wrap items-center justify-between gap-2" role="status">
+        <span>{progressQueue.pendingCount > 0 ? `${progressQueue.pendingCount} câu đang chờ lưu${progressQueue.isSaving ? " · Đang đồng bộ…" : ""}${progressQueue.error ? ` · ${progressQueue.error}` : ""}` : progressQueue.error || resumeStatus}</span>
+        {(progressQueue.pendingCount > 0 || progressQueue.error) && <button type="button" onClick={progressQueue.retry} disabled={progressQueue.isSaving} className="rounded-lg border border-control-line bg-surface px-3 py-2 text-sm font-bold text-ink disabled:opacity-50">Thử lưu lại</button>}
+      </div>}
 
       <div className={`practice-content grid min-h-[calc(100dvh-8rem)] lg:grid-cols-[1fr_1fr] ${partNum === 5 ? "practice-content--single" : ""}`}>
         <section className="practice-source-pane border-b border-line px-4 py-5 sm:px-6 lg:border-b-0 lg:border-r lg:px-10 lg:py-6">

@@ -4,7 +4,7 @@ export function mergeFirestoreWrite(previous: Record<string, unknown>, patch: Re
   for (const [key, value] of Object.entries(patch)) {
     if (value && typeof value === "object") {
       const transform = value as { operand?: number; elements?: unknown[] };
-      const name = value.constructor.name;
+      const name = value.constructor?.name;
       if (name === "DeleteTransform") {
         delete next[key];
       } else if (name === "NumericIncrementTransform") {
@@ -13,7 +13,7 @@ export function mergeFirestoreWrite(previous: Record<string, unknown>, patch: Re
         next[key] = [...new Set([...(Array.isArray(next[key]) ? next[key] as unknown[] : []), ...transform.elements!])];
       } else if (name === "ServerTimestampTransform") {
         next[key] = new Date();
-      } else if (Object.getPrototypeOf(value) === Object.prototype) {
+      } else if (Object.getPrototypeOf(value) === Object.prototype || Object.getPrototypeOf(value) === null) {
         next[key] = mergeFirestoreWrite(next[key] && typeof next[key] === "object" ? next[key] as Record<string, unknown> : {}, value as Record<string, unknown>);
       } else next[key] = value;
     } else next[key] = value;

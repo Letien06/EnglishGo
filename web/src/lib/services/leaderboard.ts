@@ -183,21 +183,35 @@ export async function recordSkillQuestionLeaderboard(
   input: SkillQuestionLeaderboardInput,
 ): Promise<void> {
   if (!input.uid?.trim() || !input.correct) return;
+  const userRef = adminDb.collection("users").doc(input.uid);
+  await adminDb.runTransaction(async (tx) => {
+    const [userSnap, writeAward] = await Promise.all([
+      tx.get(userRef), prepareSkillQuestionLeaderboardWrite(tx, input),
+    ]);
+    writeAward(userSnap.data() ?? {});
+  });
+}
+
+/** Read before composing any writes; the returned writer performs no reads. */
+export async function prepareSkillQuestionLeaderboardWrite(
+  tx: FirebaseFirestore.Transaction,
+  input: SkillQuestionLeaderboardInput,
+): Promise<(userData: Record<string, unknown>) => void> {
+  if (!input.uid?.trim() || !input.correct) return () => {};
   const scope: PracticeLeaderboardScope = input.module === "listening" ? "LISTENING" : "READING";
   const points = Math.max(1, Math.min(50, Math.trunc(input.level) * 10));
   const userRef = adminDb.collection("users").doc(input.uid);
-  const userSnap = await userRef.get().catch(() => null);
-  const userData = userSnap?.data() ?? {};
+  // Freeze the week for both document references and payloads across retries.
+  const weekKey = currentWeekKey(new Date(input.occurredAtMillis));
   const awardRef = userRef
     .collection("leaderboardQuestionAwards")
     .doc(skillQuestionAwardId(input.module, input.questionId));
   const allTimeRef = boardEntryRef(input.uid, scope, "ALL_TIME");
-  const weeklyRef = boardEntryRef(input.uid, scope, "WEEKLY");
-
-  await adminDb.runTransaction(async (tx) => {
-    const award = await tx.get(awardRef);
-    const allTime = await tx.get(allTimeRef);
-    const weekly = await tx.get(weeklyRef);
+  const weeklyRef = adminDb.collection("leaderboards").doc(`${scope.toLowerCase()}_weekly_${weekKey}`).collection("entries").doc(input.uid);
+  const award = await tx.get(awardRef);
+  if (award.exists) return () => {};
+  const [allTime, weekly] = await Promise.all([tx.get(allTimeRef), tx.get(weeklyRef)]);
+  return (userData) => {
     if (award.exists) return;
 
     tx.set(awardRef, {
@@ -218,10 +232,10 @@ export async function recordSkillQuestionLeaderboard(
     );
     tx.set(
       weeklyRef,
-      skillBoardPayload(input, scope, points, "WEEKLY", userData, weekly.data() ?? {}),
+      skillBoardPayload(input, scope, points, "WEEKLY", userData, weekly.data() ?? {}, weekKey),
       { merge: true },
     );
-  });
+  };
 }
 
 export async function getPracticeLeaderboard(
@@ -403,8 +417,9 @@ function skillBoardPayload(
   period: PracticeLeaderboardPeriod,
   userData: Record<string, unknown>,
   data: Record<string, unknown>,
+  weekKey?: string,
 ) {
-  const boardId = boardIdFor(scope, period);
+  const boardId = period === "WEEKLY" && weekKey ? `${scope.toLowerCase()}_weekly_${weekKey}` : boardIdFor(scope, period);
   const currentScore = numberValue(data.score) ?? 0;
   const currentCorrect = numberValue(data.correctCount) ?? 0;
   const currentTotal = numberValue(data.questionCount) ?? 0;
@@ -425,7 +440,7 @@ function skillBoardPayload(
     scope,
     period,
     boardId,
-    weekKey: period === "WEEKLY" ? currentWeekKey() : null,
+    weekKey: period === "WEEKLY" ? weekKey ?? currentWeekKey() : null,
     updatedAtMillis: input.occurredAtMillis,
     updatedAt: FieldValue.serverTimestamp(),
     lastQuestionId: input.questionId,

@@ -5,10 +5,10 @@ import type { DauToeicPracticeItem } from "@/types/dautoeic";
 import { usePracticeResume } from "./use-practice-resume";
 
 const items = [{ id: "one", questions: [{ id: "q1" }, { id: "q2" }] }, { id: "two", questions: [{ id: "q3" }] }] as DauToeicPracticeItem[];
-function useHarness(uid: string | null = "learner", testId?: string) {
+function useHarness(uid: string | null = "learner", testId?: string, pendingAnswers?: Record<string, string>) {
   const [answers, setAnswers] = useState<Record<string, string>>({});
   const [index, setIndex] = useState(0);
-  const resume = usePracticeResume({ skill: "reading", uid, part: 7, level: 1, testId, items, setAnswers, setIndex });
+  const resume = usePracticeResume({ skill: "reading", uid, part: 7, level: 1, testId, items, setAnswers, setIndex, pendingAnswers });
   return { ...resume, answers, index, setAnswers, setIndex };
 }
 afterEach(() => vi.unstubAllGlobals());
@@ -30,6 +30,18 @@ describe("background practice history", () => {
     const { result } = renderHook(() => useHarness());
     await waitFor(() => expect(result.current.index).toBe(1));
     expect(result.current.answers).toEqual({ q1: "A", q2: "B" });
+  });
+
+  it("uses latest local pending answers over older history to resume without refetching", async () => {
+    let resolve!: (response: unknown) => void;
+    const fetcher = vi.fn(() => new Promise((done) => { resolve = done; }));
+    vi.stubGlobal("fetch", fetcher);
+    const view = renderHook(({ pending }) => useHarness("learner", undefined, pending), { initialProps: { pending: { q1: "B" } as Record<string, string> } });
+    view.rerender({ pending: { q1: "D", q2: "A" } });
+    await act(async () => resolve({ ok: true, json: async () => ({ success: true, data: { uid: "learner", answers: { q1: "A" } } }) }));
+    expect(view.result.current.answers).toEqual({ q1: "D", q2: "A" });
+    expect(view.result.current.index).toBe(1);
+    expect(fetcher).toHaveBeenCalledTimes(1);
   });
 
   it("never overwrites a new answer or moves a learner who already interacted", async () => {

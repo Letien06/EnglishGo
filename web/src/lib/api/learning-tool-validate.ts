@@ -5,6 +5,9 @@ import { z } from "zod";
 // instead of `T | null | undefined`, which breaks under
 // `exactOptionalPropertyTypes: true` during `next build` type checking.
 export const progressRequestSchema = z.object({
+  requestId: z.uuid().nullable().default(null),
+  expectedUid: z.string().trim().min(1).max(128).nullable().default(null),
+  answeredAtMillis: z.number().int().min(0).max(Number.MAX_SAFE_INTEGER).nullable().default(null),
   testId: z.string().trim().regex(/^[a-zA-Z0-9_-]{1,200}$/).nullable().default(null),
   part: z.coerce.number().nullable().default(null),
   level: z.coerce.number().nullable().default(null),
@@ -16,6 +19,12 @@ export const progressRequestSchema = z.object({
   assistPercent: z.coerce.number().nullable().default(null),
   replayCount: z.coerce.number().nullable().default(null),
   elapsedSeconds: z.coerce.number().nullable().default(null),
+}).refine((request) => Boolean(request.requestId) === Boolean(request.expectedUid), {
+  message: "requestId and expectedUid must be supplied together",
+  path: ["requestId"],
+}).refine((request) => request.answeredAtMillis == null || Boolean(request.requestId), {
+  message: "answeredAtMillis requires a requestId",
+  path: ["answeredAtMillis"],
 });
 
 export const toolRequestSchema = z.object({

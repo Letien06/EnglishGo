@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useRef, useState, type Dispatch, type SetStateAction } from "react";
 import type { DauToeicPracticeItem } from "@/types/dautoeic";
 
-export function usePracticeResume({ skill, uid, part, level, testId, items, setAnswers, setIndex }: {
+export function usePracticeResume({ skill, uid, part, level, testId, items, setAnswers, setIndex, pendingAnswers }: {
   skill: "listening" | "reading";
   uid: string | null;
   part: number;
@@ -12,8 +12,11 @@ export function usePracticeResume({ skill, uid, part, level, testId, items, setA
   items: DauToeicPracticeItem[];
   setAnswers: Dispatch<SetStateAction<Record<string, string>>>;
   setIndex: Dispatch<SetStateAction<number>>;
+  pendingAnswers?: Record<string, string>;
 }) {
   const interacted = useRef(false);
+  const pendingRef = useRef(pendingAnswers);
+  useEffect(() => { pendingRef.current = pendingAnswers; }, [pendingAnswers]);
   const [status, setStatus] = useState(uid ? "Đang khôi phục tiến độ... Bạn có thể học ngay." : "");
   const markInteraction = useCallback(() => { interacted.current = true; }, []);
 
@@ -30,7 +33,7 @@ export function usePracticeResume({ skill, uid, part, level, testId, items, setA
         const answers: Record<string, string> = {};
         for (const item of items) {
           for (const question of item.questions) {
-            const answer = saved?.[question.id];
+            const answer = pendingRef.current?.[question.id] ?? saved?.[question.id];
             if (typeof answer === "string" && /^[A-D]$/.test(answer.trim().toUpperCase())) answers[question.id] = answer.trim().toUpperCase();
           }
         }

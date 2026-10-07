@@ -17,16 +17,36 @@ const mocks = vi.hoisted(() => ({
 vi.mock("next/cache", () => ({ unstable_cache: (callback: unknown) => callback, revalidateTag: vi.fn() }));
 vi.mock("./leaderboard", () => ({ recordSkillQuestionLeaderboard: mocks.award }));
 vi.mock("./study-activity", () => ({ recordStudyActivity: mocks.activity }));
+// Source grading tests keep the durable transaction boundary isolated; real
+// atomic effects and retries are covered in learning-progress-save.test.ts.
+vi.mock("./learning-progress-save", () => ({ saveLearningProgress: async (input: {
+  uid: string; module: string; resolveProgress: () => Promise<Record<string, unknown>>;
+}) => {
+  const data = await input.resolveProgress();
+  await mocks.set(data, { merge: true });
+  await mocks.activity(input.uid, { module: input.module, metric: input.module, quantity: 1, durationSeconds: data.elapsedSeconds });
+  if (data.correct) await mocks.award({ module: input.module, level: data.sourceLevel, questionId: data.questionId });
+  return { saved: true, authenticated: true, correct: data.correct };
+} }));
 vi.mock("./dautoeic", () => ({ listDifficultyLevels: mocks.levels, listReadingDifficultyLevels: mocks.levels, getDifficultySession: mocks.session, getReadingDifficultySession: mocks.session }));
 vi.mock("./test-part-practice", () => ({ getTestPartSession: mocks.testSession }));
+vi.mock("./learning-progress-projection", () => ({
+  readLearningProgressProjection: async (_uid: string, _collection: string, part: number) => {
+    const snapshot = await mocks.get();
+    return snapshot.docs.map((doc: { data: () => Record<string, unknown> }) => doc.data()).filter((row: Record<string, unknown>) => row.part === part);
+  },
+  learningProgressProjectionShard: () => ({ id: "projection" }),
+  prepareLearningProgressProjectionReset: async () => () => {},
+}));
 vi.mock("../firestore/db", () => ({
   adminDb: {
+    runTransaction: async (callback: (tx: unknown) => Promise<unknown>) => callback({ delete: mocks.delete }),
     collection: () => ({ doc: () => ({ collection: () => ({
       where: vi.fn().mockReturnThis(),
       get: mocks.get,
       doc: () => ({ set: mocks.set }),
     }) }) }),
-    batch: () => ({ delete: mocks.delete, commit: mocks.commit }),
+    batch: () => ({ delete: mocks.delete, set: mocks.set, commit: mocks.commit }),
   },
 }));
 
