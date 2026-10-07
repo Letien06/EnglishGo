@@ -8,6 +8,7 @@ import { markVisited, routeKey } from "@/lib/nav/session-nav";
 import { invalidateLearningLevels, setActiveLearnerId } from "@/lib/client-learning-progress-cache";
 import PracticeHeader from "../../_components/PracticeHeader";
 import { usePracticeResume } from "@/lib/use-practice-resume";
+import { parseReadingOptionTranslations } from "@/lib/reading-translations";
 import type {
   DauToeicDifficultySession,
   DauToeicPracticeItem,
@@ -66,6 +67,8 @@ export default function ReadPracticeClient({
   const autoAdvanceRef = useRef<number | null>(null);
   const item = items[currentIndex] ?? items[0];
   const firstQuestion = item.questions[0];
+  const passageTranslation = cleanDisplayText(item.translation);
+  const showPassageTranslation = activeMode === "bilingual" || Boolean(passageTranslation && item.questions.some((question) => answeredMap[question.id]));
 
   useEffect(() => {
     setActiveLearnerId(userUid);
@@ -248,10 +251,15 @@ export default function ReadPracticeClient({
                 Passage
               </h2>
               <pre className="whitespace-pre-wrap font-sans text-base leading-relaxed text-ink">{cleanDisplayText(item.transcript)}</pre>
-              {activeMode === "bilingual" && item.translation && (
-                <pre className="mt-5 whitespace-pre-wrap border-t border-line pt-5 font-sans text-sm leading-relaxed text-muted">
-                  {cleanDisplayText(item.translation)}
-                </pre>
+              {showPassageTranslation && (
+                <section aria-label="Bản dịch đoạn đọc" className="mt-5 border-t border-line pt-5">
+                  <h3 className="mb-2 text-xs font-extrabold uppercase tracking-wider text-teal-ink">Tiếng Việt</h3>
+                  {passageTranslation ? (
+                    <pre lang="vi" className="whitespace-pre-wrap font-sans text-sm leading-relaxed text-ink2">{passageTranslation}</pre>
+                  ) : activeMode === "bilingual" ? (
+                    <p className="text-sm text-muted">Đoạn đọc này chưa có bản dịch tiếng Việt.</p>
+                  ) : null}
+                </section>
               )}
             </article>
           ) : (
@@ -354,11 +362,15 @@ function QuestionCard({
   answered: string | null;
   onAnswer: (selected: string) => void;
 }) {
-  const translations = useMemo(
-    () => parseOptionTranslations(cleanDisplayText(firstText(question.answerTranslationVi, question.translationVi))),
-    [question.answerTranslationVi, question.translationVi],
-  );
-  const options = questionOptions(question);
+  const { options, translations } = useMemo(() => {
+    const options = questionOptions(question);
+    return { options, translations: parseReadingOptionTranslations(cleanDisplayText(question.answerTranslationVi), options) };
+  }, [question]);
+  const sourceTranslation = cleanDisplayText(question.translationVi);
+  const passageTranslation = cleanDisplayText(item.translation);
+  const sentenceTranslation = partNum === 5
+    ? sourceTranslation || (item.questions.length === 1 ? passageTranslation : "")
+    : sourceTranslation !== passageTranslation ? sourceTranslation : "";
   const correctAnswer = normalizeAnswer(question.correctAnswer);
   const correct = answered != null && answered === correctAnswer;
   const questionText = normalizeQuestionText(question.questionText, index + 1);
@@ -370,6 +382,17 @@ function QuestionCard({
       </h3>
       {partNum === 5 && item.transcript && cleanDisplayText(item.transcript) !== questionText && (
         <p className="mb-4 rounded-xl bg-surface-soft p-4 text-sm font-bold leading-relaxed text-ink">{cleanDisplayText(item.transcript)}</p>
+      )}
+
+      {mode === "bilingual" && (sentenceTranslation || partNum === 5) && (
+        <section aria-label="Bản dịch câu hỏi" className="mb-4 rounded-xl border border-teal-line bg-teal-soft p-4">
+          <h4 className="mb-2 text-xs font-extrabold uppercase tracking-wider text-teal-ink">Tiếng Việt</h4>
+          {sentenceTranslation ? (
+            <p lang="vi" className="whitespace-pre-wrap text-base leading-relaxed text-ink">{sentenceTranslation}</p>
+          ) : (
+            <p className="text-sm text-muted">Câu này chưa có bản dịch tiếng Việt.</p>
+          )}
+        </section>
       )}
 
       <div className="space-y-3">
@@ -408,10 +431,17 @@ function QuestionCard({
               tone="blue"
             />
           )}
-          {firstText(question.translationVi, item.translation, question.answerTranslationVi) && (
+          {mode !== "bilingual" && sentenceTranslation && (
             <SolutionBlock
               title="Dịch nghĩa câu hỏi"
-              value={[firstText(question.translationVi, item.translation), firstText(question.answerTranslationVi)].filter(Boolean).join("\n\n")}
+              value={sentenceTranslation}
+              tone="sky"
+            />
+          )}
+          {question.answerTranslationVi && (
+            <SolutionBlock
+              title="Dịch nghĩa đáp án"
+              value={question.answerTranslationVi}
               tone="sky"
             />
           )}
@@ -478,7 +508,7 @@ function AnswerOption({
         {mode === "bilingual" && (
           <>
             <span>{text}</span>
-            {translation && <span className="mt-2 block text-sm font-bold text-ink">{translation}</span>}
+            {translation && <span lang="vi" className="mt-2 block text-sm font-bold text-ink">{translation}</span>}
           </>
         )}
       </span>
@@ -735,21 +765,6 @@ function questionOptions(question: DauToeicQuestion): Array<{ key: string; text:
     .map((option) => ({ ...option, text: cleanDisplayText(option.text) }));
 }
 
-
-function parseOptionTranslations(text: string): Record<string, string> {
-  const result: Record<string, string> = {};
-  if (!text) return result;
-  text
-    .replace(/\r/g, "\n")
-    .split(/\n+|(?=\([A-D]\))/g)
-    .map((part) => part.trim())
-    .filter(Boolean)
-    .forEach((part) => {
-      const match = part.match(/^\(?([A-D])\)?[\s.:-]*(.+)$/i);
-      if (match) result[match[1].toUpperCase()] = match[2].trim();
-    });
-  return result;
-}
 
 async function postTool(url: string, body: Record<string, unknown>) {
   try {
