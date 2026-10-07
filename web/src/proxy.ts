@@ -30,7 +30,6 @@ export async function proxy(request: NextRequest) {
     "/account",
     "/ai",
     "/admin",
-    "/continue",
   ];
 
   const isProtectedRoute = protectedPrefixes.some((prefix) =>

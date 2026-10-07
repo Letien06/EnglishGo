@@ -7,6 +7,7 @@ import useDialogFocus from "@/components/useDialogFocus";
 import { GOAL_KEYS, isDashboardDate, type DashboardPeriod, type DashboardPreferences, type DashboardStats, type DashboardView, type GoalKey } from "@/lib/dashboard-model";
 import { DashboardIcon, StudyCompanion } from "./DashboardArt";
 import styles from "./dashboard.module.css";
+import CompanionEncouragement from "./CompanionEncouragement";
 
 const skills: Record<GoalKey, { label: string; unit: string; href: string; max: number; color: string }> = {
   reading: { label: "Đọc", unit: "câu", href: "/read", max: 200, color: "#52cdb0" },
@@ -148,7 +149,7 @@ export default function DashboardClient({ initial }: { initial: DashboardView })
       <section className={styles.hero}>
         <div className={styles.heroCopy}><span className={styles.eyebrow}>✦ ENGLISHGO CÙNG BẠN</span><h1><span className={styles.heroName}>{initial.greetingName},</span>luyện tiếp thôi!</h1><p>Mỗi ngày một chút, tiến gần hơn đến điểm số bạn mong muốn.</p></div>
         <div className={styles.companion}><StudyCompanion /></div>
-        <Link href="/continue" className={styles.speech}><span>Cùng học thêm một chút hôm nay nhé!</span><span className={styles.speechAction}>Tiếp tục học <DashboardIcon name="arrow" /></span></Link>
+        <CompanionEncouragement />
       </section>
 
       <section className={styles.overview} aria-label="Mục tiêu TOEIC và động lực học">
