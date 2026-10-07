@@ -5,10 +5,13 @@ import path from "node:path";
 import { createJiti } from "jiti";
 import { buildDrivePackage, sha256 } from "./lib/drive-package.mjs";
 import { connectDrive } from "./lib/drive-connection.mjs";
+import { buildReuseCandidates, validateReuseSourceFolder, validateReuseMetadata, verifyReuseChunk } from "./lib/drive-upload-reuse.mjs";
 
-const [mode, input, option, ...extra] = process.argv.slice(2);
+const [mode, input, ...options] = process.argv.slice(2);
 if (!["prepare", "connect", "upload", "verify"].includes(mode) || !input) throw new Error("Use prepare/upload/verify <materials.json> or connect <desktop-oauth-client.json>.");
-if (extra.length || (option && (mode !== "connect" || option !== "--reauthorize"))) throw new Error("Only connect accepts the optional --reauthorize flag.");
+const reauthorize = mode === "connect" && options.length === 1 && options[0] === "--reauthorize";
+const reuseManifestPath = mode === "upload" && options.length === 2 && options[0] === "--reuse-manifest" ? options[1] : undefined;
+if (options.length && !reauthorize && !reuseManifestPath) throw new Error("Use connect --reauthorize or upload <materials.json> --reuse-manifest <manifest.json>.");
 const root = fileURLToPath(new URL("../.seed-tmp/dauenglish-drive/", import.meta.url));
 const credentialFile = path.join(root, "oauth.json");
 const jiti = createJiti(import.meta.url, { fsCache: false });
@@ -18,7 +21,7 @@ const saveJson = (file, value) => writeFile(file, JSON.stringify(value, null, 2)
 await mkdir(root, { recursive: true });
 
 if (mode === "connect") {
-  const connected = await connectDrive({ clientFile: input, credentialFile, createClient: createDriveClient, reauthorize: option === "--reauthorize" });
+  const connected = await connectDrive({ clientFile: input, credentialFile, createClient: createDriveClient, reauthorize });
   console.log(JSON.stringify({ connected: true, ...connected, credentialFile, credentialsPrinted: false }, null, 2));
 } else {
   const json = await readFile(input, "utf8");
@@ -40,6 +43,12 @@ if (mode === "connect") {
     try { state = JSON.parse(await readFile(stateFile, "utf8")); } catch (error) { if (error.code !== "ENOENT") throw error; }
     state ??= { accountEmail: credentials.accountEmail, snapshotSha256: prepared.manifest.snapshotSha256, files: {}, complete: false };
     if (state.accountEmail !== credentials.accountEmail || state.snapshotSha256 !== prepared.manifest.snapshotSha256) throw new Error("Upload checkpoint belongs to another account or snapshot.");
+    let reuseCandidates = new Map();
+    if (reuseManifestPath) {
+      const sourceManifest = driveManifestSchema.parse(JSON.parse(await readFile(reuseManifestPath, "utf8")));
+      const sourceState = JSON.parse(await readFile(path.join(root, sourceManifest.snapshotSha256, "upload-state.json"), "utf8"));
+      reuseCandidates = buildReuseCandidates(sourceManifest, sourceState, credentials.accountEmail, new Set(prepared.files.keys()));
+    }
     const saveState = () => saveJson(stateFile, state);
     const properties = { app: "englishwebapp-dauenglish", snapshot: state.snapshotSha256 };
     async function newId() {
@@ -48,7 +57,7 @@ if (mode === "connect") {
       return result.ids[0];
     }
     async function metadata(fileId) {
-      try { return await (await client.request(`/drive/v3/files/${fileId}?fields=id,mimeType,size,md5Checksum,trashed,parents,appProperties`)).json(); }
+      try { return await (await client.request(`/drive/v3/files/${fileId}?fields=id,mimeType,size,md5Checksum,trashed,parents,appProperties,ownedByMe`)).json(); }
       catch (error) { if (error instanceof DriveError && error.status === 404) return null; throw error; }
     }
     async function ensureFolder() {
@@ -65,16 +74,35 @@ if (mode === "connect") {
         await client.request("/drive/v3/files?fields=id", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ id: state.folderId, name: `EnglishWebApp - Dau English ${prepared.manifest.syncedAt.slice(0, 10)} ${state.snapshotSha256.slice(0, 8)}`, mimeType: "application/vnd.google-apps.folder", appProperties: properties }) });
       }
     }
-    async function ensureText(text, name, mimeType) {
+    const checkedSourceFolders = new Set();
+    async function ensureText(text, name, mimeType, reuseCandidate) {
       const digest = sha256(text);
       if (!state.files[digest]) {
         if (mode === "verify") throw new Error(`Missing upload checkpoint: ${name}`);
-        state.files[digest] = { fileId: await newId(), verified: false };
+        state.files[digest] = reuseCandidate
+          ? { fileId: reuseCandidate.fileId, verified: false, reusedFrom: reuseCandidate.source }
+          : { fileId: await newId(), verified: false };
         await saveState();
       }
       const record = state.files[digest];
       const existing = await metadata(record.fileId);
       const bytes = Buffer.byteLength(text);
+      if (record.reusedFrom) {
+        if (mimeType !== "text/plain") throw new Error("Archive and manifest files cannot be reused.");
+        const candidate = { fileId: record.fileId, bytes, sha256: digest, source: record.reusedFrom };
+        const sourceKey = `${candidate.source.folderId}:${candidate.source.snapshotSha256}`;
+        if (!checkedSourceFolders.has(sourceKey)) {
+          validateReuseSourceFolder(await metadata(candidate.source.folderId), candidate.source);
+          checkedSourceFolders.add(sourceKey);
+        }
+        validateReuseMetadata(existing, candidate, text);
+        if (!record.verified || mode === "verify") {
+          await verifyReuseChunk(client, existing, candidate, text);
+          record.verified = true;
+          await saveState();
+        }
+        return record.fileId;
+      }
       if (existing) {
         if (existing.trashed || existing.appProperties?.snapshot !== state.snapshotSha256 || existing.appProperties?.sha256 !== digest || !existing.parents?.includes(state.folderId) || Number(existing.size) !== bytes || existing.md5Checksum !== createHash("md5").update(text).digest("hex")) throw new Error(`Existing Drive file changed; refusing to overwrite it: ${name}`);
       } else {
@@ -101,7 +129,7 @@ if (mode === "connect") {
     const fileIds = new Map();
     let uploaded = 0;
     for (const [digest, text] of prepared.files) {
-      fileIds.set(digest, await ensureText(text, `${digest}.txt`, "text/plain"));
+      fileIds.set(digest, await ensureText(text, `${digest}.txt`, "text/plain", reuseCandidates.get(digest)));
       uploaded++;
       if (uploaded % 10 === 0 || uploaded === prepared.files.size) console.log(JSON.stringify({ verifiedChunks: uploaded, totalChunks: prepared.files.size }));
     }
@@ -114,6 +142,6 @@ if (mode === "connect") {
     const environmentFile = path.join(folder, ".env.drive.production");
     const environment = { DAUTOEIC_CONTENT_STORAGE: "google-drive", GOOGLE_DRIVE_CLIENT_ID: credentials.clientId, GOOGLE_DRIVE_CLIENT_SECRET: credentials.clientSecret, GOOGLE_DRIVE_REFRESH_TOKEN: credentials.refreshToken, GOOGLE_DRIVE_MANIFEST_ID: manifestId };
     await writeFile(environmentFile, Object.entries(environment).map(([name, value]) => `${name}=${JSON.stringify(value)}`).join("\n") + "\n", { encoding: "utf8", mode: 0o600 });
-    console.log(JSON.stringify({ complete: true, accountEmail: credentials.accountEmail, archiveFileId, manifestId, folderId: state.folderId, verifiedMaterials: Object.keys(manifest.entries).length, environmentFile, deployed: false, credentialsPrinted: false }, null, 2));
+    console.log(JSON.stringify({ complete: true, accountEmail: credentials.accountEmail, archiveFileId, manifestId, folderId: state.folderId, verifiedMaterials: Object.keys(manifest.entries).length, reusedChunks: [...prepared.files.keys()].filter((digest) => state.files[digest]?.reusedFrom).length, environmentFile, deployed: false, credentialsPrinted: false }, null, 2));
   }
 }

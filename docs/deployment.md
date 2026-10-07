@@ -84,6 +84,26 @@ These tests load one practice item per Part, a sample mock-test Part and a sampl
 vocabulary part, plus media HEAD requests. Firestore and Next.js caching are
 mocked, so the check neither changes learner data nor downloads the full library.
 
+## Refreshing the vocabulary archive
+
+Vocabulary is a separate material in the Drive bundle. Run
+`node --env-file=.env.local scripts/sync-dauenglish-vocab.mjs <existing-materials.json> <new-materials.json>`
+from `web/`. The importer keeps previously archived free tests and their word IDs,
+adds every newly available free test, and reports coverage by source group. It
+does not download PRO content or change learner progress. Reading, listening,
+and exam materials remain identical to the supplied base archive.
+
+Upload and verify the new package, then activate its new `GOOGLE_DRIVE_MANIFEST_ID`
+in Vercel and redeploy. Do not overwrite an existing manifest: deployment bundles
+and in-memory caches use that ID as their content version.
+
+To reuse unchanged chunks, run
+`node scripts/sync-dauenglish-drive.mjs upload <new-materials.json> --reuse-manifest <previous-manifest.json>`.
+The uploader verifies the connected owner, recorded provenance, file metadata,
+and remote checksums. Keep previous Drive folders while a newer manifest still
+references their chunks. Upload already checks each stored checksum; use
+`verify <new-materials.json>` for a separate full audit of an existing package.
+
 ## Local Development
 
 Run all commands from `web/`:

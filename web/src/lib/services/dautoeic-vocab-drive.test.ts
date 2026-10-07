@@ -1,12 +1,13 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { vocabularyFixture } from "../../test/vocabulary-fixture";
+import { serverEnv } from "@/lib/env";
 
 const mocks = vi.hoisted(() => ({
-  drive: vi.fn(), key: 0, rows: [] as Record<string, unknown>[],
+  drive: vi.fn(), driveEnabled: true, key: 0, rows: [] as Record<string, unknown>[],
   collection: vi.fn(), writes: vi.fn(), getAll: vi.fn(),
 }));
 vi.mock("next/cache", () => ({ unstable_cache: (callback: unknown) => callback, revalidateTag: vi.fn() }));
-vi.mock("./dautoeic-drive", () => ({ isDriveContentEnabled: () => true, contentCacheKey: () => `vocab-${mocks.key}`, readDriveMaterial: mocks.drive }));
+vi.mock("./dautoeic-drive", () => ({ isDriveContentEnabled: () => mocks.driveEnabled, contentCacheKey: () => `vocab-${mocks.key}`, readDriveMaterial: mocks.drive }));
 vi.mock("./rate-limit", () => ({ enforceDailyActionLimit: vi.fn() }));
 vi.mock("./study-activity", async (importOriginal) => ({ ...await importOriginal<typeof import("./study-activity")>(), recordStudyActivity: vi.fn(async () => undefined), getStoredStudyStreakSummary: vi.fn(), getStudyStreak: vi.fn() }));
 vi.mock("@/lib/firestore/db", () => ({ adminDb: {
@@ -30,6 +31,7 @@ function userQuery(path: string) {
 beforeEach(() => {
   vi.clearAllMocks();
   mocks.key++;
+  mocks.driveEnabled = true;
   mocks.rows = [];
   mocks.drive.mockResolvedValue(vocabularyFixture());
   mocks.collection.mockImplementation((name: string) => {
@@ -39,9 +41,46 @@ beforeEach(() => {
   mocks.getAll.mockRejectedValue(new Error("Material reads must use Drive"));
   vi.stubGlobal("fetch", vi.fn(() => { throw new Error("No live upstream calls during learning"); }));
 });
-afterEach(() => vi.unstubAllGlobals());
+afterEach(() => { vi.unstubAllGlobals(); vi.restoreAllMocks(); });
 
 describe("vocabulary uses the verified Drive bundle", () => {
+  it("retains all seven supplied public groups and their tests in a complete Drive snapshot", async () => {
+    const template = vocabularyFixture();
+    const snapshot = {
+      catalog: {
+        sets: Array.from({ length: 7 }, (_, index) => ({ id: `group-${index + 1}`, name: `Nhóm ${index + 1}`, orderIndex: index + 1 })),
+        tests: Array.from({ length: 7 }, (_, index) => ({ ...template.catalog.tests[0], testId: `test-${index + 1}`, setId: `group-${index + 1}`, name: `Test ${index + 1}` })),
+      },
+      parts: Array.from({ length: 7 }, (_, index) => template.parts.map((part) => ({ ...part, id: `${part.id}-${index + 1}`, testId: `test-${index + 1}` }))).flat(),
+      words: Array.from({ length: 7 }, (_, index) => template.words.map((word) => ({ ...word, id: `${word.id}-${index + 1}`, partId: `${word.partId}-${index + 1}` }))).flat(),
+    };
+    snapshot.catalog.sets.push({ id: "empty-group", name: "Nhóm rỗng", orderIndex: 8 });
+    mocks.drive.mockResolvedValue(snapshot);
+    const catalog = await source.getVocabularyCatalogView();
+    expect(catalog.groups.map((group) => [group.id, group.count])).toEqual(Array.from({ length: 7 }, (_, index) => [`group-${index + 1}`, 1]));
+    expect(catalog.cards.map((card) => card.id)).toEqual(Array.from({ length: 7 }, (_, index) => `test-${index + 1}`));
+    expect(catalog.groups.some((group) => group.id === "empty-group")).toBe(false);
+    expect(fetch).not.toHaveBeenCalled();
+  });
+
+  it("filters only PRO and empty tests from source catalogs, without dropping late public groups", async () => {
+    mocks.driveEnabled = false;
+    vi.spyOn(serverEnv, "dauToeicSupabaseUrl", "get").mockReturnValue("https://source.example");
+    vi.spyOn(serverEnv, "dauToeicAnonKey", "get").mockReturnValue("public-test-key");
+    const publicTests = Array.from({ length: 7 }, (_, index) => ({ test_id: `test-${index + 1}`, set_id: `group-${index + 1}`, name: `Test ${index + 1}`, part_count: 1, word_count: 10, order_index: index + 1, access_level: index % 2 ? null : "free" }));
+    vi.stubGlobal("fetch", vi.fn(async () => new Response(JSON.stringify({
+      sets: [...publicTests.map((test, index) => ({ id: test.set_id, name: `Nhóm ${index + 1}`, order_index: index + 1 })), { id: "pro-group", name: "PRO only", order_index: 8 }, { id: "empty-group", name: "Empty", order_index: 9 }],
+      tests: [...publicTests, { ...publicTests[0], test_id: "pro-test", set_id: "pro-group", access_level: " Pro " }, { ...publicTests[0], test_id: "no-words", set_id: "empty-group", word_count: 0 }, { ...publicTests[0], test_id: "no-parts", set_id: "empty-group", part_count: 0 }],
+    }), { status: 200 })));
+    const catalog = await source.getVocabularyCatalogView();
+    expect(catalog.groups).toHaveLength(7);
+    expect(catalog.cards.map((card) => card.id)).toEqual(publicTests.map((test) => test.test_id));
+    expect(catalog.groups.some((group) => group.id === "pro-group" || group.id === "empty-group")).toBe(false);
+    await expect(source.getDautoeicVocabTestView("pro-test")).rejects.toMatchObject({ status: 404 });
+    expect(mocks.drive).not.toHaveBeenCalled();
+    expect(mocks.collection).not.toHaveBeenCalled();
+  });
+
   it("passes stored phrases, translations and tips to the client without upstream reads", async () => {
     const snapshot = vocabularyFixture();
     snapshot.words[0].phrases = [{ phrase: "at the office", meaning: "ở văn phòng" }];

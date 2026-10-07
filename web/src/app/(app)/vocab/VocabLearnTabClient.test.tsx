@@ -1,5 +1,5 @@
 import React from "react";
-import { act, cleanup, render, screen, within } from "@testing-library/react";
+import { act, cleanup, fireEvent, render, screen, within } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { DauToeicVocabCatalogView, DauToeicVocabTestCard } from "@/types/dautoeic";
 import VocabLearnTabClient from "./VocabLearnTabClient";
@@ -24,6 +24,30 @@ function catalog(cards: DauToeicVocabTestCard[]): DauToeicVocabCatalogView {
 }
 
 describe("vocabulary catalog study entry", () => {
+  it("renders every supplied playable group and opens all seven group catalogs without a cap", () => {
+    const cards = Array.from({ length: 7 }, (_, index) => card({ id: `test-${index + 1}`, internalSetId: 100 + index, setId: `group-${index + 1}`, setName: `Nhóm ${index + 1}`, title: `Test ${index + 1}` }));
+    const groups = cards.map((entry, index) => ({ id: entry.setId, name: entry.setName, orderIndex: index + 1, count: 1 }));
+    render(<VocabLearnTabClient initialCatalog={{ groups, cards }} />);
+    const navigation = within(screen.getByRole("navigation", { name: "Nhóm từ vựng" }));
+    expect(navigation.getAllByRole("button")).toHaveLength(7);
+    for (const entry of cards) {
+      const group = navigation.getByRole("button", { name: new RegExp(`^${entry.setName}`) });
+      fireEvent.click(group);
+      expect(group).toHaveAttribute("aria-pressed", "true");
+      expect(within(screen.getByRole("article")).getByRole("heading", { name: entry.title })).toBeInTheDocument();
+      expect(within(screen.getByRole("article")).getByRole("link", { name: "Học tiếp" })).toHaveAttribute("href", `/vocab/${entry.internalSetId}/flashcards?mode=menu&tab=learn&intent=continue&order=ordered&amount=all`);
+    }
+    expect(navigation.getAllByRole("button")).toHaveLength(7);
+  });
+
+  it("does not hide group tabs when the selected group's search has no matches", () => {
+    const cards = Array.from({ length: 7 }, (_, index) => card({ id: `test-${index + 1}`, setId: `group-${index + 1}`, setName: `Nhóm ${index + 1}`, title: `Test ${index + 1}` }));
+    render(<VocabLearnTabClient initialCatalog={{ groups: cards.map((entry, index) => ({ id: entry.setId, name: entry.setName, orderIndex: index + 1, count: 1 })), cards }} groupId="group-7" />);
+    fireEvent.change(screen.getByRole("textbox", { name: "Tìm bộ từ" }), { target: { value: "Không có bộ này" } });
+    expect(within(screen.getByRole("navigation", { name: "Nhóm từ vựng" })).getAllByRole("button")).toHaveLength(7);
+    expect(screen.queryByRole("article")).not.toBeInTheDocument();
+  });
+
   it("keeps the page heading and catalog shell present while the first catalog loads", () => {
     render(<VocabLoading />);
     expect(screen.getByRole("heading", { name: "Từ vựng." })).toBeInTheDocument();
