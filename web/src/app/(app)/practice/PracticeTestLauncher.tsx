@@ -237,7 +237,7 @@ export default function PracticeTestLauncher({ tests }: Props) {
                   <button
                     type="button"
                     onClick={chooseFullTest}
-                    className="rounded-lg bg-accent px-4 py-2 text-sm font-extrabold text-white"
+                    className="rounded-lg bg-accent px-4 py-2 text-sm font-extrabold text-gold-ink"
                   >
                     Chọn full
                   </button>
@@ -308,7 +308,7 @@ export default function PracticeTestLauncher({ tests }: Props) {
                   data-dialog-initial-focus
                   onClick={() => start(false)}
                   disabled={startDisabled || Boolean(startingLabel)}
-                  className="rounded-lg bg-accent px-5 py-2 text-sm font-extrabold text-white disabled:cursor-not-allowed disabled:opacity-50"
+                  className="rounded-lg bg-accent px-5 py-2 text-sm font-extrabold text-gold-ink disabled:cursor-not-allowed disabled:opacity-50"
                 >
                   {startingLabel ? "Đang mở..." : hasLocalDraft ? "Tiếp tục bài đang làm" : "Bắt đầu"}
                 </button>

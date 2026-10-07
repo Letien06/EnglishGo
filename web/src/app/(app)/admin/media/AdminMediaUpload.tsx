@@ -16,10 +16,10 @@ export default function AdminMediaUpload() {
     });
     const result = await response.json();
     if (!response.ok || !result.success) {
-      setMessage(result.error || "Upload failed");
+      setMessage(result.error || "Không thể tải tệp lên");
       return;
     }
-    setMessage("Upload complete.");
+    setMessage("Đã tải tệp lên.");
     event.currentTarget.reset();
     router.refresh();
   }
@@ -27,17 +27,17 @@ export default function AdminMediaUpload() {
   return (
     <form onSubmit={(event) => void submit(event)} className="space-y-4">
       <label className="block text-sm font-semibold text-ink">
-        Media type
+        Loại tệp
         <select name="mediaType" className="mt-1 w-full px-3 py-2 rounded-lg bg-surface-soft border border-line text-ink">
-          <option value="AUDIO">Audio MP3</option>
-          <option value="IMAGE">Image JPG/PNG</option>
+          <option value="AUDIO">Âm thanh MP3</option>
+          <option value="IMAGE">Ảnh JPG/PNG</option>
         </select>
       </label>
       <label className="block text-sm font-semibold text-ink">
-        File
-        <input name="file" type="file" required accept="audio/mpeg,audio/mp3,image/jpeg,image/png" className="mt-1 w-full text-sm text-ink" />
+        Tệp
+        <input name="file" type="file" required accept="audio/mpeg,audio/mp3,image/jpeg,image/png" className="mt-1 w-full text-sm text-ink bg-surface text-ink" />
       </label>
-      <button className="px-4 py-2 rounded-lg bg-accent text-white text-sm font-semibold">Upload</button>
+      <button className="px-4 py-2 rounded-lg bg-accent text-gold-ink text-sm font-semibold">Tải lên</button>
       {message && <p className="text-sm text-muted">{message}</p>}
     </form>
   );

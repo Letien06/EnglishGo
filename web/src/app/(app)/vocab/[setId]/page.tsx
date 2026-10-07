@@ -7,7 +7,6 @@
 import Link from "next/link";
 import { getCurrentUserForRead } from "@/lib/auth/session";
 import * as vocab from "@/lib/services/vocab";
-import AppTopbar from "@/components/AppTopbar";
 import VocabSetDetailClient from "./VocabSetDetailClient";
 
 interface Props {
@@ -24,13 +23,6 @@ export default async function VocabSetDetailPage({ params }: Props) {
 
   return (
     <>
-      <AppTopbar
-        pageTitle={detail.set.title}
-        pageSubtitle={detail.set.topic}
-        userName={user?.displayName}
-        userEmail={user?.email}
-      />
-
       <main className="flex-1 overflow-y-auto px-4 py-6 lg:px-8 space-y-6">
         {/* Back link */}
         <Link href="/vocab" className="text-accent text-sm">

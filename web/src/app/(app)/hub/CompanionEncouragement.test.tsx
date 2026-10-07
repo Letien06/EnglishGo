@@ -5,50 +5,61 @@ import CompanionEncouragement from "./CompanionEncouragement";
 
 beforeEach(() => {
   vi.stubGlobal("React", React);
-  vi.stubGlobal("matchMedia", vi.fn(() => ({ matches: false })));
   vi.spyOn(document, "visibilityState", "get").mockReturnValue("visible");
   vi.useFakeTimers();
 });
 afterEach(() => { cleanup(); vi.useRealTimers(); vi.restoreAllMocks(); vi.unstubAllGlobals(); });
+function quote() { return screen.getByRole("complementary").querySelector('p[aria-hidden="false"]')!.textContent; }
 
 describe("companion encouragement", () => {
-  it("keeps encouragement visible and cycles through eight messages without a learning link", () => {
+  it("starts deterministically, changes at five seconds, and wraps all eight messages", () => {
     render(<CompanionEncouragement />);
-    const bubble = screen.getByRole("complementary", { name: "Lời động viên" });
-    expect(bubble).toHaveTextContent("Mình luôn ở đây cổ vũ bạn.");
-    expect(screen.queryByRole("link")).not.toBeInTheDocument();
-    const messages = new Set<string>();
-    for (let count = 0; count < 8; count++) {
-      messages.add(bubble.querySelector("p")!.textContent!);
-      fireEvent.click(screen.getByRole("button", { name: "Lời động viên tiếp theo" }));
+    const first = quote();
+    expect(first).toBe("Cùng học thêm một chút hôm nay nhé!");
+    expect(screen.queryByRole("button")).not.toBeInTheDocument();
+    act(() => vi.advanceTimersByTime(4_999));
+    expect(quote()).toBe(first);
+    act(() => vi.advanceTimersByTime(1));
+    expect(quote()).toBe("Mỗi từ mới hôm nay là một bước gần hơn đến mục tiêu của bạn.");
+    const messages = new Set([first, quote()]);
+    for (let count = 0; count < 6; count++) {
+      act(() => vi.advanceTimersByTime(5_000));
+      messages.add(quote());
     }
     expect(messages.size).toBe(8);
-    expect(bubble).toHaveTextContent("Cùng học thêm một chút hôm nay nhé!");
+    act(() => vi.advanceTimersByTime(5_000));
+    expect(quote()).toBe(first);
+    expect(vi.getTimerCount()).toBe(1);
   });
-
-  it("gives a manually selected message a full reading interval and cleans up on exit", () => {
+  it("pauses while hidden and restarts a full interval on return", () => {
+    const visibility = vi.spyOn(document, "visibilityState", "get").mockReturnValue("visible");
+    render(<CompanionEncouragement />);
+    act(() => vi.advanceTimersByTime(4_000));
+    const first = quote();
+    visibility.mockReturnValue("hidden");
+    fireEvent(document, new Event("visibilitychange"));
+    expect(vi.getTimerCount()).toBe(0);
+    act(() => vi.advanceTimersByTime(30_000));
+    expect(quote()).toBe(first);
+    visibility.mockReturnValue("visible");
+    fireEvent(document, new Event("visibilitychange"));
+    act(() => vi.advanceTimersByTime(4_999));
+    expect(quote()).toBe(first);
+    act(() => vi.advanceTimersByTime(1));
+    expect(quote()).not.toBe(first);
+  });
+  it("starts paused when hidden and cleans up timer and visibility listener on exit", () => {
+    const visibility = vi.spyOn(document, "visibilityState", "get").mockReturnValue("hidden");
+    const remove = vi.spyOn(document, "removeEventListener");
     const { unmount } = render(<CompanionEncouragement />);
-    act(() => vi.advanceTimersByTime(19_000));
-    fireEvent.click(screen.getByRole("button", { name: "Lời động viên tiếp theo" }));
-    const second = screen.getByRole("complementary").querySelector("p")!.textContent;
-    act(() => vi.advanceTimersByTime(19_000));
-    expect(screen.getByRole("complementary").querySelector("p")!.textContent).toBe(second);
-    act(() => vi.advanceTimersByTime(1_000));
-    expect(screen.getByRole("complementary").querySelector("p")!.textContent).not.toBe(second);
+    expect(vi.getTimerCount()).toBe(0);
+    visibility.mockReturnValue("visible");
+    fireEvent(document, new Event("visibilitychange"));
+    expect(vi.getTimerCount()).toBe(1);
     unmount();
     expect(vi.getTimerCount()).toBe(0);
-  });
-
-  it("pauses automatic changes in hidden tabs and honors reduced motion while allowing manual changes", () => {
-    const visibility = vi.spyOn(document, "visibilityState", "get").mockReturnValue("hidden");
-    render(<CompanionEncouragement />);
-    act(() => vi.advanceTimersByTime(40_000));
-    expect(screen.getByText("Cùng học thêm một chút hôm nay nhé!")).toBeInTheDocument();
-    visibility.mockReturnValue("visible");
-    vi.mocked(window.matchMedia).mockReturnValue({ matches: true } as MediaQueryList);
-    act(() => vi.advanceTimersByTime(40_000));
-    expect(screen.getByText("Cùng học thêm một chút hôm nay nhé!")).toBeInTheDocument();
-    fireEvent.click(screen.getByRole("button", { name: "Lời động viên tiếp theo" }));
-    expect(screen.getByText("Mỗi từ mới hôm nay là một bước gần hơn đến mục tiêu của bạn.")).toBeInTheDocument();
+    expect(remove).toHaveBeenCalledWith("visibilitychange", expect.any(Function));
+    fireEvent(document, new Event("visibilitychange"));
+    expect(vi.getTimerCount()).toBe(0);
   });
 });

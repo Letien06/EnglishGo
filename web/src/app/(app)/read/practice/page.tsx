@@ -6,7 +6,7 @@
  *
  * Port of `ReadController.practice()` + `read/practice.html`.
  */
-import { redirect } from "next/navigation";
+import PracticeUnavailable from "../../_components/PracticeUnavailable";
 import { getReadIdentity } from "@/lib/auth/session";
 import * as dautoeic from "@/lib/services/dautoeic";
 import { getTestPartSession } from "@/lib/services/test-part-practice";
@@ -52,11 +52,11 @@ export default async function ReadPracticePage({
       getReadIdentity(),
     ]);
   } catch {
-    redirect(`/read?part=${partId}`);
+    return <PracticeUnavailable skill="reading" partId={partId} />;
   }
 
   if (!session || session.items.length === 0) {
-    redirect(`/read?part=${partId}`);
+    return <PracticeUnavailable skill="reading" partId={partId} empty />;
   }
 
   return (

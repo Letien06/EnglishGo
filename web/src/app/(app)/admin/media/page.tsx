@@ -10,7 +10,7 @@ export default async function AdminMediaPage() {
   const assets = await recentMedia();
   return (
     <>
-      <AppTopbar pageTitle="Media" pageSubtitle="Upload files to Firebase Storage" userName={user.displayName} userEmail={user.email} />
+      <AppTopbar pageTitle="Tệp đa phương tiện" pageSubtitle="Tải tệp lên kho lưu trữ" userName={user.displayName} userEmail={user.email} />
       <main className="flex-1 overflow-y-auto px-4 py-6 lg:px-8 space-y-6">
         <section className="max-w-xl p-5 rounded-xl bg-surface border border-line">
           <AdminMediaUpload />
@@ -24,12 +24,12 @@ export default async function AdminMediaPage() {
                   <p className="text-xs text-muted">{asset.mediaType} / {asset.contentType} / {formatBytes(asset.sizeBytes)}</p>
                 </div>
                 <a href={asset.publicUrl} target="_blank" rel="noreferrer" className="text-sm text-accent font-semibold">
-                  Open
+                  Mở
                 </a>
               </div>
             </article>
           ))}
-          {assets.length === 0 && <div className="p-8 text-center text-muted">No media uploaded yet.</div>}
+          {assets.length === 0 && <div className="p-8 text-center text-muted">Chưa có tệp nào được tải lên.</div>}
         </section>
       </main>
     </>

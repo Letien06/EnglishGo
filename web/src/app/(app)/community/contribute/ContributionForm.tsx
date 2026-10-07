@@ -19,29 +19,29 @@ export default function ContributionForm() {
       }),
     });
     const result = await response.json();
-    setMessage(response.ok && result.success ? "Submission captured for review." : result.error || "Submit failed");
+    setMessage(response.ok && result.success ? "Đã gửi nội dung để xét duyệt." : result.error || "Chưa gửi được nội dung.");
     if (response.ok && result.success) event.currentTarget.reset();
   }
 
   return (
     <form onSubmit={(event) => void submit(event)} className="space-y-4">
       <label className="block text-sm font-semibold text-ink">
-        Title
+        Tiêu đề
         <input name="title" required className="mt-1 w-full px-3 py-2 rounded-lg bg-surface-soft border border-line text-ink" />
       </label>
       <label className="block text-sm font-semibold text-ink">
-        Content
+        Nội dung
         <textarea name="content" required className="mt-1 w-full min-h-40 px-3 py-2 rounded-lg bg-surface-soft border border-line text-ink" />
       </label>
       <label className="block text-sm font-semibold text-ink">
-        Source note
+        Ghi chú nguồn
         <input name="sourceNote" className="mt-1 w-full px-3 py-2 rounded-lg bg-surface-soft border border-line text-ink" />
       </label>
       <label className="flex items-center gap-2 text-sm text-ink">
         <input name="ownsRights" type="checkbox" required />
-        I have the right to share this content.
+        Tôi có quyền chia sẻ nội dung này.
       </label>
-      <button className="px-4 py-2 rounded-lg bg-accent text-white text-sm font-semibold">Submit</button>
+      <button className="px-4 py-2 rounded-lg bg-accent text-gold-ink text-sm font-semibold">Gửi nội dung</button>
       {message && <p className="text-sm text-muted">{message}</p>}
     </form>
   );

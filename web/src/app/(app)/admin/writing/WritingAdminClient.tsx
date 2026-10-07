@@ -285,16 +285,16 @@ export default function WritingAdminClient() {
 
   return (
     <div className="mx-auto max-w-7xl space-y-6">
-      <section className="overflow-hidden rounded-3xl border border-line bg-gradient-to-br from-sky-50 via-surface to-violet-50 p-5 sm:p-7">
+      <section className="overflow-hidden rounded-3xl border border-line bg-surface p-5 sm:p-7">
         <div className="flex flex-col gap-5 lg:flex-row lg:items-end lg:justify-between">
           <div className="max-w-2xl">
-            <p className="text-xs font-extrabold uppercase tracking-[0.16em] text-primary">Writing content studio</p>
-            <h1 className="mt-2 text-2xl font-extrabold tracking-tight text-ink sm:text-3xl">Quản lý nội dung Writing có thể kiểm chứng</h1>
-            <p className="mt-2 text-sm leading-6 text-muted">Chỉ quản lý đề tự biên soạn hoặc tài sản có quyền sử dụng rõ ràng. Việc nạp bộ đề là idempotent, không ghi đè bản đã chỉnh sửa.</p>
+            <p className="text-xs font-extrabold uppercase tracking-[0.16em] text-primary">Biên soạn nội dung bài viết</p>
+            <h2 className="mt-2 text-2xl font-extrabold tracking-tight text-ink sm:text-3xl">Quản lý nội dung bài viết có thể kiểm chứng</h2>
+            <p className="mt-2 text-sm leading-6 text-muted">Chỉ quản lý đề tự biên soạn hoặc tài sản có quyền sử dụng rõ ràng. Nạp lại bộ đề không tạo bản trùng hoặc ghi đè bản đã chỉnh sửa.</p>
           </div>
           <div className="flex flex-wrap gap-2">
             <button type="button" onClick={() => { setSelected(emptyDraft()); setNotice(null); }} className="rounded-xl border border-primary bg-surface px-4 py-2.5 text-sm font-extrabold text-primary transition-transform active:scale-[0.98] disabled:opacity-50">+ Tạo bản nháp</button>
-            <button type="button" onClick={seed} disabled={isSeeding} className="rounded-xl bg-primary px-4 py-2.5 text-sm font-extrabold text-white shadow-sm transition-transform active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-50">{isSeeding ? "Đang nạp…" : "Nạp bộ đề gốc"}</button>
+            <button type="button" onClick={seed} disabled={isSeeding} className="rounded-xl bg-primary px-4 py-2.5 text-sm font-extrabold text-gold-ink shadow-sm transition-transform active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-50">{isSeeding ? "Đang nạp…" : "Nạp bộ đề gốc"}</button>
           </div>
         </div>
       </section>
@@ -307,7 +307,7 @@ export default function WritingAdminClient() {
         <Metric label="Cập nhật gần nhất" value={formatDate(overview.lastUpdatedAtMillis)} compact />
       </section>
 
-      {notice && <p role="status" className={`rounded-2xl border px-4 py-3 text-sm font-semibold ${notice.tone === "error" ? "border-red-200 bg-red-50 text-red-800" : notice.tone === "success" ? "border-emerald-200 bg-emerald-50 text-emerald-800" : "border-sky-200 bg-sky-50 text-sky-800"}`}>{notice.text}</p>}
+      {notice && <p role="status" className={`rounded-2xl border px-4 py-3 text-sm font-semibold ${notice.tone === "error" ? "border-danger-line bg-danger-soft text-danger-ink" : notice.tone === "success" ? "border-success-line bg-success-soft text-success-ink" : "border-info-line bg-info-soft text-info-ink"}`}>{notice.text}</p>}
 
       <section className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_minmax(360px,0.8fr)]">
         <div className="min-w-0 rounded-2xl border border-line bg-surface">
@@ -336,7 +336,7 @@ export default function WritingAdminClient() {
         </div>
 
         <aside className="min-w-0 xl:sticky xl:top-5 xl:max-h-[calc(100vh-7rem)] xl:overflow-y-auto">
-          {selected ? <PromptEditor draft={selected} onChange={setSelected} onSave={() => void save()} onCancel={() => setSelected(null)} isSaving={isSaving} /> : <section className="rounded-2xl border border-dashed border-line bg-surface p-6 text-center"><p className="text-lg font-extrabold text-ink">Chọn một đề để biên soạn</p><p className="mt-2 text-sm leading-6 text-muted">Bạn có thể chỉnh nội dung, gợi ý, câu mẫu, quy tắc chấm và trạng thái phát hành tại đây.</p><button type="button" onClick={() => setSelected(emptyDraft())} className="mt-4 rounded-xl bg-primary px-4 py-2.5 text-sm font-extrabold text-white transition-transform active:scale-[0.98]">Tạo bản nháp</button></section>}
+          {selected ? <PromptEditor draft={selected} onChange={setSelected} onSave={() => void save()} onCancel={() => setSelected(null)} isSaving={isSaving} /> : <section className="rounded-2xl border border-dashed border-line bg-surface p-6 text-center"><p className="text-lg font-extrabold text-ink">Chọn một đề để biên soạn</p><p className="mt-2 text-sm leading-6 text-muted">Bạn có thể chỉnh nội dung, gợi ý, câu mẫu, quy tắc chấm và trạng thái phát hành tại đây.</p><button type="button" onClick={() => setSelected(emptyDraft())} className="mt-4 rounded-xl bg-primary px-4 py-2.5 text-sm font-extrabold text-gold-ink transition-transform active:scale-[0.98]">Tạo bản nháp</button></section>}
         </aside>
       </section>
     </div>
@@ -348,7 +348,7 @@ function Metric({ label, value, accent = "text-ink", compact = false }: { label:
 }
 
 function FilterButton({ active, onClick, children, subdued = false }: { active: boolean; onClick: () => void; children: React.ReactNode; subdued?: boolean }) {
-  return <button type="button" onClick={onClick} className={`rounded-full border px-3 py-1.5 text-xs font-extrabold transition-colors ${active ? "border-primary bg-primary text-white" : subdued ? "border-line bg-surface text-muted hover:border-primary/40 hover:text-primary" : "border-primary/25 bg-primary/5 text-primary hover:bg-primary/10"}`}>{children}</button>;
+  return <button type="button" onClick={onClick} className={`rounded-full border px-3 py-1.5 text-xs font-extrabold transition-colors ${active ? "border-primary bg-primary text-gold-ink" : subdued ? "border-line bg-surface text-muted hover:border-primary/40 hover:text-primary" : "border-primary/25 bg-primary/5 text-primary hover:bg-primary/10"}`}>{children}</button>;
 }
 
 function PromptRow({ item, active, onClick }: { item: WritingPrompt; active: boolean; onClick: () => void }) {
@@ -365,7 +365,7 @@ function PromptRow({ item, active, onClick }: { item: WritingPrompt; active: boo
 }
 
 function StatusBadge({ status }: { status: WritingPromptStatus }) {
-  const styles: Record<WritingPromptStatus, string> = { DRAFT: "bg-slate-100 text-slate-600", REVIEW: "bg-amber-100 text-amber-800", PUBLISHED: "bg-emerald-100 text-emerald-800", ARCHIVED: "bg-stone-100 text-stone-600" };
+  const styles: Record<WritingPromptStatus, string> = { DRAFT: "bg-surface-soft text-muted", REVIEW: "bg-warning-soft text-warning-ink", PUBLISHED: "bg-success-soft text-success-ink", ARCHIVED: "bg-surface-soft text-muted" };
   return <span className={`rounded-full px-2 py-0.5 text-[11px] font-extrabold ${styles[status]}`}>{statusLabels[status]}</span>;
 }
 
@@ -377,7 +377,7 @@ function PromptEditor({ draft, onChange, onSave, onCancel, isSaving }: { draft: 
     <div className="mt-5 grid gap-3 sm:grid-cols-2">
       <Select label="Phần" value={String(draft.part)} onChange={(value) => set("part", Number(value) as WritingPart)} values={[["1", partLabels[1]], ["2", partLabels[2]], ["3", partLabels[3]]]} />
       <Select label="Trạng thái" value={draft.status} onChange={(value) => set("status", value as WritingPromptStatus)} values={(Object.keys(statusLabels) as WritingPromptStatus[]).map((value) => [value, statusLabels[value]])} />
-      {draft.part === 1 && <Select label="Dạng từ khóa Part 1" value={draft.part1Category} onChange={(value) => set("part1Category", value as WritingPartOneGrammarCategory)} values={Object.entries(WRITING_PART_ONE_GRAMMAR_CATEGORY_LABELS)} />}
+      {draft.part === 1 && <Select label="Dạng từ khóa Phần 1" value={draft.part1Category} onChange={(value) => set("part1Category", value as WritingPartOneGrammarCategory)} values={Object.entries(WRITING_PART_ONE_GRAMMAR_CATEGORY_LABELS)} />}
       <Select label="Độ khó" value={draft.difficulty} onChange={(value) => set("difficulty", value as Difficulty)} values={[["BEGINNER", "Cơ bản"], ["INTERMEDIATE", "Trung bình"], ["ADVANCED", "Nâng cao"]]} />
       <Field label="Thời gian (phút)" value={draft.timeLimitMinutes} onChange={(value) => set("timeLimitMinutes", value)} inputMode="numeric" />
     </div>
@@ -387,8 +387,8 @@ function PromptEditor({ draft, onChange, onSave, onCancel, isSaving }: { draft: 
       <Field label="Tiêu đề tiếng Việt" value={draft.titleVi} onChange={(value) => set("titleVi", value)} placeholder="Ví dụ: Xác nhận lịch giao hàng" />
       <TextArea label="Tóm tắt cho thư viện" value={draft.summary} onChange={(value) => set("summary", value)} rows={2} />
       <TextArea label="Hướng dẫn làm bài" value={draft.instructions} onChange={(value) => set("instructions", value)} rows={3} placeholder="Nêu rõ yêu cầu, không sao chép đề TOEIC có bản quyền." />
-      <TextArea label="Nội dung đề" value={draft.promptText} onChange={(value) => set("promptText", value)} rows={5} placeholder="Part 1: mô tả cảnh ảnh. Part 2: yêu cầu email. Part 3: câu hỏi opinion/argument." />
-      <Field label="Tags (ngăn cách bằng dấu phẩy)" value={draft.tags} onChange={(value) => set("tags", value)} placeholder="workplace, delivery, polite request" />
+      <TextArea label="Nội dung đề" value={draft.promptText} onChange={(value) => set("promptText", value)} rows={5} placeholder="Phần 1: mô tả cảnh ảnh. Phần 2: yêu cầu email. Phần 3: câu hỏi nêu ý kiến hoặc lập luận." />
+      <Field label="Nhãn (ngăn cách bằng dấu phẩy)" value={draft.tags} onChange={(value) => set("tags", value)} placeholder="workplace, delivery, polite request" />
     </div>
 
     <details className="mt-5 rounded-xl border border-line bg-surface-soft p-3" open>
@@ -396,7 +396,7 @@ function PromptEditor({ draft, onChange, onSave, onCancel, isSaving }: { draft: 
       <div className="mt-3 space-y-3">
         {draft.part === 1 && <><Field label="URL ảnh gốc" value={draft.imageUrl} onChange={(value) => set("imageUrl", value)} placeholder="/writing/... hoặc URL đã được cấp quyền" /><Field label="Mô tả ảnh (alt)" value={draft.imageAlt} onChange={(value) => set("imageAlt", value)} /></>}
         <Field label={draft.part === 1 ? "Từ/cụm từ bắt buộc (dấu phẩy)" : "Từ khóa gợi ý (dấu phẩy)"} value={draft.requiredTerms} onChange={(value) => set("requiredTerms", value)} placeholder="prepare, presentation" />
-        <TextArea label="Checklist nhiệm vụ (mỗi dòng một ý)" value={draft.taskChecklist} onChange={(value) => set("taskChecklist", value)} rows={3} />
+        <TextArea label="Danh sách nhiệm vụ (mỗi dòng một ý)" value={draft.taskChecklist} onChange={(value) => set("taskChecklist", value)} rows={3} />
         <div className="grid gap-3 sm:grid-cols-2"><Field label="Tiêu đề gợi ý" value={draft.hintTitle} onChange={(value) => set("hintTitle", value)} placeholder="Gợi ý 1" /><Field label="Nội dung gợi ý" value={draft.hintBody} onChange={(value) => set("hintBody", value)} placeholder="Nhắc người học về cấu trúc hoặc ý cần có." /></div>
         <TextArea label="Câu/bài mẫu" value={draft.sampleAnswer} onChange={(value) => set("sampleAnswer", value)} rows={4} />
         <TextArea label="Bản dịch câu mẫu" value={draft.sampleTranslation} onChange={(value) => set("sampleTranslation", value)} rows={2} />
@@ -406,8 +406,8 @@ function PromptEditor({ draft, onChange, onSave, onCancel, isSaving }: { draft: 
 
     {draft.part === 2 && <details className="mt-3 rounded-xl border border-line bg-surface-soft p-3" open><summary className="cursor-pointer text-sm font-extrabold text-ink">Bối cảnh email (không bắt buộc)</summary><div className="mt-3 grid gap-3 sm:grid-cols-2"><Field label="Người gửi" value={draft.emailFromName} onChange={(value) => set("emailFromName", value)} /><Field label="Người nhận" value={draft.emailToName} onChange={(value) => set("emailToName", value)} /><Field label="Chủ đề" value={draft.emailSubject} onChange={(value) => set("emailSubject", value)} /><Field label="Chữ ký" value={draft.emailSignature} onChange={(value) => set("emailSignature", value)} /></div><TextArea label="Nội dung email nguồn" value={draft.emailBody} onChange={(value) => set("emailBody", value)} rows={5} /></details>}
 
-    <p className="mt-4 rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-xs leading-5 text-amber-900">Điểm AI và trạng thái xuất bản chỉ là công cụ hỗ trợ. Chỉ xuất bản sau khi người biên soạn kiểm tra nội dung, ảnh và quyền sử dụng.</p>
-    <div className="mt-4 flex flex-wrap justify-end gap-2"><button type="button" onClick={onCancel} disabled={isSaving} className="rounded-xl border border-line px-4 py-2.5 text-sm font-extrabold text-ink transition-transform active:scale-[0.98] disabled:opacity-50">Hủy</button><button type="button" onClick={onSave} disabled={isSaving} className="rounded-xl bg-primary px-4 py-2.5 text-sm font-extrabold text-white transition-transform active:scale-[0.98] disabled:opacity-50">{isSaving ? "Đang lưu…" : draft.id ? "Lưu thay đổi" : "Tạo bản nháp"}</button></div>
+    <p className="mt-4 rounded-xl border border-warning-line bg-warning-soft px-3 py-2 text-xs leading-5 text-warning-ink">Điểm AI và trạng thái xuất bản chỉ là công cụ hỗ trợ. Chỉ xuất bản sau khi người biên soạn kiểm tra nội dung, ảnh và quyền sử dụng.</p>
+    <div className="mt-4 flex flex-wrap justify-end gap-2"><button type="button" onClick={onCancel} disabled={isSaving} className="rounded-xl border border-line px-4 py-2.5 text-sm font-extrabold text-ink transition-transform active:scale-[0.98] disabled:opacity-50">Hủy</button><button type="button" onClick={onSave} disabled={isSaving} className="rounded-xl bg-primary px-4 py-2.5 text-sm font-extrabold text-gold-ink transition-transform active:scale-[0.98] disabled:opacity-50">{isSaving ? "Đang lưu…" : draft.id ? "Lưu thay đổi" : "Tạo bản nháp"}</button></div>
   </section>;
 }
 

@@ -17,7 +17,7 @@ export default function CommunityCommentForm({ signedIn }: { signedIn: boolean }
     });
     const result = await response.json();
     if (!response.ok || !result.success) {
-      setStatus(result.error || "Could not post comment");
+      setStatus(result.error || "Chưa gửi được bình luận.");
       return;
     }
     setContent("");
@@ -28,7 +28,7 @@ export default function CommunityCommentForm({ signedIn }: { signedIn: boolean }
   if (!signedIn) {
     return (
       <p className="text-sm text-muted mt-4">
-        <Link href="/login" className="text-accent font-semibold">Sign in</Link> to comment.
+        <Link href="/login" className="text-primary-ink font-semibold">Đăng nhập</Link> để bình luận.
       </p>
     );
   }
@@ -39,13 +39,14 @@ export default function CommunityCommentForm({ signedIn }: { signedIn: boolean }
         value={content}
         onChange={(event) => setContent(event.target.value)}
         className="w-full min-h-24 px-3 py-2 rounded-lg bg-surface-soft border border-line text-ink"
-        placeholder="Write a comment"
+        placeholder="Viết bình luận"
+        aria-label="Bình luận của bạn"
       />
       <div className="flex items-center gap-3">
-        <button type="button" onClick={() => void submit()} className="px-4 py-2 rounded-lg bg-accent text-white text-sm font-semibold">
-          Post
+        <button type="button" onClick={() => void submit()} className="px-4 py-2 rounded-lg bg-accent text-gold-ink text-sm font-semibold">
+          Gửi bình luận
         </button>
-        {status && <span className="text-sm text-red-500">{status}</span>}
+        {status && <span className="text-sm text-danger-ink">{status}</span>}
       </div>
     </div>
   );

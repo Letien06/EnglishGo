@@ -20,10 +20,10 @@ export default function AiWritingForm() {
     });
     const result = await response.json();
     if (!response.ok || !result.success) {
-      setStatus(result.error || "Submit failed");
+      setStatus(result.error || "Chưa gửi được bài viết.");
       return;
     }
-    setStatus("Feedback saved.");
+    setStatus("Đã lưu phản hồi.");
     event.currentTarget.reset();
     router.refresh();
   }
@@ -31,14 +31,14 @@ export default function AiWritingForm() {
   return (
     <form onSubmit={(event) => void submit(event)} className="space-y-4">
       <label className="block text-sm font-semibold text-ink">
-        Prompt
+        Đề bài
         <input name="prompt" required className="mt-1 w-full px-3 py-2 rounded-lg bg-surface-soft border border-line text-ink" />
       </label>
       <label className="block text-sm font-semibold text-ink">
-        Your response
+        Bài viết của bạn
         <textarea name="responseText" required className="mt-1 w-full min-h-48 px-3 py-2 rounded-lg bg-surface-soft border border-line text-ink" />
       </label>
-      <button className="px-4 py-2 rounded-lg bg-accent text-white text-sm font-semibold">Get feedback</button>
+      <button className="px-4 py-2 rounded-lg bg-accent text-gold-ink text-sm font-semibold">Nhận phản hồi</button>
       {status && <p className="text-sm text-muted">{status}</p>}
     </form>
   );

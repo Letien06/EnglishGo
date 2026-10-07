@@ -6,5 +6,5 @@ export const dynamic = "force-dynamic";
 
 export default async function DictationBatchImportPage() {
   const user = await requireAdminPage();
-  return <><AppTopbar pageTitle="Import nghe-chép" pageSubtitle="Nhập lesson đã có transcript và quyền sử dụng" userName={user.displayName} userEmail={user.email} /><DictationBatchImportClient /></>;
+  return <><AppTopbar pageTitle="Nhập bài nghe-chép" pageSubtitle="Nhập bài học đã có lời thoại và quyền sử dụng" userName={user.displayName} userEmail={user.email} /><DictationBatchImportClient /></>;
 }

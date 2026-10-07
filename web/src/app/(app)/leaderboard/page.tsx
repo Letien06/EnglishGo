@@ -115,7 +115,7 @@ function PracticeBoard({
 }) {
   return (
     <section className="leaderboard-board overflow-hidden rounded-[28px] border border-line bg-surface shadow-sm">
-      <div className="grid grid-cols-[72px_1fr_120px_120px_96px] gap-3 border-b border-line bg-surface-soft/80 px-5 py-3.5 text-xs font-extrabold uppercase tracking-wider text-ink3 max-md:grid-cols-[56px_1fr_96px]">
+      <div className="grid grid-cols-[72px_1fr_120px_120px_96px] gap-3 border-b border-line bg-surface-soft/80 px-5 py-3.5 text-xs font-extrabold uppercase tracking-wider text-ink3 max-md:grid-cols-[56px_minmax(0,1fr)_96px] max-sm:grid-cols-[40px_minmax(0,1fr)_64px] max-sm:gap-2 max-sm:px-3">
         <span>Hạng</span>
         <span>Người dùng</span>
         <span className="text-right">Điểm</span>
@@ -135,14 +135,14 @@ function PracticeBoard({
               <article
                 key={entry.uid}
                 data-me={isMe ? "true" : undefined}
-                className={`leaderboard-row grid grid-cols-[72px_1fr_120px_120px_96px] items-center gap-3 px-5 py-4 max-md:grid-cols-[56px_1fr_96px] transition-colors ${
+                className={`leaderboard-row grid grid-cols-[72px_1fr_120px_120px_96px] items-center gap-3 px-5 py-4 max-md:grid-cols-[56px_minmax(0,1fr)_96px] max-sm:grid-cols-[40px_minmax(0,1fr)_64px] max-sm:gap-2 max-sm:px-3 transition-colors ${
                   isMe
                     ? "bg-primary/15 hover:bg-primary/20 border-l-4 border-l-primary shadow-inner"
                     : "bg-surface hover:bg-surface-soft/60"
                 }`}
               >
                 <RankBadge rank={entry.rank} />
-                <div className="flex min-w-0 items-center gap-4">
+                <div className="flex min-w-0 items-center gap-2 sm:gap-4">
                   <Avatar name={entry.displayName ?? entry.email ?? "Người học"} avatarUrl={entry.avatarUrl} />
                   <div className="min-w-0">
                     <h2 className="truncate text-base font-extrabold text-ink flex items-center gap-2">
@@ -185,7 +185,7 @@ function StreakBoard({
 }) {
   return (
     <section className="leaderboard-board overflow-hidden rounded-[28px] border border-line bg-surface shadow-sm">
-      <div className="grid grid-cols-[88px_1fr_112px] border-b border-line bg-surface-soft/80 px-5 py-3.5 text-xs font-extrabold uppercase tracking-wider text-ink3">
+      <div className="grid grid-cols-[88px_minmax(0,1fr)_112px] max-sm:grid-cols-[40px_minmax(0,1fr)_64px] max-sm:gap-2 max-sm:px-3 border-b border-line bg-surface-soft/80 px-5 py-3.5 text-xs font-extrabold uppercase tracking-wider text-ink3">
         <span>Hạng</span>
         <span>Người dùng</span>
         <span className="text-right">Chuỗi học</span>
@@ -203,14 +203,14 @@ function StreakBoard({
               <article
                 key={entry.uid}
                 data-me={isMe ? "true" : undefined}
-                className={`leaderboard-row grid grid-cols-[88px_1fr_112px] items-center px-5 py-4 transition-colors ${
+                className={`leaderboard-row grid grid-cols-[88px_minmax(0,1fr)_112px] max-sm:grid-cols-[40px_minmax(0,1fr)_64px] max-sm:gap-2 max-sm:px-3 items-center px-5 py-4 transition-colors ${
                   isMe
                     ? "bg-primary/15 hover:bg-primary/20 border-l-4 border-l-primary shadow-inner"
                     : "bg-surface hover:bg-surface-soft/60"
                 }`}
               >
                 <RankBadge rank={entry.rank} />
-                <div className="flex min-w-0 items-center gap-4">
+                <div className="flex min-w-0 items-center gap-2 sm:gap-4">
                   <Avatar name={entry.displayName ?? entry.email ?? "Người học"} avatarUrl={entry.avatarUrl} />
                   <div className="min-w-0">
                     <h2 className="truncate text-base font-extrabold text-ink flex items-center gap-2">
@@ -223,8 +223,8 @@ function StreakBoard({
                     </h2>
                     <p className="mt-0.5 text-xs font-medium">
                       {entry.studiedToday ? (
-                        <span className="text-emerald-400 font-medium inline-flex items-center gap-1.5">
-                          <span className="inline-block h-1.5 w-1.5 rounded-full bg-emerald-400 shadow-[0_0_8px_rgba(52,211,153,0.8)]" />
+                        <span className="text-success-ink font-medium inline-flex items-center gap-1.5">
+                          <span className="inline-block h-1.5 w-1.5 rounded-full bg-success-ink" />
                           Hôm nay đã học {entry.todayActivityCount} hoạt động
                         </span>
                       ) : (
@@ -233,7 +233,7 @@ function StreakBoard({
                     </p>
                   </div>
                 </div>
-                <strong className="text-right text-lg font-black text-orange-400 flex items-center justify-end gap-1.5">
+                <strong className="text-right text-lg font-black text-warning-ink flex items-center justify-end gap-1.5">
                   <span>{entry.streakDays}</span>
                   <span aria-hidden="true">&#128293;</span>
                 </strong>
@@ -275,9 +275,9 @@ function TabLink({
 function RankBadge({ rank }: { rank: number }) {
   if (rank === 1) {
     return (
-      <div className="flex items-center gap-1.5">
+      <div className="flex items-center gap-1.5 max-sm:flex-col max-sm:gap-0.5">
         <span className="text-2xl drop-shadow-sm" aria-hidden="true">🥇</span>
-        <span className="inline-flex h-5 min-w-5 items-center justify-center rounded-full bg-amber-500/25 border border-amber-500/50 px-1 text-[11px] font-black text-amber-300">
+        <span className="inline-flex h-5 min-w-5 items-center justify-center rounded-full bg-warning-soft border border-warning-line px-1 text-[11px] font-black text-warning-ink">
           1
         </span>
       </div>
@@ -285,9 +285,9 @@ function RankBadge({ rank }: { rank: number }) {
   }
   if (rank === 2) {
     return (
-      <div className="flex items-center gap-1.5">
+      <div className="flex items-center gap-1.5 max-sm:flex-col max-sm:gap-0.5">
         <span className="text-2xl drop-shadow-sm" aria-hidden="true">🥈</span>
-        <span className="inline-flex h-5 min-w-5 items-center justify-center rounded-full bg-slate-300/25 border border-slate-300/50 px-1 text-[11px] font-black text-slate-200">
+        <span className="inline-flex h-5 min-w-5 items-center justify-center rounded-full bg-info-soft border border-info-line px-1 text-[11px] font-black text-info-ink">
           2
         </span>
       </div>
@@ -295,9 +295,9 @@ function RankBadge({ rank }: { rank: number }) {
   }
   if (rank === 3) {
     return (
-      <div className="flex items-center gap-1.5">
+      <div className="flex items-center gap-1.5 max-sm:flex-col max-sm:gap-0.5">
         <span className="text-2xl drop-shadow-sm" aria-hidden="true">🥉</span>
-        <span className="inline-flex h-5 min-w-5 items-center justify-center rounded-full bg-amber-700/25 border border-amber-700/50 px-1 text-[11px] font-black text-amber-400">
+        <span className="inline-flex h-5 min-w-5 items-center justify-center rounded-full bg-primary-soft border border-primary/25 px-1 text-[11px] font-black text-primary-ink">
           3
         </span>
       </div>
@@ -318,14 +318,14 @@ function Avatar({ name, avatarUrl }: { name: string; avatarUrl: string | null })
       <img
         src={avatarUrl}
         alt=""
-        className="h-11 w-11 shrink-0 rounded-full object-cover ring-2 ring-line"
+        className="h-8 w-8 shrink-0 sm:h-11 sm:w-11 rounded-full object-cover ring-2 ring-line"
       />
     );
   }
 
   const initial = name.trim().charAt(0).toUpperCase() || "E";
   return (
-    <span className="inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-amber-500 to-amber-700 text-white text-base font-black shadow-sm ring-2 ring-line">
+    <span className="inline-flex h-8 w-8 shrink-0 sm:h-11 sm:w-11 items-center justify-center rounded-full bg-primary-soft text-primary-ink text-base font-black shadow-sm ring-2 ring-line">
       {initial}
     </span>
   );

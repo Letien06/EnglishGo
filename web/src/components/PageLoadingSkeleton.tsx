@@ -1,12 +1,13 @@
 import type { ReactNode } from "react";
+import AppTopbar from "./AppTopbar";
 import styles from "./PageLoadingSkeleton.module.css";
 
 type Variant = "generic" | "hub" | "progress" | "leaderboard" | "community" | "account" | "continue" | "history";
 const topbars: Partial<Record<Variant, [string, string]>> = {
   hub: ["Trang chủ", "Tổng quan học tập cá nhân"],
   progress: ["Báo cáo tiến bộ", "Dữ liệu từ các bài bạn đã nộp"],
-  community: ["Community", "Discuss, contribute, and track leaderboard"],
-  continue: ["Hoc tiep", "Resume drafts and review the next best activity"],
+  community: ["Cộng đồng", "Trao đổi kinh nghiệm và chia sẻ nội dung học tập"],
+  continue: ["Học tiếp", "Tiếp tục bài đang học và chọn hoạt động tiếp theo"],
   history: ["Lịch sử làm bài", "Xem lại đáp án đã nộp"],
 };
 
@@ -15,19 +16,7 @@ function Block({ className = "" }: { className?: string }) {
 }
 
 function Topbar({ title, subtitle }: { title: string; subtitle: string }) {
-  return (
-    <header className="app-shell-header flex items-center justify-between gap-4 border-b bg-glass/90 px-5 py-3 lg:px-8">
-      <div className="min-w-0">
-        <p className="mb-0.5 text-[11px] font-semibold uppercase tracking-widest text-muted">Không gian học tập</p>
-        <h1 className="truncate text-lg font-bold text-ink">{title}</h1>
-        <p className="truncate text-sm text-muted">{subtitle}</p>
-      </div>
-      <div aria-hidden="true" className="flex shrink-0 items-center gap-2">
-        <span className="hidden sm:block"><Block className="h-8 w-28" /></span>
-        <Block className="h-8 w-24" />
-      </div>
-    </header>
-  );
+  return <AppTopbar pageTitle={title} pageSubtitle={subtitle} />;
 }
 
 function Card({ children, className = "" }: { children?: ReactNode; className?: string }) {
@@ -77,7 +66,7 @@ function Board() {
 
 function Account() {
   return <div className="mx-auto max-w-7xl">
-    <header className="page-heading mb-8 border-b border-line pb-8"><span className="inline-flex rounded-full bg-primary/10 px-4 py-1 text-xs font-extrabold uppercase text-primary">Tài khoản</span><h1 className="mt-4 text-5xl font-extrabold text-ink">Thông tin cá nhân</h1><p className="mt-3 text-lg text-muted">Chỉnh sửa tên hiển thị, ảnh đại diện và thông tin đăng nhập của bạn.</p></header>
+    <header className="page-heading mb-8 flex flex-col items-start justify-between gap-4 border-b border-line pb-8 sm:flex-row sm:items-end"><div><span className="inline-flex rounded-full bg-primary/10 px-4 py-1 text-xs font-extrabold uppercase text-primary-ink">Tài khoản</span><h1 className="mt-4 text-3xl font-extrabold text-ink sm:text-5xl">Thông tin cá nhân</h1><p className="mt-3 text-lg text-muted">Chỉnh sửa tên hiển thị, ảnh đại diện và thông tin đăng nhập của bạn.</p></div><Block className="h-11 w-28" /></header>
     <section className="grid gap-6 lg:grid-cols-[290px_1fr]"><Card className="h-fit"><Block className="h-5 w-28" />{Array.from({ length: 3 }, (_, index) => <Block key={index} className="mt-4 h-12 w-full" />)}</Card><Card className="min-h-[480px] !p-6 sm:!p-8"><Block className="h-24 w-24 rounded-full" />{Array.from({ length: 3 }, (_, index) => <div key={index} className="mt-6"><Block className="h-4 w-28" /><Block className="mt-2 h-11 w-full" /></div>)}</Card></section>
   </div>;
 }

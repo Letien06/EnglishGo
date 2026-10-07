@@ -110,7 +110,7 @@ export default async function PracticeReviewPage({ params }: Props) {
             <Link href={retryHref} className="rounded-lg border border-line bg-surface px-4 py-2 text-sm font-bold text-ink">
               Làm lại
             </Link>
-            <Link href="/practice" className="rounded-lg bg-accent px-4 py-2 text-sm font-extrabold text-white">
+            <Link href="/practice" className="rounded-lg bg-accent px-4 py-2 text-sm font-extrabold text-gold-ink">
               Quay lại danh sách
             </Link>
           </section>

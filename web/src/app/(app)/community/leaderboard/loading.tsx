@@ -1,0 +1,5 @@
+import AppTopbar from "@/components/AppTopbar";
+
+export default function CommunityLeaderboardLoading() {
+  return <><AppTopbar pageTitle="Bảng xếp hạng cộng đồng" pageSubtitle="Người học dẫn đầu theo điểm luyện tập" /><main className="flex-1 space-y-4 overflow-y-auto px-4 py-6 lg:px-8" aria-busy="true"><p className="sr-only" role="status">Đang tải bảng xếp hạng cộng đồng</p><div className="flex gap-2" aria-hidden="true">{["Tất cả", "Tuần này"].map((label) => <span key={label} className="rounded-xl border border-line bg-surface px-4 py-2 text-sm font-extrabold text-ink2">{label}</span>)}</div><section className="overflow-hidden rounded-xl border border-line bg-surface" aria-hidden="true">{Array.from({ length: 8 }, (_, index) => <div key={index} className="flex items-center justify-between border-b border-line p-4 last:border-0"><div className="space-y-2"><div className="h-5 w-40 rounded bg-surface-soft" /><div className="h-4 w-28 rounded bg-surface-soft" /></div><div className="h-5 w-12 rounded bg-surface-soft" /></div>)}</section></main></>;
+}

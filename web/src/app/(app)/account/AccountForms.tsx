@@ -33,11 +33,11 @@ export default function AccountForms({ settings }: { settings: AccountSettingsVi
       <section id="profile" className="space-y-6">
         <div className="flex items-end gap-6">
           <div className="relative">
-            <div className="flex h-28 w-28 items-center justify-center overflow-hidden rounded-full border-4 border-amber-200 bg-sky-100 text-4xl font-extrabold text-primary">
+            <div className="flex h-28 w-28 items-center justify-center overflow-hidden rounded-full border-4 border-primary/25 bg-info-soft text-4xl font-extrabold text-info-ink">
               {avatarUrl ? (
                 <Image
                   src={avatarUrl}
-                  alt="Avatar"
+                  alt="Ảnh đại diện"
                   width={AVATAR_SIZE}
                   height={AVATAR_SIZE}
                   sizes="112px"
@@ -48,7 +48,7 @@ export default function AccountForms({ settings }: { settings: AccountSettingsVi
                 (settings.form.displayName || settings.email || "E").charAt(0).toUpperCase()
               )}
             </div>
-            <label className="absolute -bottom-3 left-2 cursor-pointer rounded-lg bg-emerald-900 px-3 py-2 text-sm font-extrabold text-white transition-opacity hover:opacity-90">
+            <label className="absolute -bottom-3 left-2 cursor-pointer rounded-lg bg-primary px-3 py-2 text-sm font-extrabold text-gold-ink transition-opacity hover:opacity-90">
               Đổi ảnh
               <input
                 type="file"
@@ -82,30 +82,30 @@ export default function AccountForms({ settings }: { settings: AccountSettingsVi
             });
           }}
         >
-          <label className="block text-sm font-extrabold text-emerald-800">
+          <label className="block text-sm font-extrabold text-ink">
             Tên hiển thị
             <input
               name="displayName"
               defaultValue={settings.form.displayName}
               required
-              className="mt-2 w-full rounded-lg border border-emerald-200 bg-white px-4 py-3 text-base font-bold text-ink focus:outline-none focus:ring-2 focus:ring-primary/30"
+              className="mt-2 w-full rounded-lg border border-control-line bg-surface px-4 py-3 text-base font-bold text-ink focus:outline-none focus:ring-2 focus:ring-primary/30"
             />
           </label>
 
-          <label className="block text-sm font-extrabold text-emerald-800">
+          <label className="block text-sm font-extrabold text-ink">
             Email
             <input
               value={settings.email}
               readOnly
-              className="mt-2 w-full rounded-lg border border-emerald-200 bg-slate-50 px-4 py-3 text-base font-bold text-ink"
+              className="mt-2 w-full rounded-lg border border-control-line bg-surface-soft px-4 py-3 text-base font-bold text-ink"
             />
           </label>
 
-          <div className="rounded-xl border border-emerald-100 bg-emerald-50/50 p-4 text-sm text-emerald-900">
+          <div className="rounded-xl border border-info-line bg-info-soft p-4 text-sm text-info-ink">
             <p className="font-extrabold">Ảnh đại diện</p>
             <p className="mt-1 text-xs font-bold text-muted">
-              Ảnh được nén nhỏ trên trình duyệt rồi lưu dạng base64 trong Firestore,
-              không cần Firebase Storage. Nên dùng ảnh chân dung rõ mặt.
+              Chọn ảnh PNG, JPEG hoặc WebP dưới 5 MB, có khuôn mặt rõ nét.
+              Bấm lưu thay đổi để cập nhật ảnh đại diện.
             </p>
             {avatarUrl ? (
               <button
@@ -114,7 +114,7 @@ export default function AccountForms({ settings }: { settings: AccountSettingsVi
                   setAvatarUrl("");
                   setMessage("Đã bỏ ảnh đại diện. Bấm lưu thay đổi để cập nhật.");
                 }}
-                className="mt-3 rounded-lg border border-emerald-200 bg-white px-4 py-2 text-xs font-extrabold text-emerald-900"
+                className="mt-3 rounded-lg border border-control-line bg-surface px-4 py-2 text-xs font-extrabold text-ink"
               >
                 Xóa ảnh hiện tại
               </button>
@@ -130,7 +130,7 @@ export default function AccountForms({ settings }: { settings: AccountSettingsVi
       <section id="password" className="border-t border-line pt-8">
         <h2 className="text-xl font-extrabold text-ink">Đổi mật khẩu</h2>
         <form
-          className="mt-4 flex gap-3"
+          className="mt-4 flex flex-col gap-3 sm:flex-row"
           onSubmit={(event) => {
             event.preventDefault();
             const form = new FormData(event.currentTarget);
@@ -144,7 +144,8 @@ export default function AccountForms({ settings }: { settings: AccountSettingsVi
             minLength={6}
             required
             placeholder="Mật khẩu mới"
-            className="flex-1 rounded-lg border border-line bg-white px-4 py-3 text-sm text-ink"
+            aria-label="Mật khẩu mới"
+            className="min-w-0 flex-1 rounded-lg border border-control-line bg-surface px-4 py-3 text-sm text-ink"
           />
           <button className="rounded-lg bg-surface-soft px-5 py-3 text-sm font-extrabold text-ink">
             Cập nhật

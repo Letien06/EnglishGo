@@ -1,7 +1,6 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { DashboardIcon } from "./DashboardArt";
 import styles from "./dashboard.module.css";
 
 const messages = [
@@ -19,18 +18,28 @@ export default function CompanionEncouragement() {
   const [index, setIndex] = useState(0);
 
   useEffect(() => {
-    const timer = window.setInterval(() => {
-      if (document.visibilityState !== "visible" || window.matchMedia?.("(prefers-reduced-motion: reduce)")?.matches) return;
-      setIndex(previous => (previous + 1) % messages.length);
-    }, 20_000);
-    return () => window.clearInterval(timer);
-  }, [index]);
+    let timer: number | undefined;
+    const restart = () => {
+      window.clearInterval(timer);
+      timer = undefined;
+      if (document.visibilityState !== "hidden") {
+        timer = window.setInterval(() => setIndex(previous => (previous + 1) % messages.length), 5_000);
+      }
+    };
+    restart();
+    document.addEventListener("visibilitychange", restart);
+    return () => {
+      window.clearInterval(timer);
+      document.removeEventListener("visibilitychange", restart);
+    };
+  }, []);
 
   return <aside className={styles.speech} aria-label="Lời động viên">
-    <p className={styles.encouragementQuote}>{messages[index]}</p>
+    <div className={styles.encouragementQuote}>
+      {messages.map((message, messageIndex) => <p key={message} aria-hidden={messageIndex !== index} className={messageIndex !== index ? styles.encouragementSizer : undefined}>{message}</p>)}
+    </div>
     <div className={styles.encouragementFooter}>
       <span>Mình luôn ở đây cổ vũ bạn.</span>
-      <button type="button" onClick={() => setIndex(previous => (previous + 1) % messages.length)} aria-label="Lời động viên tiếp theo" title="Thêm một lời động viên"><DashboardIcon name="arrow" /></button>
     </div>
   </aside>;
 }

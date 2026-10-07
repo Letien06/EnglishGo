@@ -11,6 +11,7 @@ import * as dautoeic from "@/lib/services/dautoeic";
 import { getTestPartSession } from "@/lib/services/test-part-practice";
 import { DAUTOEIC_LEVEL_COUNT } from "@/lib/services/dautoeic-source";
 import ListenPracticeClient from "./ListenPracticeClient";
+import PracticeUnavailable from "../../_components/PracticeUnavailable";
 
 function partNumber(partId: string): number {
   switch (partId) {
@@ -72,7 +73,7 @@ export default async function ListenPracticePage({
       level,
       message,
     });
-    return <PracticeLoadError partId={partId} partNum={pNum} level={level} reason="Không tải được dữ liệu bài luyện." detail={message} />;
+    return <PracticeUnavailable skill="listening" partId={partId} />;
   }
 
   if (!session || session.items.length === 0) {
@@ -82,13 +83,7 @@ export default async function ListenPracticePage({
       total: session?.total ?? 0,
     });
     return (
-      <PracticeLoadError
-        partId={partId}
-        partNum={pNum}
-        level={level}
-        reason="Session đã tải nhưng không có câu hỏi để luyện."
-        detail={`total=${session?.total ?? 0}, items=${session?.items.length ?? 0}`}
-      />
+      <PracticeUnavailable skill="listening" partId={partId} empty />
     );
   }
 
@@ -105,39 +100,5 @@ export default async function ListenPracticePage({
       userLoggedIn={!!user}
       userUid={user?.uid ?? null}
     />
-  );
-}
-
-function PracticeLoadError({
-  partId,
-  partNum,
-  level,
-  reason,
-  detail,
-}: {
-  partId: string;
-  partNum: number;
-  level: number;
-  reason: string;
-  detail: string;
-}) {
-  return (
-    <main className="app-canvas min-h-[calc(100dvh-4rem)] px-4 py-8 lg:px-8">
-      <section className="mx-auto max-w-3xl rounded-2xl border border-rose-200 bg-rose-50 p-6 text-rose-950 shadow-sm">
-        <div className="flex items-start gap-3">
-          <span className="mt-0.5 inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-rose-600 text-lg font-black text-white">!</span>
-          <div className="min-w-0">
-            <h1 className="text-xl font-extrabold">Không mở được bài luyện nghe</h1>
-            <p className="mt-2 text-sm font-semibold">{reason}</p>
-          </div>
-        </div>
-        <div className="mt-5 rounded-xl border border-rose-200 bg-white/70 p-4 text-sm">
-          <p><strong>Thông tin yêu cầu:</strong> {partId} (part {partNum}), level {level}</p>
-          <p className="mt-2 break-words font-mono text-xs text-rose-800"><strong>Chi tiết:</strong> {detail}</p>
-        </div>
-        <p className="mt-4 text-xs text-rose-800">Bạn có thể chụp màn hình phần “Chi tiết” này để kiểm tra cấu hình API hoặc dữ liệu đồng bộ.</p>
-        <a href={`/listen?part=${partId}`} className="mt-5 inline-flex rounded-xl bg-rose-700 px-4 py-2 text-sm font-extrabold text-white no-underline hover:bg-rose-800">← Quay lại danh sách bài</a>
-      </section>
-    </main>
   );
 }

@@ -1,8 +1,5 @@
 "use client";
 
-import Link from "next/link";
-import LogoutButton from "./LogoutButton";
-
 interface AppTopbarProps {
   pageTitle: string;
   pageSubtitle?: string;
@@ -13,32 +10,17 @@ interface AppTopbarProps {
 export default function AppTopbar({
   pageTitle,
   pageSubtitle,
-  userName,
-  userEmail,
 }: AppTopbarProps) {
-  const displayLabel = userName || userEmail || "Tài khoản";
-
   return (
-    <header className="app-shell-header sticky top-0 z-40 flex items-center justify-between gap-4 border-b bg-glass/90 px-5 py-3 backdrop-blur-xl lg:px-8">
-      <div className="min-w-0">
-        <p className="text-[11px] uppercase tracking-widest text-muted font-semibold mb-0.5">
+    <header className="border-b border-line bg-bg px-4 py-6 sm:px-6 lg:px-8">
+      <div className="mx-auto w-full max-w-7xl min-w-0">
+        <p className="text-xs font-extrabold uppercase tracking-widest text-muted">
           Không gian học tập
         </p>
-        <h1 className="text-lg font-bold text-ink truncate">{pageTitle}</h1>
+        <h1 className="mt-3 break-words font-display text-2xl font-extrabold tracking-tight text-ink sm:text-3xl">{pageTitle}</h1>
         {pageSubtitle && (
-          <p className="text-sm text-muted truncate">{pageSubtitle}</p>
+          <p className="mt-2 max-w-3xl text-sm leading-relaxed text-muted">{pageSubtitle}</p>
         )}
-      </div>
-
-      <div className="flex items-center gap-2 shrink-0">
-        <Link
-          href="/account?tab=profile"
-          className="hidden sm:inline-flex items-center px-3 py-1.5 rounded-full bg-surface-soft text-sm font-semibold text-ink2 hover:text-ink transition-colors truncate max-w-[160px]"
-          aria-label="Hồ sơ tài khoản"
-        >
-          {displayLabel}
-        </Link>
-        <LogoutButton />
       </div>
     </header>
   );

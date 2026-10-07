@@ -9,12 +9,12 @@ export default async function AdminContentReviewPage() {
   const drafts = await draftQueue();
   return (
     <>
-      <AppTopbar pageTitle="Content review" pageSubtitle="Approve drafts before publishing" userName={user.displayName} userEmail={user.email} />
+      <AppTopbar pageTitle="Duyệt nội dung" pageSubtitle="Duyệt bản nháp trước khi xuất bản" userName={user.displayName} userEmail={user.email} />
       <main className="flex-1 overflow-y-auto px-4 py-6 lg:px-8 space-y-4">
         <section className="p-5 rounded-xl bg-surface border border-line">
-          <span className="text-xs text-muted">Draft queue</span>
+          <span className="text-xs text-muted">Hàng đợi bản nháp</span>
           <h2 className="text-3xl font-bold text-ink">{drafts.length}</h2>
-          <p className="text-sm text-muted">Draft entries are counted from content audit logs.</p>
+          <p className="text-sm text-muted">Số bản nháp được tổng hợp từ nhật ký kiểm tra nội dung.</p>
         </section>
         <section className="rounded-xl bg-surface border border-line overflow-hidden">
           {drafts.map((draft) => (
@@ -24,11 +24,11 @@ export default async function AdminContentReviewPage() {
                 <span className="text-xs text-primary">{draft.status}</span>
               </div>
               <p className="text-sm text-muted mt-1">
-                {draft.action} / {draft.displayName ?? "system"} / {formatDate(draft.createdAtMillis)}
+                {draft.action} / {draft.displayName ?? "hệ thống"} / {formatDate(draft.createdAtMillis)}
               </p>
             </article>
           ))}
-          {drafts.length === 0 && <div className="p-8 text-center text-muted">No draft content waiting for review.</div>}
+          {drafts.length === 0 && <div className="p-8 text-center text-muted">Chưa có bản nháp đang chờ duyệt.</div>}
         </section>
       </main>
     </>

@@ -27,7 +27,7 @@ export default async function ContentQualityPage() {
             <div className="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
               <div>
                 <p className="text-xs font-extrabold uppercase tracking-widest text-terracotta">Cần rà soát</p>
-                <h1 className="mt-1 text-2xl font-extrabold text-ink">Câu có tín hiệu bất thường</h1>
+                <h2 className="mt-1 text-2xl font-extrabold text-ink">Câu có tín hiệu bất thường</h2>
               </div>
               <p className="max-w-xl text-xs leading-relaxed text-muted">Điểm rủi ro kết hợp tỉ lệ sai, số lượt làm và báo lỗi. Nó là tín hiệu để review nội dung, không tự kết luận một câu hỏi sai.</p>
             </div>

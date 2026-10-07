@@ -2098,7 +2098,7 @@ function PlaySurface({
           <button
             type="button"
             onClick={goNext}
-            className="flashcard-control flashcard-control--next rounded-lg bg-accent px-4 py-2 text-sm font-semibold text-white"
+            className="flashcard-control flashcard-control--next rounded-lg bg-accent px-4 py-2 text-sm font-semibold text-gold-ink"
           >
             Tiếp ›
           </button>
@@ -2204,7 +2204,7 @@ function FeedbackOverlay({
           <button
             type="button"
             onClick={onContinue}
-            className="rounded-lg bg-accent px-4 py-2 text-sm font-semibold text-white"
+            className="rounded-lg bg-accent px-4 py-2 text-sm font-semibold text-gold-ink"
           >
             {continueText}
           </button>

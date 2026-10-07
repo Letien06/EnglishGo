@@ -10,7 +10,7 @@ export default async function WritingAdminPage() {
   return (
     <>
       <AppTopbar
-        pageTitle="Quản lý Writing"
+        pageTitle="Quản lý bài viết"
         pageSubtitle="Bộ đề tự biên soạn, trạng thái xuất bản và quy trình rà soát"
         userName={user.displayName}
         userEmail={user.email}

@@ -11,6 +11,7 @@ const navItems = [
   { href: "/hub", icon: "home", label: "Trang chủ", key: "hub", color: "text-primary" },
   { href: "/listen", icon: "listen", label: "Nghe", key: "listen", color: "text-plum" },
   { href: "/read", icon: "read", label: "Đọc", key: "read", color: "text-azure" },
+  { href: "/writing", icon: "writing", label: "Viết", key: "writing", color: "text-terracotta" },
   { href: "/vocab", icon: "vocab", label: "Từ vựng", key: "vocab", color: "text-jade" },
   { href: "/practice", icon: "practice", label: "Đề thi", key: "practice", color: "text-terracotta" },
   { href: "/leaderboard", icon: "leaderboard", label: "Bảng xếp hạng", key: "leaderboard", color: "text-primary" },

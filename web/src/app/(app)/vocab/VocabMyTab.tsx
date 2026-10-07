@@ -259,7 +259,7 @@ export default function VocabMyTab({ uid, folderId, folderSearch }: Props) {
                 <Link
                   href={`/vocab/${set.id}`}
                   data-overdelay="Đang mở chi tiết bộ từ..."
-                  className="rounded-full bg-accent px-4 py-2 text-sm font-bold text-white no-underline"
+                  className="rounded-full bg-accent px-4 py-2 text-sm font-bold text-gold-ink no-underline"
                 >
                   Xem
                 </Link>

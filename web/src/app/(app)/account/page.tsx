@@ -12,12 +12,12 @@ export default async function AccountPage() {
   return (
     <main className="account-page app-canvas min-h-[calc(100dvh-4rem)] px-5 py-8 sm:py-12">
       <div className="mx-auto max-w-7xl">
-        <header className="page-heading mb-8 flex items-end justify-between border-b border-amber-200 pb-8">
+        <header className="page-heading mb-8 flex flex-col items-start justify-between gap-4 border-b border-line pb-8 sm:flex-row sm:items-end">
           <div>
-            <span className="inline-flex rounded-full bg-primary/10 px-4 py-1 text-xs font-extrabold uppercase text-emerald-700">
+            <span className="inline-flex rounded-full bg-primary/10 px-4 py-1 text-xs font-extrabold uppercase text-primary-ink">
               Tài khoản
             </span>
-            <h1 className="mt-4 text-5xl font-extrabold text-ink">Thông tin cá nhân</h1>
+            <h1 className="mt-4 text-3xl font-extrabold text-ink sm:text-5xl">Thông tin cá nhân</h1>
             <p className="mt-3 text-lg text-muted">
               Chỉnh sửa tên hiển thị, ảnh đại diện và thông tin đăng nhập của bạn.
             </p>

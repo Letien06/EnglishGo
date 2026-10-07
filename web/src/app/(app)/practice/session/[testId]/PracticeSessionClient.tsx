@@ -151,7 +151,7 @@ export default function PracticeSessionClient({ session }: { session: PracticeSe
   const activeQuestion = session.questions[activeIndex] ?? session.questions[0];
   const currentAudioUrl = activeQuestion?.audioUrl || null;
   const hasListening = session.questions.some((question) => question.part <= 4);
-  const timerClass = remaining <= 60 ? "bg-red-600 text-white" : remaining <= 300 ? "bg-amber-500 text-white" : "bg-accent text-white";
+  const timerClass = remaining <= 60 ? "bg-red-600 text-white" : remaining <= 300 ? "bg-amber-500 text-white" : "bg-accent text-gold-ink";
   const title = session.config.mode === "exam"
     ? `TOEIC Full Test: Questions ${activeIndex + 1} of ${totalQuestions}`
     : `${partLabel(session.config.parts)}: Questions ${activeIndex + 1} of ${totalQuestions}`;
@@ -486,7 +486,7 @@ export default function PracticeSessionClient({ session }: { session: PracticeSe
                           onClick={() => goToQuestion(question.id)}
                           className={`relative rounded-lg border px-2 py-1 text-center text-sm font-bold ${
                             active
-                              ? "border-accent bg-accent text-white"
+                              ? "border-accent bg-accent text-gold-ink"
                               : answered
                                 ? "border-emerald-300 bg-emerald-50 text-emerald-700"
                                 : "border-line bg-surface-soft text-ink"
@@ -506,7 +506,7 @@ export default function PracticeSessionClient({ session }: { session: PracticeSe
             <button type="button" onClick={() => void saveNow()} disabled={submitting} className="flex-1 rounded-lg bg-surface-soft px-3 py-2 text-sm font-semibold text-ink disabled:opacity-60">
               Save
             </button>
-            <button type="button" onClick={() => setConfirmSubmit(true)} disabled={submitting} className="flex-1 rounded-lg bg-accent px-3 py-2 text-sm font-semibold text-white disabled:opacity-60">
+            <button type="button" onClick={() => setConfirmSubmit(true)} disabled={submitting} className="flex-1 rounded-lg bg-accent px-3 py-2 text-sm font-semibold text-gold-ink disabled:opacity-60">
               Submit
             </button>
           </div>
@@ -653,7 +653,7 @@ function QuestionCard({
         <button type="button" onClick={onPrevious} disabled={previousDisabled || disabled} className="rounded-lg border border-line px-4 py-2 text-sm font-bold text-ink disabled:opacity-40">
           Câu trước
         </button>
-        <button type="button" onClick={onNext} disabled={nextDisabled || disabled} className="rounded-lg bg-accent px-4 py-2 text-sm font-bold text-white disabled:opacity-40">
+        <button type="button" onClick={onNext} disabled={nextDisabled || disabled} className="rounded-lg bg-accent px-4 py-2 text-sm font-bold text-gold-ink disabled:opacity-40">
           Câu tiếp
         </button>
       </footer>
@@ -700,7 +700,7 @@ function ConfirmDialog({
           <button type="button" data-dialog-initial-focus onClick={onCancel} className="rounded-lg border border-line px-4 py-2 text-sm font-bold text-ink">
             Quay lại
           </button>
-          <button type="button" onClick={onConfirm} className="rounded-lg bg-accent px-4 py-2 text-sm font-extrabold text-white">
+          <button type="button" onClick={onConfirm} className="rounded-lg bg-accent px-4 py-2 text-sm font-extrabold text-gold-ink">
             {confirmLabel}
           </button>
         </div>
