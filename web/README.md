@@ -34,7 +34,7 @@ The Vercel project root directory should be `web`.
 
 Run `npm run build` (not only `next build`) for deployment. In Google Drive
 storage mode its `prebuild` step downloads the configured immutable manifest
-and verifies every JSON payload before writing a server-only `.content` bundle.
+and verifies every JSON payload before writing a server-only gzip `.content` bundle.
 The existing `GOOGLE_DRIVE_*` variables must be available during the build.
 Nothing in `.content` is committed or served as a public static asset; Next.js
 file tracing includes it in the server deployment. Media URLs still point to
@@ -70,10 +70,16 @@ node --env-file=.env.local scripts/sync-dauenglish-vocab.mjs <existing-materials
 node scripts/sync-dauenglish-drive.mjs upload <new-materials.json>
 ```
 
-The exporter validates catalog counts and membership, excludes Pro tests, and
+The public exporter validates catalog counts and membership, excludes Pro tests, and
 does not write to Firestore. After read-back verification, update the production
 `GOOGLE_DRIVE_MANIFEST_ID` and redeploy. Audio/image URLs remain source URLs;
 the JSON backup is not a backup of the media files themselves.
+
+For provider-authorized Pro imports, use the authenticated workflow in
+[`docs/deployment.md`](../docs/deployment.md#importing-provider-authorized-pro-material).
+It preserves archived vocabulary and practice IDs and adds optional libraries
+at `/listen/audio-dictation` and `/read/grammar`. These two libraries keep progress
+on the current device, scoped by the EnglishGo learner identity.
 
 ### Vocabulary workspace
 

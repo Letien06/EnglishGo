@@ -1,14 +1,31 @@
 import type { NextConfig } from "next";
+import { readdirSync } from "node:fs";
+import path from "node:path";
 
 const manifestId = process.env.GOOGLE_DRIVE_MANIFEST_ID ?? "";
-const materialBundle = /^[a-zA-Z0-9_-]{10,200}$/.test(manifestId)
-  ? `./.content/dauenglish/${manifestId}/*.json`
-  : "./.content/dauenglish/**/*.json";
+const hasManifestId = /^[a-zA-Z0-9_-]{10,200}$/.test(manifestId);
+const materialFolder = hasManifestId
+  ? `./.content/dauenglish/${manifestId}`
+  : "./.content/dauenglish/**";
+const cacheRoot = path.join(process.cwd(), ".content", "dauenglish");
+let inactiveMaterialFolders: string[] = [];
+if (hasManifestId) {
+  try {
+    inactiveMaterialFolders = readdirSync(cacheRoot, { withFileTypes: true })
+      .filter((entry) => entry.isDirectory() && entry.name !== manifestId)
+      .map((entry) => `./.content/dauenglish/${entry.name}/**/*`);
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error;
+  }
+}
 
 const nextConfig: NextConfig = {
   poweredByHeader: false,
   outputFileTracingIncludes: {
-    "/*": [materialBundle],
+    "/*": [`${materialFolder}/manifest.json`, `${materialFolder}/*.json.gz`],
+  },
+  outputFileTracingExcludes: {
+    "/*": [..."0123456789abcdef"].map((prefix) => `./.content/dauenglish/**/${prefix}*.json`).concat(inactiveMaterialFolders),
   },
   allowedDevOrigins: ["127.0.0.1"],
   images: {

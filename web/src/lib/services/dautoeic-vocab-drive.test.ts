@@ -44,6 +44,33 @@ beforeEach(() => {
 afterEach(() => { vi.unstubAllGlobals(); vi.restoreAllMocks(); });
 
 describe("vocabulary uses the verified Drive bundle", () => {
+  it("opens authorized TOEIC MASTER Pro content with eight vocabulary parts and stable IDs", async () => {
+    const snapshot = vocabularyFixture();
+    snapshot.accessScope = "provider-authorized";
+    snapshot.catalog.sets[0].name = "TOEIC MASTER";
+    snapshot.catalog.tests[0] = { ...snapshot.catalog.tests[0], name: "Part 2 Tổng hợp", accessLevel: "pro", partCount: 8, wordCount: 8 };
+    snapshot.parts = Array.from({ length: 8 }, (_, index) => ({ id: `master-part-${index + 1}`, testId: "vocab-test", name: `Topic ${index + 1}`, orderIndex: index + 1 }));
+    const wordTemplate = snapshot.words[0];
+    snapshot.words = snapshot.parts.map((part, index) => ({ ...wordTemplate, id: index === 0 ? "word-lc" : `master-word-${index + 1}`, partId: part.id }));
+    mocks.drive.mockResolvedValue(snapshot);
+
+    const catalog = await source.getVocabularyCatalogView();
+    expect(catalog.groups).toEqual([{ id: "group", name: "TOEIC MASTER", orderIndex: 1, count: 1 }]);
+    expect(catalog.cards[0]).toMatchObject({ id: "vocab-test", accessLevel: "pro", partCount: 8, wordCount: 8, internalSetId: source.dautoeicVocabSetId("vocab-test") });
+    const detail = await source.getDautoeicVocabTestView("vocab-test");
+    expect(detail.test.accessLevel).toBe("pro");
+    expect(detail.parts).toHaveLength(8);
+    expect(detail.parts.map((part) => part.wordCount)).toEqual(Array(8).fill(1));
+    const synced = await source.syncDautoeicVocabTest("vocab-test", "master-part-1");
+    const session = await vocab.getFilteredSessionForPart(synced.setId, null, "master-part-1", "all", "original", "all");
+    expect(session.set).toMatchObject({ id: source.dautoeicVocabSetId("vocab-test"), externalTestId: "vocab-test", externalPartId: "master-part-1" });
+    expect(session.words[0].id).toBe(source.dautoeicVocabWordId("word-lc"));
+    expect(session.totalWords).toBe(1);
+    expect(mocks.writes).not.toHaveBeenCalled();
+    expect(mocks.collection).not.toHaveBeenCalled();
+    expect(fetch).not.toHaveBeenCalled();
+  });
+
   it("retains all seven supplied public groups and their tests in a complete Drive snapshot", async () => {
     const template = vocabularyFixture();
     const snapshot = {

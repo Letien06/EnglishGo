@@ -11,6 +11,7 @@ import { getReadIdentity } from "@/lib/auth/session";
 import * as dautoeic from "@/lib/services/dautoeic";
 import { getTestPartSession } from "@/lib/services/test-part-practice";
 import { DAUTOEIC_LEVEL_COUNT } from "@/lib/services/dautoeic-source";
+import { selectPracticeWindow } from "@/lib/practice-window";
 import ReadPracticeClient from "./ReadPracticeClient";
 
 function partNumber(partId: string): number {
@@ -25,7 +26,7 @@ function partNumber(partId: string): number {
 export default async function ReadPracticePage({
   searchParams,
 }: {
-  searchParams: Promise<{ part?: string; level?: string; testId?: string; mode?: string; q?: string }>;
+  searchParams: Promise<{ part?: string; level?: string; testId?: string; mode?: string; q?: string; auto?: string }>;
 }) {
   const params = await searchParams;
   const partId = params.part && ["part5", "part6", "part7"].includes(params.part)
@@ -58,12 +59,14 @@ export default async function ReadPracticePage({
   if (!session || session.items.length === 0) {
     return <PracticeUnavailable skill="reading" partId={partId} empty />;
   }
+  const practice = selectPracticeWindow(session, params.q);
 
   return (
     <ReadPracticeClient
-      key={`read:${partId}:${params.testId ?? level}:${user?.uid ?? "guest"}`}
-      initialIndex={Math.max(0, Math.min(session.items.length - 1, Math.trunc(Number(params.q)) || 0))}
-      session={session}
+      key={`read:${partId}:${params.testId ?? level}:${practice.session.windowOffset ?? 0}:${user?.uid ?? "guest"}`}
+      initialIndex={practice.initialIndex}
+      initialAuto={practice.session.windowOffset !== undefined && params.auto === "1"}
+      session={practice.session}
       partId={partId}
       partNum={pNum}
       level={level}

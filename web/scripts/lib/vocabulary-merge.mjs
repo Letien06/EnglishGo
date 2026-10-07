@@ -1,7 +1,7 @@
 import { vocabularySnapshotSchema } from "../../src/lib/storage/vocab-snapshot.ts";
 
 const clean = value => String(value ?? "").trim();
-const eligible = test => clean(test.accessLevel).toLowerCase() !== "pro" && test.partCount > 0 && test.wordCount > 0;
+const eligible = (test, authorized = false) => (authorized || clean(test.accessLevel).toLowerCase() !== "pro") && test.partCount > 0 && test.wordCount > 0;
 
 export function vocabularySyncTimestamp(httpDate, fallbackNow = Date.now()) {
   const sourceTime = typeof httpDate === "string" ? Date.parse(httpDate) : NaN;
@@ -28,20 +28,22 @@ export function parsePublicVocabularyCatalog(raw) {
 }
 
 /** Keep previously archived free content and IDs; add only newly public content. */
-export function mergeVocabularySnapshots(archivedValue, incomingValue, currentCatalog = incomingValue.catalog) {
+export function mergeVocabularySnapshots(archivedValue, incomingValue, currentCatalog = incomingValue?.catalog, { authorized = false } = {}) {
   const archived = archivedValue ? vocabularySnapshotSchema.parse(archivedValue) : null;
-  const incoming = vocabularySnapshotSchema.parse(incomingValue);
+  if (!incomingValue && (!authorized || !archived)) throw new Error("Missing incoming vocabulary snapshot.");
+  if (authorized && incomingValue && incomingValue.accessScope !== "provider-authorized") throw new Error("Missing authorized vocabulary provenance.");
+  const incoming = incomingValue ? vocabularySnapshotSchema.parse(incomingValue) : { catalog: { sets: [], tests: [] }, parts: [], words: [] };
+  const retained = new Map((archived?.catalog.tests ?? []).map(test => [test.testId, test]));
   const currentById = new Map(currentCatalog.tests.map(test => [test.testId, test]));
   if (currentById.size !== currentCatalog.tests.length) throw new Error("Duplicate current vocabulary test IDs.");
   const incomingById = new Map(incoming.catalog.tests.map(test => [test.testId, test]));
   for (const test of incoming.catalog.tests) {
     const current = currentById.get(test.testId);
-    if (!current || !eligible(current) || current.setId !== test.setId || current.partCount !== test.partCount || current.wordCount !== test.wordCount) throw new Error(`Current public vocabulary metadata mismatch: ${test.testId}`);
+    if (!current || !eligible(current, authorized) || current.setId !== test.setId || current.partCount !== test.partCount || current.wordCount !== test.wordCount) throw new Error(`Current public vocabulary metadata mismatch: ${test.testId}`);
   }
-  for (const test of currentCatalog.tests.filter(eligible)) {
-    if (!incomingById.has(test.testId)) throw new Error(`Missing current public vocabulary test: ${test.testId}`);
+  for (const test of currentCatalog.tests.filter(test => eligible(test, authorized))) {
+    if (!incomingById.has(test.testId) && !(authorized && retained.has(test.testId))) throw new Error(`Missing current public vocabulary test: ${test.testId}`);
   }
-  const retained = new Map((archived?.catalog.tests ?? []).map(test => [test.testId, test]));
   for (const test of retained.values()) {
     const current = currentById.get(test.testId);
     if (current && current.setId !== test.setId) throw new Error(`Vocabulary test group conflict: ${test.testId}`);
@@ -58,6 +60,7 @@ export function mergeVocabularySnapshots(archivedValue, incomingValue, currentCa
   if (sets.size !== currentCatalog.sets.length) throw new Error("Duplicate current vocabulary group IDs.");
   for (const set of archived?.catalog.sets ?? []) if (!sets.has(set.id)) sets.set(set.id, set);
   const vocabulary = vocabularySnapshotSchema.parse({
+    ...((authorized || archived?.accessScope === "provider-authorized") ? { accessScope: "provider-authorized" } : {}),
     catalog: { sets: [...sets.values()].sort((a, b) => (a.orderIndex ?? 0) - (b.orderIndex ?? 0)), tests: [...retained.values(), ...additions] },
     parts: [...(archived?.parts ?? []), ...addedParts], words: [...(archived?.words ?? []), ...addedWords],
   });
@@ -69,6 +72,7 @@ export function mergeVocabularySnapshots(archivedValue, incomingValue, currentCa
     currentFreeTests: currentCatalog.tests.filter(test => test.setId === set.id && eligible(test)).length,
     currentProTests: currentCatalog.tests.filter(test => test.setId === set.id && clean(test.accessLevel).toLowerCase() === "pro").length,
   }));
+  if (authorized && currentCatalog.tests.some(test => !vocabulary.catalog.tests.some(stored => stored.testId === test.testId && stored.partCount === test.partCount && stored.wordCount === test.wordCount))) throw new Error("Authorized vocabulary catalogue is incomplete or archived counts have changed.");
   return { vocabulary, report: { addedTests: additions.length, retainedTests: retained.size, totalTests: vocabulary.catalog.tests.length, currentCatalogTests: currentCatalog.tests.length, groups } };
 }
 

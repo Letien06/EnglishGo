@@ -21,6 +21,7 @@ const WORDS = "vocabWords";
 const PROGRESS = "userVocabProgress";
 const SOURCE = "DAUTOEIC";
 const CATALOG_REVALIDATE_SECONDS = 600;
+type VocabularyCatalogWithScope = DauToeicVocabCatalog & Pick<VocabularySnapshot, "accessScope">;
 
 export function dautoeicVocabSetId(testId: string): number {
   return stableId(`dautoeic:vocab_test:${testId}`);
@@ -69,7 +70,8 @@ function buildVocabularyIndex(snapshot: VocabularySnapshot) {
   for (const group of docsBySet.values()) group.sort((left, right) =>
     (parts.get(left.externalPartId!)?.orderIndex ?? 0) - (parts.get(right.externalPartId!)?.orderIndex ?? 0) ||
     (left.externalOrderIndex ?? 0) - (right.externalOrderIndex ?? 0));
-  return { catalog: snapshot.catalog, sets, words, partsByTest, wordsByPart, docsBySet };
+  const catalog: VocabularyCatalogWithScope = { ...snapshot.catalog, accessScope: snapshot.accessScope };
+  return { catalog, sets, words, partsByTest, wordsByPart, docsBySet };
 }
 
 let vocabularyIndex: { key: string; promise: Promise<ReturnType<typeof buildVocabularyIndex>> } | undefined;
@@ -132,7 +134,8 @@ export async function getVocabularyCatalogView(
 ): Promise<DauToeicVocabCatalogView> {
   if (!isDauToeicVocabConfigured()) return { groups: [], cards: [] };
   const catalog = await getVocabularyCatalog();
-  const visibleTests = catalog.tests.filter(isPlayableTest);
+  const allowPro = isDriveContentEnabled() && catalog.accessScope === "provider-authorized";
+  const visibleTests = catalog.tests.filter((test) => isPlayableTest(test, allowPro));
   const setNameById = new Map(
     catalog.sets.map((set) => [set.id, cleanName(set.name) || "TOEIC"]),
   );
@@ -325,7 +328,7 @@ export async function syncDautoeicVocabTest(
   };
 }
 
-export async function getVocabularyCatalog(): Promise<DauToeicVocabCatalog> {
+export async function getVocabularyCatalog(): Promise<VocabularyCatalogWithScope> {
   if (isDriveContentEnabled()) return (await driveVocabularyIndex()).catalog;
   return cachedVocabularyCatalog();
 }
@@ -379,7 +382,7 @@ async function uncachedWordsForParts(partIds: string[]): Promise<DauToeicVocabWo
 
 export async function fetchVocabularySnapshotFromSource(): Promise<VocabularySnapshot> {
   const catalog = await uncachedVocabularyCatalog();
-  catalog.tests = catalog.tests.filter(isPlayableTest);
+  catalog.tests = catalog.tests.filter((test) => isPlayableTest(test));
   const parts: DauToeicVocabPart[] = [];
   for (let offset = 0; offset < catalog.tests.length; offset += 4) {
     parts.push(...(await Promise.all(catalog.tests.slice(offset, offset + 4).map((test) => uncachedVocabularyParts(test.testId)))).flat());
@@ -396,7 +399,8 @@ async function findCatalogTest(testId: string): Promise<DauToeicVocabTest> {
   if (!cleanTestId) throw new ApiError("testId is required", 400);
   const catalog = await getVocabularyCatalog();
   const test = catalog.tests.find((item) => item.testId === cleanTestId);
-  if (!test || !isPlayableTest(test)) throw NotFound("Không tìm thấy bộ từ vựng");
+  const allowPro = isDriveContentEnabled() && catalog.accessScope === "provider-authorized";
+  if (!test || !isPlayableTest(test, allowPro)) throw NotFound("Không tìm thấy bộ từ vựng");
   return test;
 }
 
@@ -514,8 +518,8 @@ async function hasLocalWordsForPart(setId: number, partId: string): Promise<bool
   return !snap.empty;
 }
 
-function isPlayableTest(test: DauToeicVocabTest): boolean {
-  return !isProAccess(test.accessLevel) && test.wordCount > 0 && test.partCount > 0;
+function isPlayableTest(test: DauToeicVocabTest, allowPro = false): boolean {
+  return (allowPro || !isProAccess(test.accessLevel)) && test.wordCount > 0 && test.partCount > 0;
 }
 
 function isProAccess(value: string | null): boolean {

@@ -18,6 +18,7 @@ const vocabWord = z.object({
 });
 
 export const vocabularySnapshotSchema = z.object({
+  accessScope: z.enum(["public", "provider-authorized"]).optional(),
   catalog: z.object({ sets: z.array(vocabSet), tests: z.array(vocabTest).min(1) }),
   parts: z.array(vocabPart).min(1), words: z.array(vocabWord).min(1),
 }).superRefine((snapshot, context) => {
@@ -30,7 +31,7 @@ export const vocabularySnapshotSchema = z.object({
   for (const part of snapshot.parts) if (!tests.has(part.testId)) fail("Unknown vocabulary test.");
   for (const word of snapshot.words) if (!parts.has(word.partId)) fail("Unknown vocabulary part.");
   for (const test of snapshot.catalog.tests) {
-    if (!sets.has(test.setId) || test.accessLevel?.trim().toLowerCase() === "pro") fail("Unavailable vocabulary test.");
+    if (!sets.has(test.setId) || (test.accessLevel?.trim().toLowerCase() === "pro" && snapshot.accessScope !== "provider-authorized")) fail("Unavailable vocabulary test.");
     const testParts = new Set(snapshot.parts.filter((part) => part.testId === test.testId).map((part) => part.id));
     if (testParts.size !== test.partCount || snapshot.words.filter((word) => testParts.has(word.partId)).length !== test.wordCount) fail(`Vocabulary count mismatch: ${test.testId}`);
   }

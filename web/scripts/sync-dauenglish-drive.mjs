@@ -6,6 +6,7 @@ import { createJiti } from "jiti";
 import { buildDrivePackage, sha256 } from "./lib/drive-package.mjs";
 import { connectDrive } from "./lib/drive-connection.mjs";
 import { buildReuseCandidates, validateReuseSourceFolder, validateReuseMetadata, verifyReuseChunk } from "./lib/drive-upload-reuse.mjs";
+import { createAtomicCheckpointWriter, runChunkWorkers } from "./lib/drive-upload-workers.mjs";
 
 const [mode, input, ...options] = process.argv.slice(2);
 if (!["prepare", "connect", "upload", "verify"].includes(mode) || !input) throw new Error("Use prepare/upload/verify <materials.json> or connect <desktop-oauth-client.json>.");
@@ -49,7 +50,8 @@ if (mode === "connect") {
       const sourceState = JSON.parse(await readFile(path.join(root, sourceManifest.snapshotSha256, "upload-state.json"), "utf8"));
       reuseCandidates = buildReuseCandidates(sourceManifest, sourceState, credentials.accountEmail, new Set(prepared.files.keys()));
     }
-    const saveState = () => saveJson(stateFile, state);
+    const writeState = createAtomicCheckpointWriter(stateFile);
+    const saveState = () => writeState(state);
     const properties = { app: "englishwebapp-dauenglish", snapshot: state.snapshotSha256 };
     async function newId() {
       const result = await (await client.request("/drive/v3/files/generateIds?count=1&space=drive&type=files")).json();
@@ -128,11 +130,11 @@ if (mode === "connect") {
     console.log(JSON.stringify({ archiveVerified: true, archiveFileId, ...prepared.counts }));
     const fileIds = new Map();
     let uploaded = 0;
-    for (const [digest, text] of prepared.files) {
+    await runChunkWorkers(prepared.files, async ([digest, text]) => {
       fileIds.set(digest, await ensureText(text, `${digest}.txt`, "text/plain", reuseCandidates.get(digest)));
       uploaded++;
       if (uploaded % 10 === 0 || uploaded === prepared.files.size) console.log(JSON.stringify({ verifiedChunks: uploaded, totalChunks: prepared.files.size }));
-    }
+    });
     const manifest = driveManifestSchema.parse({ ...prepared.manifest, entries: Object.fromEntries(Object.entries(prepared.manifest.entries).map(([key, entry]) => [key, { ...entry, chunks: entry.chunks.map((chunk) => ({ ...chunk, fileId: fileIds.get(chunk.sha256) })) }])) });
     const manifestId = await ensureText(JSON.stringify(manifest), "manifest.json", "application/json");
     state.manifestId = manifestId;

@@ -1,6 +1,7 @@
 "use client";
 
 import Image from "next/image";
+import { useRouter } from "next/navigation";
 import { decodeHTML } from "entities";
 import Link from "@/components/IntentLink";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
@@ -8,23 +9,24 @@ import { markVisited, routeKey } from "@/lib/nav/session-nav";
 import { setActiveLearnerId } from "@/lib/client-learning-progress-cache";
 import PracticeHeader from "../../_components/PracticeHeader";
 import { usePracticeResume } from "@/lib/use-practice-resume";
+import { practiceNavigationTarget, practiceWindowInfo, type PracticeWindowSession } from "@/lib/practice-window";
 import { useReadingProgressQueue } from "@/lib/reading-progress-queue";
 import { parseReadingOptionTranslations } from "@/lib/reading-translations";
 import { parseVocabularyEntries, vocabularyRowsText } from "@/lib/practice-vocabulary";
 import type {
-  DauToeicDifficultySession,
   DauToeicPracticeItem,
   DauToeicQuestion,
 } from "@/types/dautoeic";
 
 interface Props {
-  session: DauToeicDifficultySession;
+  session: PracticeWindowSession;
   partId: string;
   partNum: number;
   level: number;
   mode: string;
   userLoggedIn: boolean;
   initialIndex: number;
+  initialAuto?: boolean;
   userUid: string | null;
 }
 
@@ -45,8 +47,11 @@ export default function ReadPracticeClient({
   userUid,
   userLoggedIn,
   initialIndex,
+  initialAuto = false,
 }: Props) {
   const initialMode = normalizeMode(mode);
+  const router = useRouter();
+  const { offset, total } = practiceWindowInfo(session);
   const [activeMode, setActiveMode] = useState<PracticeMode>(initialMode);
   const items = session.items;
   const [currentIndex, setCurrentIndex] = useState(initialIndex);
@@ -62,7 +67,7 @@ export default function ReadPracticeClient({
   const { markInteraction, resumeStatus } = usePracticeResume({ skill: "reading", uid: userUid, part: partNum, level, testId: session.testId, items, setAnswers: setAnsweredMap, setIndex: setCurrentIndex, pendingAnswers });
   const enqueueProgress = progressQueue.enqueue;
   const [showNote, setShowNote] = useState(false);
-  const [auto, setAuto] = useState(false);
+  const [auto, setAuto] = useState(initialAuto);
   const [elapsed, setElapsed] = useState(0);
   const [favorite, setFavorite] = useState(false);
   const [toolStatus, setToolStatus] = useState("");
@@ -123,9 +128,13 @@ export default function ReadPracticeClient({
       url.searchParams.delete("testId");
     }
     url.searchParams.set("mode", next.mode ?? activeMode);
-    url.searchParams.set("q", String(next.q ?? currentIndex));
+    url.searchParams.set("q", String(offset + (next.q ?? currentIndex)));
+    if (session.windowOffset !== undefined) {
+      if (auto) url.searchParams.set("auto", "1");
+      else url.searchParams.delete("auto");
+    }
     window.history.replaceState(null, "", `${url.pathname}${url.search}`);
-  }, [activeMode, currentIndex, level, partId, session.testId]);
+  }, [activeMode, auto, currentIndex, level, offset, partId, session.testId, session.windowOffset]);
 
   const switchMode = useCallback((nextMode: PracticeMode) => {
     if (nextMode === activeMode) return;
@@ -160,16 +169,28 @@ export default function ReadPracticeClient({
   }, [currentIndex, updatePracticeUrl]);
 
   const goTo = useCallback((index: number) => {
-    if (index < 0 || index >= items.length) return;
+    const target = practiceNavigationTarget(session, index);
+    if (!target) return;
     if (autoAdvanceRef.current !== null) {
       window.clearTimeout(autoAdvanceRef.current);
       autoAdvanceRef.current = null;
+    }
+    if (target.reload) {
+      const url = new URL(window.location.href);
+      url.searchParams.set("part", partId);
+      url.searchParams.set("level", String(level));
+      url.searchParams.set("mode", activeMode);
+      url.searchParams.set("q", String(target.absoluteIndex));
+      if (auto) url.searchParams.set("auto", "1");
+      else url.searchParams.delete("auto");
+      router.push(`${url.pathname}${url.search}`);
+      return;
     }
     setCurrentIndex(index);
     setShowNote(false);
     setFavorite(false);
     window.scrollTo({ top: 0, behavior: "smooth" });
-  }, [items.length]);
+  }, [activeMode, auto, level, partId, router, session]);
 
   const handleAnswer = useCallback((question: DauToeicQuestion, selected: string) => {
     if (answeredMap[question.id]) return;
@@ -178,7 +199,7 @@ export default function ReadPracticeClient({
     const correct = selectedAnswer === correctAnswer;
     setAnsweredMap((prev) => ({ ...prev, [question.id]: selectedAnswer }));
 
-    if (correct && auto && currentIndex < items.length - 1 && item.questions.every((entry) => entry.id === question.id || answeredMap[entry.id] === normalizeAnswer(entry.correctAnswer))) {
+    if (correct && auto && offset + currentIndex < total - 1 && item.questions.every((entry) => entry.id === question.id || answeredMap[entry.id] === normalizeAnswer(entry.correctAnswer))) {
       if (autoAdvanceRef.current !== null) window.clearTimeout(autoAdvanceRef.current);
       autoAdvanceRef.current = window.setTimeout(() => {
         autoAdvanceRef.current = null;
@@ -200,7 +221,7 @@ export default function ReadPracticeClient({
     });
 
 
-  }, [activeMode, answeredMap, auto, currentIndex, elapsed, enqueueProgress, goTo, item.id, item.questions, items.length, level, partNum, session.testId]);
+  }, [activeMode, answeredMap, auto, currentIndex, elapsed, enqueueProgress, goTo, item.id, item.questions, level, offset, partNum, session.testId, total]);
 
   useEffect(() => () => {
     if (autoAdvanceRef.current !== null) window.clearTimeout(autoAdvanceRef.current);
@@ -279,7 +300,7 @@ export default function ReadPracticeClient({
         <section className="practice-question-pane px-4 py-5 sm:px-6 lg:px-10 lg:py-6">
           <div className="mb-4 flex items-center justify-between">
             <span className="practice-question-count rounded-full border border-info-line bg-info-soft px-4 py-1 text-sm font-extrabold text-info-ink">
-              #{currentIndex + 1}/{items.length}
+              #{offset + currentIndex + 1}/{total}
             </span>
             <button
               type="button"
@@ -342,9 +363,9 @@ export default function ReadPracticeClient({
           </button>
         </div>
         <div className="flex items-center gap-2 sm:gap-3">
-          <button aria-label="Bài trước" onClick={() => goTo(currentIndex - 1)} disabled={currentIndex === 0} className="rounded-xl px-4 py-3 font-extrabold disabled:opacity-40 sm:px-5">‹</button>
-          <span className="px-4 py-3 text-sm font-bold tabular-nums sm:px-5">{currentIndex + 1}/{items.length}</span>
-          <button aria-label="Bài tiếp" onClick={() => goTo(currentIndex + 1)} disabled={currentIndex >= items.length - 1} className="rounded-xl px-4 py-3 font-extrabold disabled:opacity-40 sm:px-5">›</button>
+          <button aria-label="Bài trước" onClick={() => goTo(currentIndex - 1)} disabled={offset + currentIndex === 0} className="rounded-xl px-4 py-3 font-extrabold disabled:opacity-40 sm:px-5">‹</button>
+          <span className="px-4 py-3 text-sm font-bold tabular-nums sm:px-5">{offset + currentIndex + 1}/{total}</span>
+          <button aria-label="Bài tiếp" onClick={() => goTo(currentIndex + 1)} disabled={offset + currentIndex >= total - 1} className="rounded-xl px-4 py-3 font-extrabold disabled:opacity-40 sm:px-5">›</button>
         </div>
       </footer>
     </main>

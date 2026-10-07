@@ -104,6 +104,67 @@ and remote checksums. Keep previous Drive folders while a newer manifest still
 references their chunks. Upload already checks each stored checksum; use
 `verify <new-materials.json>` for a separate full audit of an existing package.
 
+## Importing provider-authorized Pro material
+
+Use this workflow only for an account and content the provider has permitted you
+to copy into this application. From `web/`, run
+`node --env-file=.env.local scripts/sync-dauenglish-authorized.mjs <base.json> <new-vocabulary.json> <new-complete.json>`.
+The local importer uses DauEnglish's Google sign-in and PKCE flow, verifies the
+requested account with `/auth/v1/user`, and keeps the short-lived access session
+in memory. It passes that session only to the local import subprocesses; it never
+puts personal access or refresh tokens in snapshots, Git, Next.js configuration,
+Drive manifests, or Vercel environment variables. Failed or expired sessions
+stop the import without falling back to anonymous access.
+If the provider returns to `https://dauenglish.com/?code=...` instead of the local
+callback, paste that visible returned URL into the waiting import terminal. The
+one-use code is exchanged using the original in-memory PKCE verifier and the
+account is verified again. Do not extract stored browser tokens or paste secrets
+into chat.
+
+To resume one stage with a new sign-in, use
+`node --env-file=.env.local scripts/sync-dauenglish-authorized.mjs <base.json> <new.json> --practice`
+or `--vocab`, `--dictation`, or `--grammar`. Keep every output separate from the base archive. Authorized
+vocabulary snapshots carry `accessScope: "provider-authorized"` and retain each
+test's original `accessLevel`; a public snapshot cannot unlock Pro tests.
+The default public importer still downloads only public material.
+
+Verify the merged archive and retained IDs, then use the normal Drive upload,
+manifest activation, deployment, and production smoke checks. No import stage
+needs Firestore credentials or writes learner progress.
+
+The authorized archive covers four corpora: TOEIC mock tests and Part 1–7
+practice, vocabulary, audio dictation (`listening_sets` / `listening_items`),
+and grammar topics/subtopics/questions. Audio dictation is available at
+`/listen/audio-dictation`; grammar is available at `/read/grammar`. Their optional
+catalog and lesson materials require `accessScope: "provider-authorized"`.
+
+The listening and reading dashboards also link to every nonempty practice group
+for the selected Part, so questions outside the mock-test catalog stay accessible.
+Difficulty sessions send at most 25 items per page while retaining absolute
+question positions, totals, and existing learner IDs.
+Package validation checks source IDs, membership, counts, audio/transcripts,
+and grammar answers/options. It rejects unexpected fields in these corpora and
+credential fields anywhere in the snapshot. Provider learner attempts and
+personal answered/correct counts are excluded from published content.
+An original dictation row with no transcript is retained only with an explicit
+`transcriptMissing: true` marker. Its UI shows the missing-source notice and
+permits navigation; grading and completion are disabled for that row.
+
+Audio dictation and grammar progress stays in browser local storage, scoped by
+the EnglishGo learner UID (or `guest`) and source set/topic ID. It is specific to
+that browser and device; clearing browser data removes it. These activities do
+not update Firestore history, dashboard totals, or the leaderboard. Existing
+TOEIC and vocabulary progress continues to use its established save flows.
+
+The build preparation script stores verified material files as `.json.gz` and
+keeps `manifest.json` plain. Next.js traces only the active manifest folder's
+manifest and compressed materials, excluding legacy JSON and inactive folders.
+Runtime decompression is bounded by the manifest's decoded byte count and
+checks its decoded SHA-256 before parsing. Drive chunks and their checksums
+remain unchanged; legacy local `.json` caches still work when gzip is absent.
+Check the unpacked server function size after preparing the active manifest;
+the uncompressed source archive size is not the deployed bundle size.
+
 ## Local Development
 
 Run all commands from `web/`:
@@ -362,7 +423,7 @@ use the same values in `web/.env.local` and restart Next.js.
 Drive mode reads the requested JSON chunks on the server, verifies checksums,
 and caches chunks for 24 hours and the immutable manifest for one hour using
 the Next.js data cache. Each chunk stays below 700,000 UTF-8 bytes, so the entire
-32 MB source snapshot is never downloaded for a single lesson. Cache keys
+complete source snapshot is never downloaded for a single lesson. Cache keys
 include the provider/manifest to avoid serving the previous Firestore catalog
 after a backend switch. Drive API calls and OAuth tokens are never exposed to
 the browser.

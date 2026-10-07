@@ -8,6 +8,7 @@ import { createDriveClient, driveFileId } from "../storage/google-drive";
 import { driveManifestSchema } from "../storage/drive-manifest";
 import { DAUTOEIC_SOURCE_VERSION } from "./dautoeic-source";
 import { createTextMemoryCache } from "../storage/text-memory-cache";
+import { decodeBundledMaterial } from "../storage/bundled-material";
 
 const manifestMemory = createTextMemoryCache(2_000_000, 2);
 const materialMemory = createTextMemoryCache(32_000_000, 128);
@@ -19,6 +20,17 @@ async function bundledText(manifestId: string, name: string): Promise<string | n
     if ((error as NodeJS.ErrnoException).code === "ENOENT") return null;
     throw error;
   }
+}
+
+async function bundledMaterial(manifestId: string, entry: { bytes: number; sha256: string }): Promise<string | null> {
+  let compressed: Buffer;
+  try {
+    compressed = await readFile(path.join(process.cwd(), ".content", "dauenglish", manifestId, `${entry.sha256}.json.gz`));
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code === "ENOENT") return bundledText(manifestId, `${entry.sha256}.json`);
+    throw error;
+  }
+  return decodeBundledMaterial(compressed, entry);
 }
 
 let configuredClient: { fingerprint: string; client: ReturnType<typeof createDriveClient> } | undefined;
@@ -59,7 +71,7 @@ export async function readDriveMaterial<T>(key: string): Promise<T> {
       const manifest = driveManifestSchema.parse(JSON.parse(manifestText));
       const entry = manifest.entries[key];
       if (!entry) throw new ApiError("Không tìm thấy tài liệu trong bản Google Drive hiện tại.", 404);
-      let material = await bundledText(manifestId, `${entry.sha256}.json`);
+      let material = await bundledMaterial(manifestId, entry);
       if (material === null) {
         const chunks: string[] = [];
         for (let offset = 0; offset < entry.chunks.length; offset += 4) {

@@ -4,7 +4,7 @@ import { DAUTOEIC_SOURCE_VERSION } from "../services/dautoeic-source";
 const hash = z.string().regex(/^[a-f0-9]{64}$/);
 const chunk = z.object({ fileId: z.string().regex(/^[a-zA-Z0-9_-]{10,200}$/), sha256: hash, bytes: z.number().int().positive().max(700_000) });
 const entry = z.object({
-  kind: z.enum(["sets", "tests", "test", "test-part", "difficulty-levels", "difficulty-session", "vocabulary"]),
+  kind: z.enum(["sets", "tests", "test", "test-part", "difficulty-levels", "difficulty-session", "vocabulary", "dictation-catalog", "dictation-set", "grammar-catalog", "grammar-topic"]),
   sha256: hash,
   bytes: z.number().int().positive().max(32_000_000),
   chunks: z.array(chunk).min(1).max(64),

@@ -2,13 +2,25 @@ import { createHash } from "node:crypto";
 import { splitJsonText } from "./firestore-json.mjs";
 import { DAUTOEIC_DIFFICULTY_BANDS, DAUTOEIC_SOURCE_VERSION } from "../../src/lib/services/dautoeic-source.ts";
 import { vocabularySnapshotSchema } from "../../src/lib/storage/vocab-snapshot.ts";
+import { dictationCatalogSchema, dictationSetSchema, validateDictationSetMembership } from "../../src/lib/storage/dictation-snapshot.ts";
+import { grammarCatalogSchema, grammarTopicSchema, validateGrammarMembership } from "../../src/lib/storage/grammar-snapshot.ts";
 
 export function sha256(text) {
   return createHash("sha256").update(text).digest("hex");
 }
 
+const credentialFields = new Set(["accesstoken", "refreshtoken", "authorization", "cookie", "setcookie", "dauenglishimportaccesstoken"]);
+function rejectCredentials(value) {
+  if (!value || typeof value !== "object") return;
+  for (const [field, child] of Object.entries(value)) {
+    if (credentialFields.has(field.replace(/[_-]/g, "").toLowerCase())) throw new Error("Credential fields cannot be published in a content snapshot.");
+    rejectCredentials(child);
+  }
+}
+
 export function buildDrivePackage(json) {
   const snapshot = JSON.parse(json);
+  rejectCredentials(snapshot);
   if (snapshot.source !== "https://dauenglish.com" || snapshot.sourceVersion !== DAUTOEIC_SOURCE_VERSION || !Array.isArray(snapshot.materials) || !Number.isFinite(Date.parse(snapshot.syncedAt))) throw new Error("Invalid Dau English snapshot.");
   const materials = new Map(snapshot.materials.map((material) => [material.key, material]));
   const key = (...parts) => [DAUTOEIC_SOURCE_VERSION, ...parts].join("__");
@@ -19,6 +31,40 @@ export function buildDrivePackage(json) {
   if (vocabulary) {
     vocabularySnapshotSchema.parse(vocabulary.payload);
     expected.set(key("vocabulary", "all"), "vocabulary");
+  }
+  const dictationMaterial = materials.get(key("dictation", "catalog"));
+  const grammarMaterial = materials.get(key("grammar", "catalog"));
+  if (grammarMaterial) {
+    const catalog = grammarCatalogSchema.parse(grammarMaterial.payload);
+    expected.set(key("grammar", "catalog"), "grammar-catalog");
+    const questionIds = new Set();
+    for (const entry of catalog.topics) {
+      const name = key("grammar", "topic", entry.id);
+      const topic = grammarTopicSchema.parse(materials.get(name)?.payload);
+      if (topic.topicId !== entry.id) throw new Error("Grammar material identity mismatch.");
+      validateGrammarMembership(catalog, topic);
+      for (const question of topic.questions) {
+        if (questionIds.has(question.id)) throw new Error("Duplicate grammar question across topics.");
+        questionIds.add(question.id);
+      }
+      expected.set(name, "grammar-topic");
+    }
+  }
+  if (dictationMaterial) {
+    const catalog = dictationCatalogSchema.parse(dictationMaterial.payload);
+    expected.set(key("dictation", "catalog"), "dictation-catalog");
+    const itemIds = new Set();
+    for (const entry of catalog.sets) {
+      const name = key("dictation", "set", entry.id);
+      const set = dictationSetSchema.parse(materials.get(name)?.payload);
+      if (set.setId !== entry.id) throw new Error("Dictation material identity mismatch.");
+      validateDictationSetMembership(catalog, set);
+      for (const item of set.items) {
+        if (itemIds.has(item.id)) throw new Error("Duplicate dictation item across sets.");
+        itemIds.add(item.id);
+      }
+      expected.set(name, "dictation-set");
+    }
   }
   for (const test of tests) {
     expected.set(key("test", test.id), "test");

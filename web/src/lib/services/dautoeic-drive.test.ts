@@ -1,4 +1,5 @@
 import { createHash } from "node:crypto";
+import { gzipSync } from "node:zlib";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 vi.mock("next/cache", () => ({ unstable_cache: (callback: unknown) => callback }));
@@ -55,7 +56,7 @@ describe("Drive material reader", () => {
   it("reads verified bundled content with no Drive request and returns isolated objects", async () => {
     const manifest = await storage.readText("manifest_12345");
     storage.readText.mockClear();
-    storage.readFile.mockImplementation(async (file: string) => file.endsWith("manifest.json") ? manifest : text);
+    storage.readFile.mockImplementation(async (file: string) => file.endsWith("manifest.json") ? manifest : gzipSync(text));
     const results = await Promise.all(Array.from({ length: 6 }, () => reader.readDriveMaterial<Array<{ name: string }>>(key)));
     results[0][0].name = "changed";
     expect(results[1]).toEqual(JSON.parse(text));
@@ -69,6 +70,29 @@ describe("Drive material reader", () => {
     storage.readText.mockClear();
     storage.readFile.mockImplementation(async (file: string) => file.endsWith("manifest.json") ? manifest : "corrupt");
     await expect(reader.readDriveMaterial(key)).rejects.toMatchObject({ status: 503 });
+    expect(storage.readText).not.toHaveBeenCalled();
+  });
+
+  it("falls back to legacy JSON only when gzip is absent", async () => {
+    const manifest = await storage.readText("manifest_12345");
+    storage.readText.mockClear();
+    storage.readFile.mockImplementation(async (file: string) => {
+      if (file.endsWith("manifest.json")) return manifest;
+      if (file.endsWith(".json.gz")) throw Object.assign(new Error("Missing"), { code: "ENOENT" });
+      return text;
+    });
+    await expect(reader.readDriveMaterial(key)).resolves.toEqual(JSON.parse(text));
+    expect(storage.readFile).toHaveBeenCalledTimes(3);
+    expect(storage.readText).not.toHaveBeenCalled();
+  });
+
+  it("fails closed on valid gzip with a decoded checksum mismatch", async () => {
+    vi.spyOn(console, "error").mockImplementation(() => undefined);
+    const manifest = await storage.readText("manifest_12345");
+    storage.readText.mockClear();
+    storage.readFile.mockImplementation(async (file: string) => file.endsWith("manifest.json") ? manifest : gzipSync("x".repeat(Buffer.byteLength(text))));
+    await expect(reader.readDriveMaterial(key)).rejects.toMatchObject({ status: 503 });
+    expect(storage.readFile).toHaveBeenCalledTimes(2);
     expect(storage.readText).not.toHaveBeenCalled();
   });
 
