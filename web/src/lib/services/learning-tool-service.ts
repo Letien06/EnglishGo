@@ -204,7 +204,7 @@ export function createLearningToolService(
     const safeParts = [...new Set(parts)].sort((left, right) => left - right);
     return readServerCache(
       () => findProgressByParts(uid, safeParts),
-      ["learning-progress", config.module, uid, safeParts.join(",")],
+      ["learning-progress-catalog-query-v2", config.module, uid, safeParts.join(",")],
       {
         revalidate: PROGRESS_CACHE_SECONDS,
         tags: safeParts.map((part) => progressCacheTag(uid, part)),
