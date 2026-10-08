@@ -18,25 +18,26 @@ describe("grouped grammar library", () => {
   it("keeps device progress unknown in server markup before hydration", () => {
     const markup = renderToStaticMarkup(<GrammarLibraryClient catalog={catalog} learnerId="guest" answerKeys={answerKeys} />);
     const node = document.createElement("div"); node.innerHTML = markup;
-    expect(node.textContent).toContain("Đã làm —/287");
-    expect(node.textContent).toContain("Đúng — · Sai —");
+    expect(node.textContent).toContain("287 câu hỏi");
+    expect(node.textContent).toContain("— đúng");
+    expect(node.textContent).toContain("— sai");
     expect(node.querySelector('[role="progressbar"]')).not.toHaveAttribute("aria-valuenow");
   });
   it("does not turn unavailable local storage into zero progress", () => {
     vi.spyOn(Storage.prototype, "getItem").mockImplementation(() => { throw new Error("Storage unavailable"); });
     render(<GrammarLibraryClient catalog={catalog} learnerId="alice" answerKeys={answerKeys} />);
     const nouns = screen.getByRole("heading", { name: "Danh từ" }).closest("article")!;
-    expect(within(nouns).getByText("Đã làm —/287")).toBeInTheDocument();
+    expect(within(nouns).getByText("287 câu hỏi")).toBeInTheDocument();
     expect(within(nouns).getByText("Không đọc được tiến độ thiết bị")).toBeInTheDocument();
     expect(within(nouns).getByRole("progressbar")).not.toHaveAttribute("aria-valuenow");
   });
   it("shows topic and group counts with reading navigation and real study links", () => {
     render(<GrammarLibraryClient catalog={catalog} learnerId="guest" answerKeys={answerKeys} />);
     expect(screen.getByRole("navigation", { name: "Phần luyện đọc" })).toBeInTheDocument();
-    expect(screen.getByText("3 chủ đề · 556 câu hỏi")).toBeInTheDocument();
+    expect(screen.getByText("556", { exact: true })).toBeInTheDocument();
     expect(screen.getByRole("heading", { name: "Từ loại" })).toBeInTheDocument();
     const nouns = screen.getByRole("heading", { name: "Danh từ" }).closest("article")!;
-    expect(within(nouns).getByText("287 câu hỏi · 1 chuyên đề")).toBeInTheDocument();
+    expect(within(nouns).getByText("287 câu hỏi")).toBeInTheDocument();
     expect(within(nouns).getByRole("link", { name: /Học ngay/ })).toHaveAttribute("href", "/read/grammar/nouns");
   });
   it("filters groups through accessible pills and restores all topics", () => {
@@ -58,14 +59,15 @@ describe("grouped grammar library", () => {
     localStorage.setItem("englishweb:grammar:v1:bob:tenses", JSON.stringify({ q3: "C" }));
     render(<GrammarLibraryClient catalog={catalog} learnerId="alice" answerKeys={answerKeys} />);
     const nouns = screen.getByRole("heading", { name: "Danh từ" }).closest("article")!;
-    expect(within(nouns).getByText("Đã làm 2/287")).toBeInTheDocument();
-    expect(within(nouns).getByText(/Đúng/)).toHaveTextContent("Đúng 1 · Sai 1");
+    expect(within(nouns).getByText("2/287 đã học")).toBeInTheDocument();
+    expect(nouns).toHaveTextContent("1 đúng");
+    expect(nouns).toHaveTextContent("1 sai");
     expect(within(nouns).getByRole("link", { name: /Học tiếp/ })).toBeInTheDocument();
     expect(within(nouns).getByRole("progressbar")).toHaveAttribute("aria-valuenow", "2");
     const tenses = screen.getByRole("heading", { name: "Thì" }).closest("article")!;
-    expect(within(tenses).getByText("Đã làm 0/113")).toBeInTheDocument();
+    expect(within(tenses).getByText("0/113 đã học")).toBeInTheDocument();
     localStorage.setItem("englishweb:grammar:v1:alice:tenses", JSON.stringify({ q3: "C" }));
     fireEvent(window, new Event("pageshow"));
-    expect(within(tenses).getByText("Đã làm 1/113")).toBeInTheDocument();
+    expect(within(tenses).getByText("1/113 đã học")).toBeInTheDocument();
   });
 });
