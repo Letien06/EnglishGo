@@ -103,6 +103,7 @@ describe("workspace annotations", () => {
     await waitFor(() => expect(workspace.querySelectorAll("[data-annotation-ink] path")).toHaveLength(1));
     fireEvent.click(screen.getByRole("button", { name: "Bút" }));
     fireEvent.click(screen.getByRole("button", { name: "Tẩy" }));
+    expect((view.container.querySelector("[data-annotation-workspace]") as HTMLElement).style.cursor).toContain("url(");
     draw(workspace, [50, 75], [170, 90]);
     fireEvent.click(screen.getByRole("button", { name: "Hoàn tác" }));
     await waitFor(() => expect(workspace.querySelectorAll("[data-annotation-ink] path")).toHaveLength(1));

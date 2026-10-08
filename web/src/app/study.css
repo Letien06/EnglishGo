@@ -109,9 +109,11 @@
 .skill-workspace .skill-workspace-footer :is(button, a) { color: var(--ink); border-color: var(--line); background: var(--surface-soft); }
 .skill-workspace .skill-workspace-footer button:disabled { opacity: .4; }
 .practice-content { max-width: 1440px; margin: 0 auto; }
+.practice-content[data-annotation-active="true"] { cursor: var(--annotation-cursor); }
+.practice-content[data-annotation-active="true"] * { cursor: inherit; }
 .practice-content > section { min-width: 0; }
 .practice-content > section > p:first-child { font-size: 14px; font-style: normal; color: var(--ink3); }
-.practice-content--single { max-width: 850px; }
+.practice-content--single { max-width: 1060px; }
 .practice-content--single > section:first-child { display: none; }
 .practice-save-status { padding: 8px 24px; font-size: 12px; color: var(--ink3); background: var(--surface-soft); }
 .practice-source-pane { background: linear-gradient(155deg, var(--teal-soft), color-mix(in srgb, var(--info-soft) 28%, var(--bg))); }

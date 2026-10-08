@@ -21,6 +21,14 @@ beforeEach(() => {
 afterEach(() => { cleanup(); vi.restoreAllMocks(); vi.unstubAllGlobals(); });
 
 describe("scratch canvas gestures", () => {
+  it("shows the selected tool as the pointer cursor", () => {
+    const { rerender } = render(<ScratchCanvas tool="pen" />);
+    const canvas = screen.getByRole("img");
+    expect((canvas as HTMLCanvasElement).style.cursor).toContain("url(");
+    rerender(<ScratchCanvas tool="eraser" />);
+    expect((canvas as HTMLCanvasElement).style.cursor).toContain("url(");
+  });
+
   it("keeps the release endpoint for a quick pen line", () => {
     const onChange = vi.fn();
     render(<ScratchCanvas onChange={onChange} />);

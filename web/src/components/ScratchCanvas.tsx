@@ -10,6 +10,7 @@ import {
   type CSSProperties,
   type PointerEvent as ReactPointerEvent,
 } from "react";
+import { annotationCursor } from "./annotation-cursor";
 
 /** A point stored relative to the canvas (both values are in the 0..1 range). */
 export interface ScratchPoint {
@@ -503,7 +504,7 @@ const ScratchCanvas = forwardRef<ScratchCanvasHandle, ScratchCanvasProps>(functi
     aria-label={accessibleLabel}
     data-dictionary-ignore="true"
     className={className}
-    style={{ touchAction: "none", cursor: tool === "eraser" ? "cell" : "crosshair", ...style }}
+    style={{ touchAction: "none", cursor: annotationCursor(tool), ...style }}
     onPointerDown={onPointerDown}
     onPointerMove={onPointerMove}
     onPointerUp={onPointerUp}

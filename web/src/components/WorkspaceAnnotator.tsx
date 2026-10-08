@@ -1,9 +1,10 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useRef, useState, type PointerEvent, type ReactNode } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties, type PointerEvent, type ReactNode } from "react";
 import { createPortal } from "react-dom";
 import AnnotationPencilIcon from "./AnnotationPencilIcon";
 import AnnotationEraserIcon from "./AnnotationEraserIcon";
+import { annotationCursor } from "./annotation-cursor";
 import { eraseScratchStrokes } from "./ScratchCanvas";
 import { loadQuestionAnnotations, type QuestionAnnotationContext } from "@/lib/question-annotations";
 import { clearWorkspaceAnnotations, loadWorkspaceAnnotations, saveWorkspaceAnnotations, validWorkspaceAnnotations, type WorkspaceAnnotationState, type WorkspacePoint, type WorkspaceStroke } from "@/lib/workspace-annotations";
@@ -267,8 +268,8 @@ function StoredWorkspace({ uid, context, legacyContexts = [], disabled = false, 
 
   return <>
     {launcher ? createPortal(launcherButton, launcher) : <div className="fixed right-4 bottom-20 z-40" data-annotation-controls>{launcherButton}</div>}
-    <div ref={root} className={`relative ${className}`} data-annotation-workspace data-annotation-active={active && !disabled} data-dictionary-ignore={active && !disabled || undefined}
-      style={{ touchAction: drawing ? "none" : "auto", cursor: drawing ? tool === "eraser" ? "cell" : "crosshair" : undefined }}
+    <div ref={root} className={`relative ${className}`} data-annotation-workspace data-annotation-active={active && !disabled} data-annotation-tool={drawing ? tool : undefined} data-dictionary-ignore={active && !disabled || undefined}
+      style={{ touchAction: drawing ? "none" : "auto", cursor: drawing ? annotationCursor(tool) : undefined, "--annotation-cursor": drawing ? annotationCursor(tool) : "auto" } as CSSProperties}
       onPointerDownCapture={down} onPointerMoveCapture={move} onPointerUpCapture={up}
       onPointerCancelCapture={(event) => { if (gesture.current?.pointer === event.pointerId) cancel(); }}
       onLostPointerCapture={() => { if (gesture.current) cancel(); }}
