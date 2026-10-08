@@ -48,6 +48,10 @@ export default function ScratchPaper({
   const [uncontrolledOpen, setUncontrolledOpen] = useState(defaultOpen);
   const [minimized, setMinimized] = useState(false);
   const [tab, setTab] = useState<ScratchPaperTab>("text");
+  const [penColor, setPenColor] = useState("#17212b");
+  const [penWidth, setPenWidth] = useState(3);
+  const [confirmClear, setConfirmClear] = useState(false);
+  const [externalModalOpen, setExternalModalOpen] = useState(false);
   const [internalText, setInternalText] = useState("");
   const [internalStrokes, setInternalStrokes] = useState<ScratchStroke[]>([]);
   const panelRef = useRef<HTMLDivElement>(null);
@@ -58,6 +62,18 @@ export default function ScratchPaper({
   const isOpen = controlledOpen ?? uncontrolledOpen;
   const text = textValue ?? internalText;
   const strokes = strokesValue ?? internalStrokes;
+
+  // Keep the floating tool out of the way of confirmation dialogs and other
+  // modal flows. Visibility is transient; the current draft and open state are
+  // intentionally preserved while the modal is mounted.
+  useEffect(() => {
+    if (typeof document === "undefined") return;
+    const readModalState = () => setExternalModalOpen(Boolean(document.querySelector('[aria-modal="true"]')));
+    readModalState();
+    const observer = new MutationObserver(readModalState);
+    observer.observe(document.body, { childList: true, subtree: true, attributes: true, attributeFilter: ["aria-modal"] });
+    return () => observer.disconnect();
+  }, []);
 
   useEffect(() => {
     if (!isOpen || minimized) return;
@@ -100,6 +116,15 @@ export default function ScratchPaper({
   }, [setOpen]);
 
   const handleDrawingChange = useCallback((next: ScratchStroke[]) => setStrokes(next), [setStrokes]);
+
+  const requestClear = useCallback(() => setConfirmClear(true), []);
+  const cancelClear = useCallback(() => setConfirmClear(false), []);
+  const clearDrawing = useCallback(() => {
+    canvasRef.current?.clear();
+    setConfirmClear(false);
+  }, []);
+
+  if (externalModalOpen) return null;
 
   return <>
     <button
@@ -149,14 +174,29 @@ export default function ScratchPaper({
           onChange={(event) => setText(event.target.value)}
           placeholder="Ghi nhanh ý tưởng, từ mới hoặc đáp án…"
           aria-label="Nội dung giấy nháp"
+          maxLength={100_000}
           readOnly={textValue !== undefined && !onTextChange}
           className="min-h-52 w-full resize-y rounded-xl border border-line bg-surface-soft p-3 text-sm leading-6 text-ink outline-none focus:border-teal-line focus:ring-2 focus:ring-teal-line/40"
           spellCheck
         /> : <div className="space-y-3">
           <div className="overflow-hidden rounded-xl border border-line bg-white dark:bg-slate-50">
-            <ScratchCanvas ref={canvasRef} strokes={strokes} onChange={handleDrawingChange} showKeyboardHint={false} ariaLabel="Vùng vẽ giấy nháp" className="block h-56 w-full" />
+            <ScratchCanvas ref={canvasRef} strokes={strokes} onChange={handleDrawingChange} color={penColor} strokeWidth={penWidth} showKeyboardHint={false} ariaLabel="Vùng vẽ giấy nháp" className="block h-56 w-full" />
           </div>
-          <div className="flex items-center justify-between gap-2"><p className="text-xs text-muted">Vẽ bằng chuột, bút hoặc chạm</p><div className="flex gap-2"><button type="button" className={buttonClass} onClick={() => canvasRef.current?.undo()} disabled={!strokes.length}>Hoàn tác</button><button type="button" className={buttonClass} onClick={() => canvasRef.current?.clear()} disabled={!strokes.length}>Xóa nét</button></div></div>
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <p className="text-xs text-muted">Vẽ bằng chuột, bút hoặc chạm</p>
+            <div className="flex gap-2"><button type="button" className={buttonClass} onClick={() => canvasRef.current?.undo()} disabled={!strokes.length}>Hoàn tác</button><button type="button" className={buttonClass} onClick={requestClear} disabled={!strokes.length}>Xóa nét</button></div>
+          </div>
+          <div className="flex flex-wrap items-center gap-3 text-xs text-muted">
+            <div className="flex items-center gap-1.5" role="group" aria-label="Màu bút">
+              <span>Màu:</span>
+              {[{ color: "#17212b", label: "Đen" }, { color: "#dc4f54", label: "Đỏ" }, { color: "#2c78c5", label: "Xanh" }].map((option) => <button key={option.color} type="button" aria-label={`Màu ${option.label}`} aria-pressed={penColor === option.color} onClick={() => setPenColor(option.color)} className={`h-7 w-7 rounded-full border-2 border-surface shadow-sm focus-visible:outline-2 focus-visible:outline-teal-ink ${penColor === option.color ? "ring-2 ring-teal-ink ring-offset-1 ring-offset-surface" : ""}`} style={{ backgroundColor: option.color }} />)}
+            </div>
+            <div className="flex items-center gap-1.5" role="group" aria-label="Độ dày bút">
+              <span>Nét:</span>
+              {[{ width: 2, label: "Mảnh" }, { width: 3, label: "Vừa" }, { width: 6, label: "Đậm" }].map((option) => <button key={option.width} type="button" aria-label={`Nét ${option.label}`} aria-pressed={penWidth === option.width} onClick={() => setPenWidth(option.width)} className={`${buttonClass} min-h-7 px-2 py-1 text-xs ${penWidth === option.width ? "border-teal-line bg-teal-soft text-teal-ink" : ""}`}>{option.label}</button>)}
+            </div>
+          </div>
+          {confirmClear && <div className="flex flex-wrap items-center justify-between gap-2 rounded-xl border border-amber-300 bg-amber-50 px-3 py-2 text-xs text-amber-950" role="alert"><span>Xóa toàn bộ nét vẽ?</span><span className="flex gap-2"><button type="button" className={buttonClass} onClick={cancelClear}>Hủy</button><button type="button" className={`${buttonClass} border-amber-400 bg-amber-100`} onClick={clearDrawing}>Xóa</button></span></div>}
         </div>}
         {children}
       </div>

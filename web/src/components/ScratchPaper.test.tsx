@@ -1,5 +1,5 @@
 import React from "react";
-import { cleanup, fireEvent, render, screen } from "@testing-library/react";
+import { act, cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import ScratchPaper from "./ScratchPaper";
 
@@ -54,6 +54,45 @@ describe("scratch paper panel", () => {
     fireEvent.click(screen.getByRole("button", { name: "Vẽ tay" }));
     expect(screen.getByRole("img", { name: "Vùng vẽ giấy nháp" })).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "Hoàn tác" }));
+    expect(onStrokesChange).toHaveBeenCalledWith([]);
+  });
+
+  it("hides underneath external modals and restores the open paper with its text", async () => {
+    render(<ScratchPaper contextKey="exam:test-1" defaultOpen />);
+    fireEvent.change(screen.getByRole("textbox", { name: "Nội dung giấy nháp" }), { target: { value: "Keep this draft" } });
+    const modal = document.createElement("div");
+    modal.setAttribute("aria-modal", "true");
+    await act(async () => { document.body.append(modal); });
+    expect(screen.queryByRole("button", { name: "Giấy nháp" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("textbox")).not.toBeInTheDocument();
+    await act(async () => { modal.remove(); });
+    expect(screen.getByRole("textbox", { name: "Nội dung giấy nháp" })).toHaveValue("Keep this draft");
+  });
+
+  it("requires confirmation before clearing the drawing and permits canceling", () => {
+    const onStrokesChange = vi.fn();
+    const strokes = [{ color: "#17212b", width: 0.01, points: [{ x: 0.1, y: 0.1 }] }];
+    render(<ScratchPaper contextKey="read:lesson-1" strokes={strokes} onStrokesChange={onStrokesChange} defaultOpen />);
+    fireEvent.click(screen.getByRole("button", { name: "Vẽ tay" }));
+    fireEvent.click(screen.getByRole("button", { name: "Xóa nét" }));
+    expect(onStrokesChange).not.toHaveBeenCalled();
+    fireEvent.click(screen.getByRole("button", { name: "Hủy" }));
+    expect(screen.queryByRole("alert")).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Xóa nét" }));
+    fireEvent.click(screen.getByRole("button", { name: /^Xóa$/ }));
+    expect(onStrokesChange).toHaveBeenCalledWith([]);
+  });
+
+  it("keeps keyboard undo on the canvas and exposes pen controls", () => {
+    const onStrokesChange = vi.fn();
+    const strokes = [{ color: "#17212b", width: 0.01, points: [{ x: 0.1, y: 0.1 }] }];
+    render(<ScratchPaper contextKey="read:lesson-1" strokes={strokes} onStrokesChange={onStrokesChange} defaultOpen />);
+    fireEvent.click(screen.getByRole("button", { name: "Vẽ tay" }));
+    fireEvent.click(screen.getByRole("button", { name: "Màu Đỏ" }));
+    expect(screen.getByRole("button", { name: "Màu Đỏ" })).toHaveAttribute("aria-pressed", "true");
+    fireEvent.click(screen.getByRole("button", { name: "Nét Đậm" }));
+    expect(screen.getByRole("button", { name: "Nét Đậm" })).toHaveAttribute("aria-pressed", "true");
+    fireEvent.keyDown(screen.getByRole("img", { name: "Vùng vẽ giấy nháp" }), { key: "z", ctrlKey: true });
     expect(onStrokesChange).toHaveBeenCalledWith([]);
   });
 });
