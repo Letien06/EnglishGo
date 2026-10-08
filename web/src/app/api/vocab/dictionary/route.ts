@@ -27,6 +27,11 @@ export const GET = withErrorHandling(async (req: NextRequest) => {
   return ok({
     word: entry.word,
     phonetic: entry.phonetic ?? "",
+    phoneticUs: entry.phoneticUs ?? "",
+    phoneticUk: entry.phoneticUk ?? "",
+    audioUrl: entry.audioUrl ?? "",
+    audioUsUrl: entry.audioUsUrl ?? "",
+    audioUkUrl: entry.audioUkUrl ?? "",
     meaning: entry.meaning,
     partOfSpeech: entry.partOfSpeech,
     example: entry.example ?? "",

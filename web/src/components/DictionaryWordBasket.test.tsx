@@ -1,0 +1,97 @@
+import { act, cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import DictionaryWordBasket from "./DictionaryWordBasket";
+import { dictionaryBasketStorageKey, saveDictionaryWord } from "@/lib/dictionary-word-basket";
+import type { SelectionDictionaryEntry } from "@/lib/selection-dictionary";
+
+const voice = { name: "English voice", lang: "en-US" };
+vi.mock("@/lib/vocab-speech", () => ({ findBestEnglishVoice: () => voice }));
+const entry = (word: string, meaning: string): SelectionDictionaryEntry => ({ word, lemma: word, meaning, partOfSpeech: "verb", phonetic: "/test/", phoneticUs: "", phoneticUk: "", audioUrl: "", audioUsUrl: "", audioUkUrl: "", example: `I ${word} here.`, exampleTranslation: "Câu ví dụ tiếng Việt.", phrases: [], synonyms: [], antonyms: [], wordFamily: [], source: "licensed-vocabulary" });
+const context = { id: "q1", title: "Động từ", sentence: "She works here." };
+beforeEach(() => { localStorage.clear(); });
+afterEach(() => { cleanup(); vi.restoreAllMocks(); vi.unstubAllGlobals(); });
+describe("dictionary basket review dialog", () => {
+  it("cancels its active speech on card changes and close while ignoring callbacks from the previous utterance", () => {
+    saveDictionaryWord("alice", entry("work", "làm việc"), context);
+    saveDictionaryWord("alice", entry("learn", "học"), { ...context, id: "q2" });
+    const cancel = vi.fn(), speak = vi.fn();
+    vi.stubGlobal("speechSynthesis", { cancel, speak });
+    vi.stubGlobal("SpeechSynthesisUtterance", class { text: string; constructor(text: string) { this.text = text; } });
+    render(<DictionaryWordBasket learnerId="alice" />);
+    fireEvent.click(screen.getByRole("button", { name: /Giỏ từ/ }));
+    fireEvent.click(screen.getByRole("button", { name: "Ôn thẻ" }));
+    fireEvent.click(screen.getByRole("button", { name: "Nghe phát âm" }));
+    expect(cancel).not.toHaveBeenCalled();
+    const oldUtterance = speak.mock.calls[0][0];
+    const oldError = oldUtterance.onerror, oldEnd = oldUtterance.onend;
+    fireEvent.click(screen.getByRole("button", { name: "Thẻ tiếp →" }));
+    expect(cancel).toHaveBeenCalledTimes(1);
+    fireEvent.click(screen.getByRole("button", { name: "Nghe phát âm" }));
+    act(() => { oldError(); oldEnd(); });
+    expect(screen.queryByText("Không thể phát giọng đọc. Vui lòng thử lại.")).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Đóng giỏ từ" }));
+    expect(cancel).toHaveBeenCalledTimes(2);
+  });
+  it("cancels active owned speech on unmount but leaves unrelated speech untouched", () => {
+    saveDictionaryWord("alice", entry("work", "làm việc"), context);
+    const cancel = vi.fn(), speak = vi.fn();
+    vi.stubGlobal("speechSynthesis", { cancel, speak });
+    vi.stubGlobal("SpeechSynthesisUtterance", class { text: string; constructor(text: string) { this.text = text; } });
+    const idle = render(<DictionaryWordBasket learnerId="alice" />);
+    idle.unmount(); expect(cancel).not.toHaveBeenCalled();
+    const active = render(<DictionaryWordBasket learnerId="alice" />);
+    fireEvent.click(screen.getByRole("button", { name: /Giỏ từ/ }));
+    fireEvent.click(screen.getByRole("button", { name: "Ôn thẻ" }));
+    fireEvent.click(screen.getByRole("button", { name: "Nghe phát âm" }));
+    active.unmount(); expect(cancel).toHaveBeenCalledTimes(1);
+  });
+  it("updates the count on save and reviews full meanings/examples and source sentences", () => {
+    render(<DictionaryWordBasket learnerId="alice" />);
+    act(() => { saveDictionaryWord("alice", entry("work", "làm việc"), context); saveDictionaryWord("alice", entry("learn", "học"), { ...context, id: "q2" }); });
+    expect(screen.getByRole("button", { name: /Giỏ từ.*2/ })).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: /Giỏ từ/ }));
+    expect(screen.getByRole("dialog", { name: "Giỏ từ của bạn" })).toBeInTheDocument();
+    expect(screen.getByText("Lưu trên thiết bị này")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: /^work/ }));
+    expect(screen.queryByText("làm việc")).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Hiện nghĩa và ví dụ" }));
+    expect(screen.getByText("làm việc")).toBeInTheDocument();
+    expect(screen.getByText("I work here.")).toBeInTheDocument();
+    expect(screen.getByText("She works here.")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Thẻ tiếp →" }));
+    expect(screen.getByRole("heading", { name: "learn" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Hiện nghĩa và ví dụ" })).toHaveAttribute("aria-pressed", "false");
+    fireEvent.click(screen.getByRole("button", { name: "← Thẻ trước" }));
+    expect(screen.getByRole("heading", { name: "work" })).toBeInTheDocument();
+  });
+  it("uses an English voice for pronunciation and restores trigger focus after Escape", async () => {
+    saveDictionaryWord("alice", entry("work", "làm việc"), context);
+    const speak = vi.fn();
+    vi.stubGlobal("speechSynthesis", { cancel: vi.fn(), speak });
+    vi.stubGlobal("SpeechSynthesisUtterance", class { text: string; voice = null; lang = ""; constructor(text: string) { this.text = text; } });
+    render(<DictionaryWordBasket learnerId="alice" />);
+    const trigger = screen.getByRole("button", { name: /Giỏ từ/ }); trigger.focus(); fireEvent.click(trigger);
+    await waitFor(() => expect(screen.getByRole("button", { name: "Đóng giỏ từ" })).toHaveFocus());
+    fireEvent.click(screen.getByRole("button", { name: "Ôn thẻ" }));
+    fireEvent.click(screen.getByRole("button", { name: "Nghe phát âm" }));
+    expect(speak).toHaveBeenCalledWith(expect.objectContaining({ text: "work", lang: "en-US", voice }));
+    fireEvent.keyDown(document, { key: "Escape" });
+    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+    expect(trigger).toHaveFocus();
+  });
+  it("keeps unknown counts and reports corrupt storage instead of pretending the basket is empty", () => {
+    localStorage.setItem(dictionaryBasketStorageKey("alice"), "{invalid");
+    render(<DictionaryWordBasket learnerId="alice" />);
+    expect(screen.getByRole("button", { name: /Giỏ từ.*—/ })).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: /Giỏ từ/ }));
+    expect(screen.getByRole("status")).toHaveTextContent("dữ liệu không hợp lệ");
+    expect(screen.queryByText(/Giỏ từ đang trống/)).not.toBeInTheDocument();
+  });
+  it("does not show another learner's saved words", () => {
+    saveDictionaryWord("bob", entry("work", "làm việc"), context);
+    render(<DictionaryWordBasket learnerId="alice" />);
+    fireEvent.click(screen.getByRole("button", { name: /Giỏ từ/ }));
+    expect(screen.getByText(/Giỏ từ đang trống/)).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /^work/ })).not.toBeInTheDocument();
+  });
+});
