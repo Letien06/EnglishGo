@@ -7,6 +7,7 @@ import { parseVocabularyEntries, vocabularyRowsText } from "@/lib/practice-vocab
 import Link from "@/components/IntentLink";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import PracticeHeader from "../../_components/PracticeHeader";
+import QuestionAnnotator, { QuestionAnnotationTarget } from "@/components/QuestionAnnotator";
 import { usePracticeResume } from "@/lib/use-practice-resume";
 import { practiceNavigationTarget, practiceWindowInfo, type PracticeWindowSession } from "@/lib/practice-window";
 import { invalidateLearningLevels, setActiveLearnerId } from "@/lib/client-learning-progress-cache";
@@ -411,6 +412,8 @@ export default function ListenPracticeClient({
                 mode={activeMode}
                 assist={activeAssist}
                 answered={answeredMap[question.id] ?? null}
+                userUid={userUid}
+                annotationResourceId={`${session.testId ?? `${partId}:level:${level}`}:${item.id}`}
                 revealedMap={revealedMap}
                 fillValues={fillValues}
                 onReveal={(optionKey, tokenIndexes) => {
@@ -473,6 +476,8 @@ function QuestionCard({
   mode,
   assist,
   answered,
+  userUid,
+  annotationResourceId,
   revealedMap,
   fillValues,
   onReveal,
@@ -488,6 +493,8 @@ function QuestionCard({
   mode: PracticeMode;
   assist: number;
   answered: string | null;
+  userUid: string | null;
+  annotationResourceId: string;
   revealedMap: Record<string, number[]>;
   fillValues: Record<string, string>;
   onReveal: (optionKey: string, tokenIndexes: number[]) => void;
@@ -508,11 +515,12 @@ function QuestionCard({
   const hasMaskableOptionText = options.some((option) => hasMeaningfulOptionText(option.text, option.key));
 
   return (
-    <article className="mb-8 last:mb-0">
+    <QuestionAnnotator uid={userUid} context={{ surface: "listen", resourceId: annotationResourceId, questionKey: question.id }}>
+      <article className="mb-8 last:mb-0">
       {showQuestionText ? (
-        <h3 className="mb-5 text-xl font-extrabold text-ink">
-          {normalizeQuestionText(partNum, question.questionText, index + 1)}
-        </h3>
+          <QuestionAnnotationTarget target="question">
+            <h3 className="mb-5 text-xl font-extrabold text-ink">{normalizeQuestionText(partNum, question.questionText, index + 1)}</h3>
+          </QuestionAnnotationTarget>
       ) : null}
 
       {(mode === "fill" || mode === "flip") && hasMaskableOptionText && (
@@ -537,9 +545,8 @@ function QuestionCard({
       )}
 
       <div className="space-y-3">
-        {options.map((option) => (
+        {options.map((option) => <QuestionAnnotationTarget key={option.key} target={`option:${option.key}`}>
           <AnswerOption
-            key={option.key}
             questionId={question.id}
             optionKey={option.key}
             text={option.text}
@@ -555,7 +562,7 @@ function QuestionCard({
             onFillValue={onFillValue}
             onAnswer={() => onAnswer(option.key)}
           />
-        ))}
+        </QuestionAnnotationTarget>)}
       </div>
 
       {answered && (
@@ -593,7 +600,8 @@ function QuestionCard({
           )}
         </section>
       )}
-    </article>
+      </article>
+    </QuestionAnnotator>
   );
 }
 

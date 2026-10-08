@@ -2,6 +2,7 @@
 
 import Image from "next/image";
 import MobileNavigationMenu from "@/components/MobileNavigationMenu";
+import QuestionAnnotator, { QuestionAnnotationTarget } from "@/components/QuestionAnnotator";
 import useDialogFocus from "@/components/useDialogFocus";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
@@ -63,7 +64,7 @@ function formatDuration(totalSeconds: number): string {
   return `${hours}:${minutes}:${seconds}`;
 }
 
-export default function PracticeSessionClient({ session }: { session: PracticeSessionView }) {
+export default function PracticeSessionClient({ session, userUid }: { session: PracticeSessionView; userUid: string }) {
   const router = useRouter();
   const storageKey = `practice:${session.config.sessionKey}`;
   const initialDraft = useMemo(() => readInitialDraft(storageKey, session.draftPayload), [session.draftPayload, storageKey]);
@@ -398,6 +399,7 @@ export default function PracticeSessionClient({ session }: { session: PracticeSe
         <h1 className="min-w-0 flex-1 text-center text-lg font-extrabold">{title}</h1>
         <div className="flex items-center gap-2">
           <MobileNavigationMenu inverted />
+          <div id="scratch-paper-launcher" className="inline-flex shrink-0 items-center" aria-label="Công cụ học tập" />
           {hasListening ? (
             <button
               type="button"
@@ -437,25 +439,27 @@ export default function PracticeSessionClient({ session }: { session: PracticeSe
       <div className="grid grid-cols-1 gap-6 px-4 py-6 xl:grid-cols-[minmax(0,1fr)_320px]">
         <section className="space-y-5">
           {activeQuestion ? (
-            <QuestionCard
-              key={activeQuestion.id}
-              question={activeQuestion}
-              index={activeIndex}
-              answer={answers[String(activeQuestion.id)] ?? { selectedOptionId: null, textResponse: null }}
-              marked={markedQuestionIds.has(activeQuestion.id)}
-              active
-              options={session.optionsByQuestionId[String(activeQuestion.id)] ?? []}
-              disabled={submitting}
-              onFocus={() => setActiveQuestionId(activeQuestion.id)}
-              onAnswer={(selectedOptionId) => setAnswer(activeQuestion.id, { selectedOptionId })}
-              onTextAnswer={(textResponse) => setAnswer(activeQuestion.id, { textResponse })}
-              onClear={() => clearAnswer(activeQuestion.id)}
-              onToggleMarked={() => toggleMarked(activeQuestion.id)}
-              onPrevious={() => goByOffset(-1)}
-              onNext={() => goByOffset(1)}
-              previousDisabled={activeIndex === 0}
-              nextDisabled={activeIndex === session.questions.length - 1}
-            />
+              <QuestionCard
+                key={activeQuestion.id}
+                question={activeQuestion}
+                index={activeIndex}
+                answer={answers[String(activeQuestion.id)] ?? { selectedOptionId: null, textResponse: null }}
+                marked={markedQuestionIds.has(activeQuestion.id)}
+                active
+                options={session.optionsByQuestionId[String(activeQuestion.id)] ?? []}
+                disabled={submitting}
+                onFocus={() => setActiveQuestionId(activeQuestion.id)}
+                onAnswer={(selectedOptionId) => setAnswer(activeQuestion.id, { selectedOptionId })}
+                onTextAnswer={(textResponse) => setAnswer(activeQuestion.id, { textResponse })}
+                onClear={() => clearAnswer(activeQuestion.id)}
+                onToggleMarked={() => toggleMarked(activeQuestion.id)}
+                onPrevious={() => goByOffset(-1)}
+                onNext={() => goByOffset(1)}
+                previousDisabled={activeIndex === 0}
+                nextDisabled={activeIndex === session.questions.length - 1}
+                userUid={userUid}
+                annotationResourceId={String(session.test.id)}
+              />
           ) : null}
         </section>
 
@@ -553,6 +557,8 @@ function QuestionCard({
   onNext,
   previousDisabled,
   nextDisabled,
+  userUid,
+  annotationResourceId,
 }: {
   question: PracticeQuestion;
   index: number;
@@ -570,12 +576,15 @@ function QuestionCard({
   onNext: () => void;
   previousDisabled: boolean;
   nextDisabled: boolean;
+  userUid: string;
+  annotationResourceId: string;
 }) {
   const showPassage = Boolean(question.group && question.part >= 6);
   const showQuestionText = shouldShowQuestionText(question.part) && question.content.trim().length > 0;
   const showOptionText = shouldShowOptionText(question.part);
   const imageFirst = question.part === 1;
   return (
+    <QuestionAnnotator uid={userUid} context={{ surface: "exam", resourceId: annotationResourceId, questionKey: String(question.id) }}>
     <article
       id={`q-${question.id}`}
       onFocus={onFocus}
@@ -605,11 +614,9 @@ function QuestionCard({
       </header>
 
       {showPassage && question.group ? (
-        <div className="mt-4 rounded-lg bg-surface-soft p-4 text-sm leading-relaxed text-ink2 whitespace-pre-wrap">
-          {question.group.passageText}
-        </div>
+        <QuestionAnnotationTarget target="passage"><div className="mt-4 rounded-lg bg-surface-soft p-4 text-sm leading-relaxed text-ink2 whitespace-pre-wrap">{question.group.passageText}</div></QuestionAnnotationTarget>
       ) : null}
-      {showQuestionText ? <p className="mt-4 whitespace-pre-wrap text-sm font-semibold text-ink">{question.content}</p> : null}
+      {showQuestionText ? <QuestionAnnotationTarget target="question"><p className="mt-4 whitespace-pre-wrap text-sm font-semibold text-ink">{question.content}</p></QuestionAnnotationTarget> : null}
       {imageFirst && question.imageUrl ? <QuestionImage src={question.imageUrl} /> : null}
       {question.audioUrl ? <audio controls src={question.audioUrl} className="mt-4 w-full" /> : null}
       {!imageFirst && question.imageUrl ? <QuestionImage src={question.imageUrl} /> : null}
@@ -632,9 +639,9 @@ function QuestionCard({
                   disabled={disabled}
                   className="mt-1"
                 />
-                <span className={`text-sm text-ink ${showOptionText ? "" : "font-extrabold"}`}>
-                  {showOptionText ? option.content : optionLabel(option.content, optionIndex)}
-                </span>
+                <QuestionAnnotationTarget target={`option:${option.id}`} className="min-w-0 flex-1">
+                  <span className={`text-sm text-ink ${showOptionText ? "" : "font-extrabold"}`}>{showOptionText ? option.content : optionLabel(option.content, optionIndex)}</span>
+                </QuestionAnnotationTarget>
               </label>
             );
           })}
@@ -658,6 +665,7 @@ function QuestionCard({
         </button>
       </footer>
     </article>
+    </QuestionAnnotator>
   );
 }
 

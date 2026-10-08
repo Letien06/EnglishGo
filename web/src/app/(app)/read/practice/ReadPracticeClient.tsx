@@ -8,6 +8,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { markVisited, routeKey } from "@/lib/nav/session-nav";
 import { setActiveLearnerId } from "@/lib/client-learning-progress-cache";
 import PracticeHeader from "../../_components/PracticeHeader";
+import QuestionAnnotator, { QuestionAnnotationTarget } from "@/components/QuestionAnnotator";
 import { usePracticeResume } from "@/lib/use-practice-resume";
 import { practiceNavigationTarget, practiceWindowInfo, type PracticeWindowSession } from "@/lib/practice-window";
 import { useReadingProgressQueue } from "@/lib/reading-progress-queue";
@@ -332,6 +333,8 @@ export default function ReadPracticeClient({
                 partNum={partNum}
                 mode={activeMode}
                 answered={answeredMap[question.id] ?? null}
+                userUid={userUid}
+                annotationResourceId={`${session.testId ?? `${partId}:level:${level}`}:${item.id}`}
                 onAnswer={(selected) => handleAnswer(question, selected)}
               />
             ))}
@@ -379,6 +382,8 @@ function QuestionCard({
   partNum,
   mode,
   answered,
+  userUid,
+  annotationResourceId,
   onAnswer,
 }: {
   item: DauToeicPracticeItem;
@@ -387,6 +392,8 @@ function QuestionCard({
   partNum: number;
   mode: PracticeMode;
   answered: string | null;
+  userUid: string | null;
+  annotationResourceId: string;
   onAnswer: (selected: string) => void;
 }) {
   const { options, translations } = useMemo(() => {
@@ -403,10 +410,11 @@ function QuestionCard({
   const questionText = normalizeQuestionText(question.questionText, index + 1);
 
   return (
-    <article className="mb-8 last:mb-0">
-      <h3 className="mb-4 text-xl font-extrabold text-ink">
-        {questionText}
-      </h3>
+    <QuestionAnnotator uid={userUid} context={{ surface: "read", resourceId: annotationResourceId, questionKey: question.id }}>
+      <article className="mb-8 last:mb-0">
+      <QuestionAnnotationTarget target="question">
+        <h3 className="mb-4 text-xl font-extrabold text-ink">{questionText}</h3>
+      </QuestionAnnotationTarget>
       {partNum === 5 && item.transcript && cleanDisplayText(item.transcript) !== questionText && (
         <p className="mb-4 rounded-xl bg-surface-soft p-4 text-sm font-bold leading-relaxed text-ink">{cleanDisplayText(item.transcript)}</p>
       )}
@@ -423,20 +431,17 @@ function QuestionCard({
       )}
 
       <div className="space-y-3">
-        {options.map((option) => {
-          return (
-            <AnswerOption
-              key={option.key}
-              optionKey={option.key}
-              text={option.text}
-              translation={translations[option.key]}
-              correctAnswer={correctAnswer}
-              selected={answered}
-              mode={mode}
-              onAnswer={() => onAnswer(option.key)}
-            />
-          );
-        })}
+        {options.map((option) => <QuestionAnnotationTarget key={option.key} target={`option:${option.key}`}>
+          <AnswerOption
+            optionKey={option.key}
+            text={option.text}
+            translation={translations[option.key]}
+            correctAnswer={correctAnswer}
+            selected={answered}
+            mode={mode}
+            onAnswer={() => onAnswer(option.key)}
+          />
+        </QuestionAnnotationTarget>)}
       </div>
 
       {answered && (
@@ -481,7 +486,8 @@ function QuestionCard({
           )}
         </section>
       )}
-    </article>
+      </article>
+    </QuestionAnnotator>
   );
 }
 

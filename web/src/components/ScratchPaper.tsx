@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState, type KeyboardEvent, type ReactNode } from "react";
+import { createPortal } from "react-dom";
 import ScratchCanvas, { type ScratchCanvasHandle, type ScratchStroke } from "./ScratchCanvas";
 
 export type ScratchPaperTab = "text" | "draw";
@@ -20,6 +21,8 @@ export interface ScratchPaperProps {
   triggerLabel?: string;
   disabled?: boolean;
   className?: string;
+  /** Optional selector for placing the launcher inside an existing toolbar. */
+  launcherSelector?: string;
   children?: ReactNode;
 }
 
@@ -43,6 +46,7 @@ export default function ScratchPaper({
   triggerLabel = "Giấy nháp",
   disabled = false,
   className,
+  launcherSelector,
   children,
 }: ScratchPaperProps) {
   const [uncontrolledOpen, setUncontrolledOpen] = useState(defaultOpen);
@@ -55,12 +59,27 @@ export default function ScratchPaper({
   const [drawingNotice, setDrawingNotice] = useState("");
   const [confirmClear, setConfirmClear] = useState(false);
   const [externalModalOpen, setExternalModalOpen] = useState(false);
+  const [launcherSlot, setLauncherSlot] = useState<HTMLElement | null>(() =>
+    typeof document !== "undefined" && launcherSelector ? document.querySelector<HTMLElement>(launcherSelector) : null,
+  );
   const [internalText, setInternalText] = useState("");
   const [internalStrokes, setInternalStrokes] = useState<ScratchStroke[]>([]);
   const panelRef = useRef<HTMLDivElement>(null);
   const triggerRef = useRef<HTMLButtonElement>(null);
   const canvasRef = useRef<ScratchCanvasHandle>(null);
   const textRef = useRef<HTMLTextAreaElement>(null);
+
+  useEffect(() => {
+    if (!launcherSelector || typeof document === "undefined") return;
+    const findSlot = () => setLauncherSlot(document.querySelector<HTMLElement>(launcherSelector));
+    findSlot();
+    // Practice headers mount alongside the app shell; observe once so the
+    // trigger moves into the toolbar after a client navigation without a
+    // second launcher being left behind.
+    const observer = new MutationObserver(findSlot);
+    observer.observe(document.body, { childList: true, subtree: true });
+    return () => observer.disconnect();
+  }, [launcherSelector]);
 
   const isOpen = controlledOpen ?? uncontrolledOpen;
   const text = textValue ?? internalText;
@@ -129,11 +148,10 @@ export default function ScratchPaper({
 
   if (externalModalOpen) return null;
 
-  return <>
-    <button
+  const trigger = <button
       ref={triggerRef}
       type="button"
-      className={`${buttonClass} fixed bottom-[calc(1rem+env(safe-area-inset-bottom))] right-4 z-[55] rounded-full border-teal-line bg-teal-soft px-4 shadow-lg shadow-slate-950/10 ${className ?? ""}`}
+      className={`${buttonClass} ${launcherSlot ? "scratch-paper-toolbar-launcher" : "fixed bottom-[calc(1rem+env(safe-area-inset-bottom))] right-4 z-[55] rounded-full border-teal-line bg-teal-soft px-4 shadow-lg shadow-slate-950/10"} ${className ?? ""}`}
       aria-haspopup="dialog"
       aria-expanded={isOpen && !minimized}
       onClick={() => { setMinimized(false); setOpen(true); }}
@@ -143,7 +161,10 @@ export default function ScratchPaper({
       title={triggerLabel}
     >
       <span aria-hidden="true">✎</span><span>{triggerLabel}</span>
-    </button>
+    </button>;
+
+  return <>
+    {launcherSlot ? createPortal(trigger, launcherSlot) : trigger}
 
     {isOpen && !minimized && <div
       ref={panelRef}

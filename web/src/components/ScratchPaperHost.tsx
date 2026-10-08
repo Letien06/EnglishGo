@@ -77,6 +77,7 @@ function StoredPaper({ uid, context }: { uid: string; context: ScratchPaperConte
     strokes={draft.strokes}
     onTextChange={(text) => updateDraft({ ...snapshot.current, text })}
     onStrokesChange={(strokes) => updateDraft({ ...snapshot.current, strokes })}
+    launcherSelector="#scratch-paper-launcher"
     onOpenChange={(open) => { if (!open) persist(); }}
   >
     <div className="mt-3 space-y-2 text-xs text-muted" data-dictionary-ignore>
