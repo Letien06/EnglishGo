@@ -52,7 +52,7 @@ describe("scratch paper panel", () => {
     const strokes = [{ color: "#17212b", width: 0.01, points: [{ x: 0.1, y: 0.1 }, { x: 0.3, y: 0.3 }] }];
     render(<ScratchPaper contextKey="read:lesson-1" strokes={strokes} onStrokesChange={onStrokesChange} defaultOpen />);
     fireEvent.click(screen.getByRole("button", { name: "Vẽ tay" }));
-    expect(screen.getByRole("img", { name: "Vùng vẽ giấy nháp" })).toBeInTheDocument();
+    expect(screen.getByRole("img", { name: /Vùng vẽ giấy nháp/ })).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "Hoàn tác" }));
     expect(onStrokesChange).toHaveBeenCalledWith([]);
   });
@@ -92,7 +92,7 @@ describe("scratch paper panel", () => {
     expect(screen.getByRole("button", { name: "Màu Đỏ" })).toHaveAttribute("aria-pressed", "true");
     fireEvent.click(screen.getByRole("button", { name: "Nét Đậm" }));
     expect(screen.getByRole("button", { name: "Nét Đậm" })).toHaveAttribute("aria-pressed", "true");
-    fireEvent.keyDown(screen.getByRole("img", { name: "Vùng vẽ giấy nháp" }), { key: "z", ctrlKey: true });
+    fireEvent.keyDown(screen.getByRole("img", { name: /Vùng vẽ giấy nháp/ }), { key: "z", ctrlKey: true });
     expect(onStrokesChange).toHaveBeenCalledWith([]);
   });
 });

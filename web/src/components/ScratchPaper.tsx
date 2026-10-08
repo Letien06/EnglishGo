@@ -48,6 +48,7 @@ export default function ScratchPaper({
   const [uncontrolledOpen, setUncontrolledOpen] = useState(defaultOpen);
   const [minimized, setMinimized] = useState(false);
   const [tab, setTab] = useState<ScratchPaperTab>("text");
+  const [drawingTool, setDrawingTool] = useState<"pen" | "eraser">("pen");
   const [penColor, setPenColor] = useState("#17212b");
   const [penWidth, setPenWidth] = useState(3);
   const [confirmClear, setConfirmClear] = useState(false);
@@ -180,13 +181,18 @@ export default function ScratchPaper({
           spellCheck
         /> : <div className="space-y-3">
           <div className="overflow-hidden rounded-xl border border-line bg-white dark:bg-slate-50">
-            <ScratchCanvas ref={canvasRef} strokes={strokes} onChange={handleDrawingChange} color={penColor} strokeWidth={penWidth} showKeyboardHint={false} ariaLabel="Vùng vẽ giấy nháp" className="block h-56 w-full" />
+            <ScratchCanvas ref={canvasRef} strokes={strokes} onChange={handleDrawingChange} color={penColor} strokeWidth={penWidth} tool={drawingTool} eraserSize={24} showKeyboardHint={false} ariaLabel="Vùng vẽ giấy nháp" className="block h-56 w-full" />
           </div>
           <div className="flex flex-wrap items-center justify-between gap-2">
             <p className="text-xs text-muted">Vẽ bằng chuột, bút hoặc chạm</p>
             <div className="flex gap-2"><button type="button" className={buttonClass} onClick={() => canvasRef.current?.undo()} disabled={!strokes.length}>Hoàn tác</button><button type="button" className={buttonClass} onClick={requestClear} disabled={!strokes.length}>Xóa nét</button></div>
           </div>
           <div className="flex flex-wrap items-center gap-3 text-xs text-muted">
+            <div className="flex items-center gap-1.5" role="group" aria-label="Công cụ vẽ">
+              <span>Công cụ:</span>
+              <button type="button" aria-label="Bút" aria-pressed={drawingTool === "pen"} onClick={() => setDrawingTool("pen")} className={`${buttonClass} min-h-7 px-2 py-1 text-xs ${drawingTool === "pen" ? "border-teal-line bg-teal-soft text-teal-ink" : ""}`}>✎ Bút</button>
+              <button type="button" aria-label="Cục tẩy" aria-pressed={drawingTool === "eraser"} onClick={() => setDrawingTool("eraser")} className={`${buttonClass} min-h-7 px-2 py-1 text-xs ${drawingTool === "eraser" ? "border-teal-line bg-teal-soft text-teal-ink" : ""}`}>⌫ Tẩy</button>
+            </div>
             <div className="flex items-center gap-1.5" role="group" aria-label="Màu bút">
               <span>Màu:</span>
               {[{ color: "#17212b", label: "Đen" }, { color: "#dc4f54", label: "Đỏ" }, { color: "#2c78c5", label: "Xanh" }].map((option) => <button key={option.color} type="button" aria-label={`Màu ${option.label}`} aria-pressed={penColor === option.color} onClick={() => setPenColor(option.color)} className={`h-7 w-7 rounded-full border-2 border-surface shadow-sm focus-visible:outline-2 focus-visible:outline-teal-ink ${penColor === option.color ? "ring-2 ring-teal-ink ring-offset-1 ring-offset-surface" : ""}`} style={{ backgroundColor: option.color }} />)}
