@@ -35,6 +35,7 @@ export default function PracticeHeader({ skill, partId, part, level, testId, tes
       {modes.map(([key, , label]) => <button type="button" key={key} aria-pressed={key === activeMode} onClick={() => onModeChange(key)}>{label}</button>)}
     </nav>
     <div id="scratch-paper-launcher" className="scratch-paper-toolbar-slot" aria-label="Công cụ học tập" />
+    <div id="question-annotation-launcher" className="scratch-paper-toolbar-slot" data-annotation-controls />
     <div className="practice-desktop-controls">
       <button type="button" className="practice-auto" aria-pressed={auto} onClick={onToggleAuto} title="Tự chuyển sau khi trả lời đúng cả cụm">Tự chuyển</button>
       {assistOptions.length > 0 && <select className="practice-assist" value={assist} onChange={(event) => onAssistChange?.(Number(event.target.value))} aria-label="Tỉ lệ hỗ trợ">

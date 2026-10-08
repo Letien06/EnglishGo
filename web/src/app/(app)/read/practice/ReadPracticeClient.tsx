@@ -8,7 +8,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { markVisited, routeKey } from "@/lib/nav/session-nav";
 import { setActiveLearnerId } from "@/lib/client-learning-progress-cache";
 import PracticeHeader from "../../_components/PracticeHeader";
-import QuestionAnnotator, { QuestionAnnotationTarget } from "@/components/QuestionAnnotator";
+import WorkspaceAnnotator, { WorkspaceAnnotationAnchor } from "@/components/WorkspaceAnnotator";
 import { usePracticeResume } from "@/lib/use-practice-resume";
 import { practiceNavigationTarget, practiceWindowInfo, type PracticeWindowSession } from "@/lib/practice-window";
 import { useReadingProgressQueue } from "@/lib/reading-progress-queue";
@@ -258,19 +258,19 @@ export default function ReadPracticeClient({
         {(progressQueue.pendingCount > 0 || progressQueue.error) && <button type="button" onClick={progressQueue.retry} disabled={progressQueue.isSaving} className="rounded-lg border border-control-line bg-surface px-3 py-2 text-sm font-bold text-ink disabled:opacity-50">Thử lưu lại</button>}
       </div>}
 
-      <div className={`practice-content grid min-h-[calc(100dvh-8rem)] lg:grid-cols-[1fr_1fr] ${partNum === 5 ? "practice-content--single" : ""}`}>
-        <section className="practice-source-pane border-b border-line px-4 py-5 sm:px-6 lg:border-b-0 lg:border-r lg:px-10 lg:py-6">
-          <p className="mb-5 text-lg italic text-ink sm:text-xl">{readingInstruction(partNum)}</p>
+      <WorkspaceAnnotator uid={userUid} context={{ surface: "read", resourceId: `${session.testId ?? `${partId}:level:${level}`}:${item.id}`, questionKey: "workspace" }} legacyContexts={item.questions.map((question) => ({ surface: "read", resourceId: `${session.testId ?? `${partId}:level:${level}`}:${item.id}`, questionKey: question.id }))} className={`practice-content grid min-h-[calc(100dvh-8rem)] lg:grid-cols-[1fr_1fr] ${partNum === 5 ? "practice-content--single" : ""}`}>
+        <section data-annotation-anchor="source" className="practice-source-pane border-b border-line px-4 py-5 sm:px-6 lg:border-b-0 lg:border-r lg:px-10 lg:py-6">
+          <WorkspaceAnnotationAnchor target="instruction"><p className="mb-5 text-lg italic text-ink sm:text-xl">{readingInstruction(partNum)}</p></WorkspaceAnnotationAnchor>
 
           {item.imageUrl && (
-            <Image
+            <WorkspaceAnnotationAnchor target="source:image"><Image
               src={item.imageUrl}
               alt="Reading material"
               width={1200}
               height={800}
               sizes="(max-width: 1024px) 100vw, 50vw"
               className="mb-4 max-h-[48dvh] w-full object-contain"
-            />
+            /></WorkspaceAnnotationAnchor>
           )}
 
           {partNum !== 5 && item.transcript ? (
@@ -278,7 +278,7 @@ export default function ReadPracticeClient({
               <h2 className="mb-4 text-xl font-extrabold text-ink">
                 Passage
               </h2>
-              <pre className="whitespace-pre-wrap font-sans text-base leading-relaxed text-ink">{cleanDisplayText(item.transcript)}</pre>
+              <WorkspaceAnnotationAnchor target="passage"><pre className="whitespace-pre-wrap font-sans text-base leading-relaxed text-ink">{cleanDisplayText(item.transcript)}</pre></WorkspaceAnnotationAnchor>
               {showPassageTranslation && (
                 <section aria-label="Bản dịch đoạn đọc" className="mt-5 border-t border-line pt-5">
                   <h3 className="mb-2 text-xs font-extrabold uppercase tracking-wider text-teal-ink">Tiếng Việt</h3>
@@ -333,8 +333,6 @@ export default function ReadPracticeClient({
                 partNum={partNum}
                 mode={activeMode}
                 answered={answeredMap[question.id] ?? null}
-                userUid={userUid}
-                annotationResourceId={`${session.testId ?? `${partId}:level:${level}`}:${item.id}`}
                 onAnswer={(selected) => handleAnswer(question, selected)}
               />
             ))}
@@ -357,7 +355,7 @@ export default function ReadPracticeClient({
             />
           )}
         </section>
-      </div>
+      </WorkspaceAnnotator>
 
       <footer className="skill-workspace-footer sticky bottom-0 z-40 flex h-16 items-center justify-between gap-2 px-3 sm:px-7">
         <div className="flex gap-2 sm:gap-3">
@@ -382,8 +380,6 @@ function QuestionCard({
   partNum,
   mode,
   answered,
-  userUid,
-  annotationResourceId,
   onAnswer,
 }: {
   item: DauToeicPracticeItem;
@@ -392,8 +388,6 @@ function QuestionCard({
   partNum: number;
   mode: PracticeMode;
   answered: string | null;
-  userUid: string | null;
-  annotationResourceId: string;
   onAnswer: (selected: string) => void;
 }) {
   const { options, translations } = useMemo(() => {
@@ -410,11 +404,11 @@ function QuestionCard({
   const questionText = normalizeQuestionText(question.questionText, index + 1);
 
   return (
-    <QuestionAnnotator uid={userUid} context={{ surface: "read", resourceId: annotationResourceId, questionKey: question.id }}>
+    <div data-annotation-anchor={`question:${question.id}`}>
       <article className="mb-8 last:mb-0">
-      <QuestionAnnotationTarget target="question">
+      <WorkspaceAnnotationAnchor target={`question:${question.id}:prompt`}>
         <h3 className="mb-4 text-xl font-extrabold text-ink">{questionText}</h3>
-      </QuestionAnnotationTarget>
+      </WorkspaceAnnotationAnchor>
       {partNum === 5 && item.transcript && cleanDisplayText(item.transcript) !== questionText && (
         <p className="mb-4 rounded-xl bg-surface-soft p-4 text-sm font-bold leading-relaxed text-ink">{cleanDisplayText(item.transcript)}</p>
       )}
@@ -431,7 +425,7 @@ function QuestionCard({
       )}
 
       <div className="space-y-3">
-        {options.map((option) => <QuestionAnnotationTarget key={option.key} target={`option:${option.key}`}>
+        {options.map((option) => <WorkspaceAnnotationAnchor key={option.key} target={`question:${question.id}:option:${option.key}`}>
           <AnswerOption
             optionKey={option.key}
             text={option.text}
@@ -441,7 +435,7 @@ function QuestionCard({
             mode={mode}
             onAnswer={() => onAnswer(option.key)}
           />
-        </QuestionAnnotationTarget>)}
+        </WorkspaceAnnotationAnchor>)}
       </div>
 
       {answered && (
@@ -487,7 +481,7 @@ function QuestionCard({
         </section>
       )}
       </article>
-    </QuestionAnnotator>
+    </div>
   );
 }
 

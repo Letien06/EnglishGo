@@ -281,6 +281,24 @@ const ScratchCanvas = forwardRef<ScratchCanvasHandle, ScratchCanvasProps>(functi
     }
   }, [color]);
 
+  const cancelGesture = useCallback((canvas = canvasRef.current) => {
+    const pointerId = activePointerRef.current;
+    activePointerRef.current = null;
+    activeStrokeRef.current = null;
+    eraserRef.current = null;
+    if (canvas && pointerId !== null) {
+      try { canvas.releasePointerCapture(pointerId); } catch { /* capture may already be released */ }
+    }
+    draw(strokesRef.current);
+  }, [draw]);
+
+  useEffect(() => {
+    const canvas = canvasRef.current;
+    // A changed tool/disabled state cannot finish an old gesture with a new
+    // meaning. Cleanup also releases capture when the surface unmounts.
+    return () => cancelGesture(canvas);
+  }, [cancelGesture, disabled, tool]);
+
   // Keep refs current for pointer handlers without recreating listeners for every
   // parent render. A cloned snapshot also protects consumers from accidental
   // mutation during drawing.
@@ -298,6 +316,7 @@ const ScratchCanvas = forwardRef<ScratchCanvasHandle, ScratchCanvasProps>(functi
     const rect = canvas.getBoundingClientRect();
     const width = Math.max(1, rect.width);
     const height = Math.max(1, rect.height);
+    if (activePointerRef.current !== null && (sizeRef.current.width !== width || sizeRef.current.height !== height)) cancelGesture(canvas);
     const pixelRatio = Math.max(1, Math.min(3, window.devicePixelRatio || 1));
     sizeRef.current = { width, height };
     const nextWidth = Math.round(width * pixelRatio);
@@ -309,7 +328,7 @@ const ScratchCanvas = forwardRef<ScratchCanvasHandle, ScratchCanvasProps>(functi
     const context = canvas.getContext("2d");
     context?.setTransform(pixelRatio, 0, 0, pixelRatio, 0, 0);
     draw();
-  }, [draw]);
+  }, [cancelGesture, draw]);
 
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -328,11 +347,12 @@ const ScratchCanvas = forwardRef<ScratchCanvasHandle, ScratchCanvasProps>(functi
 
   const pointFromEvent = useCallback((event: ReactPointerEvent<HTMLCanvasElement>): ScratchPoint => {
     const rect = event.currentTarget.getBoundingClientRect();
+    if (activePointerRef.current !== null && (sizeRef.current.width !== Math.max(1, rect.width) || sizeRef.current.height !== Math.max(1, rect.height))) cancelGesture(event.currentTarget);
     return {
       x: clamp((event.clientX - rect.left) / Math.max(1, rect.width)),
       y: clamp((event.clientY - rect.top) / Math.max(1, rect.height)),
     };
-  }, []);
+  }, [cancelGesture]);
 
   const commit = useCallback((next: ScratchStroke[]) => {
     undoHistoryRef.current = [...undoHistoryRef.current.slice(-19), cloneStrokes(strokesRef.current)];
@@ -394,6 +414,7 @@ const ScratchCanvas = forwardRef<ScratchCanvasHandle, ScratchCanvasProps>(functi
 
   const onPointerDown = useCallback((event: ReactPointerEvent<HTMLCanvasElement>) => {
     if (disabled || !event.isPrimary || activePointerRef.current !== null) return;
+    resize();
     event.preventDefault();
     event.stopPropagation();
     activePointerRef.current = event.pointerId;
@@ -409,13 +430,28 @@ const ScratchCanvas = forwardRef<ScratchCanvasHandle, ScratchCanvasProps>(functi
     const normalizedWidth = clamp(strokeWidth / Math.max(1, Math.max(rect.width, rect.height)), MIN_NORMALIZED_WIDTH, MAX_NORMALIZED_WIDTH);
     activeStrokeRef.current = { points: [pointFromEvent(event)], color, width: normalizedWidth };
     draw();
-  }, [color, disabled, draw, eraserSize, pointFromEvent, strokeWidth, tool]);
+  }, [color, disabled, draw, eraserSize, pointFromEvent, resize, strokeWidth, tool]);
+
+  const appendPenPoint = useCallback((point: ScratchPoint, endpoint = false) => {
+    const stroke = activeStrokeRef.current;
+    if (!stroke) return;
+    const previousPoint = stroke.points[stroke.points.length - 1];
+    const size = sizeRef.current;
+    if (previousPoint && (endpoint
+      ? point.x === previousPoint.x && point.y === previousPoint.y
+      : Math.hypot((point.x - previousPoint.x) * size.width, (point.y - previousPoint.y) * size.height) < 0.6)) return;
+    if (stroke.points.length >= MAX_STROKE_POINTS) {
+      stroke.points = stroke.points.filter((_, index) => index === 0 || index === stroke.points.length - 1 || index % 2 === 0);
+    }
+    stroke.points.push(point);
+  }, []);
 
   const onPointerMove = useCallback((event: ReactPointerEvent<HTMLCanvasElement>) => {
     if (disabled || activePointerRef.current !== event.pointerId) return;
     event.preventDefault();
     event.stopPropagation();
     const point = pointFromEvent(event);
+    if (activePointerRef.current !== event.pointerId) return;
     if (eraserRef.current) {
       const eraser = eraserRef.current;
       const next = eraseScratchStrokes(eraser.strokes, eraser.previous, point, sizeRef.current, eraser.diameter);
@@ -425,30 +461,24 @@ const ScratchCanvas = forwardRef<ScratchCanvasHandle, ScratchCanvasProps>(functi
       draw();
       return;
     }
-    const stroke = activeStrokeRef.current;
-    if (!stroke) return;
-    const previousPoint = stroke.points[stroke.points.length - 1];
-    const size = sizeRef.current;
-    if (previousPoint && Math.hypot((point.x - previousPoint.x) * size.width, (point.y - previousPoint.y) * size.height) < 0.6) return;
-    if (stroke.points.length >= MAX_STROKE_POINTS) {
-      stroke.points = stroke.points.filter((_, index) => index === 0 || index === stroke.points.length - 1 || index % 2 === 0);
-    }
-    stroke.points.push(point);
+    appendPenPoint(point);
     draw();
-  }, [disabled, draw, pointFromEvent]);
+  }, [appendPenPoint, disabled, draw, pointFromEvent]);
 
   const onPointerUp = useCallback((event: ReactPointerEvent<HTMLCanvasElement>) => {
+    if (activePointerRef.current !== event.pointerId) return;
+    const point = pointFromEvent(event);
     if (activePointerRef.current !== event.pointerId) return;
     event.preventDefault();
     event.stopPropagation();
     if (eraserRef.current) {
       const eraser = eraserRef.current;
-      const next = eraseScratchStrokes(eraser.strokes, eraser.previous, pointFromEvent(event), sizeRef.current, eraser.diameter);
+      const next = eraseScratchStrokes(eraser.strokes, eraser.previous, point, sizeRef.current, eraser.diameter);
       eraser.changed ||= next.some((stroke, index) => stroke !== eraser.strokes[index]) || next.length !== eraser.strokes.length;
       eraser.strokes = next;
-    }
+    } else appendPenPoint(point, true);
     finishStroke(true);
-  }, [finishStroke, pointFromEvent]);
+  }, [appendPenPoint, finishStroke, pointFromEvent]);
 
   const onPointerCancel = useCallback((event: ReactPointerEvent<HTMLCanvasElement>) => {
     if (activePointerRef.current !== event.pointerId) return;

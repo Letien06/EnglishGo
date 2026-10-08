@@ -2,7 +2,7 @@
 
 import Image from "next/image";
 import MobileNavigationMenu from "@/components/MobileNavigationMenu";
-import QuestionAnnotator, { QuestionAnnotationTarget } from "@/components/QuestionAnnotator";
+import WorkspaceAnnotator, { WorkspaceAnnotationAnchor } from "@/components/WorkspaceAnnotator";
 import useDialogFocus from "@/components/useDialogFocus";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
@@ -400,6 +400,7 @@ export default function PracticeSessionClient({ session, userUid }: { session: P
         <div className="flex items-center gap-2">
           <MobileNavigationMenu inverted />
           <div id="scratch-paper-launcher" className="inline-flex shrink-0 items-center" aria-label="Công cụ học tập" />
+          <div id="question-annotation-launcher" className="inline-flex shrink-0 items-center" data-annotation-controls />
           {hasListening ? (
             <button
               type="button"
@@ -436,7 +437,7 @@ export default function PracticeSessionClient({ session, userUid }: { session: P
         />
       ) : null}
 
-      <div className="grid grid-cols-1 gap-6 px-4 py-6 xl:grid-cols-[minmax(0,1fr)_320px]">
+      <WorkspaceAnnotator uid={userUid} context={{ surface: "exam", resourceId: String(session.test.id), questionKey: String(activeQuestion?.id ?? "workspace") }} legacyContexts={activeQuestion ? [{ surface: "exam", resourceId: String(session.test.id), questionKey: String(activeQuestion.id) }] : []} disabled={confirmSubmit || confirmExit || submitting} className="grid grid-cols-1 gap-6 px-4 py-6 xl:grid-cols-[minmax(0,1fr)_320px]">
         <section className="space-y-5">
           {activeQuestion ? (
               <QuestionCard
@@ -457,13 +458,11 @@ export default function PracticeSessionClient({ session, userUid }: { session: P
                 onNext={() => goByOffset(1)}
                 previousDisabled={activeIndex === 0}
                 nextDisabled={activeIndex === session.questions.length - 1}
-                userUid={userUid}
-                annotationResourceId={String(session.test.id)}
               />
           ) : null}
         </section>
 
-        <aside className="h-fit rounded-xl border border-line bg-surface p-5 shadow-sm xl:sticky xl:top-24">
+        <aside data-annotation-controls className="h-fit rounded-xl border border-line bg-surface p-5 shadow-sm xl:sticky xl:top-24">
           <div className="flex items-center justify-between">
             <strong className="text-ink">Navigator</strong>
             <span className="text-xs font-bold text-muted">{status}</span>
@@ -515,7 +514,7 @@ export default function PracticeSessionClient({ session, userUid }: { session: P
             </button>
           </div>
         </aside>
-      </div>
+      </WorkspaceAnnotator>
 
       {confirmSubmit ? (
         <ConfirmDialog
@@ -557,8 +556,6 @@ function QuestionCard({
   onNext,
   previousDisabled,
   nextDisabled,
-  userUid,
-  annotationResourceId,
 }: {
   question: PracticeQuestion;
   index: number;
@@ -576,15 +573,13 @@ function QuestionCard({
   onNext: () => void;
   previousDisabled: boolean;
   nextDisabled: boolean;
-  userUid: string;
-  annotationResourceId: string;
 }) {
   const showPassage = Boolean(question.group && question.part >= 6);
   const showQuestionText = shouldShowQuestionText(question.part) && question.content.trim().length > 0;
   const showOptionText = shouldShowOptionText(question.part);
   const imageFirst = question.part === 1;
   return (
-    <QuestionAnnotator uid={userUid} context={{ surface: "exam", resourceId: annotationResourceId, questionKey: String(question.id) }}>
+    <div data-annotation-anchor={`question:${question.id}`}>
     <article
       id={`q-${question.id}`}
       onFocus={onFocus}
@@ -614,12 +609,12 @@ function QuestionCard({
       </header>
 
       {showPassage && question.group ? (
-        <QuestionAnnotationTarget target="passage"><div className="mt-4 rounded-lg bg-surface-soft p-4 text-sm leading-relaxed text-ink2 whitespace-pre-wrap">{question.group.passageText}</div></QuestionAnnotationTarget>
+        <WorkspaceAnnotationAnchor target="passage"><div className="mt-4 rounded-lg bg-surface-soft p-4 text-sm leading-relaxed text-ink2 whitespace-pre-wrap">{question.group.passageText}</div></WorkspaceAnnotationAnchor>
       ) : null}
-      {showQuestionText ? <QuestionAnnotationTarget target="question"><p className="mt-4 whitespace-pre-wrap text-sm font-semibold text-ink">{question.content}</p></QuestionAnnotationTarget> : null}
-      {imageFirst && question.imageUrl ? <QuestionImage src={question.imageUrl} /> : null}
-      {question.audioUrl ? <audio controls src={question.audioUrl} className="mt-4 w-full" /> : null}
-      {!imageFirst && question.imageUrl ? <QuestionImage src={question.imageUrl} /> : null}
+      {showQuestionText ? <WorkspaceAnnotationAnchor target={`question:${question.id}:prompt`}><p className="mt-4 whitespace-pre-wrap text-sm font-semibold text-ink">{question.content}</p></WorkspaceAnnotationAnchor> : null}
+      {imageFirst && question.imageUrl ? <WorkspaceAnnotationAnchor target={`question:${question.id}:image`}><QuestionImage src={question.imageUrl} /></WorkspaceAnnotationAnchor> : null}
+      {question.audioUrl ? <div data-annotation-anchor={`question:${question.id}:audio`} data-annotation-controls><audio controls src={question.audioUrl} className="mt-4 w-full" /></div> : null}
+      {!imageFirst && question.imageUrl ? <WorkspaceAnnotationAnchor target={`question:${question.id}:image`}><QuestionImage src={question.imageUrl} /></WorkspaceAnnotationAnchor> : null}
 
       {options.length > 0 ? (
         <div className="mt-5 space-y-3">
@@ -639,9 +634,9 @@ function QuestionCard({
                   disabled={disabled}
                   className="mt-1"
                 />
-                <QuestionAnnotationTarget target={`option:${option.id}`} className="min-w-0 flex-1">
+                <WorkspaceAnnotationAnchor target={`question:${question.id}:option:${option.id}`} className="min-w-0 flex-1">
                   <span className={`text-sm text-ink ${showOptionText ? "" : "font-extrabold"}`}>{showOptionText ? option.content : optionLabel(option.content, optionIndex)}</span>
-                </QuestionAnnotationTarget>
+                </WorkspaceAnnotationAnchor>
               </label>
             );
           })}
@@ -665,7 +660,7 @@ function QuestionCard({
         </button>
       </footer>
     </article>
-    </QuestionAnnotator>
+    </div>
   );
 }
 

@@ -21,6 +21,68 @@ beforeEach(() => {
 afterEach(() => { cleanup(); vi.restoreAllMocks(); vi.unstubAllGlobals(); });
 
 describe("scratch canvas gestures", () => {
+  it("keeps the release endpoint for a quick pen line", () => {
+    const onChange = vi.fn();
+    render(<ScratchCanvas onChange={onChange} />);
+    const canvas = screen.getByRole("img");
+    pointer(canvas, "pointerdown", 10, 20);
+    pointer(canvas, "pointerup", 90, 20);
+    expect(onChange.mock.calls[0][0][0].points).toEqual([{ x: 0.1, y: 0.2 }, { x: 0.9, y: 0.2 }]);
+  });
+
+  it("retains a final endpoint without exceeding the point budget", () => {
+    const onChange = vi.fn();
+    render(<ScratchCanvas onChange={onChange} />);
+    const canvas = screen.getByRole("img");
+    pointer(canvas, "pointerdown", 10, 10);
+    for (let index = 0; index < 1999; index++) pointer(canvas, "pointermove", index % 2 ? 20 : 80, 20);
+    pointer(canvas, "pointerup", 90, 90);
+    const points = onChange.mock.calls[0][0][0].points;
+    expect(points.length).toBeLessThanOrEqual(2000);
+    expect(points.at(-1)).toEqual({ x: 0.9, y: 0.9 });
+  });
+
+  it.each(["disabled", "tool"])("cancels a pending gesture when %s changes", (change) => {
+    const onChange = vi.fn();
+    const { rerender } = render(<ScratchCanvas onChange={onChange} />);
+    const canvas = screen.getByRole("img");
+    pointer(canvas, "pointerdown", 10, 10);
+    pointer(canvas, "pointermove", 80, 80);
+    rerender(<ScratchCanvas onChange={onChange} disabled={change === "disabled"} tool={change === "tool" ? "eraser" : "pen"} />);
+    pointer(canvas, "pointerup", 90, 90);
+    expect(onChange).not.toHaveBeenCalled();
+    rerender(<ScratchCanvas onChange={onChange} />);
+    pointer(canvas, "pointerdown", 20, 20);
+    pointer(canvas, "pointerup", 30, 30);
+    expect(onChange).toHaveBeenCalledTimes(1);
+  });
+
+  it("cancels on dimension changes before another pointer point can be added", () => {
+    const onChange = vi.fn();
+    render(<ScratchCanvas onChange={onChange} />);
+    const canvas = screen.getByRole("img");
+    pointer(canvas, "pointerdown", 10, 10);
+    vi.mocked(HTMLCanvasElement.prototype.getBoundingClientRect).mockReturnValue({ x: 0, y: 0, left: 0, top: 0, right: 200, bottom: 100, width: 200, height: 100, toJSON: () => ({}) });
+    pointer(canvas, "pointermove", 80, 80);
+    pointer(canvas, "pointerup", 90, 90);
+    expect(onChange).not.toHaveBeenCalled();
+    pointer(canvas, "pointerdown", 20, 20);
+    pointer(canvas, "pointerup", 100, 20);
+    expect(onChange.mock.calls[0][0][0].points.at(-1)).toEqual({ x: 0.5, y: 0.2 });
+  });
+
+  it("releases pointer capture on unmount without persisting an unfinished stroke", () => {
+    const onChange = vi.fn();
+    const { unmount } = render(<ScratchCanvas onChange={onChange} />);
+    const canvas = screen.getByRole("img");
+    const release = vi.fn();
+    Object.defineProperty(canvas, "releasePointerCapture", { value: release });
+    pointer(canvas, "pointerdown", 10, 10);
+    unmount();
+    expect(release).toHaveBeenCalledWith(1);
+    expect(onChange).not.toHaveBeenCalled();
+  });
+
   it("commits one eraser gesture once and undo restores the entire original snapshot", () => {
     const original = [ink()];
     const onChange = vi.fn();

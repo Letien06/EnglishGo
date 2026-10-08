@@ -7,7 +7,7 @@ import { parseVocabularyEntries, vocabularyRowsText } from "@/lib/practice-vocab
 import Link from "@/components/IntentLink";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import PracticeHeader from "../../_components/PracticeHeader";
-import QuestionAnnotator, { QuestionAnnotationTarget } from "@/components/QuestionAnnotator";
+import WorkspaceAnnotator, { WorkspaceAnnotationAnchor } from "@/components/WorkspaceAnnotator";
 import { usePracticeResume } from "@/lib/use-practice-resume";
 import { practiceNavigationTarget, practiceWindowInfo, type PracticeWindowSession } from "@/lib/practice-window";
 import { invalidateLearningLevels, setActiveLearnerId } from "@/lib/client-learning-progress-cache";
@@ -298,15 +298,15 @@ export default function ListenPracticeClient({
       <PracticeHeader skill="listening" partId={partId} part={partNum} level={level} testId={session.testId} testName={session.testName} setName={session.setName} grouped={session.grouping === "balanced"} modes={modes} activeMode={activeMode} onModeChange={switchMode} auto={auto} onToggleAuto={() => setAuto((value) => !value)} elapsed={formatElapsed(elapsed)} assist={activeAssist} onAssistChange={switchAssist} />
       {(saveError || resumeStatus) && <div className="practice-save-status" role="status">{saveError || resumeStatus}</div>}
 
-      <div className="practice-content grid min-h-[calc(100dvh-8rem)] lg:grid-cols-[1fr_1fr]">
-        <section className="practice-source-pane border-b border-line px-4 py-5 sm:px-6 lg:border-b-0 lg:border-r lg:px-10 lg:py-8">
-          <p className="mb-5 text-lg italic text-ink sm:text-xl lg:mb-8">
+      <WorkspaceAnnotator uid={userUid} context={{ surface: "listen", resourceId: `${session.testId ?? `${partId}:level:${level}`}:${item.id}`, questionKey: "workspace" }} legacyContexts={item.questions.map((question) => ({ surface: "listen", resourceId: `${session.testId ?? `${partId}:level:${level}`}:${item.id}`, questionKey: question.id }))} className="practice-content grid min-h-[calc(100dvh-8rem)] lg:grid-cols-[1fr_1fr]">
+        <section data-annotation-anchor="source" className="practice-source-pane border-b border-line px-4 py-5 sm:px-6 lg:border-b-0 lg:border-r lg:px-10 lg:py-8">
+          <WorkspaceAnnotationAnchor target="instruction"><p className="mb-5 text-lg italic text-ink sm:text-xl lg:mb-8">
             {partNum === 1
               ? "Select the one statement that best describes what you see in the picture."
               : "Select the best response to each question."}
-          </p>
+          </p></WorkspaceAnnotationAnchor>
 
-          <div className="practice-audio-card rounded-2xl border border-line bg-surface p-4">
+          <div data-annotation-anchor="source:audio" data-annotation-controls className="practice-audio-card rounded-2xl border border-line bg-surface p-4">
             {(item.audioUrl || currentQuestion?.audioUrl) && (
               <audio
                 ref={audioRef}
@@ -362,14 +362,14 @@ export default function ListenPracticeClient({
           {(() => {
             const imageUrl = item.imageUrl ?? currentQuestion?.imageUrl;
             return imageUrl ? (
-              <Image
+              <WorkspaceAnnotationAnchor target="source:image"><Image
                 src={imageUrl}
                 alt="Listening question"
                 width={1200}
                 height={800}
                 sizes="(max-width: 1024px) 100vw, 50vw"
                 className="practice-source-image mt-4 max-h-[62dvh] w-full object-contain"
-              />
+              /></WorkspaceAnnotationAnchor>
             ) : null;
           })()}
         </section>
@@ -412,8 +412,6 @@ export default function ListenPracticeClient({
                 mode={activeMode}
                 assist={activeAssist}
                 answered={answeredMap[question.id] ?? null}
-                userUid={userUid}
-                annotationResourceId={`${session.testId ?? `${partId}:level:${level}`}:${item.id}`}
                 revealedMap={revealedMap}
                 fillValues={fillValues}
                 onReveal={(optionKey, tokenIndexes) => {
@@ -450,7 +448,7 @@ export default function ListenPracticeClient({
             />
           )}
         </section>
-      </div>
+      </WorkspaceAnnotator>
 
       <footer className="skill-workspace-footer sticky bottom-0 z-40 flex h-16 items-center justify-between gap-2 px-3 sm:px-7">
         <div className="flex gap-2 sm:gap-3">
@@ -476,8 +474,6 @@ function QuestionCard({
   mode,
   assist,
   answered,
-  userUid,
-  annotationResourceId,
   revealedMap,
   fillValues,
   onReveal,
@@ -493,8 +489,6 @@ function QuestionCard({
   mode: PracticeMode;
   assist: number;
   answered: string | null;
-  userUid: string | null;
-  annotationResourceId: string;
   revealedMap: Record<string, number[]>;
   fillValues: Record<string, string>;
   onReveal: (optionKey: string, tokenIndexes: number[]) => void;
@@ -515,12 +509,12 @@ function QuestionCard({
   const hasMaskableOptionText = options.some((option) => hasMeaningfulOptionText(option.text, option.key));
 
   return (
-    <QuestionAnnotator uid={userUid} context={{ surface: "listen", resourceId: annotationResourceId, questionKey: question.id }}>
+    <div data-annotation-anchor={`question:${question.id}`}>
       <article className="mb-8 last:mb-0">
       {showQuestionText ? (
-          <QuestionAnnotationTarget target="question">
+          <WorkspaceAnnotationAnchor target={`question:${question.id}:prompt`}>
             <h3 className="mb-5 text-xl font-extrabold text-ink">{normalizeQuestionText(partNum, question.questionText, index + 1)}</h3>
-          </QuestionAnnotationTarget>
+          </WorkspaceAnnotationAnchor>
       ) : null}
 
       {(mode === "fill" || mode === "flip") && hasMaskableOptionText && (
@@ -545,7 +539,7 @@ function QuestionCard({
       )}
 
       <div className="space-y-3">
-        {options.map((option) => <QuestionAnnotationTarget key={option.key} target={`option:${option.key}`}>
+        {options.map((option) => <WorkspaceAnnotationAnchor key={option.key} target={`question:${question.id}:option:${option.key}`}>
           <AnswerOption
             questionId={question.id}
             optionKey={option.key}
@@ -562,7 +556,7 @@ function QuestionCard({
             onFillValue={onFillValue}
             onAnswer={() => onAnswer(option.key)}
           />
-        </QuestionAnnotationTarget>)}
+        </WorkspaceAnnotationAnchor>)}
       </div>
 
       {answered && (
@@ -601,7 +595,7 @@ function QuestionCard({
         </section>
       )}
       </article>
-    </QuestionAnnotator>
+    </div>
   );
 }
 
