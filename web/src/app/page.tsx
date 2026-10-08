@@ -1,10 +1,8 @@
-import Link from "next/link";
+import Link from "@/components/IntentLink";
 import { redirect } from "next/navigation";
 import PublicHeader from "@/components/PublicHeader";
 import NavIcon from "@/components/NavIcon";
-import { getCurrentUserForRead } from "@/lib/auth/session";
-import { isFirestoreQuotaError } from "@/lib/firestore/quota";
-import { logServerError } from "@/lib/logging";
+import { getReadIdentity } from "@/lib/auth/session";
 
 const features = [
   {
@@ -70,27 +68,18 @@ const steps = [
 ];
 
 export default async function HomePage() {
-  let user = null;
-  let dataUnavailable = false;
-  try {
-    user = await getCurrentUserForRead();
-  } catch (error) {
-    if (!isFirestoreQuotaError(error)) throw error;
-    logServerError("home-profile-quota-exhausted", error);
-    dataUnavailable = true;
-  }
-  if (user) redirect("/hub");
+  // The landing page only needs to know whether a valid session exists. The
+  // profile document is not needed until /hub renders, so avoid the extra
+  // Firestore read on the cold root request. This keeps anonymous visitors on
+  // the fast path and lets signed-in users redirect after token verification.
+  const identity = await getReadIdentity();
+  if (identity) redirect("/hub");
 
   return (
     <>
       <PublicHeader />
 
       <main className="app-canvas flex-1">
-        {dataUnavailable && (
-          <p role="status" className="mx-auto mt-5 max-w-3xl rounded-xl border border-line bg-surface px-5 py-4 text-sm text-ink2">
-            Dữ liệu học tập đang tạm gián đoạn. Tiến độ đã lưu được giữ nguyên. Bạn có thể xem trang giới thiệu và quay lại học sau.
-          </p>
-        )}
         <section className="landing-hero mx-4 mt-4 flex min-h-[calc(100dvh-7rem)] max-w-none flex-col items-center justify-center px-5 py-16 text-center sm:mx-6 sm:px-8 md:mx-8 md:py-24 lg:mx-auto lg:max-w-7xl">
           <div className="landing-hero-orbit" aria-hidden="true" />
           <span className="landing-kicker landing-reveal inline-flex px-5 py-3 text-base font-extrabold text-primary">

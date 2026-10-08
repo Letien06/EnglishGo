@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type PointerEvent, type ReactNode } from "react";
 import { createPortal } from "react-dom";
 import AnnotationPencilIcon from "./AnnotationPencilIcon";
+import AnnotationEraserIcon from "./AnnotationEraserIcon";
 import { eraseScratchStrokes } from "./ScratchCanvas";
 import { loadQuestionAnnotations, type QuestionAnnotationContext } from "@/lib/question-annotations";
 import { clearWorkspaceAnnotations, loadWorkspaceAnnotations, saveWorkspaceAnnotations, validWorkspaceAnnotations, type WorkspaceAnnotationState, type WorkspacePoint, type WorkspaceStroke } from "@/lib/workspace-annotations";
@@ -293,7 +294,7 @@ function StoredWorkspace({ uid, context, legacyContexts = [], disabled = false, 
     {active && !disabled && <section aria-label="Công cụ chú thích" data-annotation-controls data-dictionary-ignore className="fixed bottom-20 left-1/2 z-40 w-[calc(100%-1.5rem)] max-w-lg -translate-x-1/2 rounded-2xl border border-line bg-surface p-3 text-ink shadow-xl">
       <div className="flex flex-wrap items-center justify-center gap-1.5">
         <button type="button" className={buttonClass} aria-pressed={tool === "pen"} onClick={() => { cancel(); setTool("pen"); }}>Bút</button>
-        <button type="button" className={buttonClass} aria-pressed={tool === "eraser"} onClick={() => { cancel(); setTool("eraser"); }}>Tẩy</button>
+        <button type="button" className={`${buttonClass} inline-flex h-9 w-9 items-center justify-center p-1`} aria-label="Tẩy" title="Tẩy" aria-pressed={tool === "eraser"} onClick={() => { cancel(); setTool("eraser"); }}><AnnotationEraserIcon width={24} height={24} /></button>
         <button type="button" className={buttonClass} aria-pressed={tool === "move"} onClick={() => { cancel(); setTool("move"); }}>Di chuyển</button>
         <button type="button" className={buttonClass} disabled={!canUndo && !state.strokes.length} onClick={undo}>Hoàn tác</button>
         <button type="button" className={buttonClass} disabled={!state.strokes.length} onClick={() => { cancel(); setConfirmClear(true); }}>Xóa nét</button>

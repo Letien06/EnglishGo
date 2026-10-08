@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useRef, useState, type KeyboardEvent, type ReactNode } from "react";
 import { createPortal } from "react-dom";
 import ScratchCanvas, { type ScratchCanvasHandle, type ScratchStroke } from "./ScratchCanvas";
+import AnnotationEraserIcon from "./AnnotationEraserIcon";
 
 export type ScratchPaperTab = "text" | "draw";
 
@@ -215,7 +216,7 @@ export default function ScratchPaper({
             <div className="flex items-center gap-1.5" role="group" aria-label="Công cụ vẽ">
               <span>Công cụ:</span>
               <button type="button" aria-label="Bút" aria-pressed={drawingTool === "pen"} onClick={() => setDrawingTool("pen")} className={`${buttonClass} min-h-7 px-2 py-1 text-xs ${drawingTool === "pen" ? "border-teal-line bg-teal-soft text-teal-ink" : ""}`}>✎ Bút</button>
-              <button type="button" aria-label="Cục tẩy" aria-pressed={drawingTool === "eraser"} onClick={() => setDrawingTool("eraser")} className={`${buttonClass} min-h-7 px-2 py-1 text-xs ${drawingTool === "eraser" ? "border-teal-line bg-teal-soft text-teal-ink" : ""}`}>⌫ Tẩy</button>
+              <button type="button" aria-label="Cục tẩy" title="Cục tẩy" aria-pressed={drawingTool === "eraser"} onClick={() => setDrawingTool("eraser")} className={`${buttonClass} min-h-7 w-9 px-1 text-xs ${drawingTool === "eraser" ? "border-teal-line bg-teal-soft text-teal-ink" : ""}`}><AnnotationEraserIcon width={22} height={22} /></button>
             </div>
             <div className="flex items-center gap-1.5" role="group" aria-label="Màu bút">
               <span>Màu:</span>

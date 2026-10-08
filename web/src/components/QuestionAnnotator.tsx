@@ -2,6 +2,7 @@
 
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import ScratchCanvas, { type ScratchCanvasHandle, type ScratchStroke } from "./ScratchCanvas";
+import AnnotationEraserIcon from "./AnnotationEraserIcon";
 import { clearQuestionAnnotations, loadQuestionAnnotations, saveQuestionAnnotations, type QuestionAnnotation, type QuestionAnnotationContext } from "@/lib/question-annotations";
 
 type AnnotationApi = {
@@ -124,7 +125,7 @@ function StoredAnnotator({ uid, context, children, className = "" }: { uid: stri
         <button type="button" className={`${buttonClass} ${active ? "border-teal-line bg-teal-soft text-teal-ink" : ""}`} aria-pressed={active} onClick={() => { setActive((value) => !value); setConfirmClear(false); }}><span aria-hidden="true">✎</span>{active ? "Xong chú thích" : "Bút chú thích"}</button>
         {active && <>
           <button type="button" className={buttonClass} aria-pressed={tool === "pen"} onClick={() => setTool("pen")}>Bút</button>
-          <button type="button" className={buttonClass} aria-pressed={tool === "eraser"} onClick={() => setTool("eraser")}>Tẩy</button>
+          <button type="button" className={`${buttonClass} h-9 w-9 p-1`} aria-label="Tẩy" title="Tẩy" aria-pressed={tool === "eraser"} onClick={() => setTool("eraser")}><AnnotationEraserIcon width={22} height={22} /></button>
           <button type="button" className={buttonClass} disabled={!canUndo} onClick={undo}>Hoàn tác</button>
           <button type="button" className={buttonClass} disabled={!marks.length} onClick={() => setConfirmClear(true)}>Xóa nét</button>
         </>}
