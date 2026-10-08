@@ -3,7 +3,7 @@
 import Link from "./IntentLink";
 import dynamic from "next/dynamic";
 import { usePathname } from "next/navigation";
-import { useEffect, useState, type ReactNode } from "react";
+import { Suspense, useEffect, useState, type ReactNode } from "react";
 import ThemeToggle from "./ThemeToggle";
 import { AuthenticatedSessionProvider } from "./AuthenticatedSessionContext";
 import StudyStreakBadge from "./StudyStreakBadge";
@@ -16,6 +16,7 @@ import { useVocabReviewQueue } from "@/lib/vocab-review-queue";
 import { useReadingProgressQueue } from "@/lib/reading-progress-queue";
 
 const StudyStreakCelebration = dynamic(() => import("./StudyStreakCelebration"), { ssr: false });
+const ScratchPaperHost = dynamic(() => import("./ScratchPaperHost"), { ssr: false, loading: () => null });
 
 const navItems = [
   { href: "/hub", icon: "home", label: "Trang chủ", color: "text-primary" },
@@ -107,6 +108,7 @@ export default function AppShell({ children }: { children: ReactNode }) {
   const pathname = usePathname();
   const [bootstrap, setBootstrap] = useState<AppBootstrap | null>(() => cachedBootstrap);
   const [session, setSession] = useState<AppSession | null>(() => cachedSession ?? null);
+  const [sessionResolved, setSessionResolved] = useState(() => cachedSession !== undefined);
   const authenticated = bootstrap?.authenticated === true;
   const sessionAuthenticated = session?.authenticated === true;
   useVocabReviewQueue(session?.user?.uid, sessionAuthenticated);
@@ -116,6 +118,16 @@ export default function AppShell({ children }: { children: ReactNode }) {
     pathname.startsWith("/read/practice") ||
     pathname.startsWith("/practice/session") ||
     pathname.startsWith("/writing/practice");
+  const isScratchWorkspace =
+    pathname.startsWith("/listen") ||
+    pathname.startsWith("/read") ||
+    pathname.startsWith("/practice");
+  const scratchUid = session?.user?.uid ?? bootstrap?.user?.uid ?? null;
+  const scratchPaper = isScratchWorkspace ? (
+    <Suspense fallback={null}>
+      <ScratchPaperHost uid={scratchUid} ready={sessionResolved} />
+    </Suspense>
+  ) : null;
 
   useEffect(() => {
     let cancelled = false;
@@ -127,6 +139,7 @@ export default function AppShell({ children }: { children: ReactNode }) {
       } else {
         clearActiveLearnerCache();
       }
+      setSessionResolved(true);
     });
 
     return () => {
@@ -153,7 +166,7 @@ export default function AppShell({ children }: { children: ReactNode }) {
   }, [isPracticeWorkspace]);
 
   if (isPracticeWorkspace) {
-    return <>{children}</>;
+    return <>{children}{scratchPaper}</>;
   }
 
   return (
@@ -216,6 +229,7 @@ export default function AppShell({ children }: { children: ReactNode }) {
       </header>
 
         {children}
+        {scratchPaper}
         {authenticated && <StudyStreakCelebration />}
       </div>
     </AuthenticatedSessionProvider>
