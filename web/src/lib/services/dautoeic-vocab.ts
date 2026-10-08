@@ -135,7 +135,14 @@ export async function getVocabularyCatalogView(
   if (!isDauToeicVocabConfigured()) return { groups: [], cards: [] };
   const catalog = await getVocabularyCatalog();
   const allowPro = isDriveContentEnabled() && catalog.accessScope === "provider-authorized";
-  const visibleTests = catalog.tests.filter((test) => isPlayableTest(test, allowPro));
+  const groupOrder = new Map(catalog.sets.map((set, index) => [set.id, index]));
+  // Incremental snapshots append new tests after retained content. Presentation
+  // follows the source ordering metadata without changing archived records.
+  const visibleTests = catalog.tests.filter((test) => isPlayableTest(test, allowPro)).sort((left, right) =>
+    (groupOrder.get(left.setId ?? "") ?? Number.MAX_SAFE_INTEGER) - (groupOrder.get(right.setId ?? "") ?? Number.MAX_SAFE_INTEGER) ||
+    (left.orderIndex ?? Number.MAX_SAFE_INTEGER) - (right.orderIndex ?? Number.MAX_SAFE_INTEGER) ||
+    cleanName(left.name).localeCompare(cleanName(right.name), "vi", { numeric: true }) ||
+    left.testId.localeCompare(right.testId));
   const setNameById = new Map(
     catalog.sets.map((set) => [set.id, cleanName(set.name) || "TOEIC"]),
   );

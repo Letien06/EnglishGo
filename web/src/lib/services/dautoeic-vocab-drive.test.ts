@@ -44,6 +44,44 @@ beforeEach(() => {
 afterEach(() => { vi.unstubAllGlobals(); vi.restoreAllMocks(); });
 
 describe("vocabulary uses the verified Drive bundle", () => {
+  it("orders appended Pro tests by library metadata while retaining groups and archived IDs", async () => {
+    const template = vocabularyFixture();
+    const tests = [
+      { testId: "later-group", setId: "group-later", name: "Test 1", orderIndex: 1 },
+      ...[2, 4, 5, 7, 8, 9, 10, 1, 3, 6].map(number => ({ testId: `test-${number}`, setId: "group", name: `Test ${number}`, orderIndex: number })),
+    ].map(test => ({ ...template.catalog.tests[0], ...test, accessLevel: ["test-1", "test-3", "test-6"].includes(test.testId) ? "pro" : "free" }));
+    const snapshot = {
+      accessScope: "provider-authorized" as const,
+      catalog: { sets: [...template.catalog.sets, { id: "group-later", name: "Later", orderIndex: 2 }], tests },
+      parts: tests.flatMap(test => template.parts.map(part => ({ ...part, id: `${test.testId}-${part.id}`, testId: test.testId }))),
+      words: tests.flatMap(test => template.words.map(word => ({ ...word, id: `${test.testId}-${word.id}`, partId: `${test.testId}-${word.partId}` }))),
+    };
+    const archivedOrder = snapshot.catalog.tests.map(test => test.testId);
+    mocks.drive.mockResolvedValue(snapshot);
+    const catalog = await source.getVocabularyCatalogView();
+    expect(catalog.cards.map(card => card.id)).toEqual([...Array.from({ length: 10 }, (_, index) => `test-${index + 1}`), "later-group"]);
+    expect(catalog.cards[0]).toMatchObject({ id: "test-1", accessLevel: "pro", internalSetId: source.dautoeicVocabSetId("test-1") });
+    expect(catalog.groups.map(group => [group.id, group.count])).toEqual([["group", 10], ["group-later", 1]]);
+    expect(snapshot.catalog.tests.map(test => test.testId)).toEqual(archivedOrder);
+    expect(mocks.writes).not.toHaveBeenCalled();
+    expect(mocks.collection).not.toHaveBeenCalled();
+  });
+
+  it("uses numeric titles and stable IDs when test ordering metadata ties", async () => {
+    const template = vocabularyFixture();
+    const tests = [
+      { testId: "test-10", name: "Test 10" },
+      { testId: "test-2-b", name: "Test 2" },
+      { testId: "test-2-a", name: "Test 2" },
+    ].map(test => ({ ...template.catalog.tests[0], ...test, orderIndex: null }));
+    mocks.drive.mockResolvedValue({
+      catalog: { sets: template.catalog.sets, tests },
+      parts: tests.flatMap(test => template.parts.map(part => ({ ...part, id: `${test.testId}-${part.id}`, testId: test.testId }))),
+      words: tests.flatMap(test => template.words.map(word => ({ ...word, id: `${test.testId}-${word.id}`, partId: `${test.testId}-${word.partId}` }))),
+    });
+    expect((await source.getVocabularyCatalogView()).cards.map(card => card.id)).toEqual(["test-2-a", "test-2-b", "test-10"]);
+  });
+
   it("opens authorized TOEIC MASTER Pro content with eight vocabulary parts and stable IDs", async () => {
     const snapshot = vocabularyFixture();
     snapshot.accessScope = "provider-authorized";
