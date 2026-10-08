@@ -51,6 +51,8 @@ export default function ScratchPaper({
   const [drawingTool, setDrawingTool] = useState<"pen" | "eraser">("pen");
   const [penColor, setPenColor] = useState("#17212b");
   const [penWidth, setPenWidth] = useState(3);
+  const [canUndoDrawing, setCanUndoDrawing] = useState(Boolean(strokesValue?.length));
+  const [drawingNotice, setDrawingNotice] = useState("");
   const [confirmClear, setConfirmClear] = useState(false);
   const [externalModalOpen, setExternalModalOpen] = useState(false);
   const [internalText, setInternalText] = useState("");
@@ -181,12 +183,13 @@ export default function ScratchPaper({
           spellCheck
         /> : <div className="space-y-3">
           <div className="overflow-hidden rounded-xl border border-line bg-white dark:bg-slate-50">
-            <ScratchCanvas ref={canvasRef} strokes={strokes} onChange={handleDrawingChange} color={penColor} strokeWidth={penWidth} tool={drawingTool} eraserSize={24} showKeyboardHint={false} ariaLabel="Vùng vẽ giấy nháp" className="block h-56 w-full" />
+            <ScratchCanvas ref={canvasRef} strokes={strokes} onChange={handleDrawingChange} onUndoAvailabilityChange={setCanUndoDrawing} onLimit={setDrawingNotice} color={penColor} strokeWidth={penWidth} tool={drawingTool} eraserSize={24} showKeyboardHint={false} ariaLabel="Vùng vẽ giấy nháp" className="block h-56 w-full" />
           </div>
           <div className="flex flex-wrap items-center justify-between gap-2">
             <p className="text-xs text-muted">Vẽ bằng chuột, bút hoặc chạm</p>
-            <div className="flex gap-2"><button type="button" className={buttonClass} onClick={() => canvasRef.current?.undo()} disabled={!strokes.length}>Hoàn tác</button><button type="button" className={buttonClass} onClick={requestClear} disabled={!strokes.length}>Xóa nét</button></div>
+            <div className="flex gap-2"><button type="button" className={buttonClass} onClick={() => canvasRef.current?.undo()} disabled={!canUndoDrawing}>Hoàn tác</button><button type="button" className={buttonClass} onClick={requestClear} disabled={!strokes.length}>Xóa nét</button></div>
           </div>
+          {drawingNotice && <p role="status" className="text-xs text-terracotta">{drawingNotice}</p>}
           <div className="flex flex-wrap items-center gap-3 text-xs text-muted">
             <div className="flex items-center gap-1.5" role="group" aria-label="Công cụ vẽ">
               <span>Công cụ:</span>

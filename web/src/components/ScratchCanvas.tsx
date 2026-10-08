@@ -46,6 +46,10 @@ export interface ScratchCanvasProps {
   onChange?: (strokes: ScratchStroke[]) => void;
   /** Optional lifecycle hooks for a toolbar outside of this component. */
   onUndo?: (strokes: ScratchStroke[]) => void;
+  /** Reports whether the toolbar can currently undo, including persisted ink. */
+  onUndoAvailabilityChange?: (available: boolean) => void;
+  /** Called when an operation would exceed local draft storage limits. */
+  onLimit?: (message: string) => void;
   onClear?: () => void;
   /** CSS color used for newly drawn strokes. */
   color?: string;
@@ -81,6 +85,10 @@ function cloneStrokes(strokes: ScratchStroke[]): ScratchStroke[] {
     ...stroke,
     points: stroke.points.map((point) => ({ x: point.x, y: point.y })),
   }));
+}
+
+function fitsStorageBudget(strokes: ScratchStroke[]): boolean {
+  return strokes.length <= MAX_STROKES && strokes.every((stroke) => stroke.points.length <= MAX_STROKE_POINTS);
 }
 
 type Interval = [number, number];
@@ -186,6 +194,8 @@ const ScratchCanvas = forwardRef<ScratchCanvasHandle, ScratchCanvasProps>(functi
     defaultStrokes,
     onChange,
     onUndo,
+    onUndoAvailabilityChange,
+    onLimit,
     onClear,
     color = DEFAULT_COLOR,
     strokeWidth = DEFAULT_STROKE_WIDTH,
@@ -208,6 +218,10 @@ const ScratchCanvas = forwardRef<ScratchCanvasHandle, ScratchCanvasProps>(functi
   const strokesRef = useRef<ScratchStroke[]>(cloneStrokes(strokes ?? defaultStrokes ?? []));
   const [internalStrokes, setInternalStrokes] = useState<ScratchStroke[]>(() => cloneStrokes(defaultStrokes ?? []));
   const isControlled = strokes !== undefined;
+
+  const reportUndoAvailability = useCallback(() => {
+    onUndoAvailabilityChange?.(undoHistoryRef.current.length > 0 || strokesRef.current.length > 0);
+  }, [onUndoAvailabilityChange]);
 
   const draw = useCallback((snapshot: ScratchStroke[] = eraserRef.current?.strokes ?? strokesRef.current) => {
     const canvas = canvasRef.current;
@@ -275,7 +289,8 @@ const ScratchCanvas = forwardRef<ScratchCanvasHandle, ScratchCanvasProps>(functi
     const next = cloneStrokes(strokes !== undefined ? strokes : internalStrokes);
     strokesRef.current = next;
     if (!activeStrokeRef.current) draw(next);
-  }, [draw, internalStrokes, strokes]);
+    reportUndoAvailability();
+  }, [draw, internalStrokes, reportUndoAvailability, strokes]);
 
   const resize = useCallback(() => {
     const canvas = canvasRef.current;
@@ -326,18 +341,20 @@ const ScratchCanvas = forwardRef<ScratchCanvasHandle, ScratchCanvasProps>(functi
     if (!isControlled) setInternalStrokes(snapshot);
     onChange?.(cloneStrokes(snapshot));
     draw(snapshot);
-  }, [draw, isControlled, onChange]);
+    reportUndoAvailability();
+  }, [draw, isControlled, onChange, reportUndoAvailability]);
 
   const undo = useCallback(() => {
     const restored = undoHistoryRef.current.pop();
-    if (!restored && !strokesRef.current.length) return;
+    if (!restored && !strokesRef.current.length) { reportUndoAvailability(); return; }
     const next = restored ?? strokesRef.current.slice(0, -1);
     strokesRef.current = cloneStrokes(next);
     if (!isControlled) setInternalStrokes(next);
     onChange?.(cloneStrokes(next));
     draw(next);
     onUndo?.(cloneStrokes(next));
-  }, [draw, isControlled, onChange, onUndo]);
+    reportUndoAvailability();
+  }, [draw, isControlled, onChange, onUndo, reportUndoAvailability]);
 
   const clear = useCallback(() => {
     if (!strokesRef.current.length) return;
@@ -357,10 +374,23 @@ const ScratchCanvas = forwardRef<ScratchCanvasHandle, ScratchCanvasProps>(functi
     activePointerRef.current = null;
     activeStrokeRef.current = null;
     eraserRef.current = null;
-    if (shouldCommit && eraser?.changed) commit(eraser.strokes);
-    else if (shouldCommit && active?.points.length) commit([...strokesRef.current, active].slice(-MAX_STROKES));
+    if (shouldCommit && eraser?.changed) {
+      if (fitsStorageBudget(eraser.strokes)) commit(eraser.strokes);
+      else {
+        onLimit?.("Nét tẩy này tạo quá nhiều đoạn; giấy nháp được giữ nguyên.");
+        draw(strokesRef.current);
+      }
+    }
+    else if (shouldCommit && active?.points.length) {
+      const next = [...strokesRef.current, active];
+      if (fitsStorageBudget(next)) commit(next);
+      else {
+        onLimit?.("Giấy nháp đã đầy. Hãy tẩy hoặc xóa bớt nét trước khi vẽ thêm.");
+        draw(strokesRef.current);
+      }
+    }
     else draw();
-  }, [commit, draw]);
+  }, [commit, draw, onLimit]);
 
   const onPointerDown = useCallback((event: ReactPointerEvent<HTMLCanvasElement>) => {
     if (disabled || !event.isPrimary || activePointerRef.current !== null) return;
