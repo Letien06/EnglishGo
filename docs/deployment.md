@@ -162,6 +162,9 @@ manifest and compressed materials, excluding legacy JSON and inactive folders.
 Runtime decompression is bounded by the manifest's decoded byte count and
 checks its decoded SHA-256 before parsing. Drive chunks and their checksums
 remain unchanged; legacy local `.json` caches still work when gzip is absent.
+Build downloads allow 90 seconds for the manifest and 120 seconds per chunk,
+with at most three attempts for transient network, timeout, 429, or 5xx errors.
+Authorization, missing files, invalid sizes, and checksum errors stop immediately.
 Check the unpacked server function size after preparing the active manifest;
 the uncompressed source archive size is not the deployed bundle size.
 
