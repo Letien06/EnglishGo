@@ -24,7 +24,9 @@ describe("listening dashboard UI", () => {
     render(<ListeningLoading skill="reading" />);
     expect(screen.getByRole("main")).toHaveAttribute("aria-busy", "true");
     expect(screen.getByRole("heading", { name: "Luyện đọc." })).toBeInTheDocument();
-    expect(within(screen.getByRole("navigation", { name: "Các phần luyện đọc" })).getAllByRole("link")).toHaveLength(3);
+    const sections = within(screen.getByRole("navigation", { name: "Các phần luyện đọc" }));
+    expect(sections.getAllByRole("link")).toHaveLength(4);
+    expect(sections.getByRole("link", { name: "Ngữ pháp" })).toHaveAttribute("href", "/read/grammar");
     expect(screen.getByRole("searchbox")).toBeInTheDocument();
     expect(screen.getByRole("status", { name: "Đang tải bài luyện tập" })).toBeInTheDocument();
     expect(screen.queryByText("Part này chưa có bài đọc")).not.toBeInTheDocument();
@@ -51,6 +53,7 @@ describe("listening dashboard UI", () => {
     expect(screen.getByText("Test 1 · Part 5 · câu 3/6")).toBeInTheDocument();
     expect(screen.getByRole("link", { name: "Tiếp tục học Test 1 - Bộ đề 1" })).toHaveAttribute("href", "/read/practice?part=part5&testId=test1&mode=normal&q=2");
     expect(screen.getByRole("link", { name: "Part 7: Đọc hiểu" })).toHaveAttribute("href", "/read?part=part7");
+    expect(screen.getByRole("link", { name: "Part 5: Hoàn thành câu" })).toHaveAttribute("aria-current", "page");
     expect(screen.queryByRole("link", { name: "Nghe - chép video" })).not.toBeInTheDocument();
     fireEvent.click(within(screen.getByRole("article", { name: "Test 1 - Bộ đề 1" })).getByRole("button", { name: "Làm lại" }));
     await waitFor(() => expect(fetch).toHaveBeenCalledWith("/api/reading/reset", expect.objectContaining({ method: "POST", body: JSON.stringify({ part: 5, level: 1, testId: "test1" }) })));

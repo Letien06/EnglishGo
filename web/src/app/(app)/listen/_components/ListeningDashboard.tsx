@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, type ReactNode } from "react";
 import Link from "@/components/IntentLink";
 import NavIcon from "@/components/NavIcon";
 import type { DauToeicPartTest } from "@/types/dautoeic";
@@ -13,8 +13,9 @@ import ListeningGridSkeleton from "./ListeningGridSkeleton";
 import useListeningPartProgress from "./useListeningPartProgress";
 import { filterTests, studyParts, type StudySkill, summarizeTests, testProgress, type ListeningMetadata, type PartProgress, type TestFilter, type TestSort } from "./listening-view-model";
 import styles from "./listening.module.css";
+import ReadingSectionNav, { type ReadingSection } from "@/components/ReadingSectionNav";
 
-export default function ListeningDashboard({ tests, part, skill = "listening", initialError, progressError, progressReady, authenticated, partProgress = {}, metadata = {}, catalogLoading = false }: {
+export default function ListeningDashboard({ tests, part, skill = "listening", initialError, progressError, progressReady, authenticated, partProgress = {}, metadata = {}, catalogLoading = false, libraryTools }: {
   tests: DauToeicPartTest[];
   part: number;
   skill?: StudySkill;
@@ -25,11 +26,12 @@ export default function ListeningDashboard({ tests, part, skill = "listening", i
   partProgress?: Partial<Record<number, PartProgress>>;
   metadata?: ListeningMetadata;
   catalogLoading?: boolean;
+  libraryTools?: ReactNode;
 }) {
   const [filter, setFilter] = useState<TestFilter>("all");
   const [query, setQuery] = useState("");
   const [sort, setSort] = useState<TestSort>("catalog");
-  const otherParts = useListeningPartProgress(part, authenticated && progressReady && !initialError, skill);
+  const otherParts = useListeningPartProgress(part, skill === "listening" && authenticated && progressReady && !initialError, skill);
   const parts = studyParts(skill);
   const active = parts.find((entry) => entry.number === part) ?? parts[0];
   const listening = skill === "listening";
@@ -43,10 +45,11 @@ export default function ListeningDashboard({ tests, part, skill = "listening", i
 
   return <main className={styles.dashboard} aria-busy={catalogLoading || undefined}>
     <div className={styles.topline}><span className={styles.eyebrow}>KHÔNG GIAN LUYỆN TẬP</span><nav className={styles.skillSwitch} aria-label="Kỹ năng luyện tập"><Link href="/listen" aria-current={listening ? "page" : undefined}><NavIcon name="listen" />Nghe</Link><Link href="/read" aria-current={!listening ? "page" : undefined}><NavIcon name="read" />Đọc</Link></nav></div>
+    {!listening && <ReadingSectionNav selected={`part${part}` as ReadingSection} />}
     <header className={styles.intro}><div><h1>Luyện {label}<span>.</span></h1><p>{listening ? "Lắng nghe tốt hơn. Tự tin hơn mỗi ngày." : "Hiểu từng câu chữ. Chinh phục từng bài đọc."}</p></div>{listening && <Link className={styles.dictationLink} href="/listen/dictation"><ListeningIcon name={listening ? "headphones" : "book"} />Nghe - chép video<ListeningIcon name="arrow" /></Link>}</header>
     <ListeningHero skill={skill} tests={initialError ? [] : tests} part={part} authenticated={authenticated} progressReady={progressReady && !initialError} catalogLoading={catalogLoading} />
-    <div className={styles.sectionLabel}><span className={styles.eyebrow}>01 / CHỌN KỸ NĂNG</span><span>Một Part mỗi lần, tập trung hơn</span></div>
-    <ListeningParts skill={skill} part={part} progress={progress} />
+    {listening && <><div className={styles.sectionLabel}><span className={styles.eyebrow}>01 / CHỌN KỸ NĂNG</span><span>Một Part mỗi lần, tập trung hơn</span></div><ListeningParts skill={skill} part={part} progress={progress} /></>}
+    {libraryTools}
     <section id="listening-library" className={styles.library} aria-labelledby="listening-library-title">
       <div className={styles.libraryHeading}><div><span className={styles.eyebrow}>02 / BÀI LUYỆN CỦA BẠN</span><h2 id="listening-library-title">Part {part}<span> / </span>{active.name}</h2></div>{!initialError && <p className={styles.catalogTotal}><strong>{catalogLoading ? "—" : tests.length}</strong> test<span>·</span><strong>{catalogLoading ? "—" : summary.total}</strong> câu hỏi</p>}</div>
       {initialError ? <div className={styles.empty} role="alert"><ListeningIcon name={listening ? "headphones" : "book"} /><h3>Chưa tải được danh sách test</h3><p>Tiến độ của bạn vẫn được giữ nguyên. Hãy tải lại để thử lần nữa.</p><button className={styles.primaryButton} type="button" onClick={() => window.location.reload()}>Tải lại trang<ListeningIcon name="reset" /></button></div> : <>

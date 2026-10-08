@@ -13,17 +13,9 @@ export default async function ReadPage({ searchParams }: { searchParams: Promise
     listTests().then(listeningMetadata).catch(() => ({})),
     listReadingDifficultyLevels(part).catch(() => []),
   ]);
-  return <>
-    <div className="mx-auto w-full max-w-7xl px-5 pt-5 md:px-8">
-      <Link href="/read/grammar" className="flex items-center justify-between gap-4 rounded-2xl border border-line bg-surface px-5 py-4 transition-colors hover:bg-surface-soft">
-        <span><strong className="block text-ink">Ngữ pháp</strong><span className="text-sm text-muted">Luyện theo chủ đề · Giải thích và bản dịch</span></span>
-        <span aria-hidden="true" className="font-bold text-teal-ink">→</span>
-      </Link>
-      {levels.some((level) => (level.total ?? 0) > 0) && <nav aria-label={`Kho câu luyện Part ${part}`} className="mt-3 flex flex-wrap items-center gap-2 rounded-2xl border border-line bg-surface px-5 py-4">
+  const libraryTools = levels.some((level) => (level.total ?? 0) > 0) ? <nav aria-label={`Kho câu luyện Part ${part}`} className="my-5 flex flex-wrap items-center gap-2 rounded-2xl border border-line bg-surface px-5 py-4">
         <span className="mr-2 text-sm font-bold text-ink">Kho câu luyện Part {part}</span>
         {levels.filter((level) => (level.total ?? 0) > 0).map((level) => <Link key={level.level} href={`/read/practice?part=part${part}&level=${level.level}&mode=normal`} className="rounded-xl border border-line px-3 py-2 text-sm font-bold text-teal-ink transition-colors hover:bg-surface-soft">Nhóm {level.level} · {level.total} bài</Link>)}
-      </nav>}
-    </div>
-    <StudyDashboard skill="reading" part={part} listeningMetadata={metadata} {...initial} />
-  </>;
+      </nav> : null;
+  return <StudyDashboard skill="reading" part={part} listeningMetadata={metadata} libraryTools={libraryTools} {...initial} />;
 }

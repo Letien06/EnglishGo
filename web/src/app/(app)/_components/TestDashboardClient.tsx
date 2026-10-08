@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 import { useAuthenticatedSession } from "@/components/AuthenticatedSessionContext";
 import { ACTIVE_LEARNER_UPDATED_EVENT, LEARNING_LEVELS_UPDATED_EVENT, activeLearnerId, isLearningLevelsDirty } from "@/lib/client-learning-progress-cache";
 import type { DauToeicPartTest } from "@/types/dautoeic";
@@ -9,12 +9,13 @@ import { summarizeTests, studyParts, type ListeningMetadata, type PartProgress }
 
 const progressCache = new Map<string, DauToeicPartTest[]>();
 
-export default function TestDashboardClient({ skill, part, initialTests, initialError, listeningMetadata }: {
+export default function TestDashboardClient({ skill, part, initialTests, initialError, listeningMetadata, libraryTools }: {
   skill: "listening" | "reading";
   part: number;
   initialTests: DauToeicPartTest[];
   initialError: boolean;
   listeningMetadata?: ListeningMetadata;
+  libraryTools?: ReactNode;
 }) {
   const authenticated = useAuthenticatedSession();
   const [view, setView] = useState<{ uid: string | null; tests: DauToeicPartTest[]; resolved: boolean }>({ uid: null, tests: initialTests, resolved: false });
@@ -81,5 +82,5 @@ export default function TestDashboardClient({ skill, part, initialTests, initial
       if (cached && !isLearningLevelsDirty(skill, number, uid)) partProgress[number] = summarizeTests(cached);
     }
   }
-  return <ListeningDashboard skill={skill} tests={tests} part={part} initialError={initialError} progressError={progressError} progressReady={!authenticated || (view.resolved && view.uid === activeLearnerId())} authenticated={authenticated} partProgress={partProgress} metadata={listeningMetadata} />;
+  return <ListeningDashboard skill={skill} tests={tests} part={part} initialError={initialError} progressError={progressError} progressReady={!authenticated || (view.resolved && view.uid === activeLearnerId())} authenticated={authenticated} partProgress={partProgress} metadata={listeningMetadata} libraryTools={libraryTools} />;
 }

@@ -1,75 +1,120 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { decodeHTML } from "entities";
 import Link from "@/components/IntentLink";
 import ThemeToggle from "@/components/ThemeToggle";
 import { parseVocabularyEntries } from "@/lib/practice-vocabulary";
+import { grammarStorageKey, grammarAnswerKey, readGrammarAnswers, getGrammarProgress, type GrammarAnswers } from "@/lib/grammar-learning";
 import type { GrammarCatalog, GrammarTopic } from "@/lib/storage/grammar-snapshot";
 
 const display = (text: string | null) => decodeHTML(text ?? "").replace(/<br\s*\/?>/gi, "\n").replace(/<[^>]*>/g, "");
-type Answers = Record<string, string>;
+const button = "rounded-xl border border-line bg-surface px-4 py-2.5 text-sm font-bold text-ink transition-colors hover:bg-surface-soft focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-teal-ink disabled:opacity-40";
+
 export default function GrammarPracticeClient({ topic, metadata, learnerId }: { topic: GrammarTopic; metadata: GrammarCatalog["topics"][number]; learnerId: string }) {
   const [subtopicId, setSubtopicId] = useState("all");
   const [index, setIndex] = useState(0);
-  const [answers, setAnswers] = useState<Answers>({});
+  const [answers, setAnswers] = useState<GrammarAnswers>({});
   const [bilingual, setBilingual] = useState(false);
   const [storageStatus, setStorageStatus] = useState("Tiến độ được lưu trên thiết bị này.");
   const [loaded, setLoaded] = useState(false);
-  const storageKey = `englishweb:grammar:v1:${learnerId}:${topic.topicId}`;
+  const [progressKnown, setProgressKnown] = useState(false);
+  const [sidebarOpen, setSidebarOpen] = useState(false);
+  const storageKey = grammarStorageKey(learnerId, topic.topicId);
+  const answerKey = useMemo(() => grammarAnswerKey(topic), [topic]);
   useEffect(() => {
-    try {
-      const saved = JSON.parse(localStorage.getItem(storageKey) ?? "{}");
-      const valid: Answers = {};
-      for (const question of topic.questions) if (/^[A-D]$/.test(saved[question.id] ?? "")) valid[question.id] = saved[question.id];
-      // Hydrate device progress only after the server-rendered first paint.
-      // eslint-disable-next-line react-hooks/set-state-in-effect
+    let cancelled = false;
+    queueMicrotask(() => {
+      if (cancelled) return;
+      let valid: GrammarAnswers = {};
+      try {
+        valid = readGrammarAnswers(localStorage.getItem(storageKey), answerKey);
+        setProgressKnown(true);
+      } catch { setStorageStatus("Không thể đọc tiến độ trên thiết bị này."); }
+      const unanswered = topic.questions.findIndex((question) => !valid[question.id]);
       setAnswers(valid);
-    } catch { setStorageStatus("Không thể đọc tiến độ trên thiết bị này."); }
-    setLoaded(true);
-  }, [storageKey, topic.questions]);
+      setSubtopicId("all");
+      setIndex(Math.max(0, unanswered));
+      setLoaded(true);
+    });
+    return () => { cancelled = true; };
+  }, [storageKey, topic.questions, answerKey]);
   const questions = useMemo(() => topic.questions.filter((question) => subtopicId === "all" || question.subtopicId === subtopicId), [subtopicId, topic.questions]);
   const question = questions[index];
   const selected = question ? answers[question.id] : undefined;
-  const done = topic.questions.filter((entry) => answers[entry.id]).length;
-  const correct = topic.questions.filter((entry) => answers[entry.id] === entry.answer).length;
+  const activeSubtopic = metadata.subtopics.find((entry) => entry.id === question?.subtopicId);
+  const { answered: done, correct } = getGrammarProgress(answerKey, answers);
   const vocabulary = question ? parseVocabularyEntries(typeof question.vocabulary === "string" ? question.vocabulary : JSON.stringify(question.vocabulary ?? "")) : [];
-  function answer(letter: string) {
-    if (!loaded || !question || selected) return;
+  const answer = useCallback((letter: string) => {
+    if (!loaded || !question || selected || !/^[A-D]$/.test(letter) || !question.options[letter as "A" | "B" | "C" | "D"]?.trim()) return;
     const updated = { ...answers, [question.id]: letter };
     setAnswers(updated);
     try { localStorage.setItem(storageKey, JSON.stringify(updated)); }
     catch { setStorageStatus("Không thể lưu tiến độ. Bạn vẫn có thể tiếp tục luyện tập."); }
+  }, [loaded, question, selected, answers, storageKey]);
+  useEffect(() => {
+    const keydown = (event: KeyboardEvent) => {
+      if (event.ctrlKey || event.metaKey || event.altKey || event.shiftKey || event.repeat || (event.target instanceof HTMLElement && event.target.closest("input, textarea, select, [contenteditable='true']"))) return;
+      if (/^[1-4]$/.test(event.key)) { event.preventDefault(); answer(["A", "B", "C", "D"][Number(event.key) - 1]); }
+      if (event.key === "ArrowLeft" && index > 0) { event.preventDefault(); setIndex(index - 1); }
+      if (event.key === "ArrowRight" && index < questions.length - 1) { event.preventDefault(); setIndex(index + 1); }
+    };
+    window.addEventListener("keydown", keydown);
+    return () => window.removeEventListener("keydown", keydown);
+  }, [answer, index, questions.length]);
+  function selectSubtopic(id: string) {
+    const group = topic.questions.filter((entry) => id === "all" || entry.subtopicId === id);
+    setSubtopicId(id);
+    setIndex(Math.max(0, group.findIndex((entry) => !answers[entry.id])));
   }
-  return <main className="mx-auto w-full max-w-4xl p-5 md:p-8">
-    <header className="flex items-start justify-between gap-4">
-      <div><Link href="/read/grammar" className="text-sm font-bold text-teal-ink">← Ngữ pháp</Link><h1 className="mt-4 text-2xl font-extrabold text-ink">{metadata.title}</h1></div>
+  function subtopicButton(id: string, title: string, total: number) {
+    const group = topic.questions.filter((entry) => id === "all" || entry.subtopicId === id);
+    const { answered: completed, correct: right } = getGrammarProgress(Object.fromEntries(group.map((entry) => [entry.id, entry.answer])), answers);
+    return <button type="button" key={id} aria-label={`Chuyên đề: ${title}`} aria-current={subtopicId === id ? "true" : undefined} onClick={() => selectSubtopic(id)} className={`w-full rounded-xl border p-3.5 text-left transition-colors focus-visible:outline-2 focus-visible:outline-teal-ink ${subtopicId === id ? "border-teal-line bg-teal-soft" : "border-transparent hover:bg-surface-soft"}`}>
+      <span className="block text-sm font-extrabold text-ink">{title}</span>
+      <span className="mt-2 block text-xs tabular-nums text-muted">Đã làm {progressKnown ? completed : "—"}/{total} · Đúng {progressKnown ? right : "—"} · Sai {progressKnown ? completed - right : "—"}</span>
+      <span role="progressbar" aria-label={`Tiến độ ${title}`} aria-valuenow={progressKnown ? completed : undefined} aria-valuemin={0} aria-valuemax={total} className="mt-2 block h-1.5 overflow-hidden rounded-full bg-line"><span className="block h-full rounded-full bg-teal-ink" style={{ width: `${progressKnown && total ? completed / total * 100 : 0}%` }} /></span>
+    </button>;
+  }
+  return <main className="mx-auto w-full max-w-[1440px] px-4 py-5 md:px-6 md:py-7">
+    <header className="mb-5 flex items-start justify-between gap-4">
+      <div><Link href="/read/grammar" className="text-sm font-bold text-teal-ink">← Thư viện ngữ pháp</Link><p className="mt-3 text-xs font-bold uppercase tracking-wider text-muted">{metadata.bigTopic || "Ngữ pháp TOEIC"}</p><h1 className="mt-1 text-2xl font-extrabold text-ink">{metadata.title}</h1><p className="mt-2 text-sm font-bold text-muted">Đã làm {progressKnown ? done : "—"}/{topic.questions.length} · Đúng {progressKnown ? correct : "—"} · Sai {progressKnown ? done - correct : "—"}</p></div>
       <ThemeToggle />
     </header>
-    <p className="mt-3 text-sm text-muted">{storageStatus}</p>
-    <p className="mt-2 text-sm font-bold text-ink">Đã làm {done}/{topic.questions.length} · Đúng {correct}</p>
-    <div className="my-6 flex flex-wrap items-center gap-3">
-      <label className="text-sm font-bold text-ink">Chuyên đề <select className="ml-2 rounded-xl border border-line bg-surface p-2" value={subtopicId} onChange={(event) => { setSubtopicId(event.target.value); setIndex(0); }}>
-        <option value="all">Tất cả</option>{metadata.subtopics.map((subtopic) => <option key={subtopic.id} value={subtopic.id}>{subtopic.title} ({subtopic.questionCount})</option>)}
-      </select></label>
-      <button type="button" className="rounded-xl border border-line bg-surface px-4 py-2 text-sm font-bold" aria-pressed={bilingual} onClick={() => setBilingual((value) => !value)}>Song ngữ</button>
+    <div className="grid items-start gap-5 xl:grid-cols-[250px_minmax(0,1fr)_310px]">
+      <aside className="rounded-2xl border border-line bg-surface xl:sticky xl:top-24" aria-label="Chuyên đề ngữ pháp">
+        <button type="button" aria-expanded={sidebarOpen} aria-controls="grammar-subtopics" onClick={() => setSidebarOpen((value) => !value)} className="flex min-h-14 w-full items-center justify-between p-4 font-extrabold text-ink xl:hidden">Chuyên đề <span className="text-xs font-normal text-muted">{sidebarOpen ? "Thu gọn ↑" : "Mở danh sách ↓"}</span></button>
+        <h2 className="hidden p-4 font-extrabold text-ink xl:block">Chuyên đề</h2>
+        <div id="grammar-subtopics" className={`${sidebarOpen ? "block" : "hidden"} space-y-1 border-t border-line p-2 xl:block xl:max-h-[calc(100dvh-260px)] xl:overflow-y-auto`}>
+          {subtopicButton("all", "Tất cả", topic.questions.length)}
+          {metadata.subtopics.map((entry) => subtopicButton(entry.id, entry.title, entry.questionCount))}
+        </div>
+        <p className="border-t border-line p-4 text-xs leading-relaxed text-muted" role="status">{storageStatus}</p>
+      </aside>
+      <section className="min-w-0" aria-label="Luyện câu hỏi">
+        <div className="mb-3 flex flex-wrap items-center justify-between gap-3"><p className="text-sm font-bold text-muted">{activeSubtopic?.title || "Tất cả chuyên đề"}</p><button type="button" className={button} aria-pressed={bilingual} onClick={() => setBilingual((value) => !value)}>Song ngữ</button></div>
+        {!question ? <div className="rounded-2xl border border-line bg-surface p-7 text-muted">Chuyên đề này chưa có câu hỏi.</div> : <article className="min-h-[380px] rounded-2xl border border-line bg-surface p-5 md:p-7">
+          <div className="flex items-center justify-between gap-3"><p className="text-sm font-extrabold tabular-nums text-muted">Câu {index + 1}/{questions.length}</p><span className="text-xs text-muted">Chọn đáp án 1–4</span></div>
+          <h2 className="mt-6 whitespace-pre-wrap text-xl font-extrabold leading-relaxed text-ink">{display(question.text)}</h2>
+          {bilingual && question.translation && <p className="mt-4 whitespace-pre-wrap rounded-xl bg-teal-soft p-4 text-teal-ink" lang="vi">{display(question.translation)}</p>}
+          <div className="mt-6 space-y-3">{(["A", "B", "C", "D"] as const).filter((letter) => question.options[letter]?.trim()).map((letter) => {
+            const isCorrect = Boolean(selected) && letter === question.answer;
+            const isWrong = selected === letter && letter !== question.answer;
+            return <button type="button" key={letter} disabled={!loaded || Boolean(selected)} aria-pressed={selected === letter} onClick={() => answer(letter)} className={`flex min-h-14 w-full items-center gap-3 rounded-xl border p-4 text-left font-bold transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-teal-ink ${isCorrect ? "border-teal-line bg-teal-soft text-teal-ink" : isWrong ? "border-rose-300 bg-rose-50 text-rose-800" : "border-line bg-surface text-ink enabled:hover:bg-surface-soft"}`}><span>{letter}.</span><span>{display(question.options[letter])}</span>{isCorrect && <span className="ml-auto" aria-label="Đáp án đúng">✓</span>}{isWrong && <span className="ml-auto" aria-label="Đáp án sai">✕</span>}</button>;
+          })}</div>
+        </article>}
+        <nav aria-label="Chuyển câu hỏi" className="mt-4 flex items-center justify-between gap-3"><button type="button" disabled={index === 0} onClick={() => setIndex((value) => value - 1)} className={button}>← Câu trước</button><button type="button" disabled={index >= questions.length - 1} onClick={() => setIndex((value) => value + 1)} className={button}>Câu tiếp →</button></nav>
+        <details className="mt-5 rounded-xl border border-line bg-surface"><summary className="cursor-pointer p-4 text-sm font-bold text-ink">Danh sách câu ({questions.length})</summary><nav aria-label="Danh sách câu hỏi" className="flex flex-wrap gap-2 border-t border-line p-4">{questions.map((entry, position) => <button type="button" key={entry.id} onClick={() => setIndex(position)} aria-label={`Câu ${position + 1}${answers[entry.id] ? answers[entry.id] === entry.answer ? ", đã trả lời đúng" : ", đã trả lời sai" : ", chưa làm"}`} aria-current={position === index ? "true" : undefined} className={`h-10 min-w-10 rounded-lg border text-sm font-bold ${position === index ? "border-teal-ink ring-1 ring-teal-ink" : "border-line"} ${answers[entry.id] ? answers[entry.id] === entry.answer ? "bg-teal-soft text-teal-ink" : "bg-rose-50 text-rose-800" : "bg-surface text-muted"}`}>{position + 1}</button>)}</nav></details>
+      </section>
+      <aside aria-label="Giải thích và từ vựng" className="min-h-[380px] rounded-2xl border border-line bg-surface p-5 xl:sticky xl:top-24">
+        <h2 className="text-base font-extrabold text-ink">Giải thích</h2>
+        {!question || !selected ? <div className="mt-5 rounded-xl border border-dashed border-line p-5"><p className="text-sm leading-relaxed text-muted">Chọn một đáp án để xem giải thích, bản dịch và từ vựng của câu này.</p></div> : <div aria-live="polite" className="mt-4 space-y-5">
+          <p className="rounded-xl bg-surface-soft p-3 text-sm font-extrabold text-ink">{selected === question.answer ? "Chính xác!" : `Đáp án đúng: ${question.answer}`}</p>
+          <p className="whitespace-pre-wrap text-sm leading-relaxed text-ink">{question.explanation ? display(question.explanation) : "Nguồn chưa cung cấp giải thích cho câu này."}</p>
+          {question.translation && <section><h3 className="text-sm font-extrabold text-ink">Bản dịch</h3><p className="mt-2 whitespace-pre-wrap text-sm leading-relaxed text-muted" lang="vi">{display(question.translation)}</p></section>}
+          {vocabulary.length > 0 && <section><h3 className="text-sm font-extrabold text-ink">Từ vựng</h3><ul className="mt-2 space-y-3">{vocabulary.map((entry) => <li key={entry.id} className="text-sm leading-relaxed text-muted"><strong className="text-ink">{entry.word}</strong> — {entry.meaning}</li>)}</ul></section>}
+        </div>}
+      </aside>
     </div>
-    {!question ? <p className="rounded-2xl border border-line bg-surface p-5">Chuyên đề này chưa có câu hỏi.</p> : <article className="rounded-2xl border border-line bg-surface p-5 md:p-7">
-      <p className="text-sm font-bold text-muted">Câu {index + 1}/{questions.length}</p>
-      <h2 className="mt-4 whitespace-pre-wrap text-xl font-extrabold leading-relaxed text-ink">{display(question.text)}</h2>
-      {bilingual && question.translation && <p className="mt-4 whitespace-pre-wrap rounded-xl bg-teal-soft p-4 text-teal-ink" lang="vi">{display(question.translation)}</p>}
-      <div className="mt-5 space-y-3">{(["A", "B", "C", "D"] as const).filter((letter) => question.options[letter]).map((letter) => {
-        const isCorrect = Boolean(selected) && letter === question.answer;
-        const isWrong = selected === letter && letter !== question.answer;
-        return <button type="button" key={letter} disabled={!loaded || Boolean(selected)} aria-pressed={selected === letter} onClick={() => answer(letter)} className={`flex w-full gap-3 rounded-xl border p-4 text-left font-bold ${isCorrect ? "border-teal-line bg-teal-soft text-teal-ink" : isWrong ? "border-rose-300 bg-rose-50 text-rose-800" : "border-line bg-surface text-ink"}`}><span>{letter}.</span><span>{display(question.options[letter])}</span>{isCorrect && <span className="ml-auto">✓</span>}{isWrong && <span className="ml-auto">✕</span>}</button>;
-      })}</div>
-      {selected && <section aria-live="polite" className="mt-5 space-y-4">
-        <p className="font-extrabold text-ink">{selected === question.answer ? "Chính xác!" : `Đáp án đúng: ${question.answer}`}</p>
-        {question.explanation && <div className="rounded-xl bg-surface-soft p-4"><h3 className="font-extrabold text-ink">Giải thích</h3><p className="mt-2 whitespace-pre-wrap text-ink">{display(question.explanation)}</p></div>}
-        {!bilingual && question.translation && <p className="whitespace-pre-wrap rounded-xl bg-teal-soft p-4 text-teal-ink" lang="vi">{display(question.translation)}</p>}
-        {vocabulary.length > 0 && <div className="rounded-xl bg-surface-soft p-4"><h3 className="font-extrabold text-ink">Từ vựng</h3><ul className="mt-2 space-y-2">{vocabulary.map((entry) => <li key={entry.id} className="text-ink"><strong>{entry.word}</strong> — {entry.meaning}</li>)}</ul></div>}
-      </section>}
-    </article>}
-    <nav aria-label="Chuyển câu hỏi" className="mt-5 flex items-center justify-between gap-3"><button type="button" disabled={index === 0} onClick={() => setIndex((value) => value - 1)} className="rounded-xl border border-line bg-surface px-4 py-3 font-bold disabled:opacity-40">← Câu trước</button><button type="button" disabled={index >= questions.length - 1} onClick={() => setIndex((value) => value + 1)} className="rounded-xl bg-teal-soft px-4 py-3 font-bold text-teal-ink disabled:opacity-40">Câu tiếp →</button></nav>
   </main>;
 }
