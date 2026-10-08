@@ -21,9 +21,28 @@ if (hasManifestId) {
 
 const nextConfig: NextConfig = {
   poweredByHeader: false,
-  outputFileTracingIncludes: {
-    "/*": [`${materialFolder}/manifest.json`, `${materialFolder}/*.json.gz`],
-  },
+  // The material bundle is read only by study pages and their content APIs.
+  // Keeping it out of the landing/auth traces avoids copying every compressed
+  // lesson chunk into the cold root function package.
+  outputFileTracingIncludes: Object.fromEntries(
+    [
+      "/listen",
+      "/listen/**",
+      "/read",
+      "/read/**",
+      "/vocab",
+      "/vocab/**",
+      "/practice",
+      "/practice/**",
+      "/api/dautoeic/**",
+      "/api/vocab/**",
+      "/api/listening/**",
+      "/api/reading/**",
+      "/api/practice/**",
+      "/api/dictation/**",
+      "/api/admin/dautoeic-sync",
+    ].map((route) => [route, [`${materialFolder}/manifest.json`, `${materialFolder}/*.json.gz`]]),
+  ),
   outputFileTracingExcludes: {
     "/*": [..."0123456789abcdef"].map((prefix) => `./.content/dauenglish/**/${prefix}*.json`).concat(inactiveMaterialFolders),
   },
