@@ -9,7 +9,7 @@
 import { adminDb } from "@/lib/firestore/db";
 import { cache } from "react";
 import { vocabularyDetails } from "@/lib/vocab-content";
-import { FieldValue } from "firebase-admin/firestore";
+import { FieldPath, FieldValue } from "firebase-admin/firestore";
 import { createHash, randomInt } from "crypto";
 import { BadRequest, Forbidden, NotFound, Unauthorized } from "@/lib/api/response";
 import type {
@@ -252,6 +252,27 @@ async function progressForSet(
 ): Promise<VocabProgressDoc[]> {
   const snap = await progressCollection(uid).where("setId", "==", setId).get();
   return snap.docs.map(toProgressDoc);
+}
+
+async function progressForWordIds(
+  uid: string,
+  wordIds: number[],
+): Promise<VocabProgressDoc[]> {
+  const uniqueIds = [...new Set(wordIds)].filter((id) => Number.isFinite(id));
+  if (!uniqueIds.length) return [];
+  // Firestore caps `in` filters at 30 values, so keep each read bounded.
+  const snapshots: FirebaseFirestore.QuerySnapshot[] = [];
+  for (let offset = 0; offset < uniqueIds.length; offset += 30 * 4) {
+    const batch = await Promise.all(
+      Array.from({ length: Math.min(4, Math.ceil((uniqueIds.length - offset) / 30)) }, (_, index) =>
+        progressCollection(uid)
+          .where(FieldPath.documentId(), "in", uniqueIds.slice(offset + index * 30, offset + (index + 1) * 30).map(String))
+          .get(),
+      ),
+    );
+    snapshots.push(...batch);
+  }
+  return snapshots.flatMap((snapshot) => snapshot.docs.map(toProgressDoc));
 }
 
 async function findProgress(
@@ -915,11 +936,13 @@ export async function getFilteredSessionForPart(
 ): Promise<VocabSetSession> {
   const set = await findPublishedSet(setId);
   if (!set) throw NotFound("Set not found");
-  const [words, progress, history] = await Promise.all([
+  const [words, history] = await Promise.all([
     wordsForSetPart(setId, externalPartId),
-    uid ? progressForSet(uid, setId) : [],
     uid && includeHistory ? findStudyHistory(uid, setId, externalPartId) : [],
   ]);
+  // A part session only needs progress for its own cards. Avoid loading the
+  // learner's entire set when LC/RC contains many words.
+  const progress = uid ? await progressForWordIds(uid, words.map((word) => word.id)) : [];
   const progressByWordId = new Map(progress.map((p) => [p.wordId, p]));
   const now = Date.now();
   const normalizedMastery = normalizeMastery(mastery);
@@ -967,20 +990,20 @@ export async function getReviewSession(
   size: number,
 ): Promise<VocabSetSession> {
   requireUid(uid);
-  const progress = await userProgressDocs(uid);
   const now = Date.now();
-  const due = progress.filter(
-    (p) =>
-      p.status !== "NEW" &&
-      p.nextReviewAtMillis != null &&
-      p.nextReviewAtMillis <= now,
-  );
-
-  due.sort(
-    (a, b) => (a.nextReviewAtMillis ?? 0) - (b.nextReviewAtMillis ?? 0),
-  );
-
-  const selected = due.slice(0, size);
+  const safeSize = Math.max(1, Math.min(100, Math.trunc(size)));
+  // Ask Firestore for due rows directly instead of downloading every word the
+  // learner has ever seen. The extra buffer handles legacy rows with an
+  // incomplete status while keeping the response small.
+  const snapshot = await progressCollection(uid)
+    .where("nextReviewAtMillis", "<=", now)
+    .orderBy("nextReviewAtMillis", "asc")
+    .limit(Math.max(safeSize * 2, safeSize + 20))
+    .get();
+  const selected = snapshot.docs
+    .map(toProgressDoc)
+    .filter((progress) => progress.status !== "NEW" && progress.nextReviewAtMillis != null)
+    .slice(0, safeSize);
   const wordMap = await wordsByIds(selected.map((progress) => progress.wordId));
 
   const cards: VocabWordCard[] = [];

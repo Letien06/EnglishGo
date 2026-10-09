@@ -3,6 +3,7 @@ import { adminDb } from "@/lib/firestore/db";
 import { BadRequest, Unauthorized } from "@/lib/api/response";
 import type { AppUser } from "@/types";
 import { enforceDailyActionLimit } from "./rate-limit";
+import { readServerCache } from "../server-cache";
 
 const ALL_TIME = "ALL_TIME";
 const WEEKLY = "WEEKLY";
@@ -75,15 +76,18 @@ export async function leaderboard(
   period?: string | null,
 ): Promise<LeaderboardEntry[]> {
   const normalized = normalizePeriod(period);
-  const snap = await leaderboardCollection(normalized).get();
-  const entries = snap.docs
-    .map((doc) => toLeaderboardEntry(doc, normalized))
-    .sort((a, b) => b.score - a.score)
-    .slice(0, 20);
-  return entries.map((entry, index) => ({
-    ...entry,
-    rankPosition: index + 1,
-  }));
+  return readServerCache(async () => {
+    // Keep ranking work in Firestore so a growing community does not turn
+    // this public page into a full collection scan on every visit.
+    const snap = await leaderboardCollection(normalized)
+      .orderBy("score", "desc")
+      .limit(20)
+      .get();
+    return snap.docs.map((doc, index) => ({
+      ...toLeaderboardEntry(doc, normalized),
+      rankPosition: index + 1,
+    }));
+  }, ["community-leaderboard", normalized], { revalidate: 30, tags: [] });
 }
 
 export async function addScore(user: Pick<AppUser, "uid" | "email" | "displayName">, score: number): Promise<void> {
