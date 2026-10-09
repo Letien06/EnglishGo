@@ -18,6 +18,12 @@ export async function proxy(request: NextRequest) {
     headers = rateLimit.headers;
   }
 
+  if (pathname === "/" && hasFreshSessionCookie(request.cookies.get("session")?.value)) {
+    const response = NextResponse.redirect(new URL("/hub", request.url));
+    applyHeaders(response, headers);
+    return response;
+  }
+
   if (["/", "/login"].includes(pathname)) {
     return nextWithHeaders(headers);
   }
@@ -179,5 +185,19 @@ function nextWithHeaders(headers: Record<string, string>): NextResponse {
 function applyHeaders(response: NextResponse, headers: Record<string, string>): void {
   for (const [name, value] of Object.entries(headers)) {
     response.headers.set(name, value);
+  }
+}
+
+/** Avoid booting the Node/Firebase landing function for an already signed-in learner. */
+function hasFreshSessionCookie(value: string | undefined): boolean {
+  if (!value) return false;
+  try {
+    const payload = value.split(".")[1];
+    if (!payload) return false;
+    const normalized = payload.replace(/-/g, "+").replace(/_/g, "/").padEnd(Math.ceil(payload.length / 4) * 4, "=");
+    const data = JSON.parse(atob(normalized)) as { exp?: unknown };
+    return typeof data.exp === "number" && data.exp > Math.floor(Date.now() / 1000);
+  } catch {
+    return false;
   }
 }

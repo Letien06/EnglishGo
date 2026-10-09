@@ -1,6 +1,4 @@
 import Link from "@/components/IntentLink";
-import { redirect } from "next/navigation";
-import { cookies } from "next/headers";
 import PublicHeader from "@/components/PublicHeader";
 import NavIcon from "@/components/NavIcon";
 
@@ -68,13 +66,6 @@ const steps = [
 ];
 
 export default async function HomePage() {
-  // A landing request should not boot Firebase Admin just to decide whether
-  // to redirect. The protected hub still verifies the cookie and rejects an
-  // expired session; this fast hint only removes the expensive cold-start
-  // verification from the public page.
-  const session = (await cookies()).get("session")?.value;
-  if (hasFreshSessionHint(session)) redirect("/hub");
-
   return (
     <>
       <PublicHeader />
@@ -222,18 +213,6 @@ export default async function HomePage() {
       </footer>
     </>
   );
-}
-
-function hasFreshSessionHint(value: string | undefined): boolean {
-  if (!value) return false;
-  try {
-    const payload = value.split(".")[1];
-    if (!payload) return false;
-    const data = JSON.parse(Buffer.from(payload, "base64url").toString("utf8")) as { exp?: unknown };
-    return typeof data.exp === "number" && data.exp > Math.floor(Date.now() / 1000);
-  } catch {
-    return false;
-  }
 }
 
 function LandingStudyPreview() {
