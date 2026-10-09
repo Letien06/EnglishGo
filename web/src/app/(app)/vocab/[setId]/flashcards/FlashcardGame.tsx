@@ -1409,6 +1409,14 @@ function PlaySurface({
     }
   }, [activeMode, index, speakWord]);
 
+  // Give learners immediate pronunciation feedback when a new flashcard or
+  // typing prompt appears, without waiting for a manual speaker click.
+  useEffect(() => {
+    if (activeMode !== "flashcard" && activeMode !== "typing") return;
+    const timer = window.setTimeout(speakWord, 120);
+    return () => window.clearTimeout(timer);
+  }, [activeMode, index, speakWord]);
+
   // Handle timeout for quiz/matching.
   useEffect(() => {
     if (timer !== 0 || feedback || showResult || !usesTimer) return;

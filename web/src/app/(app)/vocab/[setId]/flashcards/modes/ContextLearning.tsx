@@ -79,6 +79,7 @@ export default function ContextLearning({
   const [showWordDrawer, setShowWordDrawer] = useState(false);
   const [drawerQuery, setDrawerQuery] = useState("");
   const [drawerFilter, setDrawerFilter] = useState<FilterMode>("all");
+  const [deferredWordIds, setDeferredWordIds] = useState<number[]>([]);
 
   const isWordMastered = useCallback(
     (w: VocabWordCard) => masteryByWordId.get(w.id) ?? masteryOverrides.get(w.id) ?? Boolean(w.mastered),
@@ -86,16 +87,22 @@ export default function ContextLearning({
   );
 
   const activeWords = useMemo(() => {
+    const deferred = new Set(deferredWordIds);
+    const orderWithDeferredLast = (list: VocabWordCard[]) => [
+      ...list.filter((item) => !deferred.has(item.id)),
+      ...deferredWordIds.flatMap((id) => {
+        const item = list.find((candidate) => candidate.id === id);
+        return item ? [item] : [];
+      }),
+    ];
     if (filterMode === "unmastered") {
-      const list = words.filter((w) => !isWordMastered(w));
-      return list;
+      return orderWithDeferredLast(words.filter((w) => !isWordMastered(w) || deferred.has(w.id)));
     }
     if (filterMode === "mastered") {
-      const list = words.filter((w) => isWordMastered(w));
-      return list;
+      return orderWithDeferredLast(words.filter((w) => isWordMastered(w) || deferred.has(w.id)));
     }
-    return words;
-  }, [words, filterMode, isWordMastered]);
+    return orderWithDeferredLast(words);
+  }, [words, filterMode, isWordMastered, deferredWordIds]);
 
   // Keep the selected identity stable when other words leave the filtered deck.
   const [cursor, setCursor] = useState<{ id: number | undefined; index: number }>(() => ({ id: activeWords[0]?.id, index: 0 }));
@@ -135,6 +142,15 @@ export default function ContextLearning({
   const word = activeWords[safeIndex];
   const isCurrentMastered = word ? isWordMastered(word) : false;
 
+  useEffect(() => {
+    if (!word) return;
+    const timer = window.setTimeout(() => speakWord(word, "us"), 120);
+    return () => {
+      window.clearTimeout(timer);
+      stop();
+    };
+  }, [word, speakWord, stop]);
+
   const steps = useMemo(() => {
     return word ? vocabularyStudySteps(word) : [];
   }, [word]);
@@ -152,6 +168,7 @@ export default function ContextLearning({
     setSessionFinished(false);
     stop();
     setFilterMode(mode);
+    setDeferredWordIds([]);
     setCursor({ id: undefined, index: 0 });
     setStepIndex(0);
     setForgotten(false);
@@ -262,7 +279,15 @@ export default function ContextLearning({
     (quality?: number, markMastered?: boolean) => {
       if (finished.current || !word || advancingWordId.current === word.id) return;
       advancingWordId.current = word.id;
-      const nextWord = activeWords[safeIndex + 1];
+      const shouldDefer = studyIntent === "continue" && quality !== undefined && activeWords.length > 1;
+      const wasDeferred = shouldDefer && deferredWordIds.includes(word.id);
+      const nextDeferredIds = shouldDefer
+        ? (wasDeferred ? deferredWordIds.filter((id) => id !== word.id) : [...deferredWordIds, word.id])
+        : deferredWordIds;
+      const nextWord = activeWords[safeIndex + 1]
+        ?? (shouldDefer
+          ? activeWords.find((item) => item.id !== word.id && nextDeferredIds.includes(item.id))
+          : undefined);
       stop();
 
       const reviewQuality = quality ?? (studyIntent === "review" ? 4 : undefined);
@@ -292,6 +317,10 @@ export default function ContextLearning({
         setMasteryOverrides((prev) => new Map(prev).set(word.id, false));
       }
 
+      // Keep each rated card in this round, but move it to the end for one
+      // reinforcement pass. The second rating removes it from the queue.
+      if (shouldDefer) setDeferredWordIds(nextDeferredIds);
+
       setPoints((prev) => prev + (isCorrect ? 10 : 2));
 
       if (!nextWord) {
@@ -312,7 +341,7 @@ export default function ContextLearning({
         setSkipTyping(false);
       }
     },
-    [word, answers, forgotten, typed, safeIndex, activeWords, onComplete, stop, studyIntent, persistAnswers, isAuthenticated, enqueue]
+    [word, answers, forgotten, typed, safeIndex, activeWords, deferredWordIds, onComplete, stop, studyIntent, persistAnswers, isAuthenticated, enqueue]
   );
 
   // Keyboard controls
