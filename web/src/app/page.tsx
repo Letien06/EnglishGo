@@ -1,8 +1,8 @@
 import Link from "@/components/IntentLink";
 import { redirect } from "next/navigation";
+import { cookies } from "next/headers";
 import PublicHeader from "@/components/PublicHeader";
 import NavIcon from "@/components/NavIcon";
-import { getReadIdentity } from "@/lib/auth/session";
 
 const features = [
   {
@@ -68,12 +68,12 @@ const steps = [
 ];
 
 export default async function HomePage() {
-  // The landing page only needs to know whether a valid session exists. The
-  // profile document is not needed until /hub renders, so avoid the extra
-  // Firestore read on the cold root request. This keeps anonymous visitors on
-  // the fast path and lets signed-in users redirect after token verification.
-  const identity = await getReadIdentity();
-  if (identity) redirect("/hub");
+  // A landing request should not boot Firebase Admin just to decide whether
+  // to redirect. The protected hub still verifies the cookie and rejects an
+  // expired session; this fast hint only removes the expensive cold-start
+  // verification from the public page.
+  const session = (await cookies()).get("session")?.value;
+  if (hasFreshSessionHint(session)) redirect("/hub");
 
   return (
     <>
@@ -222,6 +222,18 @@ export default async function HomePage() {
       </footer>
     </>
   );
+}
+
+function hasFreshSessionHint(value: string | undefined): boolean {
+  if (!value) return false;
+  try {
+    const payload = value.split(".")[1];
+    if (!payload) return false;
+    const data = JSON.parse(Buffer.from(payload, "base64url").toString("utf8")) as { exp?: unknown };
+    return typeof data.exp === "number" && data.exp > Math.floor(Date.now() / 1000);
+  } catch {
+    return false;
+  }
 }
 
 function LandingStudyPreview() {

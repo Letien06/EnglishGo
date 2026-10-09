@@ -3,10 +3,10 @@ import path from "node:path";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { DauToeicPassage, DauToeicQuestion, DauToeicTest } from "@/types/dautoeic";
 
-const mocks = vi.hoisted(() => ({ drive: vi.fn(), firestore: vi.fn(() => { throw new Error("Unexpected Firestore content read"); }) }));
+const mocks = vi.hoisted(() => ({ drive: vi.fn(), compact: vi.fn(async () => null), firestore: vi.fn(() => { throw new Error("Unexpected Firestore content read"); }) }));
 vi.mock("next/cache", () => ({ unstable_cache: (callback: unknown) => callback }));
 vi.mock("@/lib/firestore/db", () => ({ adminDb: { collection: mocks.firestore } }));
-vi.mock("./dautoeic-drive", () => ({ isDriveContentEnabled: () => true, readDriveMaterial: mocks.drive, contentCacheKey: () => "test-snapshot" }));
+vi.mock("./dautoeic-drive", () => ({ isDriveContentEnabled: () => true, readDriveMaterial: mocks.drive, readDriveCatalogIndex: mocks.compact, contentCacheKey: () => "test-snapshot" }));
 
 import { practiceSessionFromPart } from "./dautoeic";
 import { getTestPartSession, listTestParts } from "./test-part-practice";
@@ -27,6 +27,7 @@ const content = (part = 3) => ({
 
 beforeEach(() => {
   vi.clearAllMocks();
+  mocks.compact.mockResolvedValue(null);
   vi.stubGlobal("fetch", vi.fn(() => { throw new Error("Unexpected upstream read"); }));
 });
 afterEach(() => vi.unstubAllGlobals());
@@ -81,6 +82,22 @@ describe("test-part practice content", () => {
     expect(catalog[1].items[0].questionIds).toEqual(["test-two-q1"]);
     expect(mocks.firestore).not.toHaveBeenCalled();
     expect(fetch).not.toHaveBeenCalled();
+  });
+
+  it("uses the compact catalog index without opening full test-part materials", async () => {
+    const indexedTest = testInfo("test-indexed", "Vol Index", "Test Indexed");
+    mocks.drive.mockImplementation(async (key: string) => key.endsWith("tests__all") ? [indexedTest] : content());
+    mocks.compact.mockResolvedValue({
+      "test-indexed": {
+        test: { testId: indexedTest.id, testName: indexedTest.name!, setName: indexedTest.setName!, part: 3, questionCount: 2, itemCount: 1, done: 0, correct: 0, wrong: 0, nextIndex: 0 },
+        items: [{ id: "passage", questionIds: ["q1", "q2"] }],
+      },
+    } as never);
+    const catalog = await listTestParts(3);
+    expect(catalog[0].test.questionCount).toBe(2);
+    expect(catalog[0].items).toEqual([{ id: "passage", questionIds: ["q1", "q2"] }]);
+    expect(mocks.drive).toHaveBeenCalledTimes(1);
+    expect(mocks.drive.mock.calls[0][0]).toContain("tests__all");
   });
 
   it.each([["../test", 1], ["test", 0], ["test", 1.5], ["test", 8]] as const)("rejects invalid coordinates %s/%s before I/O", async (testId, part) => {

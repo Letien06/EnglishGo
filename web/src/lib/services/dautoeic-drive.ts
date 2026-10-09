@@ -9,9 +9,11 @@ import { driveManifestSchema } from "../storage/drive-manifest";
 import { DAUTOEIC_SOURCE_VERSION } from "./dautoeic-source";
 import { createTextMemoryCache } from "../storage/text-memory-cache";
 import { decodeBundledMaterial } from "../storage/bundled-material";
+import { testPartCatalogIndexSchema, type TestPartCatalogEntry } from "../storage/test-part-catalog-index";
 
 const manifestMemory = createTextMemoryCache(2_000_000, 2);
 const materialMemory = createTextMemoryCache(32_000_000, 128);
+const catalogIndexMemory = createTextMemoryCache(8_000_000, 1);
 
 async function bundledText(manifestId: string, name: string): Promise<string | null> {
   try {
@@ -41,6 +43,21 @@ export function isDriveContentEnabled(): boolean {
 
 export function contentCacheKey(): string {
   return `${DAUTOEIC_SOURCE_VERSION}:${serverEnv.dauToeicContentStorage}:${isDriveContentEnabled() ? serverEnv.googleDriveManifestId : "legacy"}`;
+}
+
+/** Read the build-time compact index used by the listening/reading catalog. */
+export async function readDriveCatalogIndex(part: number): Promise<Record<string, TestPartCatalogEntry> | null> {
+  if (!isDriveContentEnabled()) return null;
+  try {
+    const manifestId = driveFileId(serverEnv.googleDriveManifestId);
+    const text = await catalogIndexMemory.get(`${manifestId}:catalog-part-${part}`, async () =>
+      await bundledText(manifestId, `catalog-part-${part}.json`) ?? "",
+    );
+    if (!text) return null;
+    return testPartCatalogIndexSchema.parse(JSON.parse(text)).entries;
+  } catch {
+    return null;
+  }
 }
 
 function driveClient() {

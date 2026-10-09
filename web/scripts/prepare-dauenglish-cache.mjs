@@ -15,6 +15,7 @@ if (process.env.DAUTOEIC_CONTENT_STORAGE !== "google-drive") {
   const { createDriveClient, driveFileId, DriveError } = await jiti.import("../src/lib/storage/google-drive.ts");
   const { driveManifestSchema } = await jiti.import("../src/lib/storage/drive-manifest.ts");
   const { decodeBundledMaterial } = await jiti.import("../src/lib/storage/bundled-material.ts");
+  const { buildTestPartCatalogEntry, testPartCatalogIndexSchema } = await jiti.import("../src/lib/storage/test-part-catalog-index.ts");
   const client = createDriveClient({ clientId: process.env.GOOGLE_DRIVE_CLIENT_ID, clientSecret: process.env.GOOGLE_DRIVE_CLIENT_SECRET, refreshToken: process.env.GOOGLE_DRIVE_REFRESH_TOKEN });
   const manifestId = driveFileId(process.env.GOOGLE_DRIVE_MANIFEST_ID ?? "");
   const folder = path.resolve(".content/dauenglish", manifestId);
@@ -23,6 +24,7 @@ if (process.env.DAUTOEIC_CONTENT_STORAGE !== "google-drive") {
   const hash = (text) => createHash("sha256").update(text).digest("hex");
   await mkdir(folder, { recursive: true });
   const entries = Object.values(manifest.entries);
+  const catalogParts = Array.from({ length: 7 }, () => ({}));
   let next = 0;
   let completed = 0;
   let bytes = 0;
@@ -45,6 +47,15 @@ if (process.env.DAUTOEIC_CONTENT_STORAGE !== "google-drive") {
         if (Buffer.byteLength(text) !== entry.bytes || hash(text) !== entry.sha256) throw new Error("Content bundle material checksum mismatch.");
         await writeFile(output, await compress(text, { level: 9 }));
       }
+      // Keep a tiny catalog index beside the full materials. The practice
+      // dashboard only needs counts and IDs; loading every test-part JSON at
+      // request time made the first page render O(number of tests * part size).
+      if (entry.kind === "test-part") {
+        const payload = JSON.parse(text);
+        const projected = buildTestPartCatalogEntry(payload);
+        if (!catalogParts[payload.part - 1]) throw new Error("Invalid catalog part.");
+        catalogParts[payload.part - 1][payload.test.id] = projected;
+      }
       bytes += Buffer.byteLength(text);
       completed++;
       if (completed % 40 === 0) console.log(`[materials] Verified ${completed}/${entries.length}`);
@@ -52,5 +63,9 @@ if (process.env.DAUTOEIC_CONTENT_STORAGE !== "google-drive") {
   }
   await Promise.all(Array.from({ length: 6 }, prepare));
   await writeFile(path.join(folder, "manifest.json"), manifestText, "utf8");
+  for (let part = 1; part <= 7; part++) {
+    const index = testPartCatalogIndexSchema.parse({ sourceVersion: manifest.sourceVersion, snapshotSha256: manifest.snapshotSha256, part, entries: catalogParts[part - 1] });
+    await writeFile(path.join(folder, `catalog-part-${part}.json`), JSON.stringify(index), "utf8");
+  }
   console.log(`[materials] Ready: ${completed} verified materials, ${(bytes / 1_000_000).toFixed(1)} MB. Server-only bundle; no runtime Drive round trip needed.`);
 }

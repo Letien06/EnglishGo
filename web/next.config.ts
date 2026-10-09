@@ -41,7 +41,7 @@ const nextConfig: NextConfig = {
       "/api/practice/**",
       "/api/dictation/**",
       "/api/admin/dautoeic-sync",
-    ].map((route) => [route, [`${materialFolder}/manifest.json`, `${materialFolder}/*.json.gz`]]),
+    ].map((route) => [route, [`${materialFolder}/manifest.json`, `${materialFolder}/catalog-part-*.json`, `${materialFolder}/*.json.gz`]]),
   ),
   outputFileTracingExcludes: {
     "/*": [..."0123456789abcdef"].map((prefix) => `./.content/dauenglish/**/${prefix}*.json`).concat(inactiveMaterialFolders),

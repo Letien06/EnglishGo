@@ -2,7 +2,7 @@ import { ApiError } from "../api/response";
 import { getPart, listTests, practiceSessionFromPart } from "./dautoeic";
 import type { DauToeicPartTest } from "@/types/dautoeic";
 import { readServerCache } from "../server-cache";
-import { contentCacheKey } from "./dautoeic-drive";
+import { contentCacheKey, readDriveCatalogIndex } from "./dautoeic-drive";
 
 export interface TestPartCatalogEntry {
   test: DauToeicPartTest;
@@ -24,7 +24,7 @@ export async function getTestPartSession(testId: string, part: number) {
 
 export async function listTestParts(part: number): Promise<TestPartCatalogEntry[]> {
   validateTestPart("catalog", part);
-  return readServerCache(() => buildTestPartCatalog(part), ["test-part-catalog-v1", contentCacheKey(), String(part)], { revalidate: 3600, tags: [] });
+  return readServerCache(() => buildTestPartCatalog(part), ["test-part-catalog-v2", contentCacheKey(), String(part)], { revalidate: 3600, tags: [] });
 }
 
 async function buildTestPartCatalog(part: number): Promise<TestPartCatalogEntry[]> {
@@ -33,6 +33,19 @@ async function buildTestPartCatalog(part: number): Promise<TestPartCatalogEntry[
     (left.orderIndex ?? 0) - (right.orderIndex ?? 0) ||
     (left.name ?? "").localeCompare(right.name ?? "", "vi", { numeric: true }) || left.id.localeCompare(right.id),
   );
+  const compactIndex = await readDriveCatalogIndex(part);
+  if (compactIndex) {
+    const indexed = tests.map((test) => compactIndex[test.id]).filter(Boolean);
+    if (indexed.length === tests.length) {
+      return indexed.map((entry) => ({
+        test: {
+          ...entry.test,
+          part,
+        },
+        items: entry.items,
+      }));
+    }
+  }
   const entries: TestPartCatalogEntry[] = [];
   for (let offset = 0; offset < tests.length; offset += 6) {
     entries.push(...await Promise.all(tests.slice(offset, offset + 6).map(async (test) => {
