@@ -1,7 +1,8 @@
-import { DAUTOEIC_SOURCE_VERSION } from "./dautoeic-source";
-import { getGrammarCatalog, getGrammarTopic } from "./dautoeic-grammar";
-import { validateGrammarMembership, type GrammarCatalog } from "../storage/grammar-snapshot";
-import { buildSelectionDictionaryIndex, isDictionarySelection, lookupSelectionDictionary, parseSelectionVocabulary, type SelectionDictionaryEntry, type SelectionDictionaryIndex, type SelectionDictionaryMatch } from "../selection-dictionary";
+import { getGrammarCatalog } from "./dautoeic-grammar";
+import type { GrammarCatalog } from "../storage/grammar-snapshot";
+import { contentCacheKey, readGrammarProjection } from "./dautoeic-drive";
+import { grammarDictionaryIndexSchema } from "../storage/grammar-index";
+import { isDictionarySelection, lookupSelectionDictionary, type SelectionDictionaryEntry, type SelectionDictionaryIndex, type SelectionDictionaryMatch } from "../selection-dictionary";
 
 type Library = {
   all: SelectionDictionaryIndex;
@@ -13,28 +14,23 @@ let cachedLibrary: { key: string; promise: Promise<Library> } | undefined;
 async function buildLibrary(catalog: GrammarCatalog): Promise<Library> {
   const topics = new Map<string, SelectionDictionaryEntry[]>();
   const questions = new Map<string, { topicId: string; entries: SelectionDictionaryEntry[] }>();
-  for (let offset = 0; offset < catalog.topics.length; offset += 3) {
-    const loaded = await Promise.all(catalog.topics.slice(offset, offset + 3).map(async metadata => {
-      const topic = await getGrammarTopic(metadata.id);
-      if (!topic) throw new Error("Grammar dictionary material is unavailable.");
-      validateGrammarMembership(catalog, topic);
-      return topic;
-    }));
-    for (const topic of loaded) {
-      const entries: SelectionDictionaryEntry[] = [];
-      for (const question of topic.questions) {
-        const vocabulary = parseSelectionVocabulary(question.vocabulary);
-        questions.set(question.id, { topicId: topic.topicId, entries: vocabulary });
-        entries.push(...vocabulary);
-      }
-      topics.set(topic.topicId, entries);
+  const projection = grammarDictionaryIndexSchema.parse(await readGrammarProjection("grammar-dictionary.json.gz"));
+  if (projection.syncedAt !== catalog.syncedAt || Object.keys(projection.topics).length !== catalog.topics.length) throw new Error("Grammar dictionary index mismatch.");
+  for (const topic of catalog.topics) {
+    const projectedQuestions = projection.topics[topic.id];
+    if (!projectedQuestions || Object.keys(projectedQuestions).length !== topic.questionCount) throw new Error("Grammar dictionary membership mismatch.");
+    const entries: SelectionDictionaryEntry[] = [];
+    for (const [id, vocabulary] of Object.entries(projectedQuestions)) {
+      questions.set(id, { topicId: topic.id, entries: vocabulary });
+      entries.push(...vocabulary);
     }
+    topics.set(topic.id, entries);
   }
-  return { topics, questions, all: buildSelectionDictionaryIndex(null, [...topics.values()]) };
+  return { topics, questions, all: { question: [], topic: [...topics.values()].flat() } };
 }
 
 function libraryFor(catalog: GrammarCatalog): Promise<Library> {
-  const key = `${DAUTOEIC_SOURCE_VERSION}:${catalog.syncedAt}`;
+  const key = `${contentCacheKey()}:${catalog.syncedAt}`;
   if (cachedLibrary?.key !== key) {
     const promise = buildLibrary(catalog);
     cachedLibrary = { key, promise };

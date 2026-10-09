@@ -11,6 +11,7 @@ import WorkspaceAnnotator, { WorkspaceAnnotationAnchor } from "@/components/Work
 import { usePracticeResume } from "@/lib/use-practice-resume";
 import { practiceNavigationTarget, practiceWindowInfo, type PracticeWindowSession } from "@/lib/practice-window";
 import { invalidateLearningLevels, setActiveLearnerId } from "@/lib/client-learning-progress-cache";
+import { markLearningReady } from "@/components/PerformanceTelemetry";
 import { markVisited, routeKey } from "@/lib/nav/session-nav";
 import type {
   DauToeicPracticeItem,
@@ -292,6 +293,7 @@ export default function ListenPracticeClient({
   }, []);
 
   const currentQuestion = item.questions[0];
+  useEffect(() => { markLearningReady("first-question"); }, [item.id]);
 
   return (
     <main className="skill-workspace skill-workspace--listen design-system min-h-dvh bg-surface" onPointerDownCapture={markInteraction} onKeyDownCapture={markInteraction}>
@@ -314,6 +316,7 @@ export default function ListenPracticeClient({
                 controls
                 preload="none"
                 className="w-full"
+                onLoadedMetadata={() => markLearningReady("audio")}
                 onPlay={() => {
                   replayCountRef.current += 1;
                 }}

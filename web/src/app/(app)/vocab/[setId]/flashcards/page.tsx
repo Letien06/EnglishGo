@@ -6,7 +6,7 @@
  */
 import { getCurrentUserForRead } from "@/lib/auth/session";
 import * as vocab from "@/lib/services/vocab";
-import FlashcardGame from "./FlashcardGame";
+import FlashcardGame from "./FlashcardGameLoader";
 import { isDriveContentEnabled } from "@/lib/services/dautoeic-drive";
 import { redirect } from "next/navigation";
 

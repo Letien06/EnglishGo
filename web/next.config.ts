@@ -7,7 +7,14 @@ const hasManifestId = /^[a-zA-Z0-9_-]{10,200}$/.test(manifestId);
 const materialFolder = hasManifestId
   ? `./.content/dauenglish/${manifestId}`
   : "./.content/dauenglish/**";
+// Keep verified archives available locally so opening a question never needs
+// an avoidable Drive round trip. Inactive snapshots are excluded below.
+const bundledArchives = [`${materialFolder}/*.json.gz`];
 const cacheRoot = path.join(process.cwd(), ".content", "dauenglish");
+// Source material chunks are SHA-256 named files (64 lowercase hex chars).
+// Keep the generated catalog-part-*.json indexes in the trace: a broad `c*.json`
+// exclusion also matched those indexes and silently removed the fast path.
+const materialChunkGlob = `./.content/dauenglish/**/${"[0123456789abcdef]".repeat(8)}*.json`;
 let inactiveMaterialFolders: string[] = [];
 if (hasManifestId) {
   try {
@@ -21,6 +28,9 @@ if (hasManifestId) {
 
 const nextConfig: NextConfig = {
   poweredByHeader: false,
+  env: {
+    NEXT_PUBLIC_BUILD_VERSION: process.env.VERCEL_GIT_COMMIT_SHA || process.env.BUILD_VERSION || String(Date.now()),
+  },
   // The material bundle is read only by study pages and their content APIs.
   // Keeping it out of the landing/auth traces avoids copying every compressed
   // lesson chunk into the cold root function package.
@@ -41,10 +51,11 @@ const nextConfig: NextConfig = {
       "/api/practice/**",
       "/api/dictation/**",
       "/api/admin/dautoeic-sync",
-    ].map((route) => [route, [`${materialFolder}/manifest.json`, `${materialFolder}/catalog-part-*.json`, `${materialFolder}/*.json.gz`]]),
+      "/api/grammar/**",
+    ].map((route) => [route, [`${materialFolder}/manifest.json`, `${materialFolder}/catalog-part-*.json`, `${materialFolder}/grammar-answers.json`, `${materialFolder}/grammar-dictionary.json.gz`, ...bundledArchives]]),
   ),
   outputFileTracingExcludes: {
-    "/*": [..."0123456789abcdef"].map((prefix) => `./.content/dauenglish/**/${prefix}*.json`).concat(inactiveMaterialFolders),
+    "/*": [materialChunkGlob].concat(inactiveMaterialFolders),
   },
   allowedDevOrigins: ["127.0.0.1"],
   images: {
@@ -98,7 +109,7 @@ const nextConfig: NextConfig = {
         headers: [
           {
             key: "Cache-Control",
-            value: "public, max-age=1296000, s-maxage=300, stale-while-revalidate=86400",
+            value: "public, max-age=0, s-maxage=300, stale-while-revalidate=300",
           },
         ],
       },

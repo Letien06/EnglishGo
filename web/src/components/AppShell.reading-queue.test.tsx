@@ -25,7 +25,7 @@ it("activates persisted reading answers on a direct practice visit using lightwe
   await act(async () => { await Promise.resolve(); });
   expect(queue).toHaveBeenLastCalledWith("learner", true);
   await act(async () => { await vi.advanceTimersByTimeAsync(2_000); });
-  expect(fetcher).toHaveBeenCalledExactlyOnceWith("/api/app/session", { cache: "no-store" });
+  expect(fetcher).toHaveBeenCalledExactlyOnceWith("/api/app/bootstrap", { cache: "no-store" });
   expect(screen.getByText("Đang luyện đọc")).toBeInTheDocument();
   expect(screen.queryByRole("banner")).not.toBeInTheDocument();
 });

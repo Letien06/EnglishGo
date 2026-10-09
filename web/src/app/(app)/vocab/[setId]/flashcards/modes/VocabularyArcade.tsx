@@ -1,17 +1,18 @@
 "use client";
 
-import { useEffect, useReducer, useRef, useState } from "react";
+import { useCallback, useEffect, useReducer, useRef, useState } from "react";
+import type { RacePlayer, RaceRoom } from "@/lib/vocab-race";
 import dynamic from "next/dynamic";
 import { fetchWithTimeout } from "@/lib/client-request";
 import type { VocabWordCard } from "@/types/vocab";
 import { arcadeDuration, arcadeReducer, arcadeWords, createArcadeState, createFloatingTargets, rainHint, tickFloatingTarget, type ArcadeState, type FloatingTarget, type VocabularyArcadeMode, type VocabularyRoundResult } from "@/lib/vocab-arcade";
 import { arcadeCountdownMs } from "@/lib/word-blast-timing";
 import useVocabularyAudio from "../useVocabularyAudio";
-import VocabularyRain from "./VocabularyRain";
 import styles from "../vocabulary.module.css";
 
 import { GameModeSelector } from "../components/GameModeSelector";
 import { GameLobby } from "../components/GameLobby";
+import VocabularyRain from "./VocabularyRain";
 const MultiplayerWordBlast = dynamic(() => import("../components/MultiplayerWordBlast").then((module) => module.MultiplayerWordBlast), { loading: MultiplayerLoading });
 const MultiplayerVocabularyRain = dynamic(() => import("../components/MultiplayerVocabularyRain").then((module) => module.MultiplayerVocabularyRain), { loading: MultiplayerLoading });
 
@@ -50,16 +51,14 @@ export default function VocabularyArcade({
     initialRoomCode ? "lobby" : enableMultiplayer ? "mode-select" : "solo"
   );
   const [roomCode, setRoomCode] = useState<string>(() => initialRoomCode || "");
-  const [currentUserId, setCurrentUserId] = useState(initialCurrentUserId);
+  const [recoveredUserId, setCurrentUserId] = useState("");
+  const currentUserId = initialCurrentUserId || recoveredUserId;
   const [roomError, setRoomError] = useState("");
   const roomOperation = useRef(0);
   useEffect(() => () => { roomOperation.current += 1; }, []);
 
-  useEffect(() => {
-    if (initialCurrentUserId) setCurrentUserId(initialCurrentUserId);
-  }, [initialCurrentUserId]);
-  const [lobbyRoom, setLobbyRoom] = useState<any>(null);
-  const [lobbyPlayers, setLobbyPlayers] = useState<any[]>([]);
+  const [lobbyRoom, setLobbyRoom] = useState<RaceRoom | null>(null);
+  const [lobbyPlayers, setLobbyPlayers] = useState<RacePlayer[]>([]);
   const [loadingRoom, setLoadingRoom] = useState(false);
   // BUG-6: tracks the in-flight leave-room request so the lobby button can show
   // a loading state instead of looking dead on a cold-start fetch.
@@ -98,19 +97,6 @@ export default function VocabularyArcade({
     return () => controller.abort();
   }, [view, currentUserId, isAuthenticated]);
 
-  // Handle URL room param if someone opens link with ?room=XYZ
-  useEffect(() => {
-    const code =
-      initialRoomCode ||
-      (typeof window !== "undefined"
-        ? new URLSearchParams(window.location.search).get("room")?.trim().toUpperCase()
-        : null);
-    if (code && code.length === 6) {
-      setRoomCode(code);
-      handleJoinRoom(code);
-    }
-  }, [initialRoomCode]);
-
   // Realtime SDK and multiplayer UI are loaded only after entering a room.
   // Warm the match UI in the lobby, before its short countdown begins.
   useEffect(() => {
@@ -120,7 +106,7 @@ export default function VocabularyArcade({
     void import("@/lib/game-room-subscription").then(({ subscribeGameRoom }) => {
       if (cancelled) return;
       setRoomError("");
-      unsubscribe = subscribeGameRoom<any, any>(roomCode, {
+      unsubscribe = subscribeGameRoom<RaceRoom, RacePlayer>(roomCode, {
         room: (data) => {
           if (cancelled) return;
           setLobbyRoom(data);
@@ -176,7 +162,7 @@ export default function VocabularyArcade({
     }
   };
 
-  const handleJoinRoom = async (code: string) => {
+  const handleJoinRoom = useCallback(async (code: string) => {
     if (!isAuthenticated) {
       if (typeof window !== "undefined") {
         const url = new URL(window.location.href);
@@ -203,7 +189,7 @@ export default function VocabularyArcade({
       }
       if (json.data?.currentUserId) setCurrentUserId(json.data.currentUserId);
       if (json.data?.gameMode) {
-        setLobbyRoom((prev: any) => ({ ...prev, gameMode: json.data.gameMode }));
+        setLobbyRoom((prev) => prev ? { ...prev, gameMode: json.data.gameMode } : prev);
       }
       setRoomCode(code);
       setView("lobby");
@@ -213,7 +199,16 @@ export default function VocabularyArcade({
     } finally {
       setLoadingRoom(false);
     }
-  };
+  }, [isAuthenticated, mode, loginHref, enableMultiplayer]);
+
+  // Defer URL-driven join to a cancellable task so Strict Mode's effect replay
+  // does not issue a second mutation before the first setup has been cleaned up.
+  useEffect(() => {
+    const code = initialRoomCode || new URLSearchParams(window.location.search).get("room")?.trim().toUpperCase();
+    if (!code || !/^[A-Z0-9]{6}$/.test(code)) return;
+    const timer = window.setTimeout(() => void handleJoinRoom(code), 0);
+    return () => window.clearTimeout(timer);
+  }, [initialRoomCode, handleJoinRoom]);
 
   const handleStartGame = async () => {
     const operation = roomOperation.current;
@@ -229,7 +224,7 @@ export default function VocabularyArcade({
         alert(json.error || "Không thể bắt đầu game");
         return;
       }
-      setLobbyRoom((prev: any) => ({
+      setLobbyRoom((prev) => ({
         ...prev,
         ...json.data?.room,
         status: "countdown",
@@ -237,10 +232,13 @@ export default function VocabularyArcade({
         runId: json.data?.runId,
         matchEndsAt: json.data?.matchEndsAt,
         serverNow: json.data?.serverNow,
-        countdownEndsAt: json.data?.countdownEndsAt || Date.now() + arcadeCountdownMs(prev.gameMode || mode),
+        code: roomCode,
+        hostId: prev?.hostId ?? currentUserId,
+        gameMode: prev?.gameMode ?? mode,
+        countdownEndsAt: json.data?.countdownEndsAt || Date.now() + arcadeCountdownMs(prev?.gameMode || mode),
         questionDurationMs: json.data?.questionDurationMs,
         roundStartedAt: json.data?.roundStartedAt || json.data?.countdownEndsAt,
-        words: json.data?.words && json.data.words.length > 0 ? json.data.words : prev.words,
+        words: json.data?.words && json.data.words.length > 0 ? json.data.words : prev?.words ?? words,
         activeDrops: json.data?.activeDrops,
         nextIndex: json.data?.nextIndex,
         currentIndex: 0,
@@ -277,7 +275,6 @@ export default function VocabularyArcade({
     return (
       <GameModeSelector
         gameTitle={title}
-        gameMode={mode}
         onPlaySolo={() => setView("solo")}
         onCreateRoom={handleCreateRoom}
         onJoinRoom={handleJoinRoom}
@@ -332,7 +329,7 @@ export default function VocabularyArcade({
           setView("mode-select");
         }}
         onReturnToLobby={() => {
-          setLobbyRoom((prev: any) =>
+          setLobbyRoom((prev) =>
             prev ? { ...prev, status: "waiting", currentIndex: 0 } : null
           );
           setLobbyPlayers((prev) =>
@@ -354,7 +351,7 @@ export default function VocabularyArcade({
           setView("mode-select");
         }}
         onReturnToLobby={() => {
-          setLobbyRoom((prev: any) =>
+          setLobbyRoom((prev) =>
             prev ? { ...prev, status: "waiting", currentIndex: 0 } : null
           );
           setLobbyPlayers((prev) =>
@@ -566,7 +563,8 @@ function ArcadeRound({ initialState, muted, suspended, onComplete, onExit, onRes
   const [travel, setTravel] = useState(140);
   const [aim, setAim] = useState(0);
   const [shot, setShot] = useState<number | null>(null);
-  const [hoveredOptionId, setHoveredOptionId] = useState<number | null>(null);
+  const [hoveredTarget, setHoveredTarget] = useState<{ questionIndex: number; id: number } | null>(null);
+  const hoveredOptionId = hoveredTarget?.questionIndex === state.index && !state.disabled.includes(hoveredTarget.id) ? hoveredTarget.id : null;
   const finished = useRef(false);
   const [showGameOver, setShowGameOver] = useState(false);
   const { speakWord, stop } = useVocabularyAudio();
@@ -588,17 +586,6 @@ function ArcadeRound({ initialState, muted, suspended, onComplete, onExit, onRes
       setFloats(createFloatingTargets(state.options[state.index]?.length ?? 4));
     }
   }, [state.index, state.options]);
-
-  // Reset hovered target when moving to next question or if target gets disabled
-  useEffect(() => {
-    setHoveredOptionId(null);
-  }, [state.index]);
-
-  useEffect(() => {
-    if (hoveredOptionId !== null && state.disabled.includes(hoveredOptionId)) {
-      setHoveredOptionId(null);
-    }
-  }, [state.disabled, hoveredOptionId]);
 
   // Dynamically track hovered floating target as it moves with rAF
   useEffect(() => {
@@ -748,7 +735,7 @@ function ArcadeRound({ initialState, muted, suspended, onComplete, onExit, onRes
         <div className={styles.gameOverOverlay}>
           <div className={styles.gameOverIcon} aria-hidden="true">💥</div>
           <h2 className={styles.gameOverTitle}>KẾT THÚC LƯỢT CHƠI</h2>
-          <p className={styles.gameOverSubtitle}>ĐIỂM: {state.score} // MỐC: {Math.floor(state.index / 2) + 1}</p>
+          <p className={styles.gameOverSubtitle}>ĐIỂM: {state.score}{" // MỐC: "}{Math.floor(state.index / 2) + 1}</p>
 
           <div className={styles.gameOverStats}>
             <div className={styles.gameOverStat}>
@@ -835,14 +822,14 @@ function ArcadeRound({ initialState, muted, suspended, onComplete, onExit, onRes
               }}
               onPointerEnter={() => {
                 if (state.phase === "playing" && !state.disabled.includes(option.id)) {
-                  setHoveredOptionId(option.id);
+                  setHoveredTarget({ questionIndex: state.index, id: option.id });
                   if (f && field.current) {
                     setAim(getAngleToTarget(f.x, f.y, field.current));
                   }
                 }
               }}
               onPointerLeave={() => {
-                setHoveredOptionId((prev) => (prev === option.id ? null : prev));
+                setHoveredTarget((prev) => (prev?.id === option.id ? null : prev));
               }}
             >
               <kbd>{index + 1}</kbd>{option.word}

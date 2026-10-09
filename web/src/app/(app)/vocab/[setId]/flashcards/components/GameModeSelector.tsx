@@ -1,10 +1,8 @@
 "use client";
 
-import React, { useState } from "react";
 
 interface GameModeSelectorProps {
   gameTitle: string; // "Word Blast" or "Mưa từ vựng"
-  gameMode: "blast" | "rain";
   onPlaySolo: () => void;
   onCreateRoom: () => void;
   onJoinRoom: (code: string) => void;
@@ -12,10 +10,8 @@ interface GameModeSelectorProps {
 
 export function GameModeSelector({
   gameTitle,
-  gameMode,
   onPlaySolo,
   onCreateRoom,
-  onJoinRoom: _onJoinRoom,
 }: GameModeSelectorProps) {
   return (
     <div className="flex flex-col items-center justify-center min-h-[60vh] p-4 text-[var(--ink)]">

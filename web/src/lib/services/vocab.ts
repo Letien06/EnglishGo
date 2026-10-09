@@ -655,9 +655,16 @@ export async function findProgressSetCards(
   const setIds = new Set(progress.map((p) => p.setId));
   const relevantSets = await resolveLegacyWordCounts(await liveSetsByIds([...setIds]));
 
+  const progressBySetId = new Map<number, VocabProgressDoc[]>();
+  for (const item of progress) {
+    const bucket = progressBySetId.get(item.setId);
+    if (bucket) bucket.push(item);
+    else progressBySetId.set(item.setId, [item]);
+  }
+
   return relevantSets
     .map((set) => {
-      const setProgress = progress.filter((p) => p.setId === set.id);
+      const setProgress = progressBySetId.get(set.id) ?? [];
 
       return {
         id: set.id,

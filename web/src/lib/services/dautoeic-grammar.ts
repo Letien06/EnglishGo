@@ -1,8 +1,9 @@
 import { ApiError } from "../api/response";
 import { grammarCatalogSchema, grammarTopicSchema, validateGrammarMembership, type GrammarCatalog, type GrammarTopic } from "../storage/grammar-snapshot";
-import { isDriveContentEnabled, readDriveMaterial } from "./dautoeic-drive";
+import { isDriveContentEnabled, readDriveMaterial, readGrammarProjection } from "./dautoeic-drive";
 import { DAUTOEIC_SOURCE_VERSION } from "./dautoeic-source";
-import { grammarAnswerKey, type GrammarAnswerKey } from "../grammar-learning";
+import type { GrammarAnswerKey } from "../grammar-learning";
+import { grammarAnswerIndexSchema, validateGrammarAnswerIndex } from "../storage/grammar-index";
 
 export async function getGrammarCatalog(): Promise<GrammarCatalog | null> {
   if (!isDriveContentEnabled()) return null;
@@ -20,25 +21,23 @@ export async function getGrammarTopic(slugOrId: string): Promise<GrammarTopic | 
   const catalog = await getGrammarCatalog();
   const entry = catalog?.topics.find((topic) => topic.id === slugOrId.trim() || topic.slug === slugOrId.trim());
   if (!catalog || !entry) return null;
+  return loadGrammarTopic(catalog, entry);
+}
+
+async function loadGrammarTopic(catalog: GrammarCatalog, entry: GrammarCatalog["topics"][number]): Promise<GrammarTopic> {
   const topic = grammarTopicSchema.parse(await readDriveMaterial(`${DAUTOEIC_SOURCE_VERSION}__grammar__topic__${entry.id}`));
   if (topic.topicId !== entry.id) throw new Error("Grammar material identity mismatch.");
   validateGrammarMembership(catalog, topic);
   const subtopics = [...entry.subtopics].sort((a, b) => (a.orderIndex ?? 0) - (b.orderIndex ?? 0));
-  topic.questions.sort((a, b) => subtopics.findIndex((subtopic) => subtopic.id === a.subtopicId) - subtopics.findIndex((subtopic) => subtopic.id === b.subtopicId) || (a.orderIndex ?? 0) - (b.orderIndex ?? 0));
+  const rank = new Map(subtopics.map((subtopic, index) => [subtopic.id, index]));
+  topic.questions.sort((a, b) => (rank.get(a.subtopicId) ?? Number.MAX_SAFE_INTEGER) - (rank.get(b.subtopicId) ?? Number.MAX_SAFE_INTEGER) || (a.orderIndex ?? 0) - (b.orderIndex ?? 0));
   return topic;
 }
 
 /** Send only IDs and correct letters to the device-local progress library. */
 export async function getGrammarAnswerKeys(catalog: GrammarCatalog): Promise<Record<string, GrammarAnswerKey>> {
-  const entries: [string, GrammarAnswerKey][] = [];
-  for (let offset = 0; offset < catalog.topics.length; offset += 3) {
-    const batch = await Promise.all(catalog.topics.slice(offset, offset + 3).map(async entry => {
-      const topic = await getGrammarTopic(entry.id);
-      if (!topic) throw new Error("Grammar answer key material is unavailable.");
-      validateGrammarMembership(catalog, topic);
-      return [entry.id, grammarAnswerKey(topic)] as [string, GrammarAnswerKey];
-    }));
-    entries.push(...batch);
-  }
-  return Object.fromEntries(entries);
+  if (!isDriveContentEnabled()) throw new Error("Grammar answer key material is unavailable.");
+  const index = grammarAnswerIndexSchema.parse(await readGrammarProjection("grammar-answers.json"));
+  validateGrammarAnswerIndex(catalog, index);
+  return index.topics;
 }

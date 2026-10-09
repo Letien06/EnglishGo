@@ -20,5 +20,5 @@ export default async function PracticeSessionPage({ params, searchParams }: Prop
     resetDraft: typeof sp.reset === "string" ? sp.reset : null,
   });
 
-  return <PracticeSessionClient session={session} userUid={user.uid} />;
+  return <PracticeSessionClient key={`${user.uid}:${session.config.sessionKey}:${session.startedAtMillis}`} session={session} userUid={user.uid} />;
 }

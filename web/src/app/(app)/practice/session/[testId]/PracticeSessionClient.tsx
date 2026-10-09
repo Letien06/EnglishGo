@@ -7,6 +7,8 @@ import useDialogFocus from "@/components/useDialogFocus";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import type { PracticeQuestion, PracticeSessionView } from "@/lib/services/practice";
+import { readPracticeDraft } from "@/lib/practice-draft-storage";
+import { usePracticeDraftQueue } from "@/lib/practice-draft-queue";
 
 type PracticeAnswers = Record<string, { selectedOptionId: number | null; textResponse: string | null }>;
 type PracticeDraftPayload = {
@@ -16,12 +18,6 @@ type PracticeDraftPayload = {
   startedAtMillis?: number;
   updatedAtMillis: number;
 };
-
-function readInitialDraft(storageKey: string, draftPayload: string): PracticeDraftPayload {
-  if (typeof window === "undefined") return { answers: {}, markedQuestionIds: [], currentQuestionIndex: 0, updatedAtMillis: 0 };
-  const raw = window.localStorage.getItem(storageKey) || draftPayload || "{}";
-  return parseDraftPayload(raw);
-}
 
 function parseDraftPayload(raw: string): PracticeDraftPayload {
   try {
@@ -66,14 +62,13 @@ function formatDuration(totalSeconds: number): string {
 
 export default function PracticeSessionClient({ session, userUid }: { session: PracticeSessionView; userUid: string }) {
   const router = useRouter();
-  const storageKey = `practice:${session.config.sessionKey}`;
-  const initialDraft = useMemo(() => readInitialDraft(storageKey, session.draftPayload), [session.draftPayload, storageKey]);
+  const initialDraft = useMemo(() => parseDraftPayload(session.draftPayload), [session.draftPayload]);
+  const draftQueue = usePracticeDraftQueue({ uid: userUid, sessionKey: session.config.sessionKey, testId: session.test.id, mode: session.config.mode, parts: session.config.parts, durationMinutes: session.config.durationMinutes, startedAtMillis: session.startedAtMillis });
   const [answers, setAnswers] = useState<PracticeAnswers>(initialDraft.answers);
   const [markedQuestionIds, setMarkedQuestionIds] = useState<Set<number>>(() => new Set(initialDraft.markedQuestionIds));
-  const [status, setStatus] = useState("Draft not saved yet");
+  const [status, setStatus] = useState("");
   const [remaining, setRemaining] = useState(() => initialRemainingSeconds(session));
   const [submitting, setSubmitting] = useState(false);
-  const [online, setOnline] = useState(() => typeof navigator === "undefined" ? true : navigator.onLine);
   const [confirmSubmit, setConfirmSubmit] = useState(false);
   const [confirmExit, setConfirmExit] = useState(false);
   const [activeQuestionId, setActiveQuestionId] = useState(() => {
@@ -81,7 +76,6 @@ export default function PracticeSessionClient({ session, userUid }: { session: P
     return session.questions[index]?.id ?? session.questions[0]?.id ?? 0;
   });
   const audioRef = useRef<HTMLAudioElement | null>(null);
-  const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const answersRef = useRef(answers);
   const markedRef = useRef(markedQuestionIds);
   const draftUpdatedAtRef = useRef(initialDraft.updatedAtMillis);
@@ -97,38 +91,16 @@ export default function PracticeSessionClient({ session, userUid }: { session: P
   }, [markedQuestionIds]);
 
   useEffect(() => {
-    let cancelled = false;
-    const params = new URLSearchParams({
-      mode: session.config.mode,
-      parts: session.config.parts.join(","),
-      time: String(session.config.durationMinutes),
-    });
-    fetch(`/api/practice/tests/${session.test.id}/draft?${params.toString()}`, {
-      cache: "no-store",
-    })
-      .then(async (response) => response.ok ? response.json() : null)
-      .then((result) => {
-        if (cancelled || !result?.success || !result.data?.payload) return;
-        const serverDraft = parseDraftPayload(result.data.payload);
-        const serverUpdatedAtMillis =
-          serverDraft.updatedAtMillis || Number(result.data.updatedAtMillis) || 0;
-        if (serverUpdatedAtMillis <= draftUpdatedAtRef.current) return;
-        answersRef.current = serverDraft.answers;
-        const nextMarked = new Set(serverDraft.markedQuestionIds);
-        markedRef.current = nextMarked;
-        setAnswers(serverDraft.answers);
-        setMarkedQuestionIds(nextMarked);
-        draftUpdatedAtRef.current = serverUpdatedAtMillis;
-        window.localStorage.setItem(storageKey, result.data.payload);
-        const nextQuestion = session.questions[serverDraft.currentQuestionIndex];
-        if (nextQuestion) setActiveQuestionId(nextQuestion.id);
-        setStatus("Loaded server draft");
-      })
-      .catch(() => undefined);
-    return () => {
-      cancelled = true;
-    };
-  }, [session.config.durationMinutes, session.config.mode, session.config.parts, session.questions, session.test.id, storageKey]);
+    const restored = parseDraftPayload(readPracticeDraft(userUid, session.config.sessionKey, session.draftPayload, session.startedAtMillis));
+    if (restored.updatedAtMillis <= draftUpdatedAtRef.current) return;
+    answersRef.current = restored.answers;
+    markedRef.current = new Set(restored.markedQuestionIds);
+    setAnswers(restored.answers);
+    setMarkedQuestionIds(markedRef.current);
+    draftUpdatedAtRef.current = restored.updatedAtMillis;
+    const question = session.questions[restored.currentQuestionIndex];
+    if (question) setActiveQuestionId(question.id);
+  }, [userUid, session.config.sessionKey, session.draftPayload, session.startedAtMillis, session.questions]);
 
   const answeredCount = useMemo(
     () => session.questions.filter((question) => hasAnswer(answers[String(question.id)])).length,
@@ -165,6 +137,7 @@ export default function PracticeSessionClient({ session, userUid }: { session: P
   ) => {
     draftUpdatedAtRef.current = updatedAtMillis;
     return JSON.stringify({
+      ownerUid: userUid,
       answers: nextAnswers,
       markedQuestionIds: [...nextMarked],
       currentQuestionIndex,
@@ -172,24 +145,16 @@ export default function PracticeSessionClient({ session, userUid }: { session: P
       updatedAtMillis,
       config: session.config,
     });
-  }, [activeIndex, session.config, session.startedAtMillis]);
+  }, [activeIndex, session.config, session.startedAtMillis, userUid]);
 
   function persistLocal(nextAnswers = answersRef.current, nextMarked = markedRef.current) {
-    window.localStorage.setItem(
-      storageKey,
-      makeDraftPayload(nextAnswers, nextMarked),
-    );
-  }
-
-  function queueSave() {
-    setStatus(online ? "Changes pending" : "Offline - saved on this device");
-    if (saveTimer.current) clearTimeout(saveTimer.current);
-    saveTimer.current = setTimeout(() => void saveNow(), 8000);
+    draftQueue.enqueue(makeDraftPayload(nextAnswers, nextMarked), activeIndex);
   }
 
   function setAnswer(questionId: number, value: { selectedOptionId?: number | null; textResponse?: string | null }) {
     if (submittingRef.current) return;
-    setAnswers((current) => {
+    {
+      const current = answersRef.current;
       const previous = current[String(questionId)] ?? { selectedOptionId: null, textResponse: null };
       const next = {
         ...current,
@@ -200,9 +165,8 @@ export default function PracticeSessionClient({ session, userUid }: { session: P
       };
       answersRef.current = next;
       persistLocal(next, markedRef.current);
-      return next;
-    });
-    queueSave();
+      setAnswers(next);
+    }
   }
 
   function clearAnswer(questionId: number) {
@@ -210,49 +174,23 @@ export default function PracticeSessionClient({ session, userUid }: { session: P
   }
 
   function toggleMarked(questionId: number) {
-    setMarkedQuestionIds((current) => {
+    {
+      const current = markedRef.current;
       const next = new Set(current);
       if (next.has(questionId)) next.delete(questionId);
       else next.add(questionId);
       markedRef.current = next;
       persistLocal(answersRef.current, next);
-      return next;
-    });
-    queueSave();
+      setMarkedQuestionIds(next);
+    }
   }
 
   async function saveNow() {
-    const payload = makeDraftPayload();
-    window.localStorage.setItem(storageKey, payload);
-    if (!navigator.onLine) {
-      setStatus("Offline - saved on this device");
-      return;
-    }
-    const result = await saveDraftToServer(payload, activeIndex).catch(() => ({
-      ok: false,
-      error: "Save failed",
-    }));
-    setStatus(result.ok ? `Saved at ${new Date().toLocaleTimeString()}` : result.error || "Save failed - saved locally");
+    setStatus("");
+    persistLocal();
+    draftQueue.retry();
+    await draftQueue.flush();
   }
-
-  const saveDraftToServer = useCallback(async (payload: string, currentQuestionIndex: number) => {
-    const response = await fetch(`/api/practice/tests/${session.test.id}/draft`, {
-      method: "PUT",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        payload,
-        mode: session.config.mode,
-        parts: session.config.parts,
-        durationMinutes: session.config.durationMinutes,
-        currentQuestionIndex,
-      }),
-    });
-    const result = await response.json().catch(() => null);
-    return {
-      ok: response.ok && result?.success,
-      error: result?.error as string | undefined,
-    };
-  }, [session.config.durationMinutes, session.config.mode, session.config.parts, session.test.id]);
 
   async function submit(reason: "manual" | "timeout" = "manual") {
     if (submittingRef.current) return;
@@ -260,14 +198,8 @@ export default function PracticeSessionClient({ session, userUid }: { session: P
     setSubmitting(true);
     setConfirmSubmit(false);
     setStatus(reason === "timeout" ? "Hết giờ, đang nộp bài..." : "Đang nộp bài...");
-    if (saveTimer.current) {
-      clearTimeout(saveTimer.current);
-      saveTimer.current = null;
-    }
     persistLocal();
-    await saveDraftToServer(window.localStorage.getItem(storageKey) || "{}", activeIndex).catch(() => ({
-      ok: false,
-    }));
+    await draftQueue.pause();
     const payload = Object.entries(answersRef.current).map(([questionId, answer]) => ({
       questionId: Number(questionId),
       selectedOptionId: answer.selectedOptionId,
@@ -281,6 +213,8 @@ export default function PracticeSessionClient({ session, userUid }: { session: P
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
+          expectedUid: userUid,
+          runStartedAtMillis: session.startedAtMillis,
           mode: session.config.mode,
           parts: session.config.parts,
           durationMinutes: session.config.durationMinutes,
@@ -292,20 +226,24 @@ export default function PracticeSessionClient({ session, userUid }: { session: P
       setStatus("Không thể nộp bài. Vui lòng kiểm tra kết nối và thử lại.");
       submittingRef.current = false;
       setSubmitting(false);
+      draftQueue.resume();
       return;
     }
     if (!response.ok || !result.success) {
       setStatus(result.error || "Submit failed");
       submittingRef.current = false;
       setSubmitting(false);
+      draftQueue.resume();
       return;
     }
-    window.localStorage.removeItem(storageKey);
+    draftQueue.complete();
     router.replace(`/practice/review/${result.data!.attemptId}`);
   }
 
   function goToQuestion(questionId: number) {
     setActiveQuestionId(questionId);
+    const nextIndex = questionIndexById.get(questionId) ?? 0;
+    draftQueue.enqueue(makeDraftPayload(undefined, undefined, Date.now(), nextIndex), nextIndex);
     window.requestAnimationFrame(() => {
       document.getElementById(`q-${questionId}`)?.scrollIntoView({ behavior: "smooth", block: "start" });
     });
@@ -349,42 +287,6 @@ export default function PracticeSessionClient({ session, userUid }: { session: P
     return () => window.removeEventListener("beforeunload", onBeforeUnload);
   }, []);
 
-  useEffect(() => {
-    const flush = () => {
-      const payload = makeDraftPayload();
-      window.localStorage.setItem(storageKey, payload);
-      if (document.visibilityState === "hidden" && !submittingRef.current) {
-        void saveDraftToServer(payload, activeIndex).catch(() => undefined);
-      }
-    };
-    document.addEventListener("visibilitychange", flush);
-    return () => {
-      document.removeEventListener("visibilitychange", flush);
-      if (saveTimer.current) clearTimeout(saveTimer.current);
-    };
-  }, [activeIndex, makeDraftPayload, saveDraftToServer, storageKey]);
-
-  useEffect(() => {
-    const onOnline = () => {
-      setOnline(true);
-      const payload = window.localStorage.getItem(storageKey);
-      if (payload && !submittingRef.current) {
-        void saveDraftToServer(payload, activeIndex).then(() => {
-          setStatus(`Synced at ${new Date().toLocaleTimeString()}`);
-        }).catch(() => setStatus("Save failed - saved locally"));
-      }
-    };
-    const onOffline = () => {
-      setOnline(false);
-      setStatus("Offline - saved on this device");
-    };
-    window.addEventListener("online", onOnline);
-    window.addEventListener("offline", onOffline);
-    return () => {
-      window.removeEventListener("online", onOnline);
-      window.removeEventListener("offline", onOffline);
-    };
-  }, [activeIndex, saveDraftToServer, storageKey]);
 
   return (
     <main className="exam-workspace design-system min-h-[calc(100dvh-4rem)] bg-white">
@@ -465,7 +367,8 @@ export default function PracticeSessionClient({ session, userUid }: { session: P
         <aside data-annotation-controls className="h-fit rounded-xl border border-line bg-surface p-5 shadow-sm xl:sticky xl:top-24">
           <div className="flex items-center justify-between">
             <strong className="text-ink">Navigator</strong>
-            <span className="text-xs font-bold text-muted">{status}</span>
+            <span role="status" className="text-xs font-bold text-muted">{status || draftQueue.error || (draftQueue.isSaving ? "Đang đồng bộ bản nháp…" : draftQueue.pendingCount ? `${draftQueue.pendingCount} bản nháp chờ đồng bộ` : draftQueue.lastSavedAt ? "Đã đồng bộ bản nháp" : "Bản nháp đã sẵn sàng")}</span>
+            {draftQueue.pendingCount > 0 && <button type="button" disabled={submitting || draftQueue.isSaving} onClick={() => { draftQueue.retry(); void draftQueue.flush(); }} className="text-sm font-bold text-primary">Thử lưu lại</button>}
           </div>
           <div className="mt-4 space-y-4">
             {session.config.parts.map((part) => {

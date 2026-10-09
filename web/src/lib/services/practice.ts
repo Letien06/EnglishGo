@@ -1,5 +1,5 @@
 import { adminDb } from "@/lib/firestore/db";
-import { BadRequest, NotFound } from "@/lib/api/response";
+import { ApiError, BadRequest, NotFound } from "@/lib/api/response";
 import { FieldPath, FieldValue } from "firebase-admin/firestore";
 import { unstable_cache } from "next/cache";
 import type { AppUser } from "@/types";
@@ -22,6 +22,7 @@ import {
 } from "./dautoeic-test-index";
 import { enforceDailyActionLimit } from "./rate-limit";
 import { recordContentQualityAttempt } from "./content-quality";
+import { writeOrderedPracticeDraft, type PracticeDraftMutation } from "./practice-draft-write";
 
 export interface PracticeTestCard {
   id: number;
@@ -43,6 +44,7 @@ export interface PracticeSessionConfig {
 }
 
 export interface PracticeSessionInput {
+  runStartedAtMillis?: number;
   mode?: string | null;
   parts?: string | number[] | null;
   durationMinutes?: number | string | null;
@@ -313,29 +315,21 @@ export async function saveDraft(
   payload: string | null,
   input?: PracticeSessionInput,
   currentQuestionIndex?: number | null,
+  mutation?: PracticeDraftMutation,
 ): Promise<PracticeDraftView> {
   const config = normalizeSessionConfig(input, testId);
   const updatedAtMillis = Date.now();
   await enforceDailyActionLimit(uid, "practice-draft", 1500);
   const draftRef = practiceDraftRef(uid, config.sessionKey);
-  const snap = await draftRef.get();
-  const startedAtMillis =
-    numberValue(snap.get("startedAtMillis")) ?? updatedAtMillis;
   const answerKey = await loadAnswerKey(testId, config.parts);
   const safeCurrentQuestionIndex = normalizeCurrentQuestionIndex(
     currentQuestionIndex,
     answerKey.questions.length,
   );
-  const safePayload = normalizeDraftPayload(
-    payload,
-    new Set(answerKey.questions.map((question) => question.id)),
-    config,
-    startedAtMillis,
-    updatedAtMillis,
-    safeCurrentQuestionIndex,
-  );
-  await draftRef.set(
-    {
+  const allowedIds = new Set(answerKey.questions.map(question => question.id));
+  const saved = await writeOrderedPracticeDraft(draftRef, mutation, startedAtMillis => {
+    const safePayload = normalizeDraftPayload(payload, allowedIds, config, startedAtMillis, mutation?.revision ?? updatedAtMillis, safeCurrentQuestionIndex);
+    return {
       source: "DAUTOEIC",
       testId,
       mode: config.mode,
@@ -346,16 +340,15 @@ export async function saveDraft(
       startedAtMillis,
       updatedAtMillis,
       currentQuestionIndex: safeCurrentQuestionIndex,
-    },
-    { merge: true },
-  );
+    };
+  });
   return {
     testId,
     config,
-    payload: safePayload,
-    startedAtMillis,
-    updatedAtMillis,
-    currentQuestionIndex: safeCurrentQuestionIndex,
+    payload: saved.payload,
+    startedAtMillis: saved.startedAtMillis,
+    updatedAtMillis: saved.updatedAtMillis,
+    currentQuestionIndex: saved.currentQuestionIndex,
   };
 }
 
@@ -431,6 +424,9 @@ export async function submit(
   }
   const submittedAtMillis = Date.now();
   const draftSnap = await practiceDraftRef(user.uid, config.sessionKey).get();
+  if (input?.runStartedAtMillis != null && (!draftSnap.exists || draftSnap.get("startedAtMillis") !== input.runStartedAtMillis)) {
+    throw new ApiError("Phiên làm bài đã thay đổi hoặc đã nộp. Vui lòng mở lại bài.", 409);
+  }
   const startedAtMillis =
     numberValue(draftSnap.get("startedAtMillis")) ?? submittedAtMillis;
   const elapsedMillis = Math.max(submittedAtMillis - startedAtMillis, 0);
@@ -531,20 +527,21 @@ export async function submit(
     scoreBreakdown,
     answers: answerDocs,
   };
+  const attemptRef = adminDb.collection("users").doc(user.uid).collection("practiceAttempts").doc(String(attemptId));
+  const submittedDraftRef = practiceDraftRef(user.uid, config.sessionKey);
+  if (input?.runStartedAtMillis != null) {
+    await adminDb.runTransaction(async tx => {
+      const current = await tx.get(submittedDraftRef);
+      if (!current.exists || current.get("startedAtMillis") !== input.runStartedAtMillis) {
+        throw new ApiError("Phiên làm bài đã thay đổi hoặc đã nộp. Vui lòng mở lại bài.", 409);
+      }
+      tx.set(attemptRef, attempt, { merge: true });
+      tx.delete(submittedDraftRef);
+    });
+  } else {
+    await Promise.all([attemptRef.set(attempt, { merge: true }), submittedDraftRef.delete()]);
+  }
   await Promise.all([
-    adminDb
-      .collection("users")
-      .doc(user.uid)
-      .collection("practiceAttempts")
-      .doc(String(attemptId))
-      .set(attempt, { merge: true }),
-    adminDb
-      .collection("users")
-      .doc(user.uid)
-      .collection("practiceDrafts")
-      .doc(config.sessionKey)
-      .delete()
-      .catch(() => undefined),
     updatePracticeWeakAreas(user.uid, attempt).catch(() => undefined),
     updatePracticeSummary(user.uid, score, submittedAtMillis).catch(() => undefined),
     recordContentQualityAttempt({

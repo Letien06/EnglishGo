@@ -1,4 +1,4 @@
-import { describe, it, expect, vi } from "vitest";
+import { describe, it, expect } from "vitest";
 import { generateRoomCode } from "./game-room";
 
 describe("game-room service", () => {
@@ -86,7 +86,7 @@ describe("game-room service", () => {
 
   it("resets room status, questions, and all players to waiting state for rematch", () => {
     const resetRoomState = (
-      room: { status: string; currentIndex: number; lastWinner?: any },
+      room: { status: string; currentIndex: number; lastWinner?: unknown },
       players: Array<{ status: string; score: number; lives: number; combo: number }>
     ) => {
       return {

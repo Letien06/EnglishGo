@@ -6,6 +6,7 @@ import { useRouter } from "next/navigation";
 import type { PracticeTestCard } from "@/lib/services/practice";
 import useDialogFocus from "@/components/useDialogFocus";
 import { formatPracticeLabel } from "@/lib/practice-label";
+import { practiceDraftKey } from "@/lib/practice-draft-storage";
 
 const PARTS = [
   { part: 1, label: "Part 1", group: "LISTENING", questions: 6, minutes: 4 },
@@ -22,11 +23,12 @@ const FULL_TEST_MINUTES = 120;
 
 interface Props {
   tests: PracticeTestCard[];
+  userUid: string | null;
 }
 
 type ModalTab = "exam" | "practice";
 
-export default function PracticeTestLauncher({ tests }: Props) {
+export default function PracticeTestLauncher({ tests, userUid }: Props) {
   const router = useRouter();
   const [selectedTest, setSelectedTest] = useState<PracticeTestCard | null>(null);
   const [tab, setTab] = useState<ModalTab>("exam");
@@ -95,9 +97,9 @@ export default function PracticeTestLauncher({ tests }: Props) {
     : "";
   const selectedPartsKey = selectedParts.join(",");
   const hasLocalDraft = useMemo(() => {
-    if (!currentSessionKey || typeof window === "undefined") return false;
-    return window.localStorage.getItem(`practice:${currentSessionKey}`) != null;
-  }, [currentSessionKey]);
+    if (!userUid || !currentSessionKey || typeof window === "undefined") return false;
+    try { return window.localStorage.getItem(practiceDraftKey(userUid, currentSessionKey)) != null; } catch { return false; }
+  }, [currentSessionKey, userUid]);
   const warning = validDuration && totalQuestions > 0 && durationMinutes < Math.max(1, Math.round(totalQuestions / 3))
     ? `Thời gian khá ngắn cho ${totalQuestions} câu.`
     : "";
@@ -131,7 +133,9 @@ export default function PracticeTestLauncher({ tests }: Props) {
     const nextHref = sessionHref(selectedTest.id, currentMode, selectedParts, durationMinutes);
     setStartingLabel(resetDraft ? "Đang tạo lại bài thi..." : "Đang mở bài thi...");
     if (resetDraft) {
-      if (currentSessionKey) window.localStorage.removeItem(`practice:${currentSessionKey}`);
+      if (currentSessionKey && userUid) {
+        try { window.localStorage.removeItem(practiceDraftKey(userUid, currentSessionKey)); } catch { /* Server reset still proceeds. */ }
+      }
       router.push(`${nextHref}&reset=1`);
       return;
     }

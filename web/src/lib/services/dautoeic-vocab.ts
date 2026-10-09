@@ -496,20 +496,19 @@ async function progressStatsForSetIds(
   const wanted = new Set(setIds);
   const stats = new Map<number, ProgressStats>();
   if (!uid || !wanted.size) return stats;
-  // Only fetch the fields used for stats to keep the payload small: a full
-  // collection scan without projection gets slower as the user studies more
-  // words and can exceed the client's fetch timeout on /vocab.
-  const snap = await adminDb
+  const now = Date.now();
+  const chunks: number[][] = [];
+  for (let offset = 0; offset < setIds.length; offset += 30) chunks.push(setIds.slice(offset, offset + 30));
+  const snapshots = await Promise.all(chunks.map((chunk) => adminDb
     .collection("users")
     .doc(uid)
     .collection(PROGRESS)
+    .where("setId", "in", chunk)
     .select("setId", "status", "nextReviewAtMillis")
-    .get();
-  const now = Date.now();
-  for (const doc of snap.docs) {
+    .get()));
+  for (const snapshot of snapshots) for (const doc of snapshot.docs) {
     const data = doc.data() ?? {};
     const setId = numVal(data, "setId") ?? 0;
-    if (!wanted.has(setId)) continue;
     addProgress(stats, setId, data, now);
   }
   return stats;

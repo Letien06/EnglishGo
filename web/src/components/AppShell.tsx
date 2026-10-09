@@ -56,15 +56,8 @@ type AppSession = {
   user: AppBootstrap["user"];
 };
 
-type SessionResponse = {
-  success: boolean;
-  data: AppSession | null;
-};
-
 let cachedBootstrap: AppBootstrap | null = null;
 let bootstrapInFlight: Promise<AppBootstrap | null> | null = null;
-let cachedSession: AppSession | null | undefined;
-let sessionInFlight: Promise<AppSession | null> | null = null;
 
 async function loadAppBootstrap(): Promise<AppBootstrap | null> {
   if (cachedBootstrap) return cachedBootstrap;
@@ -85,30 +78,11 @@ async function loadAppBootstrap(): Promise<AppBootstrap | null> {
   return bootstrapInFlight;
 }
 
-async function loadAppSession(): Promise<AppSession | null> {
-  if (cachedSession !== undefined) return cachedSession;
-  if (sessionInFlight) return sessionInFlight;
-
-  sessionInFlight = fetch("/api/app/session", { cache: "no-store" })
-    .then(async (response) => {
-      const body = await response.json() as SessionResponse;
-      if (!response.ok || !body.success || !body.data) return null;
-      cachedSession = body.data;
-      return body.data;
-    })
-    .catch(() => null)
-    .finally(() => {
-      sessionInFlight = null;
-    });
-
-  return sessionInFlight;
-}
-
 export default function AppShell({ children }: { children: ReactNode }) {
   const pathname = usePathname();
   const [bootstrap, setBootstrap] = useState<AppBootstrap | null>(() => cachedBootstrap);
-  const [session, setSession] = useState<AppSession | null>(() => cachedSession ?? null);
-  const [sessionResolved, setSessionResolved] = useState(() => cachedSession !== undefined);
+  const [session, setSession] = useState<AppSession | null>(() => cachedBootstrap);
+  const [sessionResolved, setSessionResolved] = useState(() => cachedBootstrap !== null);
   const authenticated = bootstrap?.authenticated === true;
   const sessionAuthenticated = session?.authenticated === true;
   useVocabReviewQueue(session?.user?.uid, sessionAuthenticated);
@@ -131,39 +105,16 @@ export default function AppShell({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     let cancelled = false;
-    void loadAppSession().then((nextSession) => {
+    void loadAppBootstrap().then((nextBootstrap) => {
       if (cancelled) return;
-      setSession(nextSession);
-      if (nextSession?.authenticated && nextSession.user) {
-        setActiveLearnerId(nextSession.user.uid);
-      } else {
-        clearActiveLearnerCache();
-      }
+      setBootstrap(nextBootstrap);
+      setSession(nextBootstrap);
       setSessionResolved(true);
+      if (nextBootstrap?.authenticated && nextBootstrap.user) setActiveLearnerId(nextBootstrap.user.uid);
+      else clearActiveLearnerCache();
     });
-
-    return () => {
-      cancelled = true;
-    };
-  }, [isPracticeWorkspace]);
-
-  useEffect(() => {
-    if (isPracticeWorkspace || cachedBootstrap) return;
-
-    let cancelled = false;
-    // Keep first content paint clear of optional account widgets. One compact
-    // request supplies their data after the page is already stable.
-    const timer = window.setTimeout(() => {
-      void loadAppBootstrap().then((nextBootstrap) => {
-        if (!cancelled) setBootstrap(nextBootstrap);
-      });
-    }, 1200);
-
-    return () => {
-      cancelled = true;
-      window.clearTimeout(timer);
-    };
-  }, [isPracticeWorkspace]);
+    return () => { cancelled = true; };
+  }, []);
 
   if (isPracticeWorkspace) {
     return <>{children}{scratchPaper}</>;

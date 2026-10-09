@@ -7,6 +7,10 @@ import { arcadeCountdownMs, WORD_BLAST_QUESTION_MS, wordBlastQuestionMs } from "
 import { randomUUID } from "node:crypto";
 import { advanceRacePlayer, createRacePlayer, type RaceEvent, type RacePlayer, type RaceRoom } from "@/lib/vocab-race";
 
+function summary(player: Partial<RacePlayer> & { uid: string }) {
+  const { uid, displayName = "Unknown Player", photoURL = null, isHost = false, score = 0, lives = 3, combo = 0, status = "waiting", revision = 0, correctCount = 0, maxCombo = 0, runId = "" } = player;
+  return { uid, displayName, photoURL, isHost, score, lives, combo, status, revision, correctCount, maxCombo, runId };
+}
 export const generateRoomCode = () => {
   const chars = "ABCDEFGHJKMNPQRSTUVWXYZ23456789";
   let result = "";
@@ -55,7 +59,7 @@ export const createRoom = async (
 
   const batch = adminDb.batch();
   const roomRef = roomsRef.doc(code);
-  batch.set(roomRef, roomData);
+  batch.set(roomRef, { ...roomData, playerSummaries: [summary({ uid: user.uid, displayName: user.displayName || "Unknown Player", photoURL: user.avatarUrl || null, isHost: true, score: 0, lives: 3, combo: 0, status: "waiting", revision: 0, correctCount: 0, maxCombo: 0, runId: "" })] });
 
   const playerRef = roomRef.collection("players").doc(user.uid);
   const playerData = {
@@ -115,6 +119,9 @@ export const joinRoom = async (user: AppUser, code: string) => {
         joinedAt: FieldValue.serverTimestamp(),
         updatedAt: Date.now(),
       });
+      if (Array.isArray(room.playerSummaries)) transaction.update(roomRef, {
+        playerSummaries: [...room.playerSummaries, summary({ uid: user.uid, displayName: user.displayName || "Unknown Player", photoURL: user.avatarUrl || null, isHost: false, score: 0, lives: 3, combo: 0, status: "waiting", revision: 0, correctCount: 0, maxCombo: 0, runId: room.runId ?? "" })],
+      });
     }
 
     return { gameMode: room.gameMode, vocabSetId: room.vocabSetId };
@@ -143,6 +150,10 @@ export const leaveRoom = async (user: AppUser, code: string) => {
     
     const room = roomDoc.data()!;
     const survivors = playersSnapshot.docs.filter(doc => doc.id !== user.uid);
+    if (Array.isArray(room.playerSummaries) && survivors.length > 0) {
+      const hostId = room.hostId === user.uid ? survivors[0].id : room.hostId;
+      transaction.update(roomRef, { playerSummaries: room.playerSummaries.filter((item: { uid: string }) => item.uid !== user.uid).map((item: { uid: string }) => ({ ...item, isHost: item.uid === hostId })) });
+    }
     if (room.raceVersion === 2 && room.status !== "waiting" && survivors.length > 0 && survivors.every(doc => ["finished", "eliminated"].includes(doc.data().status))) {
       transaction.update(roomRef, { status: "finished", finishedAt: Date.now() });
     }
@@ -235,6 +246,7 @@ export const startGame = async (user: AppUser, code: string) => {
     const raceRoom = { ...room, raceVersion: 2, runId, status: "countdown", countdownEndsAt, matchEndsAt, words: shuffledWords, questionDurationMs: WORD_BLAST_QUESTION_MS, serverNow: now, updatedAt: now } as RaceRoom;
     const players = playersSnapshot.docs.map(doc => ({ ...doc.data(), ...createRacePlayer({ ...doc.data(), uid: doc.id }, raceRoom), updatedAt: now }));
     playersSnapshot.docs.forEach((doc, index) => transaction.update(doc.ref, { ...players[index], finishedAt: FieldValue.delete(), answers: [] }));
+    if (Array.isArray(room.playerSummaries)) transaction.update(roomRef, { playerSummaries: players.map(summary) });
 
     return {
       raceVersion: 2,
@@ -279,7 +291,9 @@ export const getRoomWithPlayers = async (code: string) => {
         players.docs.forEach(doc => {
           if (!["finished", "eliminated"].includes(doc.data().status)) transaction.update(doc.ref, { status: "finished", finishedAt: current.matchEndsAt, updatedAt: now });
         });
-        transaction.update(roomRef, { status: "finished", finishedAt: current.matchEndsAt });
+        transaction.update(roomRef, { status: "finished", finishedAt: current.matchEndsAt,
+          ...(Array.isArray(current.playerSummaries) ? { playerSummaries: current.playerSummaries.map((item: { status: string }) => ["finished", "eliminated"].includes(item.status) ? item : { ...item, status: "finished" }) } : {}),
+        });
       }
     });
     room = await getRoom(code);
@@ -327,7 +341,10 @@ export const submitRaceEvents = async (user: AppUser, code: string, runId: strin
       const players = await transaction.get(roomRef.collection("players"));
       finished = players.docs.every(doc => doc.id === user.uid || ["finished", "eliminated"].includes(doc.data().status));
     }
-    if (player !== original) transaction.update(playerRef, { ...player, updatedAt: now });
+    if (player !== original) {
+      transaction.update(playerRef, { ...player, updatedAt: now });
+      if (Array.isArray(room.playerSummaries)) transaction.update(roomRef, { playerSummaries: room.playerSummaries.map((item: RacePlayer) => item.uid === user.uid ? summary(player) : item) });
+    }
     if (finished) {
       transaction.update(roomRef, { status: "finished", finishedAt: now });
       room.status = "finished";
@@ -760,6 +777,9 @@ export const resetRoomToLobby = async (user: AppUser, code: string) => {
       lastWinner: FieldValue.delete(),
       words: shuffledWords,
       updatedAt: Date.now(),
+    });
+    if (Array.isArray(room.playerSummaries)) transaction.update(roomRef, {
+      playerSummaries: playersSnapshot.docs.map((doc) => summary({ ...doc.data(), uid: doc.id, status: "waiting", runId: "", score: 0, lives: 3, combo: 0, revision: 0, correctCount: 0, maxCombo: 0 })),
     });
 
     playersSnapshot.docs.forEach((doc) => {

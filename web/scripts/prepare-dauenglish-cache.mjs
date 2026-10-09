@@ -5,6 +5,11 @@ import { createJiti } from "jiti";
 import { gzip } from "node:zlib";
 import { promisify } from "node:util";
 import { readDriveTextWithRetry } from "./lib/drive-download-retry.mjs";
+import { writeGrammarIndexes } from "./lib/build-grammar-indexes.mjs";
+import nextEnv from "@next/env";
+
+// npm runs prebuild outside Next.js; load the same production env files here.
+nextEnv.loadEnvConfig(process.cwd(), false);
 
 const compress = promisify(gzip);
 
@@ -63,6 +68,8 @@ if (process.env.DAUTOEIC_CONTENT_STORAGE !== "google-drive") {
   }
   await Promise.all(Array.from({ length: 6 }, prepare));
   await writeFile(path.join(folder, "manifest.json"), manifestText, "utf8");
+  const grammar = await writeGrammarIndexes(folder, manifest);
+  if (grammar) console.log(`[materials] Grammar projections: ${JSON.stringify(grammar)}`);
   for (let part = 1; part <= 7; part++) {
     const index = testPartCatalogIndexSchema.parse({ sourceVersion: manifest.sourceVersion, snapshotSha256: manifest.snapshotSha256, part, entries: catalogParts[part - 1] });
     await writeFile(path.join(folder, `catalog-part-${part}.json`), JSON.stringify(index), "utf8");

@@ -12,6 +12,10 @@ const eslintConfig = defineConfig([
     "out/**",
     "build/**",
     "next-env.d.ts",
+    // Scratch imports, screenshots, and upstream seed bundles are QA artifacts,
+    // not application source and should not decide whether production lint passes.
+    ".seed-tmp/**",
+    ".content/**",
   ]),
 ]);
 

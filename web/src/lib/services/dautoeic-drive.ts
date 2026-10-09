@@ -1,6 +1,7 @@
 import { createHash } from "node:crypto";
 import { readFile } from "node:fs/promises";
 import path from "node:path";
+import { gunzipSync } from "node:zlib";
 import { unstable_cache } from "next/cache";
 import { serverEnv } from "../env";
 import { ApiError } from "../api/response";
@@ -13,7 +14,31 @@ import { testPartCatalogIndexSchema, type TestPartCatalogEntry } from "../storag
 
 const manifestMemory = createTextMemoryCache(2_000_000, 2);
 const materialMemory = createTextMemoryCache(32_000_000, 128);
-const catalogIndexMemory = createTextMemoryCache(8_000_000, 1);
+// Keep all seven Part projections warm for a process. A single-entry cache
+// caused alternating Part navigation to re-read every index.
+const catalogIndexMemory = createTextMemoryCache(8_000_000, 7);
+const projectionMemory = createTextMemoryCache(16_000_000, 2);
+
+/** Build-generated metadata never falls back to scanning all question bodies. */
+export async function readGrammarProjection(name: "grammar-answers.json" | "grammar-dictionary.json.gz"): Promise<unknown> {
+  if (!isDriveContentEnabled()) throw new ApiError("Grammar material is unavailable.", 503);
+  const manifestId = driveFileId(serverEnv.googleDriveManifestId);
+  try {
+    const text = await projectionMemory.get(`${manifestId}:${name}`, async () => {
+      const buffer = await readFile(path.join(process.cwd(), ".content", "dauenglish", manifestId, name));
+      const text = name.endsWith(".gz") ? gunzipSync(buffer, { maxOutputLength: 16_000_000 }).toString("utf8") : buffer.toString("utf8");
+      const manifestText = await manifestMemory.get(manifestId, async () =>
+        await bundledText(manifestId, "manifest.json") ?? JSON.stringify(await cachedManifest(manifestId)),
+      );
+      const manifest = driveManifestSchema.parse(JSON.parse(manifestText));
+      if (JSON.parse(text).snapshotSha256 !== manifest.snapshotSha256) throw new Error("Grammar projection snapshot mismatch.");
+      return text;
+    });
+    return JSON.parse(text);
+  } catch {
+    throw new ApiError("Chưa tải được danh mục ngữ pháp. Vui lòng thử lại sau.", 503);
+  }
+}
 
 async function bundledText(manifestId: string, name: string): Promise<string | null> {
   try {

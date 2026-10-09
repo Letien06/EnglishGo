@@ -1,8 +1,10 @@
 "use client";
 
 import Link from "next/link";
-import { useMemo, useState } from "react";
-import type { DictationLessonCard } from "@/lib/services/dictation";
+import Image from "next/image";
+import { useEffect, useMemo, useRef, useState } from "react";
+import type { DictationLessonCard, getCatalogPage } from "@/lib/services/dictation";
+import { fetchWithTimeout } from "@/lib/client-request";
 import type { DictationProgressSummary } from "@/types/dictation";
 
 const topics: Array<[string, string]> = [
@@ -10,29 +12,42 @@ const topics: Array<[string, string]> = [
   ["SCIENCE_TECHNOLOGY", "Science & Technology"], ["SPACE", "Space"], ["NEWS_CULTURE", "News & Culture"],
 ];
 
-export default function DictationLibraryClient({ lessons, progress }: { lessons: DictationLessonCard[]; progress: DictationProgressSummary[] }) {
+export default function DictationLibraryClient({ initialCatalog }: { initialCatalog: Awaited<ReturnType<typeof getCatalogPage>> }) {
+  const [catalog, setCatalog] = useState(initialCatalog);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState("");
+  const [offset, setOffset] = useState(0);
+  const [retry, setRetry] = useState(0);
+  const initial = useRef(true);
   const [query, setQuery] = useState("");
   const [level, setLevel] = useState("");
   const [topic, setTopic] = useState("");
   const [duration, setDuration] = useState("");
   const [source, setSource] = useState("");
   const [sort, setSort] = useState("RECOMMENDED");
-  const progressByLesson = useMemo(() => new Map(progress.map((item) => [item.lessonId, item])), [progress]);
-  const sources = useMemo(() => [...new Set(lessons.map((lesson) => lesson.sourceName))].sort(), [lessons]);
-  const filtered = useMemo(() => lessons.filter((lesson) => {
-    const lowercase = query.trim().toLowerCase();
-    return (!lowercase || `${lesson.title} ${lesson.sourceName} ${lesson.topics.join(" ")}`.toLowerCase().includes(lowercase))
-      && (!level || lesson.level === level)
-      && (!topic || lesson.topics.includes(topic))
-      && (!source || lesson.sourceName === source)
-      && (!duration || (duration === "SHORT" ? lesson.durationSeconds < 300 : duration === "MEDIUM" ? lesson.durationSeconds >= 300 && lesson.durationSeconds <= 600 : lesson.durationSeconds > 600));
-  }).sort((left, right) => {
-    if (sort === "SHORTEST") return left.durationSeconds - right.durationSeconds;
-    if (sort === "NEWEST") return (right.publishedAtMillis ?? 0) - (left.publishedAtMillis ?? 0);
-    if (sort === "CONTINUE") return (progressByLesson.get(right.id)?.lastStudiedAtMillis ?? 0) - (progressByLesson.get(left.id)?.lastStudiedAtMillis ?? 0);
-    return left.title.localeCompare(right.title);
-  }), [duration, lessons, level, progressByLesson, query, sort, source, topic]);
-  const continueLesson = progress.map((item) => lessons.find((lesson) => lesson.id === item.lessonId)).find(Boolean);
+  const progressByLesson = useMemo(() => new Map(catalog.progress.map((item) => [item.lessonId, item])), [catalog.progress]);
+  const { sources, continueLesson, lessons: filtered } = catalog;
+  const filters = JSON.stringify({ query, level, topic, duration, source, sort });
+  const previousFilters = useRef(filters);
+  useEffect(() => {
+    if (initial.current) { initial.current = false; return; }
+    const changed = previousFilters.current !== filters;
+    previousFilters.current = filters;
+    if (changed && offset !== 0) { setOffset(0); return; }
+    const controller = new AbortController();
+    setLoading(true);
+    const timer = setTimeout(async () => {
+      try {
+        const params = new URLSearchParams({ ...JSON.parse(filters), offset: String(offset) });
+        const response = await fetchWithTimeout(`/api/dictation/lessons?${params}`, { signal: controller.signal }, 15_000);
+        const body = await response.json();
+        if (!response.ok || !body.success) throw new Error(body.error || "Chưa tải được thư viện.");
+        if (!controller.signal.aborted) { setCatalog(body.data); setError(""); }
+      } catch (error) { if (!controller.signal.aborted) setError(error instanceof Error ? error.message : "Chưa tải được thư viện."); }
+      finally { if (!controller.signal.aborted) setLoading(false); }
+    }, 250);
+    return () => { clearTimeout(timer); controller.abort(); };
+  }, [filters, offset, retry]);
 
   return (
     <main className="min-h-[calc(100dvh-4rem)] bg-bg px-4 py-6 lg:px-8">
@@ -62,9 +77,15 @@ export default function DictationLibraryClient({ lessons, progress }: { lessons:
           </div>
         </section>
 
-        <section>
-          <div className="mb-4 flex items-end justify-between"><div><p className="text-sm font-bold text-primary">THƯ VIỆN</p><h2 className="text-2xl font-extrabold text-ink">Chọn bài phù hợp</h2></div><span className="text-sm font-semibold text-muted">{filtered.length} bài</span></div>
+        <section aria-busy={loading}>
+          <div className="mb-4 flex items-end justify-between"><div><p className="text-sm font-bold text-primary">THƯ VIỆN</p><h2 className="text-2xl font-extrabold text-ink">Chọn bài phù hợp</h2></div><span className="text-sm font-semibold text-muted">{catalog.total} bài</span></div>
+          <p className="min-h-6 text-sm text-muted" role="status">{loading ? "Đang cập nhật danh sách…" : error}{error && !loading && <button onClick={() => setRetry(value => value + 1)} className="ml-2 font-bold text-primary">Thử lại</button>}</p>
           {filtered.length ? <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">{filtered.map((lesson) => <LessonCard key={lesson.id} lesson={lesson} progress={progressByLesson.get(lesson.id) ?? null} />)}</div> : <div className="rounded-2xl border border-dashed border-control-line bg-surface p-12 text-center text-muted">Chưa tìm thấy bài học phù hợp.</div>}
+          <nav aria-label="Trang thư viện" className="mt-5 flex justify-center gap-4">
+            <button disabled={loading || offset === 0} onClick={() => setOffset(Math.max(0, offset - 24))} className="rounded-xl border border-line px-4 py-2 disabled:opacity-40">Trang trước</button>
+            <span className="py-2">{Math.floor(offset / 24) + 1}</span>
+            <button disabled={loading || catalog.nextOffset === null} onClick={() => setOffset(catalog.nextOffset ?? offset)} className="rounded-xl border border-line px-4 py-2 disabled:opacity-40">Trang sau</button>
+          </nav>
         </section>
       </section>
     </main>
@@ -74,7 +95,7 @@ export default function DictationLibraryClient({ lessons, progress }: { lessons:
 function LessonCard({ lesson, progress }: { lesson: DictationLessonCard; progress: DictationProgressSummary | null }) {
   const percent = progress ? Math.round((progress.completedCount / Math.max(1, lesson.segmentCount)) * 100) : 0;
   return <Link href={`/listen/dictation/${lesson.id}`} className="group overflow-hidden rounded-2xl bg-surface no-underline shadow-sm transition hover:-translate-y-1 hover:shadow-lg">
-    <div className="relative aspect-video overflow-hidden bg-gradient-to-br from-sky-500 to-indigo-700">{lesson.thumbnailUrl ? <div aria-hidden className="h-full w-full bg-cover bg-center transition duration-300 group-hover:scale-105" style={{ backgroundImage: `url("${lesson.thumbnailUrl}")` }} /> : <div className="flex h-full items-center justify-center text-4xl text-white">♫</div>}<span className="absolute left-3 top-3 rounded-lg bg-surface px-2 py-1 text-xs font-extrabold text-info-ink">{lesson.level}</span><span className="absolute bottom-3 right-3 rounded-lg bg-black/70 px-2 py-1 text-xs font-bold text-white">{formatDuration(lesson.durationSeconds)}</span></div>
+    <div className="relative aspect-video overflow-hidden bg-gradient-to-br from-sky-500 to-indigo-700">{lesson.thumbnailUrl ? <Image src={lesson.thumbnailUrl} alt="" fill sizes="(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 25vw" loading="lazy" className="object-cover transition duration-300 group-hover:scale-105" /> : <div className="flex h-full items-center justify-center text-4xl text-white">♫</div>}<span className="absolute left-3 top-3 rounded-lg bg-surface px-2 py-1 text-xs font-extrabold text-info-ink">{lesson.level}</span><span className="absolute bottom-3 right-3 rounded-lg bg-black/70 px-2 py-1 text-xs font-bold text-white">{formatDuration(lesson.durationSeconds)}</span></div>
     <div className="p-4"><p className="truncate text-xs font-bold text-primary">{lesson.sourceName}</p><h3 className="mt-1 min-h-12 text-base font-extrabold leading-6 text-ink">{lesson.title}</h3><p className="mt-2 text-sm text-muted">{lesson.segmentCount} đoạn nghe–chép</p>{progress ? <><div className="mt-3 h-1.5 overflow-hidden rounded-full bg-surface-soft"><div className="h-full rounded-full bg-teal-soft0" style={{ width: `${percent}%` }} /></div><p className="mt-1 text-xs font-semibold text-muted">{progress.completedCount}/{lesson.segmentCount} đã hoàn thành</p></> : <p className="mt-3 text-xs font-semibold text-muted">Chưa bắt đầu</p>}</div>
   </Link>;
 }

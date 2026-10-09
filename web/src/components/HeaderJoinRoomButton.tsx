@@ -6,7 +6,6 @@ import { createPortal } from "react-dom";
 
 export default function HeaderJoinRoomButton() {
   const [isOpen, setIsOpen] = useState(false);
-  const [mounted, setMounted] = useState(false);
   const [code, setCode] = useState("");
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
@@ -14,14 +13,7 @@ export default function HeaderJoinRoomButton() {
   const inputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
-    setMounted(true);
-  }, []);
-
-  useEffect(() => {
     if (isOpen) {
-      setCode("");
-      setError("");
-      setLoading(false);
       const timer = window.setTimeout(() => {
         inputRef.current?.focus();
       }, 50);
@@ -81,7 +73,7 @@ export default function HeaderJoinRoomButton() {
       <button
         type="button"
         data-testid="header-join-room-button"
-        onClick={() => setIsOpen(true)}
+        onClick={() => { setCode(""); setError(""); setLoading(false); setIsOpen(true); }}
         className="inline-flex h-9 items-center gap-1.5 rounded-xl border border-indigo-200/80 bg-indigo-50/70 px-3 text-xs sm:text-sm font-extrabold text-indigo-700 transition-all hover:bg-indigo-100 hover:border-indigo-300 active:scale-95 dark:border-indigo-800/80 dark:bg-indigo-950/40 dark:text-indigo-300 dark:hover:bg-indigo-900/50 cursor-pointer shadow-sm shrink-0"
         title="Nhập mã phòng đấu đối kháng cùng bạn bè"
         aria-label="Nhập mã phòng đấu"
@@ -91,7 +83,7 @@ export default function HeaderJoinRoomButton() {
         <span className="md:hidden">Mã phòng</span>
       </button>
 
-      {isOpen && mounted && typeof document !== "undefined" && createPortal(
+      {isOpen && typeof document !== "undefined" && createPortal(
         <div
           role="dialog"
           aria-modal="true"

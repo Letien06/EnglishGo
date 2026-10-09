@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useState } from "react";
+import Image from "next/image";
 
 interface GameLobbyProps {
   roomCode: string;
@@ -92,7 +93,10 @@ export function GameLobby({
           
           <div className="w-52 h-52 bg-white rounded-2xl p-3 shadow-lg border-2 border-amber-400/30 flex items-center justify-center mb-6 overflow-hidden">
             {typeof window !== "undefined" ? (
-              <img
+              <Image
+                width={180}
+                height={180}
+                unoptimized
                 src={`https://api.qrserver.com/v1/create-qr-code/?size=180x180&data=${encodeURIComponent(
                   getShareableRoomUrl()
                 )}`}
@@ -162,7 +166,7 @@ export function GameLobby({
                 >
                   <div className="w-11 h-11 rounded-full bg-gradient-to-br from-amber-400 to-amber-600 text-slate-950 font-black text-lg flex items-center justify-center shadow flex-shrink-0 overflow-hidden">
                     {player.photoURL ? (
-                      <img src={player.photoURL} alt={player.displayName} className="w-full h-full object-cover" />
+                      <Image src={player.photoURL} alt={player.displayName} width={48} height={48} unoptimized className="w-full h-full object-cover" />
                     ) : (
                       player.displayName.charAt(0).toUpperCase()
                     )}

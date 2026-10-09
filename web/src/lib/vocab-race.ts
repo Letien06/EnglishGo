@@ -20,6 +20,7 @@ export interface RaceRoom {
   serverNow?: number;
   updatedAt?: number;
   currentIndex?: number;
+  playerSummaries?: Array<Partial<RacePlayer> & { uid: string }>;
 }
 export interface RacePlayer {
   uid: string;

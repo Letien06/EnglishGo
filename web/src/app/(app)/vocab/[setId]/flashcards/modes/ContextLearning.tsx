@@ -1,4 +1,5 @@
 "use client";
+import Image from "next/image";
 
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { VocabWordCard } from "@/types/vocab";
@@ -900,7 +901,10 @@ export default function ContextLearning({
                   <div className="flex justify-center">
                     <div className={styles.dauIllustrationBox}>
                       {word.imageUrl ? (
-                        <img
+                        <Image
+                          width={320}
+                          height={240}
+                          unoptimized
                           src={word.imageUrl}
                           alt={word.word}
                           className="w-full h-full object-contain p-2"

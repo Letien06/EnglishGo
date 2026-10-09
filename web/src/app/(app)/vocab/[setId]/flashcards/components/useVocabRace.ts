@@ -205,7 +205,9 @@ export function useVocabRace({ roomCode, initialRoom, initialPlayers, currentUse
         return old && old.runId === value.runId && old.revision > value.revision ? old : value;
       }));
       const own = fresh.find((value) => value.uid === uidRef.current);
-      if (own) acceptPlayer(own);
+      // Scoreboard projections cannot acknowledge moves: they omit the current
+      // question and drops. Only a full server player can rebase our queue.
+      if (own && typeof own.currentIndex === "number" && typeof own.questionStartedAt === "number" && Array.isArray(own.activeDrops) && Array.isArray(own.disabledAnswers)) acceptPlayer(own);
       else publish();
     };
     const unsubscribe = subscribeGameRoom<RaceRoom, RacePlayer>(roomCode, { room: acceptRoom, players: acceptPlayers });

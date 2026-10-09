@@ -1,4 +1,4 @@
-import { collection, doc, onSnapshot } from "firebase/firestore";
+import { doc, onSnapshot } from "firebase/firestore";
 import { getClientDb } from "./firebase/client";
 import { COLLECTIONS } from "./firestore/collections";
 
@@ -13,7 +13,6 @@ export function subscribeGameRoom<Room, Player>(code: string, handlers: Handlers
   let stopped = false;
   let fallback = false;
   let roomReady = false;
-  let playersReady = false;
   let delay = 2_000;
   let timer: ReturnType<typeof setTimeout> | undefined;
   let request: AbortController | undefined;
@@ -69,24 +68,23 @@ export function subscribeGameRoom<Room, Player>(code: string, handlers: Handlers
     if (stopped || document.hidden) return;
     fallback = false;
     roomReady = false;
-    playersReady = false;
-    const ready = () => {
-      if (roomReady && playersReady) clearTimeout(timer);
-    };
+    const ready = () => { if (roomReady) clearTimeout(timer); };
     try {
       const db = getClientDb();
+      // New rooms carry a compact scoreboard in the room document. Legacy
+      // rooms without it use bounded HTTP fallback instead of a second listener.
       subscriptions.push(onSnapshot(doc(db, COLLECTIONS.gameRooms, code), (snapshot) => {
         roomReady = true;
         ready();
-        if (snapshot.exists()) handlers.room(snapshot.data() as Room);
-      }, startFallback));
-      subscriptions.push(onSnapshot(collection(db, COLLECTIONS.gameRooms, code, "players"), (snapshot) => {
-        playersReady = true;
-        ready();
-        handlers.players(snapshot.docs.map((player) => player.data() as Player));
+        if (snapshot.exists()) {
+          const data = snapshot.data() as Room & { playerSummaries?: Player[] };
+          handlers.room(data);
+          if (Array.isArray(data.playerSummaries)) handlers.players(data.playerSummaries);
+          else startFallback();
+        }
       }, startFallback));
       // A blocked client SDK must not leave a lobby permanently loading.
-      if (!roomReady || !playersReady) timer = setTimeout(startFallback, 4_000);
+      if (!roomReady) timer = setTimeout(startFallback, 4_000);
     } catch {
       startFallback();
     }

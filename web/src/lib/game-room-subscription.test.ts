@@ -17,17 +17,17 @@ describe("room subscription read budget", () => {
   it("uses only two listeners and never polls while both are healthy", async () => {
     const unsub = vi.fn();
     mocks.snapshot.mockImplementation((_ref, callback) => {
-      callback({ exists: () => true, data: () => ({ status: "playing" }), docs: [] });
+      callback({ exists: () => true, data: () => ({ status: "playing", playerSummaries: [] }), docs: [] });
       return unsub;
     });
     const room = vi.fn();
     stop = subscribeGameRoom("ABC123", { room, players: vi.fn() });
     await vi.advanceTimersByTimeAsync(60_000);
-    expect(room).toHaveBeenCalledWith({ status: "playing" });
-    expect(mocks.snapshot).toHaveBeenCalledTimes(2);
+    expect(room).toHaveBeenCalledWith({ status: "playing", playerSummaries: [] });
+    expect(mocks.snapshot).toHaveBeenCalledTimes(1);
     expect(fetch).not.toHaveBeenCalled();
     stop();
-    expect(unsub).toHaveBeenCalledTimes(2);
+    expect(unsub).toHaveBeenCalledTimes(1);
     stop = undefined;
   });
   it("detaches both listeners before fallback, respects quota cooldown and stops on unmount", async () => {
@@ -37,7 +37,7 @@ describe("room subscription read budget", () => {
     vi.mocked(fetch).mockResolvedValue(new Response("", { status: 503, headers: { "Retry-After": "60" } }));
     stop = subscribeGameRoom("ABC123", { room: vi.fn(), players: vi.fn() });
     failures[0]();
-    expect(unsub).toHaveBeenCalledTimes(2);
+    expect(unsub).toHaveBeenCalledTimes(1);
     await vi.advanceTimersByTimeAsync(2_000);
     expect(fetch).toHaveBeenCalledTimes(1);
     await vi.advanceTimersByTimeAsync(59_999);
@@ -65,11 +65,11 @@ describe("room subscription read budget", () => {
     stop = subscribeGameRoom("ABC123", { room: vi.fn(), players: vi.fn() });
     Object.defineProperty(document, "hidden", { configurable: true, value: true });
     document.dispatchEvent(new Event("visibilitychange"));
-    expect(unsub).toHaveBeenCalledTimes(2);
+    expect(unsub).toHaveBeenCalledTimes(1);
     await vi.advanceTimersByTimeAsync(30_000);
     expect(fetch).not.toHaveBeenCalled();
     Object.defineProperty(document, "hidden", { configurable: true, value: false });
     document.dispatchEvent(new Event("visibilitychange"));
-    expect(mocks.snapshot).toHaveBeenCalledTimes(4);
+    expect(mocks.snapshot).toHaveBeenCalledTimes(2);
   });
 });

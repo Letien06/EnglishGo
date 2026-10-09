@@ -5,10 +5,12 @@
  * Never persist authenticated HTML, attempts, progress, questions, audio, or
  * remote media: those can be private, copyrighted, or must stay current.
  */
-const SHELL_CACHE_NAME = "englishgo-shell-v2";
-const CONTENT_CACHE_NAME = "englishgo-content-v1";
+const BUILD_VERSION = new URL(self.location.href).searchParams.get("v") || "development";
+const SHELL_CACHE_NAME = `englishgo-shell-${BUILD_VERSION}`;
+const CONTENT_CACHE_NAME = `englishgo-content-${BUILD_VERSION}`;
 const CACHE_PREFIX = "englishgo-";
-const PUBLIC_CONTENT_MAX_AGE_MS = 15 * 24 * 60 * 60 * 1000;
+const PUBLIC_CONTENT_MAX_AGE_MS = 24 * 60 * 60 * 1000;
+const MAX_SHELL_ENTRIES = 128;
 const CACHED_AT_HEADER = "x-englishgo-cached-at";
 const SHELL_ASSETS = ["/offline.html", "/icon.svg"];
 
@@ -39,7 +41,11 @@ self.addEventListener("fetch", (event) => {
   }
 
   if (isPublicCatalogRequest(url)) {
-    event.respondWith(publicContentCacheFirst(request));
+    const refresh = refreshPublicContent(request);
+    // Keep the worker alive after returning stale data, until it has persisted
+    // the refreshed copy. A detached promise alone can be terminated by the UA.
+    event.waitUntil(refresh.then(() => undefined));
+    event.respondWith(publicContentStaleWhileRevalidate(request, refresh));
     return;
   }
 
@@ -64,19 +70,35 @@ async function shellCacheFirst(request) {
   if (cached) return cached;
 
   const response = await fetch(request);
-  if (response.ok) await cache.put(request, response.clone());
+  if (response.ok) {
+    try {
+      await cache.put(request, response.clone());
+      const keys = await cache.keys();
+      await Promise.all(keys.slice(0, Math.max(0, keys.length - MAX_SHELL_ENTRIES)).map(key => cache.delete(key)));
+    } catch { /* Storage eviction must not turn a successful fetch into an error. */ }
+  }
   return response;
 }
 
-async function publicContentCacheFirst(request) {
+async function refreshPublicContent(request) {
+  try {
+    const response = await fetch(request, { cache: "no-cache" });
+    if (!response.ok) return null;
+    try {
+      const cache = await caches.open(CONTENT_CACHE_NAME);
+      await cachePublicContent(cache, request, response);
+    } catch { /* Return fresh content even when the disk cache is full. */ }
+    return response;
+  } catch { return null; }
+}
+
+async function publicContentStaleWhileRevalidate(request, refresh) {
   const cache = await caches.open(CONTENT_CACHE_NAME);
   const cached = await cache.match(request);
-  if (cached && !isExpired(cached)) return cached;
-  if (cached) await cache.delete(request);
-
-  const response = await fetch(request);
-  if (response.ok) await cachePublicContent(cache, request, response);
-  return response;
+  if (cached && !isExpired(cached)) {
+    return cached;
+  }
+  return (await refresh) || cached || new Response("Offline", { status: 503 });
 }
 
 function isExpired(response) {

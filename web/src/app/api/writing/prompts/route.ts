@@ -15,10 +15,8 @@ export const GET = withErrorHandling(async (req) => {
   const part = query.part ? Number(query.part) as WritingPart : undefined;
   return ok(await listWritingPrompts(part), {
     headers: {
-      // Browsers/PWA can retain the self-authored card catalog for 15 days.
-      // CDN freshness remains short so an admin edit reaches new visitors
-      // promptly; the service invalidates its tagged server cache on edits.
-      "Cache-Control": "public, max-age=1296000, s-maxage=300, stale-while-revalidate=86400",
+      // The service worker revalidates its offline copy on each visit.
+      "Cache-Control": "public, max-age=0, s-maxage=300, stale-while-revalidate=300",
     },
   });
 });

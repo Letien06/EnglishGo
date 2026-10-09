@@ -1,4 +1,5 @@
-import { FieldValue } from "firebase-admin/firestore";
+import { FieldPath, FieldValue, type QueryDocumentSnapshot } from "firebase-admin/firestore";
+import { readDictationCatalog, updateDictationCatalog, invalidateDictationCatalog } from "./dictation-catalog";
 import { ApiError, NotFound } from "@/lib/api/response";
 import { adminDb } from "@/lib/firestore/db";
 import { COLLECTIONS } from "@/lib/firestore/collections";
@@ -6,6 +7,7 @@ import { mergeTranscriptCues, parseTranscript } from "@/lib/parsers/transcript";
 import { buildPrompt, gradeDictationAttempt, type MaskPercent } from "@/lib/services/dictation-grading";
 import { studyActivityDayRef, writeStudyActivityInTransaction } from "./study-activity";
 import { invalidateLearnerActivityCaches } from "./learner-cache";
+import { measureFirestore, addFirestoreBytes } from "@/lib/telemetry/server";
 import type {
   DictationAttemptRequest,
   DictationAttemptResult,
@@ -73,13 +75,46 @@ export interface DictationBatchImportLesson extends DictationAdminInput {
 }
 
 export async function listPublishedLessons(filters: DictationCatalogFilters = {}): Promise<DictationLessonCard[]> {
-  const snap = await adminDb.collection(LESSONS).where("status", "==", "PUBLISHED").get();
-  return snap.docs
-    .map((doc) => toLesson(doc.id, doc.data()))
-    .filter((lesson): lesson is DictationLesson => lesson !== null)
-    .filter((lesson) => matchesFilters(lesson, filters))
-    .sort((a, b) => a.orderIndex - b.orderIndex || a.title.localeCompare(b.title))
-    .map(toCard);
+  const cards = await readDictationCatalog(async () => {
+    const lessons: DictationLesson[] = [];
+    let after: QueryDocumentSnapshot | undefined;
+    for (;;) {
+      let query = adminDb.collection(LESSONS).where("status", "==", "PUBLISHED").orderBy(FieldPath.documentId()).limit(100);
+      if (after) query = query.startAfter(after);
+      const snap = await measureFirestore("dictation-catalog-bootstrap", () => query.get());
+      for (const doc of snap.docs) { const lesson = toLesson(doc.id, doc.data()); if (lesson) lessons.push(lesson); }
+      if (snap.size < 100) break;
+      after = snap.docs.at(-1);
+    }
+    return lessons.sort((a, b) => a.orderIndex - b.orderIndex || a.title.localeCompare(b.title)).map(toCard);
+  });
+  return cards.filter(lesson => matchesFilters(lesson, filters));
+}
+
+export async function getCatalogPage(uid: string | null, filters: DictationCatalogFilters & { query?: string; sort?: string; offset?: number } = {}) {
+  const catalog = await listPublishedLessons();
+  const sources = [...new Set(catalog.map(card => card.sourceName))].sort();
+  const recent = uid ? await listUserLessonProgress(uid) : [];
+  const recentById = new Map(recent.map(item => [item.lessonId, item]));
+  const byId = new Map(catalog.map(card => [card.id, card]));
+  const continueLesson = recent.map(item => byId.get(item.lessonId)).find(Boolean) ?? null;
+  const query = filters.query?.trim().toLowerCase() ?? "";
+  const filtered = catalog.filter(card => matchesFilters(card, filters) && (!query || `${card.title} ${card.sourceName} ${card.topics.join(" ")}`.toLowerCase().includes(query)));
+  filtered.sort((a, b) => {
+    if (filters.sort === "SHORTEST") return a.durationSeconds - b.durationSeconds || a.id.localeCompare(b.id);
+    if (filters.sort === "NEWEST") return (b.publishedAtMillis ?? 0) - (a.publishedAtMillis ?? 0) || a.id.localeCompare(b.id);
+    if (filters.sort === "CONTINUE") return (recentById.get(b.id)?.lastStudiedAtMillis ?? 0) - (recentById.get(a.id)?.lastStudiedAtMillis ?? 0) || a.title.localeCompare(b.title);
+    return a.title.localeCompare(b.title) || a.id.localeCompare(b.id);
+  });
+  const offset = Math.max(0, Math.floor(filters.offset ?? 0));
+  const lessons = filtered.slice(offset, offset + 24);
+  const missingIds = lessons.map(card => card.id).filter(id => !recentById.has(id));
+  if (uid && missingIds.length) {
+    const snapshots = await measureFirestore("dictation-progress-page", () => adminDb.getAll(...missingIds.map(id => userLessonRef(uid, id))));
+    snapshots.forEach(doc => { const summary = doc.exists ? toSummary(doc.id, doc.data()) : null; if (summary) recentById.set(doc.id, summary); });
+  }
+  const wanted = new Set([...lessons.map(card => card.id), continueLesson?.id]);
+  return { lessons, progress: [...recentById.values()].filter(item => wanted.has(item.lessonId)), sources, continueLesson, total: filtered.length, nextOffset: offset + lessons.length < filtered.length ? offset + lessons.length : null };
 }
 
 export async function getPublishedLessonView(lessonId: string): Promise<DictationLessonView> {
@@ -170,7 +205,8 @@ export async function getUserLessonProgress(uid: string, lessonId: string): Prom
 }
 
 export async function listUserLessonProgress(uid: string): Promise<DictationProgressSummary[]> {
-  const snap = await adminDb.collection("users").doc(uid).collection("dictationLessonProgress").get();
+  const snap = await measureFirestore("dictation-progress-recent", () => adminDb.collection("users").doc(uid).collection("dictationLessonProgress").orderBy("lastStudiedAtMillis", "desc").limit(24).get());
+  addFirestoreBytes(Buffer.byteLength(JSON.stringify(snap.docs.map(doc => doc.data()))));
   return snap.docs
     .map((doc) => toSummary(doc.id, doc.data()))
     .filter((item): item is DictationProgressSummary => item !== null)
@@ -276,7 +312,9 @@ export async function importPublishedBatch(items: DictationBatchImportLesson[], 
         createdAtMillis: now, updatedAtMillis: now,
       });
     });
+    updateDictationCatalog(batch, ref.id, toCard(lesson));
     await batch.commit();
+    invalidateDictationCatalog();
     await audit("BATCH_IMPORT_PUBLISH", ref.id, uid);
     created.push(lesson);
   }
@@ -322,7 +360,9 @@ export async function publishLesson(lessonId: string, uid: string): Promise<Dict
   const batch = adminDb.batch();
   batch.update(adminDb.collection(LESSONS).doc(lessonId), { status: "PUBLISHED", publishedAtMillis: now, updatedAtMillis: now, updatedByUid: uid, updatedAt: FieldValue.serverTimestamp() });
   segments.forEach((segment) => batch.update(adminDb.collection(LESSONS).doc(lessonId).collection("segments").doc(segment.id), { status: "PUBLISHED", updatedAtMillis: now }));
+  updateDictationCatalog(batch, lessonId, toCard({ ...lesson, publishedAtMillis: now }));
   await batch.commit();
+  invalidateDictationCatalog();
   await audit("PUBLISH", lessonId, uid);
   return { ...lesson, status: "PUBLISHED", publishedAtMillis: now, updatedAtMillis: now };
 }
@@ -334,7 +374,9 @@ export async function archiveLesson(lessonId: string, uid: string): Promise<Dict
   const batch = adminDb.batch();
   batch.update(adminDb.collection(LESSONS).doc(lessonId), { status: "ARCHIVED", updatedAtMillis: now, updatedByUid: uid, updatedAt: FieldValue.serverTimestamp() });
   segments.forEach((segment) => batch.update(adminDb.collection(LESSONS).doc(lessonId).collection("segments").doc(segment.id), { status: "ARCHIVED", updatedAtMillis: now }));
+  updateDictationCatalog(batch, lessonId, null);
   await batch.commit();
+  invalidateDictationCatalog();
   await audit("ARCHIVE", lessonId, uid);
   return { ...lesson, status: "ARCHIVED", updatedAtMillis: now };
 }
@@ -419,7 +461,7 @@ async function getSegment(lessonId: string, segmentId: string): Promise<Dictatio
 async function getSegments(lessonId: string, publishedOnly: boolean): Promise<DictationSegment[]> { const snap = await adminDb.collection(LESSONS).doc(lessonId).collection("segments").get(); return snap.docs.map((doc) => toSegment(doc.id, doc.data())).filter((segment): segment is DictationSegment => segment !== null).filter((segment) => !publishedOnly || segment.status === "PUBLISHED").sort((a, b) => a.index - b.index); }
 function userLessonRef(uid: string, lessonId: string) { return adminDb.collection("users").doc(uid).collection("dictationLessonProgress").doc(lessonId); }
 function toCard(lesson: DictationLesson): DictationLessonCard { const { id, title, sourceName, sourceUrl, thumbnailUrl, durationSeconds, level, topics, segmentCount, publicAttribution, publishedAtMillis } = lesson; return { id, title, sourceName, sourceUrl, thumbnailUrl, durationSeconds, level, topics, segmentCount, publicAttribution, publishedAtMillis }; }
-function matchesFilters(lesson: DictationLesson, filters: DictationCatalogFilters) { return (!filters.level || lesson.level === filters.level) && (!filters.topic || lesson.topics.includes(filters.topic)) && (!filters.source || lesson.sourceName === filters.source) && (!filters.duration || durationMatches(lesson.durationSeconds, filters.duration)); }
+function matchesFilters(lesson: DictationLessonCard, filters: DictationCatalogFilters) { return (!filters.level || lesson.level === filters.level) && (!filters.topic || lesson.topics.includes(filters.topic)) && (!filters.source || lesson.sourceName === filters.source) && (!filters.duration || durationMatches(lesson.durationSeconds, filters.duration)); }
 function durationMatches(seconds: number, value: string) { return value === "SHORT" ? seconds < 300 : value === "MEDIUM" ? seconds >= 300 && seconds <= 600 : value === "LONG" ? seconds > 600 : true; }
 function validateMask(value: number): MaskPercent { if (!MASKS.has(value)) throw new ApiError("Mask percent must be 30, 50, or 100."); return value as MaskPercent; }
 function validateAdminInput(input: DictationAdminInput): DictationAdminInput { if (!input.title.trim() || !input.slug.trim() || !input.sourceName.trim() || !input.sourceUrl.trim() || !input.youtubeVideoId.trim() || !input.publicAttribution.trim() || !input.rightsEvidenceNote.trim()) throw new ApiError("Missing required lesson fields."); if (!LEVELS.has(input.level)) throw new ApiError("Level must be A2, B1, B2, or C1."); if (!Number.isFinite(input.durationSeconds) || input.durationSeconds <= 0) throw new ApiError("Duration must be positive."); return { ...input, title: input.title.trim(), slug: input.slug.trim(), sourceName: input.sourceName.trim(), sourceUrl: input.sourceUrl.trim(), youtubeVideoId: input.youtubeVideoId.trim(), topics: input.topics.filter(Boolean), publicAttribution: input.publicAttribution.trim(), transcriptOrigin: input.transcriptOrigin.trim() || "RIGHTS_HOLDER_FILE", descriptionVi: input.descriptionVi?.trim() || null, thumbnailUrl: input.thumbnailUrl?.trim() || null, rightsEvidenceNote: input.rightsEvidenceNote.trim() }; }

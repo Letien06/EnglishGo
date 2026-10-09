@@ -376,19 +376,6 @@ export default function FlashcardGame({
     if (completionTimerRef.current) window.clearTimeout(completionTimerRef.current);
   }, []);
 
-  useEffect(() => {
-    if (typeof window === "undefined") return;
-    const searchParams = new URLSearchParams(window.location.search);
-    const r = searchParams.get("room")?.trim().toUpperCase();
-    const urlMode = searchParams.get("mode");
-    if (r && /^[A-Z0-9]{6}$/.test(r)) {
-      setRoomParam(r);
-      setScreen("play");
-      setMode(urlMode === "rain" ? "rain" : "blast");
-      setWorkspaceTab("play");
-    }
-  }, []);
-
   async function handleJoinRoomFromHub(code: string) {
     try {
       const res = await fetch(`/api/vocab/game-room?code=${encodeURIComponent(code)}`);
@@ -419,8 +406,8 @@ export default function FlashcardGame({
       } else {
         throw new Error("Phòng không tồn tại hoặc đã kết thúc");
       }
-    } catch (err: any) {
-      if (err?.message?.includes("Phòng")) {
+    } catch (err) {
+      if (err instanceof Error && err.message.includes("Phòng")) {
         throw err;
       }
       setRoomParam(code);
@@ -749,14 +736,13 @@ function Hub({
   onApplyFilters,
   onSelectTab,
   onRecordRound,
-  onJoinRoom,
   studyIntent,
   onReview,
   onContinue,
 }: {
   tab: WorkspaceTab;
   onSelectTab?: (tab: WorkspaceTab) => void;
-  onRecordRound?: (record: any) => void;
+  onRecordRound?: (record: HistoryEntry) => void;
   onJoinRoom?: (code: string) => void;
   studyIntent: "continue" | "review";
   onReview: () => void;
