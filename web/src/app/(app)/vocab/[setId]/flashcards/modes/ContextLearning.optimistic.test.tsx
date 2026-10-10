@@ -35,12 +35,14 @@ it("advances immediately through root queue publications and ACKs without skippi
   const card = () => screen.getByRole("button", { name: "Lật thẻ học" });
   expect(card()).toHaveTextContent("apple");
   fireEvent.click(screen.getByTitle("Đánh dấu đã thuộc"));
+  fireEvent.click(screen.getByRole("button", { name: "Tốt" }));
   expect(card()).toHaveTextContent("banana");
   expect(onComplete).not.toHaveBeenCalled();
   await act(async () => { await vi.advanceTimersByTimeAsync(100); });
   expect(saves).toHaveLength(1);
   expect(saves[0].ids).toEqual([1]);
   fireEvent.click(screen.getByTitle("Đánh dấu đã thuộc"));
+  fireEvent.click(screen.getByRole("button", { name: "Tốt" }));
   expect(card()).toHaveTextContent("cherry");
   expect(onComplete).not.toHaveBeenCalled();
   const acknowledge = async (index: number) => {

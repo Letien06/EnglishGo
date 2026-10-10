@@ -344,6 +344,23 @@ export default function ContextLearning({
     [word, answers, forgotten, typed, safeIndex, activeWords, deferredWordIds, onComplete, stop, studyIntent, persistAnswers, isAuthenticated, enqueue]
   );
 
+  // Jump to scheduling without submitting a review until the learner rates it.
+  const handleMarkKnown = useCallback(() => {
+    if (!word) return;
+    const typingIndex = steps.findIndex((item) => item.kind === "typing");
+    if (typingIndex < 0) {
+      handleAdvanceWord(undefined, true);
+      return;
+    }
+    stop();
+    setStepIndex(typingIndex);
+    setFlipped(false);
+    setTyped("");
+    setFeedback(null);
+    setForgotten(false);
+    setSkipTyping(true);
+  }, [word, steps, stop, handleAdvanceWord]);
+
   // Keyboard controls
   useEffect(() => {
     function handleKeyDown(event: KeyboardEvent) {
@@ -660,7 +677,7 @@ export default function ContextLearning({
             </button>
 
             <button
-              onClick={() => handleAdvanceWord(undefined, !isCurrentMastered)}
+              onClick={handleMarkKnown}
               className={`${styles.dauControlBtn} ${
                 isCurrentMastered ? "text-emerald-400 border-emerald-500/50 bg-emerald-950/40" : ""
               }`}
@@ -756,7 +773,7 @@ export default function ContextLearning({
             ) : (
               /* Revealed Word with 4 Spaced Repetition (Anki/SM-2) Rating Buttons */
               <div className="w-full max-w-xl space-y-5 animate-[fadeIn_0.25s_ease-out]">
-                {feedback !== null && (
+                {feedback !== null && !skipTyping && (
                   <div
                     role="status"
                     className={`inline-block px-4 py-1.5 rounded-full text-xs font-bold mb-2 ${
@@ -799,13 +816,14 @@ export default function ContextLearning({
                   </p>
                 </div>
 
-                {feedback !== null && (
+                {(feedback !== null || skipTyping) && (
                   <div className="flex justify-center gap-2 my-2">
-                    {feedback === false && (
+                    {(feedback === false || skipTyping) && (
                       <button
                         className="px-4 py-1.5 rounded-lg bg-slate-800 text-xs font-semibold text-slate-300 hover:text-white"
                         onClick={() => {
                           setFeedback(null);
+                          setSkipTyping(false);
                           setTyped("");
                           inputRef.current?.focus();
                         }}
@@ -815,7 +833,7 @@ export default function ContextLearning({
                     )}
                     <button
                       className="px-5 py-2 rounded-xl bg-blue-600 text-sm font-bold text-white hover:bg-blue-500 shadow-md transition-all"
-                      onClick={() => handleAdvanceWord(feedback ? 4 : 1)}
+                      onClick={() => handleAdvanceWord(skipTyping ? 4 : feedback ? 4 : 1)}
                     >
                       Từ tiếp theo →
                     </button>
@@ -829,6 +847,7 @@ export default function ContextLearning({
                   </span>
                   <div className={styles.dauSrsGrid}>
                     <button
+                      aria-label="Học lại"
                       onClick={() => handleAdvanceWord(1)}
                       className={`${styles.dauSrsBtn} ${styles.dauSrsAgain}`}
                     >
@@ -836,6 +855,7 @@ export default function ContextLearning({
                       <small>1m</small>
                     </button>
                     <button
+                      aria-label="Khó"
                       onClick={() => handleAdvanceWord(2)}
                       className={`${styles.dauSrsBtn} ${styles.dauSrsHard}`}
                     >
@@ -843,6 +863,7 @@ export default function ContextLearning({
                       <small>12h</small>
                     </button>
                     <button
+                      aria-label="Tốt"
                       onClick={() => handleAdvanceWord(4)}
                       className={`${styles.dauSrsBtn} ${styles.dauSrsGood}`}
                     >
@@ -850,6 +871,7 @@ export default function ContextLearning({
                       <small>18h</small>
                     </button>
                     <button
+                      aria-label="Dễ"
                       onClick={() => handleAdvanceWord(5)}
                       className={`${styles.dauSrsBtn} ${styles.dauSrsEasy}`}
                     >
@@ -1075,7 +1097,7 @@ export default function ContextLearning({
       {step.kind !== "typing" && flipped && (
         <div className={styles.dauActionRow}>
           <button
-            onClick={() => handleAdvanceWord(undefined, true)}
+            onClick={handleMarkKnown}
             className={styles.dauMasteredBtn}
           >
             <span>✓</span>
