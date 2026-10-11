@@ -1734,13 +1734,13 @@ async function saveCandidates(
   const existingWords = await wordKeysForSet(setId);
   const existingSet = new Set(existingWords);
 
-  // Manual entries already contain the meaning/example selected by the learner.
+  // Manual/imported entries already contain the learner-provided fields.
   // Do not block the save on an optional dictionary request; pronunciation can
   // be filled later when the word is opened or played.
   const normalizedCandidates = await mapWithConcurrency(
     candidates.slice(0, limit),
     8,
-    async (candidate) => sourceType === "AI" || sourceType === "MANUAL"
+    async (candidate) => sourceType === "AI" || sourceType === "MANUAL" || sourceType === "IMPORT"
       ? normalizeCandidateWithoutLookup(candidate)
       : normalizeCandidateForSave(candidate),
   );
