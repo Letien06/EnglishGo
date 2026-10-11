@@ -5,7 +5,7 @@ import { afterEach, expect, it, vi } from "vitest";
 const queue = vi.hoisted(() => vi.fn());
 vi.mock("next/navigation", () => ({ usePathname: () => "/read/practice" }));
 vi.mock("next/dynamic", () => ({ default: () => () => null }));
-vi.mock("@/lib/reading-progress-queue", () => ({ useReadingProgressQueue: queue }));
+vi.mock("@/lib/reading-progress-queue", () => ({ useReadingProgressQueue: queue, useListeningProgressQueue: queue }));
 vi.mock("@/lib/vocab-review-queue", () => ({ useVocabReviewQueue: () => ({}) }));
 vi.mock("@/lib/client-learning-progress-cache", () => ({ setActiveLearnerId: vi.fn(), clearActiveLearnerCache: vi.fn() }));
 

@@ -13,7 +13,7 @@ import PwaInstallPrompt from "./PwaInstallPrompt";
 import HeaderJoinRoomButton from "./HeaderJoinRoomButton";
 import { clearActiveLearnerCache, setActiveLearnerId } from "@/lib/client-learning-progress-cache";
 import { useVocabReviewQueue } from "@/lib/vocab-review-queue";
-import { useReadingProgressQueue } from "@/lib/reading-progress-queue";
+import { useReadingProgressQueue, useListeningProgressQueue } from "@/lib/reading-progress-queue";
 
 const StudyStreakCelebration = dynamic(() => import("./StudyStreakCelebration"), { ssr: false });
 const ScratchPaperHost = dynamic(() => import("./ScratchPaperHost"), { ssr: false, loading: () => null });
@@ -87,6 +87,7 @@ export default function AppShell({ children }: { children: ReactNode }) {
   const sessionAuthenticated = session?.authenticated === true;
   useVocabReviewQueue(session?.user?.uid, sessionAuthenticated);
   useReadingProgressQueue(session?.user?.uid, sessionAuthenticated);
+  useListeningProgressQueue(session?.user?.uid, sessionAuthenticated);
   const isPracticeWorkspace =
     pathname.startsWith("/listen/practice") ||
     pathname.startsWith("/read/practice") ||

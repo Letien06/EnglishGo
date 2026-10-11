@@ -10,7 +10,8 @@ import PracticeHeader from "../../_components/PracticeHeader";
 import WorkspaceAnnotator, { WorkspaceAnnotationAnchor } from "@/components/WorkspaceAnnotator";
 import { usePracticeResume } from "@/lib/use-practice-resume";
 import { practiceNavigationTarget, practiceWindowInfo, type PracticeWindowSession } from "@/lib/practice-window";
-import { invalidateLearningLevels, setActiveLearnerId } from "@/lib/client-learning-progress-cache";
+import { setActiveLearnerId } from "@/lib/client-learning-progress-cache";
+import { useListeningProgressQueue } from "@/lib/reading-progress-queue";
 import { markLearningReady } from "@/components/PerformanceTelemetry";
 import { markVisited, routeKey } from "@/lib/nav/session-nav";
 import type {
@@ -51,6 +52,7 @@ export default function ListenPracticeClient({
   mode,
   assist,
   userUid,
+  userLoggedIn,
   initialIndex,
   initialAuto = false,
 }: Props) {
@@ -62,10 +64,18 @@ export default function ListenPracticeClient({
   const items = session.items;
   const [currentIndex, setCurrentIndex] = useState(initialIndex);
   const [answeredMap, setAnsweredMap] = useState<Record<string, string>>({});
+  const progressQueue = useListeningProgressQueue(userUid, userLoggedIn);
+  const enqueueProgress = progressQueue.enqueue;
+  const pendingAnswers = useMemo(() => {
+    const answers: Record<string, string> = {};
+    for (const action of progressQueue.pending) {
+      if (action.part === partNum && action.level === level && action.testId === session.testId) answers[action.questionId] = action.selectedAnswer;
+    }
+    return answers;
+  }, [level, partNum, progressQueue.pending, session.testId]);
   const [revealedMap, setRevealedMap] = useState<Record<string, number[]>>({});
   const [fillValues, setFillValues] = useState<Record<string, string>>({});
-  const { markInteraction, resumeStatus } = usePracticeResume({ skill: "listening", uid: userUid, part: partNum, level, testId: session.testId, items, setAnswers: setAnsweredMap, setIndex: setCurrentIndex });
-  const [saveError, setSaveError] = useState("");
+  const { markInteraction, resumeStatus } = usePracticeResume({ skill: "listening", uid: userUid, part: partNum, level, testId: session.testId, items, setAnswers: setAnsweredMap, setIndex: setCurrentIndex, pendingAnswers });
   const [showNote, setShowNote] = useState(false);
   const [auto, setAuto] = useState(initialAuto);
   const [elapsed, setElapsed] = useState(0);
@@ -81,6 +91,13 @@ export default function ListenPracticeClient({
   useEffect(() => {
     setActiveLearnerId(userUid);
   }, [userUid]);
+
+  useEffect(() => {
+    if (!Object.keys(pendingAnswers).length) return;
+    // Restore durable answers even when the history request is offline.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setAnsweredMap((previous) => ({ ...pendingAnswers, ...previous }));
+  }, [pendingAnswers]);
 
   useEffect(() => {
     let firstFrame = 0;
@@ -238,7 +255,7 @@ export default function ListenPracticeClient({
     }
   }, [activeAssist, activeMode, auto, level, partId, router, session]);
 
-  const handleAnswer = useCallback(async (question: DauToeicQuestion, selected: string) => {
+  const handleAnswer = useCallback((question: DauToeicQuestion, selected: string) => {
     if (answeredMap[question.id]) return;
     const correctAnswer = normalizeAnswer(question.correctAnswer);
     const selectedAnswer = normalizeAnswer(selected);
@@ -253,40 +270,22 @@ export default function ListenPracticeClient({
       }, 450);
     }
 
-    try {
-      const response = await fetch("/api/listening/progress", {
-        method: "POST",
-        keepalive: true,
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          part: partNum,
-          level,
-          testId: session.testId,
-          itemId: item.id,
-          questionId: question.id,
-          selectedAnswer,
-          correctAnswer,
-          modeUsed: activeMode,
-          assistPercent: activeAssist,
-          replayCount: replayCountRef.current,
-          elapsedSeconds: elapsed,
-        }),
-      });
-      const payload = await response.json().catch(() => null) as {
-        success?: boolean;
-        data?: { saved?: boolean; authenticated?: boolean } | null;
-      } | null;
-      if (response.ok && payload?.success && payload.data?.saved && payload.data.authenticated) {
-        invalidateLearningLevels("listening", [partNum], userUid);
-      } else if (userUid) {
-        setSaveError("Chưa lưu được một số câu. Hãy kiểm tra kết nối trước khi rời bài.");
-      }
-    } catch {
-      if (userUid) setSaveError("Chưa lưu được một số câu. Hãy kiểm tra kết nối trước khi rời bài.");
-    }
+    enqueueProgress({
+      part: partNum,
+      level,
+      testId: session.testId,
+      itemId: item.id,
+      questionId: question.id,
+      selectedAnswer,
+      correctAnswer,
+      modeUsed: activeMode,
+      replayCount: replayCountRef.current,
+      assistPercent: activeAssist,
+      elapsedSeconds: elapsed,
+    });
 
 
-  }, [activeAssist, activeMode, answeredMap, auto, currentIndex, elapsed, goTo, item.id, item.questions, level, offset, partNum, total, userUid, session.testId]);
+  }, [activeAssist, activeMode, answeredMap, auto, currentIndex, elapsed, enqueueProgress, goTo, item.id, item.questions, level, offset, partNum, total, session.testId]);
 
   useEffect(() => () => {
     if (autoAdvanceRef.current !== null) window.clearTimeout(autoAdvanceRef.current);
@@ -298,7 +297,10 @@ export default function ListenPracticeClient({
   return (
     <main className="skill-workspace skill-workspace--listen design-system min-h-dvh bg-surface" onPointerDownCapture={markInteraction} onKeyDownCapture={markInteraction}>
       <PracticeHeader skill="listening" partId={partId} part={partNum} level={level} testId={session.testId} testName={session.testName} setName={session.setName} grouped={session.grouping === "balanced"} modes={modes} activeMode={activeMode} onModeChange={switchMode} auto={auto} onToggleAuto={() => setAuto((value) => !value)} elapsed={formatElapsed(elapsed)} assist={activeAssist} onAssistChange={switchAssist} />
-      {(saveError || resumeStatus) && <div className="practice-save-status" role="status">{saveError || resumeStatus}</div>}
+      {(progressQueue.pendingCount > 0 || progressQueue.error || resumeStatus) && <div className="practice-save-status flex flex-wrap items-center justify-between gap-2" role="status">
+        <span>{progressQueue.pendingCount > 0 ? `${progressQueue.pendingCount} câu đang chờ lưu${progressQueue.isSaving ? " · Đang đồng bộ…" : ""}${progressQueue.error ? ` · ${progressQueue.error}` : ""}` : progressQueue.error || resumeStatus}</span>
+        {(progressQueue.pendingCount > 0 || progressQueue.error) && <button type="button" onClick={progressQueue.retry} disabled={progressQueue.isSaving} className="rounded-lg border border-control-line bg-surface px-3 py-2 text-sm font-bold text-ink disabled:opacity-50">Thử lưu lại</button>}
+      </div>}
 
       <WorkspaceAnnotator uid={userUid} context={{ surface: "listen", resourceId: `${session.testId ?? `${partId}:level:${level}`}:${item.id}`, questionKey: "workspace" }} legacyContexts={item.questions.map((question) => ({ surface: "listen", resourceId: `${session.testId ?? `${partId}:level:${level}`}:${item.id}`, questionKey: question.id }))} className="practice-content grid min-h-[calc(100dvh-8rem)] lg:grid-cols-[1fr_1fr]">
         <section data-annotation-anchor="source" className="practice-source-pane border-b border-line px-4 py-5 sm:px-6 lg:border-b-0 lg:border-r lg:px-10 lg:py-8">

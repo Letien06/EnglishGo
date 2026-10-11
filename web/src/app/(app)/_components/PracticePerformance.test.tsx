@@ -16,10 +16,13 @@ const session: DauToeicDifficultySession = { part: 3, level: 1, total: 2, title:
 
 beforeEach(() => {
   vi.useFakeTimers();
+  vi.spyOn(navigator, "onLine", "get").mockReturnValue(true);
   window.localStorage.clear();
   document.documentElement.dataset.theme = "light";
   vi.stubGlobal("React", React);
-  vi.stubGlobal("fetch", vi.fn(() => new Promise(() => undefined)));
+  vi.stubGlobal("fetch", vi.fn((_url: string, options?: RequestInit) => new Promise((_resolve, reject) => {
+    options?.signal?.addEventListener("abort", () => reject(new DOMException("Aborted", "AbortError")), { once: true });
+  })));
   vi.spyOn(window, "scrollTo").mockImplementation(() => undefined);
 });
 afterEach(async () => { cleanup(); await act(async () => { await vi.advanceTimersByTimeAsync(15_000); }); vi.useRealTimers(); vi.restoreAllMocks(); vi.unstubAllGlobals(); });
@@ -64,8 +67,8 @@ describe.each(["listening", "reading"] as const)("%s responsive practice", (skil
     fireEvent.click(screen.getAllByLabelText("Đáp án A")[1]);
     await act(async () => { vi.advanceTimersByTime(500); });
     expect(screen.getByText("#2/2")).toBeInTheDocument();
-    expect(fetch).toHaveBeenCalledTimes(skill === "reading" ? 1 : 2);
-    if (skill === "reading") expect(screen.getByRole("status")).toHaveTextContent("2 câu đang chờ lưu");
+    expect(fetch).toHaveBeenCalledTimes(1);
+    expect(screen.getByRole("status")).toHaveTextContent("2 câu đang chờ lưu");
   });
 });
 

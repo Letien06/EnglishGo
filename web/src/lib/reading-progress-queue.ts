@@ -11,17 +11,20 @@ export type ReadingProgressAction = {
   questionId: string;
   selectedAnswer: string;
   correctAnswer: string;
-  modeUsed: "normal" | "bilingual";
+  modeUsed: "normal" | "bilingual" | "fill" | "flip";
+  replayCount?: number;
   assistPercent: number;
   elapsedSeconds: number;
 };
 type Entry = { requestId: string; queuedAt: number; action: ReadingProgressAction };
 type Snapshot = { pending: readonly ReadingProgressAction[]; pendingCount: number; error: string | null; isSaving: boolean };
+type Skill = "reading" | "listening";
 const EMPTY: Snapshot = Object.freeze({ pending: Object.freeze([]), pendingCount: 0, error: null, isSaving: false });
 const queues = new Map<string, ReadingQueue>();
 let activeUid: string | undefined;
 let owner: ReadingQueue | undefined;
-const TIMEOUT = 15_000;
+const SINGLE_TIMEOUT = 15_000;
+const BATCH_TIMEOUT = 45_000;
 
 function validEntry(value: unknown): value is Entry {
   if (!value || typeof value !== "object") return false;
@@ -29,13 +32,14 @@ function validEntry(value: unknown): value is Entry {
   const a = entry.action;
   return typeof entry.requestId === "string" && /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(entry.requestId)
     && Number.isSafeInteger(entry.queuedAt) && entry.queuedAt >= 0
-    && Boolean(a) && Number.isInteger(a.part) && a.part >= 5 && a.part <= 7
+    && Boolean(a) && Number.isInteger(a.part) && a.part >= 1 && a.part <= 7
     && Number.isInteger(a.level) && a.level >= 1 && a.level <= 4
     && (a.testId === undefined || (typeof a.testId === "string" && /^[a-zA-Z0-9_-]{1,200}$/.test(a.testId)))
     && typeof a.itemId === "string" && Boolean(a.itemId)
     && typeof a.questionId === "string" && Boolean(a.questionId)
     && /^[A-D]$/.test(a.selectedAnswer) && /^[A-D]$/.test(a.correctAnswer)
-    && (a.modeUsed === "normal" || a.modeUsed === "bilingual")
+    && ["normal", "bilingual", "fill", "flip"].includes(a.modeUsed)
+    && (a.replayCount === undefined || (Number.isFinite(a.replayCount) && a.replayCount >= 0))
     && Number.isFinite(a.assistPercent) && a.assistPercent >= 0 && a.assistPercent <= 100
     && Number.isFinite(a.elapsedSeconds) && a.elapsedSeconds >= 0;
 }
@@ -54,8 +58,8 @@ class ReadingQueue {
   timer: ReturnType<typeof setTimeout> | undefined;
   controller: AbortController | undefined;
 
-  constructor(readonly uid: string) {
-    this.key = `englishgo:reading-progress-queue:${encodeURIComponent(uid)}`;
+  constructor(readonly uid: string, readonly skill: Skill = "reading") {
+    this.key = `englishgo:${skill}-progress-queue:${encodeURIComponent(uid)}`;
     try {
       this.entries = this.readStored();
       if (localStorage.getItem(this.key)) {
@@ -129,7 +133,7 @@ class ReadingQueue {
       window.removeEventListener("focus", this.retry);
       window.removeEventListener("storage", this.onStorage);
       document.removeEventListener("visibilitychange", this.onVisible);
-      if (activeUid === this.uid) activeUid = undefined;
+      if (activeUid === this.uid && ![...queues.values()].some((queue) => queue.uid === this.uid && queue.users > 0)) activeUid = undefined;
       if (this.timer) clearTimeout(this.timer);
       this.timer = undefined;
       this.controller?.abort();
@@ -150,6 +154,8 @@ class ReadingQueue {
     this.entries.push(entry);
     this.persist();
     this.publish();
+    // A zero-delay timer lets answers from the same interaction burst share
+    // one request without delaying a single answer.
     this.schedule(0);
   };
   retry = () => {
@@ -171,7 +177,8 @@ class ReadingQueue {
     if (!this.eligible() || this.blocked || owner || !this.entries.length) return;
     try { this.reconcile(); } catch { /* Send in-memory answers if storage is unavailable. */ }
     if (!this.entries.length) { this.publish(); return; }
-    const entry = this.entries[0];
+    const batch = this.entries.slice(0, 10);
+    const useBatch = batch.length > 1;
     // The global owner serializes requests across queue instances and hook mounts.
     // eslint-disable-next-line @typescript-eslint/no-this-alias
     owner = this;
@@ -182,28 +189,52 @@ class ReadingQueue {
     let delay = 0;
     try {
       const request = (async () => {
-        const response = await fetch("/api/reading/progress", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ ...entry.action, requestId: entry.requestId, expectedUid: this.uid, answeredAtMillis: entry.queuedAt }), signal: controller.signal });
+        const first = batch[0]!;
+        const body = useBatch
+          ? { answers: batch.map((pending) => ({ ...pending.action, requestId: pending.requestId, expectedUid: this.uid, answeredAtMillis: pending.queuedAt })) }
+          : { ...first.action, requestId: first.requestId, expectedUid: this.uid, answeredAtMillis: first.queuedAt };
+        const response = await fetch(useBatch ? `/api/${this.skill}/progress/batch` : `/api/${this.skill}/progress`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body), signal: controller.signal });
         if (response.status === 401 || response.status === 403) this.blocked = true;
         if (!response.ok) {
           if (response.status !== 408 && response.status !== 429 && response.status < 500) this.blocked = true;
           throw new Error("Reading save failed");
         }
-        return await response.json() as { success?: boolean; data?: { saved?: boolean; authenticated?: boolean; uid?: string; requestId?: string } };
+        return await response.json() as { success?: boolean; data?: { saved?: boolean; authenticated?: boolean; uid?: string; requestId?: string; results?: Array<{ requestId?: string; status?: number; response?: { saved?: boolean; authenticated?: boolean; uid?: string; requestId?: string } }> } };
       })();
       const deadline = new Promise<never>((_, reject) => {
-        timeout = setTimeout(() => { controller.abort(); reject(new Error("Reading save timed out")); }, TIMEOUT);
+        timeout = setTimeout(() => { controller.abort(); reject(new Error("Progress save timed out")); }, useBatch ? BATCH_TIMEOUT : SINGLE_TIMEOUT);
       });
       const body = await Promise.race([request, deadline]);
       if (controller.signal.aborted || !this.eligible()) return;
-      if (!body?.success || !body.data?.saved || !body.data.authenticated || body.data.uid !== this.uid || body.data.requestId !== entry.requestId) {
-        if (body?.data?.authenticated === false || (body?.data?.uid && body.data.uid !== this.uid)) this.blocked = true;
+      if (body?.data?.authenticated === false || (body?.data?.uid && body.data.uid !== this.uid)) this.blocked = true;
+      const legacyResult = body?.data?.saved && body.data.authenticated && body.data.uid === this.uid && body.data.requestId === batch[0]?.requestId
+        ? [{ requestId: batch[0].requestId, status: 200, response: body.data }]
+        : undefined;
+      const results = body?.data?.results ?? legacyResult;
+      if (!body?.success || !Array.isArray(results) || results.length !== batch.length || results.some((result, index) => !result || result.requestId !== batch[index]?.requestId || !Number.isInteger(result.status))) {
         throw new Error("Reading save not acknowledged");
       }
-      this.entries = this.entries.filter((pending) => pending.requestId !== entry.requestId);
+      for (const result of results) {
+        if (result.status !== 200) continue;
+        if (result.response?.uid !== this.uid) this.blocked = true;
+        if (!result.response?.saved || !result.response.authenticated || result.response.uid !== this.uid || result.response.requestId !== result.requestId) throw new Error("Invalid answer acknowledgement");
+      }
+      const acknowledged = new Set(results.filter((result) => result.status === 200).map((result) => result.requestId));
+      this.entries = this.entries.filter((pending) => !acknowledged.has(pending.requestId));
+      for (const pending of batch) {
+        if (acknowledged.has(pending.requestId)) {
+          this.unsaved.delete(pending.requestId);
+          localStorage.removeItem(`${this.key}:${pending.requestId}`);
+        }
+      }
+      this.persist();
+      invalidateLearningLevels(this.skill, [...new Set(batch.map((pending) => pending.action.part))], this.uid);
+      if (acknowledged.size !== batch.length) {
+        if (results.some((result) => result.status! >= 400 && result.status! < 500 && result.status !== 408 && result.status !== 429)) this.blocked = true;
+        throw new Error("Some answers were not accepted");
+      }
       this.attempts = 0;
       this.requestError = null;
-      this.persist(entry.requestId);
-      invalidateLearningLevels("reading", [entry.action.part], this.uid);
     } catch {
       if (this.eligible()) {
         this.requestError = this.blocked ? "Chưa lưu được. Hãy kiểm tra phiên đăng nhập và thử lưu lại." : "Chưa đồng bộ được. Các câu đang chờ sẽ được thử lưu lại.";
@@ -219,11 +250,20 @@ class ReadingQueue {
   }
 }
 
-export function useReadingProgressQueue(uid: string | null | undefined, authenticated = true) {
-  const queue = useMemo(() => uid && authenticated && typeof window !== "undefined" ? queues.get(uid) ?? (() => { const next = new ReadingQueue(uid); queues.set(uid, next); return next; })() : undefined, [uid, authenticated]);
+function useProgressQueue(skill: Skill, uid: string | null | undefined, authenticated: boolean) {
+  const key = `${skill}:${uid}`;
+  const queue = useMemo(() => uid && authenticated && typeof window !== "undefined" ? queues.get(key) ?? (() => { const next = new ReadingQueue(uid, skill); queues.set(key, next); return next; })() : undefined, [key, skill, uid, authenticated]);
   useEffect(() => queue?.activate(), [queue]);
   const snapshot = useSyncExternalStore(queue?.subscribe ?? (() => () => {}), queue?.getSnapshot ?? (() => EMPTY), () => EMPTY);
   const enqueue = useCallback((action: ReadingProgressAction) => queue?.enqueue(action), [queue]);
   const retry = useCallback(() => queue?.retry(), [queue]);
   return { ...snapshot, enqueue, retry };
+}
+
+export function useReadingProgressQueue(uid: string | null | undefined, authenticated = true) {
+  return useProgressQueue("reading", uid, authenticated);
+}
+
+export function useListeningProgressQueue(uid: string | null | undefined, authenticated = true) {
+  return useProgressQueue("listening", uid, authenticated);
 }

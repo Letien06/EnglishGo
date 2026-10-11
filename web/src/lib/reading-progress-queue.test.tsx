@@ -1,6 +1,6 @@
 import { act, cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
-import { useReadingProgressQueue, type ReadingProgressAction } from "./reading-progress-queue";
+import { useReadingProgressQueue, useListeningProgressQueue, type ReadingProgressAction } from "./reading-progress-queue";
 
 vi.mock("./client-learning-progress-cache", () => ({ invalidateLearningLevels: vi.fn() }));
 const action: ReadingProgressAction = { part: 5, level: 1, testId: "source-test", itemId: "item", questionId: "q1", selectedAnswer: "B", correctAnswer: "B", modeUsed: "bilingual", assistPercent: 0, elapsedSeconds: 12 };
@@ -14,13 +14,16 @@ function Harness({ uid, authenticated = true }: { uid: string | null; authentica
 }
 function ack(options?: RequestInit, overrides: Record<string, unknown> = {}) {
   const sent = JSON.parse(options!.body as string);
+  if (Array.isArray(sent.answers)) {
+    return new Response(JSON.stringify({ success: true, data: { results: sent.answers.map((answer: { requestId: string; expectedUid: string }) => ({ requestId: answer.requestId, status: 200, response: { saved: true, authenticated: true, uid: answer.expectedUid, requestId: answer.requestId } })) } }), { status: 200 });
+  }
   return new Response(JSON.stringify({ success: true, data: { saved: true, authenticated: true, uid: sent.expectedUid, requestId: sent.requestId, ...overrides } }), { status: 200 });
 }
 async function tick(ms = 0) { await act(async () => { await vi.advanceTimersByTimeAsync(ms); }); }
 beforeEach(() => { vi.useFakeTimers(); vi.spyOn(navigator, "onLine", "get").mockReturnValue(true); });
 afterEach(async () => { cleanup(); await tick(15_000); localStorage.clear(); vi.useRealTimers(); vi.restoreAllMocks(); vi.unstubAllGlobals(); });
 
-it("keeps immutable actions through a lost response and serializes subsequent answers", async () => {
+it("keeps immutable actions through a lost response and retries a batch", async () => {
   const uid = learner();
   let calls = 0;
   const fetcher = vi.fn(async (_url: string, options?: RequestInit) => {
@@ -36,11 +39,11 @@ it("keeps immutable actions through a lost response and serializes subsequent an
   const stored = storedEntries(uid);
   expect(stored).toHaveLength(2);
   expect(stored[0].action).toEqual(action);
-  expect(JSON.parse(String(fetcher.mock.calls[0][1]?.body)).answeredAtMillis).toBe(stored[0].queuedAt);
+  expect(JSON.parse(String(fetcher.mock.calls[0][1]?.body)).answers[0].answeredAtMillis).toBe(stored[0].queuedAt);
   fireEvent.click(screen.getByText("Retry"));
   await tick(1);
   expect(fetcher.mock.calls[1][1]!.body).toBe(fetcher.mock.calls[0][1]!.body);
-  expect(JSON.parse(fetcher.mock.calls[2][1]!.body as string).questionId).toBe("q2");
+  expect(JSON.parse(fetcher.mock.calls[1][1]!.body as string).answers.map((answer: { questionId: string }) => answer.questionId)).toEqual(["q1", "q2"]);
   expect(screen.getByTestId("pending")).toHaveTextContent("0");
   expect(localStorage.getItem(storageKey(uid))).toBeNull();
 });
@@ -77,8 +80,8 @@ it("preserves another tab's durable answer while enqueueing and acknowledging it
   online.mockReturnValue(true);
   fireEvent.click(screen.getByText("Retry"));
   await tick(1);
-  expect(fetcher).toHaveBeenCalledTimes(2);
-  expect(JSON.parse(fetcher.mock.calls[0][1]!.body as string)).toMatchObject({ requestId: foreignId, questionId: "other-tab-question" });
+  expect(fetcher).toHaveBeenCalledTimes(1);
+  expect(JSON.parse(fetcher.mock.calls[0][1]!.body as string).answers.map((answer: { requestId: string }) => answer.requestId)).toContain(foreignId);
   expect(storedEntries(uid)).toHaveLength(0);
 });
 
@@ -92,7 +95,7 @@ it("replays persisted answers by immutable order even when keys enumerate newest
   vi.stubGlobal("fetch", fetcher);
   render(<Harness uid={uid} />);
   await tick(1);
-  expect(fetcher.mock.calls.map((call) => JSON.parse(String(call[1]?.body)).selectedAnswer)).toEqual(["B", "A"]);
+  expect(JSON.parse(String(fetcher.mock.calls[0][1]?.body)).answers.map((answer: { selectedAnswer: string }) => answer.selectedAnswer)).toEqual(["B", "A"]);
 });
 
 it("reconciles deleted durable records without resurrecting them or writing on storage events", async () => {
@@ -144,6 +147,7 @@ it("pauses nontransient failures and refuses mismatched acknowledgments", async 
   expect(screen.getByTestId("pending")).toHaveTextContent("1");
   fireEvent.click(screen.getByText("Retry"));
   await tick();
+  expect(fetcher).toHaveBeenCalledTimes(3);
   expect(screen.getByTestId("pending")).toHaveTextContent("0");
 });
 
@@ -209,4 +213,83 @@ it("ignores a late acknowledgment after account switch and replays the original 
   await tick();
   expect(fetcher.mock.calls[1][1].body).toBe(fetcher.mock.calls[0][1].body);
   expect(storedEntries(old)).toHaveLength(0);
+});
+
+it("sends a 23-answer backlog in three requests of at most ten answers", async () => {
+  const uid = learner();
+  const online = vi.spyOn(navigator, "onLine", "get").mockReturnValue(false);
+  const fetcher = vi.fn(async (_url: string, options?: RequestInit) => ack(options));
+  vi.stubGlobal("fetch", fetcher);
+  render(<Harness uid={uid} />);
+  for (let index = 0; index < 23; index++) fireEvent.click(screen.getByText("Answer"));
+  online.mockReturnValue(true);
+  fireEvent(window, new Event("online"));
+  await tick(10);
+  expect(fetcher.mock.calls.map(([url]) => url)).toEqual(Array(3).fill("/api/reading/progress/batch"));
+  expect(fetcher.mock.calls.map(([, options]) => JSON.parse(options!.body as string).answers.length)).toEqual([10, 10, 3]);
+  expect(screen.getByTestId("pending")).toHaveTextContent("0");
+});
+
+it("retries only unacknowledged answers after a partial batch failure", async () => {
+  const uid = learner();
+  const fetcher = vi.fn().mockImplementationOnce(async (_url: string, options?: RequestInit) => {
+    const [first, second] = JSON.parse(options!.body as string).answers;
+    return new Response(JSON.stringify({ success: true, data: { results: [
+      { requestId: first.requestId, status: 200, response: { saved: true, authenticated: true, uid, requestId: first.requestId } },
+      { requestId: second.requestId, status: 503 },
+    ] } }));
+  }).mockImplementation(async (_url: string, options?: RequestInit) => ack(options));
+  vi.stubGlobal("fetch", fetcher);
+  render(<Harness uid={uid} />);
+  fireEvent.click(screen.getByText("Answer"));
+  fireEvent.click(screen.getByText("Answer second"));
+  await tick();
+  const original = JSON.parse(fetcher.mock.calls[0][1].body).answers[1];
+  expect(storedEntries(uid).map((entry) => entry.requestId)).toEqual([original.requestId]);
+  expect(screen.getByTestId("pending")).toHaveTextContent("1");
+  await tick(1_000);
+  expect(fetcher.mock.calls[1][0]).toBe("/api/reading/progress");
+  expect(JSON.parse(fetcher.mock.calls[1][1].body)).toEqual(original);
+  expect(screen.getByTestId("pending")).toHaveTextContent("0");
+});
+
+it("groups answers queued during an in-flight save into the next request", async () => {
+  const uid = learner();
+  let resolve!: (response: Response) => void;
+  const fetcher = vi.fn().mockReturnValueOnce(new Promise<Response>((done) => { resolve = done; }))
+    .mockImplementation(async (_url: string, options?: RequestInit) => ack(options));
+  vi.stubGlobal("fetch", fetcher);
+  render(<Harness uid={uid} />);
+  fireEvent.click(screen.getByText("Answer"));
+  await tick();
+  for (let index = 0; index < 4; index++) fireEvent.click(screen.getByText("Answer second"));
+  expect(fetcher).toHaveBeenCalledTimes(1);
+  await act(async () => resolve(ack(fetcher.mock.calls[0][1])));
+  await tick(1);
+  expect(fetcher).toHaveBeenCalledTimes(2);
+  expect(JSON.parse(fetcher.mock.calls[1][1].body).answers).toHaveLength(4);
+  expect(screen.getByTestId("pending")).toHaveTextContent("0");
+});
+
+it("keeps listening receipts separate and restores their mode and replay count", async () => {
+  const uid = learner();
+  const listeningKey = `englishgo:listening-progress-queue:${uid}`;
+  const entries = [1, 2].map((index) => ({ requestId: crypto.randomUUID(), queuedAt: index, action: { ...action, part: 3, questionId: `listen-${index}`, modeUsed: "fill", replayCount: index } }));
+  for (const entry of entries) localStorage.setItem(`${listeningKey}:${entry.requestId}`, JSON.stringify(entry));
+  const fetcher = vi.fn(async (_url: string, options?: RequestInit) => ack(options));
+  vi.stubGlobal("fetch", fetcher);
+  function ListeningHarness() {
+    const queue = useListeningProgressQueue(uid);
+    return <span data-testid="listening-pending">{queue.pendingCount}</span>;
+  }
+  render(<><Harness uid={uid} /><ListeningHarness /></>);
+  await tick(1);
+  expect(fetcher).toHaveBeenCalledTimes(1);
+  expect(fetcher.mock.calls[0][0]).toBe("/api/listening/progress/batch");
+  expect(JSON.parse(fetcher.mock.calls[0][1]!.body as string).answers).toEqual(entries.map((entry) => ({ ...entry.action, expectedUid: uid, requestId: entry.requestId, answeredAtMillis: entry.queuedAt })));
+  expect(screen.getByTestId("listening-pending")).toHaveTextContent("0");
+  fireEvent.click(screen.getByText("Answer"));
+  await tick(1);
+  expect(fetcher.mock.calls[1][0]).toBe("/api/reading/progress");
+  expect(screen.getByTestId("pending")).toHaveTextContent("0");
 });

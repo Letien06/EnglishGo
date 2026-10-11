@@ -27,6 +27,10 @@ export const progressRequestSchema = z.object({
   path: ["answeredAtMillis"],
 });
 
+export const progressBatchRequestSchema = z.object({
+  answers: z.array(progressRequestSchema).min(1).max(20),
+});
+
 export const toolRequestSchema = z.object({
   testId: z.string().trim().regex(/^[a-zA-Z0-9_-]{1,200}$/).nullable().default(null),
   part: z.coerce.number().nullable().default(null),
