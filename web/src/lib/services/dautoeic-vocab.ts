@@ -132,6 +132,13 @@ export async function findDriveVocabWordsByIds(wordIds: number[]): Promise<Map<n
 export async function getVocabularyCatalogView(
   uid?: string | null,
 ): Promise<DauToeicVocabCatalogView> {
+  if (!uid) return cachedPublicVocabularyCatalogView();
+  return buildVocabularyCatalogView(uid);
+}
+
+async function buildVocabularyCatalogView(
+  uid?: string | null,
+): Promise<DauToeicVocabCatalogView> {
   if (!isDauToeicVocabConfigured()) return { groups: [], cards: [] };
   const catalog = await getVocabularyCatalog();
   const allowPro = isDriveContentEnabled() && catalog.accessScope === "provider-authorized";
@@ -414,6 +421,12 @@ async function findCatalogTest(testId: string): Promise<DauToeicVocabTest> {
 const cachedVocabularyCatalog = unstable_cache(
   uncachedVocabularyCatalog,
   ["dautoeic-vocab-catalog", DAUTOEIC_SOURCE_VERSION],
+  { revalidate: CATALOG_REVALIDATE_SECONDS },
+);
+
+const cachedPublicVocabularyCatalogView = unstable_cache(
+  () => buildVocabularyCatalogView(),
+  ["dautoeic-vocab-catalog-view", DAUTOEIC_SOURCE_VERSION],
   { revalidate: CATALOG_REVALIDATE_SECONDS },
 );
 

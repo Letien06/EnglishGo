@@ -26,6 +26,16 @@ if (process.env.DAUTOEIC_CONTENT_STORAGE !== "google-drive") {
   const folder = path.resolve(".content/dauenglish", manifestId);
   const manifestText = await readDriveTextWithRetry(client, manifestId, 1_000_000, { DriveError, timeoutMs: 90_000 });
   const manifest = driveManifestSchema.parse(JSON.parse(manifestText));
+  const preparedMarker = path.join(folder, ".prepared-manifest.json");
+  const preparedSnapshot = await readFile(preparedMarker, "utf8").then((text) => JSON.parse(text)).catch(() => null);
+  const indexesPresent = await Promise.all([
+    readFile(path.join(folder, "manifest.json")),
+    ...Array.from({ length: 7 }, (_, index) => readFile(path.join(folder, `catalog-part-${index + 1}.json`))),
+  ]).then(() => true).catch(() => false);
+  if (indexesPresent && preparedSnapshot?.snapshotSha256 === manifest.snapshotSha256 && preparedSnapshot?.sourceVersion === manifest.sourceVersion) {
+    console.log(`[materials] Snapshot ${manifest.snapshotSha256} already prepared; skipped ${Object.keys(manifest.entries).length} content validations.`);
+    process.exit(0);
+  }
   const hash = (text) => createHash("sha256").update(text).digest("hex");
   await mkdir(folder, { recursive: true });
   const entries = Object.values(manifest.entries);
@@ -74,5 +84,6 @@ if (process.env.DAUTOEIC_CONTENT_STORAGE !== "google-drive") {
     const index = testPartCatalogIndexSchema.parse({ sourceVersion: manifest.sourceVersion, snapshotSha256: manifest.snapshotSha256, part, entries: catalogParts[part - 1] });
     await writeFile(path.join(folder, `catalog-part-${part}.json`), JSON.stringify(index), "utf8");
   }
+  await writeFile(preparedMarker, JSON.stringify({ sourceVersion: manifest.sourceVersion, snapshotSha256: manifest.snapshotSha256 }), "utf8");
   console.log(`[materials] Ready: ${completed} verified materials, ${(bytes / 1_000_000).toFixed(1)} MB. Server-only bundle; no runtime Drive round trip needed.`);
 }
