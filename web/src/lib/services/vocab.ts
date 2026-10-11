@@ -1734,10 +1734,13 @@ async function saveCandidates(
   const existingWords = await wordKeysForSet(setId);
   const existingSet = new Set(existingWords);
 
+  // Manual entries already contain the meaning/example selected by the learner.
+  // Do not block the save on an optional dictionary request; pronunciation can
+  // be filled later when the word is opened or played.
   const normalizedCandidates = await mapWithConcurrency(
     candidates.slice(0, limit),
     8,
-    async (candidate) => sourceType === "AI"
+    async (candidate) => sourceType === "AI" || sourceType === "MANUAL"
       ? normalizeCandidateWithoutLookup(candidate)
       : normalizeCandidateForSave(candidate),
   );
@@ -1780,14 +1783,16 @@ async function saveCandidates(
     });
   }
 
-  await commitWordWrites(writes);
-
-  if (writes.length > 0) {
-    await adminDb.collection(SETS).doc(String(setId)).update({
-      wordCount: existingWords.length + writes.length,
-      updatedAtMillis: Date.now(),
-    });
-  }
+  await commitWordWrites(
+    writes,
+    writes.length > 0
+      ? {
+          setId,
+          wordCount: existingWords.length + writes.length,
+          updatedAtMillis: Date.now(),
+        }
+      : undefined,
+  );
 
   return writes.length;
 }
@@ -1971,13 +1976,16 @@ async function copyWords(
     });
     existingSet.add(normalized);
   }
-  await commitWordWrites(writes);
-  if (writes.length > 0) {
-    await adminDb.collection(SETS).doc(String(targetSetId)).update({
-      wordCount: existingWords.length + writes.length,
-      updatedAtMillis: Date.now(),
-    });
-  }
+  await commitWordWrites(
+    writes,
+    writes.length > 0
+      ? {
+          setId: targetSetId,
+          wordCount: existingWords.length + writes.length,
+          updatedAtMillis: Date.now(),
+        }
+      : undefined,
+  );
   return writes.length;
 }
 
@@ -1992,11 +2000,22 @@ async function newNumericId(collection: string): Promise<number> {
 
 async function commitWordWrites(
   writes: Array<{ id: number; data: Record<string, unknown> }>,
+  setUpdate?: { setId: number; wordCount: number; updatedAtMillis: number },
 ): Promise<void> {
   for (let index = 0; index < writes.length; index += 450) {
     const batch = adminDb.batch();
     for (const write of writes.slice(index, index + 450)) {
       batch.set(adminDb.collection(WORDS).doc(String(write.id)), write.data);
+    }
+    if (index === 0 && setUpdate) {
+      batch.set(
+        adminDb.collection(SETS).doc(String(setUpdate.setId)),
+        {
+          wordCount: setUpdate.wordCount,
+          updatedAtMillis: setUpdate.updatedAtMillis,
+        },
+        { merge: true },
+      );
     }
     await batch.commit();
   }
