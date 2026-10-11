@@ -41,9 +41,11 @@ export default async function VocabSetDetailPage({ params }: Props) {
 
         {/* Vocabulary dashboard, search, and word management */}
         <VocabSetDetailClient
+          key={`${id}:${uid}`}
           setId={id}
           words={detail.words}
           isOwner={detail.set.ownerUid === uid}
+          userUid={uid || undefined}
         />
       </main>
     </>

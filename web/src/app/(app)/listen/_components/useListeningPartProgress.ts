@@ -21,20 +21,26 @@ export default function useListeningPartProgress(part: number, enabled: boolean,
       const request = new AbortController();
       controller = request;
       const parts: Partial<Record<number, PartProgress>> = {};
+      const freshParts = new Set<number>();
       for (const { number } of studyParts(skill)) {
         const saved = cache.get(`${skill}:${uid}:${number}`);
-        if (saved && Date.now() - saved.savedAt < 300_000 && !isLearningLevelsDirty(skill, number, uid)) parts[number] = saved.progress;
+        if (saved) {
+          parts[number] = saved.progress;
+          if (Date.now() - saved.savedAt < 300_000 && !isLearningLevelsDirty(skill, number, uid)) freshParts.add(number);
+        }
       }
       setView({ uid, parts: { ...parts } });
-      for (const { number } of studyParts(skill)) {
+      const pendingParts = studyParts(skill)
+        .map(({ number }) => number)
+        .filter((number) => number !== part && !freshParts.has(number));
+      const loadPart = async (number: number) => {
         if (disposed || request.signal.aborted) return;
-        if (number === part || parts[number]) continue;
         try {
           const response = await fetch(`/api/${skill}/tests?part=${number}`, { cache: "no-store", signal: request.signal });
           const payload = await response.json();
           if (disposed || request.signal.aborted || activeLearnerId() !== uid) return;
           if (!response.ok || !payload.success || payload.data?.uid !== uid || !Array.isArray(payload.data.tests)
-            || !payload.data.tests.every((test: DauToeicPartTest) => test.part === number)) continue;
+            || !payload.data.tests.every((test: DauToeicPartTest) => test.part === number)) return;
           const progress = summarizeTests(payload.data.tests);
           if (cache.size >= 16) cache.delete(cache.keys().next().value!);
           cache.set(`${skill}:${uid}:${number}`, { savedAt: Date.now(), progress });
@@ -43,7 +49,15 @@ export default function useListeningPartProgress(part: number, enabled: boolean,
         } catch {
           if (request.signal.aborted) return;
         }
-      }
+      };
+      // Each worker starts the next Part as soon as a slot becomes available.
+      let nextPart = 0;
+      const worker = async () => {
+        while (!disposed && !request.signal.aborted && nextPart < pendingParts.length) {
+          await loadPart(pendingParts[nextPart++]);
+        }
+      };
+      await Promise.all(Array.from({ length: Math.min(2, pendingParts.length) }, worker));
     };
     const onIdentity = () => { cache.clear(); setView(null); void load(); };
     const onProgress = (event: Event) => {

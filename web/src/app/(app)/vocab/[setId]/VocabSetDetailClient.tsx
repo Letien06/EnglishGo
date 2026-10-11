@@ -6,6 +6,7 @@ import { useMemo, useRef, useState } from "react";
 import dynamic from "next/dynamic";
 import type { AiVocabCandidate, VocabWordCard } from "@/types/vocab";
 import useDialogFocus from "@/components/useDialogFocus";
+import { useVocabReviewQueue } from "@/lib/vocab-review-queue";
 
 const DictionaryAddModal = dynamic(() => import("./DictionaryAddModal"), {
   ssr: false,
@@ -17,7 +18,7 @@ type AddMode = "form" | "paste";
 type Draft = { key: number; word: string; phonetic: string; meaning: string; partOfSpeech: string; example: string; note: string };
 const blank = (key: number): Draft => ({ key, word: "", phonetic: "", meaning: "", partOfSpeech: "NOUN", example: "", note: "" });
 
-export default function VocabSetDetailClient({ setId, words: initialWords, isOwner }: { setId: number; words: VocabWordCard[]; isOwner: boolean }) {
+export default function VocabSetDetailClient({ setId, words: initialWords, isOwner, userUid }: { setId: number; words: VocabWordCard[]; isOwner: boolean; userUid?: string }) {
   const inputFile = useRef<HTMLInputElement>(null);
   const [words, setWords] = useState(initialWords);
   const [search, setSearch] = useState("");
@@ -26,11 +27,16 @@ export default function VocabSetDetailClient({ setId, words: initialWords, isOwn
   const [ai, setAi] = useState(false);
   const [notice, setNotice] = useState("");
   const [uploading, setUploading] = useState(false);
-  const filtered = useMemo(() => words.filter((word) => {
+  const reviewSync = useVocabReviewQueue(userUid, Boolean(userUid));
+  const displayWords = useMemo(() => words.map((word) => {
+    const queuedMastery = reviewSync.masteryByWordId.get(word.id);
+    return queuedMastery === undefined ? word : { ...word, mastered: queuedMastery };
+  }), [reviewSync.masteryByWordId, words]);
+  const filtered = useMemo(() => {
     const q = search.trim().toLowerCase();
-    return (!q || word.word.toLowerCase().includes(q) || word.meaning.toLowerCase().includes(q)) && (filter === "all" || (filter === "mastered" ? word.mastered : !word.mastered));
-  }), [words, search, filter]);
-  const mastered = words.filter((word) => word.mastered).length;
+    return displayWords.filter((word) => (!q || word.word.toLowerCase().includes(q) || word.meaning.toLowerCase().includes(q)) && (filter === "all" || (filter === "mastered" ? word.mastered : !word.mastered)));
+  }, [displayWords, search, filter]);
+  const mastered = displayWords.filter((word) => word.mastered).length;
   const progress = words.length ? Math.round(mastered / words.length * 100) : 0;
 
   function speak(word: VocabWordCard) {
@@ -47,14 +53,18 @@ export default function VocabSetDetailClient({ setId, words: initialWords, isOwn
     if (url) new Audio(url).play().catch(speakTts);
     else speakTts();
   }
-  async function markKnown(id: number) { const res = await fetch(`/api/vocab/words/${id}/review`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ mastered: true }) }); if (res.status === 401) { window.location.href = `/login?redirect=${encodeURIComponent(window.location.pathname)}`; return; } const json = await res.json(); if (json.success && json.data?.newStatus === "MASTERED") setWords((old) => old.map((word) => word.id === id ? { ...word, mastered: true } : word)); else setNotice(json.error || "Không thể cập nhật từ vựng."); }
-  async function refreshWords() { const res = await fetch(`/api/vocab/sets/${setId}`, { cache: "no-store" }); const json = await res.json(); if (json.success && Array.isArray(json.data?.words)) setWords(json.data.words); }
+  function markKnown(id: number) {
+    if (!userUid) { window.location.href = `/login?redirect=${encodeURIComponent(window.location.pathname)}`; return; }
+    reviewSync.enqueue({ wordId: id, mastered: true });
+  }
+  async function refreshWords() { const res = await fetch(`/api/vocab/sets/${setId}`, { cache: "no-store" }); const json = await res.json(); if (json.success && Array.isArray(json.data?.words)) { setWords(json.data.words); reviewSync.reconcile(json.data.words); } }
   async function importFile(file: File) { setUploading(true); const data = new FormData(); data.append("file", file); try { const res = await fetch(`/api/vocab/my-sets/${setId}`, { method: "POST", body: data }); const json = await res.json(); if (!json.success) throw new Error(json.error); await refreshWords(); setNotice(`Đã thêm ${json.data.count} từ từ ${file.name}.`); } catch (error) { setNotice(error instanceof Error ? error.message : "Không thể nhập tệp."); } finally { setUploading(false); if (inputFile.current) inputFile.current.value = ""; } }
 
   return <section className="space-y-6">
     <div className="grid grid-cols-2 gap-4 xl:grid-cols-4"><Stat icon="▤" label="Tổng" value={words.length} tone="azure" /><Stat icon="✓" label="Thuộc" value={mastered} tone="jade" /><Stat icon="◷" label="Chưa" value={words.length - mastered} tone="gold" /><Stat icon="%" label="Tiến trình" value={`${progress}%`} tone="plum" /></div>
     <div className="rounded-[28px] border-2 border-line bg-surface p-3"><div className="flex flex-wrap items-center gap-3"><label className="relative min-w-[200px] flex-1"><span className="pointer-events-none absolute left-4 top-2.5 text-muted">⌕</span><input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Tìm từ..." className="w-full rounded-full border border-line bg-surface-soft py-2.5 pl-10 pr-4 text-sm text-ink outline-none focus:border-accent" /></label><select value={filter} onChange={(event) => setFilter(event.target.value as Filter)} className="rounded-full border border-line bg-surface-soft px-4 py-2.5 text-sm text-ink outline-none"><option value="all">Tất cả</option><option value="mastered">Đã thuộc</option><option value="learning">Chưa thuộc</option></select>{isOwner && <div className="ml-auto flex flex-wrap gap-2"><button onClick={() => setAi(true)} className="rounded-full bg-plum px-4 py-2.5 text-sm font-bold text-white">ϟ Thêm từ với AI</button><button onClick={() => setAdding(true)} className="rounded-full bg-jade px-4 py-2.5 text-sm font-bold text-white">▱ Thêm nhiều từ</button></div>}</div></div>
     {notice && <p className="rounded-xl border border-line bg-surface-soft px-4 py-3 text-sm text-ink2">{notice}</p>}
+    {(reviewSync.pendingCount > 0 || reviewSync.error) && <div role="status" className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-line bg-surface-soft px-4 py-3 text-sm text-ink2"><p>{reviewSync.pendingCount > 0 && `${reviewSync.pendingCount} từ đang chờ đồng bộ. `}{reviewSync.error}</p>{reviewSync.error && <button type="button" onClick={reviewSync.retry} disabled={reviewSync.isSaving} className="rounded-full border border-line px-3 py-1.5 font-bold disabled:opacity-50">Thử lưu lại</button>}</div>}
     <div className="overflow-x-auto rounded-[28px] border-2 border-line bg-surface"><table className="w-full min-w-[800px] text-left"><thead className="bg-surface-soft text-xs font-bold uppercase tracking-wide text-muted"><tr><th className="w-12 px-5 py-4"><span className="block h-5 w-5 rounded-full border-2 border-line" /></th><th className="px-3 py-4">Từ vựng</th><th className="px-3 py-4">Nghĩa</th><th className="px-3 py-4">Loại từ</th><th className="px-3 py-4">Ví dụ</th><th className="w-24 px-5 py-4 text-right">Thuộc</th></tr></thead><tbody>{filtered.map((word) => <tr key={word.id} className="border-t border-line/70 hover:bg-surface-soft/40"><td className="px-5 py-4"><span className="block h-4 w-4 rounded-full border-2 border-line" /></td><td className="px-3 py-4"><div className="flex items-start gap-2"><button onClick={() => speak(word)} className="text-azure" aria-label={`Nghe ${word.word}`}>♬</button><div><b className="text-ink">{word.word}</b><p className="font-mono text-xs text-muted">{word.phoneticUs || word.phoneticUk || word.phonetic || "—"}</p></div></div></td><td className="max-w-[220px] px-3 py-4 font-semibold text-ink2">{word.meaning}</td><td className="px-3 py-4"><Badge value={word.partOfSpeech} /></td><td className="max-w-[320px] px-3 py-4 text-sm text-ink2"><p className="line-clamp-2">{word.example || "—"}</p></td><td className="px-5 py-4 text-right"><button onClick={() => !word.mastered && markKnown(word.id)} disabled={word.mastered} title={word.mastered ? "Đã thuộc" : "Đánh dấu đã thuộc"} className={`inline-flex h-6 w-11 rounded-full p-1 ${word.mastered ? "bg-jade" : "bg-slate-300 dark:bg-slate-600"}`}><span className={`h-4 w-4 rounded-full bg-white shadow transition-transform ${word.mastered ? "translate-x-5" : ""}`} /></button></td></tr>)}</tbody></table>{!filtered.length && <p className="py-12 text-center text-sm text-muted">{words.length ? "Không tìm thấy từ phù hợp." : "Bộ từ này chưa có từ vựng nào."}</p>}</div>
     <input ref={inputFile} type="file" accept=".csv,.tsv,.txt,.xlsx,.xls,.pdf" className="hidden" onChange={(event) => { const file = event.target.files?.[0]; if (file) importFile(file); }} />
     {adding && <DictionaryAddModal setId={setId} uploading={uploading} onImport={() => inputFile.current?.click()} onClose={() => setAdding(false)} onSaved={(count) => { setAdding(false); setNotice(`Đã thêm ${count} từ vựng.`); void refreshWords(); }} />}
