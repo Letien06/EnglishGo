@@ -7,12 +7,12 @@ import { isDriveContentEnabled } from "@/lib/services/dautoeic-drive";
 
 interface Props {
   params: Promise<{ testId: string }>;
-  searchParams: Promise<{ tab?: string; intent?: string }>;
+  searchParams: Promise<{ tab?: string; intent?: string; studyReturn?: string; saved?: string }>;
 }
 
 export default async function DautoeicVocabTestPage({ params, searchParams }: Props) {
   const { testId } = await params;
-  const { tab: requestedTab, intent: requestedIntent } = await searchParams;
+  const { tab: requestedTab, intent: requestedIntent, studyReturn, saved } = await searchParams;
   const tab = requestedTab === "view" || requestedTab === "learn" || requestedTab === "play" ? requestedTab : undefined;
   const user = await getCurrentUserForRead();
   const intent = requestedIntent === "review" ? "review" : "continue";
@@ -51,7 +51,8 @@ export default async function DautoeicVocabTestPage({ params, searchParams }: Pr
             </p>
           </section>
 
-          <DautoeicPartsClient key={`${user.uid}:${testId}`} testId={testId} parts={view.parts} ready={isDriveContentEnabled()} tab={tab} />
+          {saved === "1" && <p role="status" className="text-sm font-bold text-success-ink">Đã lưu tiến trình học từ vựng.</p>}
+          <DautoeicPartsClient key={`${user.uid}:${testId}:${studyReturn ?? ""}`} userUid={user.uid} testId={testId} parts={view.parts} ready={isDriveContentEnabled()} tab={tab} />
         </div>
       </main>
     </>

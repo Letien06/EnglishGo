@@ -31,7 +31,7 @@ export default async function VocabPage({
         <VocabPageHeader active={active} />
 
         {active === "learn" ? (
-          <Suspense fallback={<VocabCatalogSkeleton />}>
+          <Suspense key={typeof params.studyReturn === "string" ? params.studyReturn : "catalog"} fallback={<VocabCatalogSkeleton />}>
             <LearnTab groupId={groupId} userUid={user?.uid} />
           </Suspense>
         ) : active === "progress" ? (

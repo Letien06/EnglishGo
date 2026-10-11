@@ -11,10 +11,12 @@ import VocabSetDetailClient from "./VocabSetDetailClient";
 
 interface Props {
   params: Promise<{ setId: string }>;
+  searchParams: Promise<{ studyReturn?: string; saved?: string }>;
 }
 
-export default async function VocabSetDetailPage({ params }: Props) {
+export default async function VocabSetDetailPage({ params, searchParams }: Props) {
   const { setId } = await params;
+  const { studyReturn, saved } = await searchParams;
   const id = Number(setId);
   const user = await getCurrentUserForRead();
   const uid = user?.uid ?? "";
@@ -40,8 +42,9 @@ export default async function VocabSetDetailPage({ params }: Props) {
         </section>
 
         {/* Vocabulary dashboard, search, and word management */}
+        {saved === "1" && <p role="status" className="text-sm font-bold text-success-ink">Đã lưu tiến trình học từ vựng.</p>}
         <VocabSetDetailClient
-          key={`${id}:${uid}`}
+          key={`${id}:${uid}:${studyReturn ?? ""}`}
           setId={id}
           words={detail.words}
           isOwner={detail.set.ownerUid === uid}

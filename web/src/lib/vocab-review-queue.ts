@@ -217,6 +217,11 @@ class ReviewQueue {
       this.attempts = 0;
       this.requestError = null;
       this.persist();
+      if (typeof window !== "undefined") {
+        window.dispatchEvent(new CustomEvent("englishgo:vocab-progress-saved", {
+          detail: { wordIds: [...acknowledgements.keys()] },
+        }));
+      }
       retryDelay = 100;
     } catch (error) {
       this.requestError = "Tiến độ chưa đồng bộ. Bạn có thể tiếp tục học hoặc thử lưu lại.";

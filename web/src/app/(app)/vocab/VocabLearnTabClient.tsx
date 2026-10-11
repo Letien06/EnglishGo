@@ -10,6 +10,7 @@ import vocabStyles from "./[setId]/flashcards/vocabulary.module.css";
 import VocabCatalogSkeleton from "./VocabCatalogSkeleton";
 import styles from "../listen/_components/listening.module.css";
 import { fetchWithTimeout, recordNextPaint } from "@/lib/client-request";
+import { useVocabReviewQueue } from "@/lib/vocab-review-queue";
 
 type ApiEnvelope<T> = {
   success: boolean;
@@ -29,6 +30,7 @@ function studyHref(setId: number, intent: "continue" | "review") {
 export default function VocabLearnTabClient({ groupId, userUid, initialCatalog = null }: {
   groupId?: string; userUid?: string; initialCatalog?: DauToeicVocabCatalogView | null;
 }) {
+  useVocabReviewQueue(userUid, Boolean(userUid));
   const [query, setQuery] = useState("");
   const [filter, setFilter] = useState("all");
   const [sort, setSort] = useState("catalog");
@@ -38,6 +40,18 @@ export default function VocabLearnTabClient({ groupId, userUid, initialCatalog =
     return { status: "loading", catalog: null, fallbackSets: [] };
   });
   const [progressStatus, setProgressStatus] = useState(userUid ? "loading" : "ready");
+  const [progressRefresh, setProgressRefresh] = useState(0);
+
+  useEffect(() => {
+    const refresh = () => setProgressRefresh((value) => value + 1);
+    const onPageShow = (event: PageTransitionEvent) => { if (event.persisted) refresh(); };
+    window.addEventListener("englishgo:vocab-progress-saved", refresh);
+    window.addEventListener("pageshow", onPageShow);
+    return () => {
+      window.removeEventListener("englishgo:vocab-progress-saved", refresh);
+      window.removeEventListener("pageshow", onPageShow);
+    };
+  }, []);
 
   useEffect(() => {
     let cancelled = false;
@@ -77,7 +91,7 @@ export default function VocabLearnTabClient({ groupId, userUid, initialCatalog =
       cancelled = true;
       controller.abort();
     };
-  }, [initialCatalog, userUid]);
+  }, [initialCatalog, progressRefresh, userUid]);
 
   useEffect(() => {
     function syncFromHistory() {

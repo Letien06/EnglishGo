@@ -14,6 +14,8 @@ interface ContextLearningProps {
   words: VocabWordCard[];
   onComplete: (result: VocabularyRoundResult) => void;
   onExit: () => void;
+  onProgress?: () => void;
+  suspended?: boolean;
   onNavigateTab?: (tab: "view" | "learn" | "play") => void;
   activeTab?: "view" | "learn" | "play";
   studyIntent?: "continue" | "review";
@@ -64,6 +66,8 @@ export default function ContextLearning({
   words,
   onComplete,
   onExit,
+  onProgress,
+  suspended = false,
   onNavigateTab,
   activeTab = "learn",
   studyIntent = "continue",
@@ -143,13 +147,13 @@ export default function ContextLearning({
   const isCurrentMastered = word ? isWordMastered(word) : false;
 
   useEffect(() => {
-    if (!word) return;
+    if (!word || suspended) return;
     const timer = window.setTimeout(() => speakWord(word, "us"), 120);
     return () => {
       window.clearTimeout(timer);
       stop();
     };
-  }, [word, speakWord, stop]);
+  }, [word, speakWord, stop, suspended]);
 
   const steps = useMemo(() => {
     return word ? vocabularyStudySteps(word) : [];
@@ -235,6 +239,7 @@ export default function ContextLearning({
       const currentlyMastered = isWordMastered(targetWord);
       const nextMastered = !currentlyMastered;
       if (isAuthenticated) {
+        onProgress?.();
         enqueue(nextMastered
           ? { wordId: targetWord.id, mastered: true }
           : { wordId: targetWord.id, quality: 1 });
@@ -250,7 +255,7 @@ export default function ContextLearning({
       }
       setMasteryOverrides((prev) => new Map(prev).set(targetWord.id, nextMastered));
     },
-    [isWordMastered, word?.id, stop, isAuthenticated, enqueue]
+    [isWordMastered, word?.id, stop, isAuthenticated, enqueue, onProgress]
   );
 
   // Auto-pronounce word or phrase when entering step or on demand
@@ -295,6 +300,7 @@ export default function ContextLearning({
 
       // Queue this answer first, then advance without waiting for the database.
       if (isAuthenticated && persistAnswers && (markMastered || effectiveQuality !== undefined)) {
+        onProgress?.();
         enqueue(markMastered
           ? { wordId: word.id, mastered: true }
           : { wordId: word.id, quality: effectiveQuality });
@@ -341,7 +347,7 @@ export default function ContextLearning({
         setSkipTyping(false);
       }
     },
-    [word, answers, forgotten, typed, safeIndex, activeWords, deferredWordIds, onComplete, stop, studyIntent, persistAnswers, isAuthenticated, enqueue]
+    [word, answers, forgotten, typed, safeIndex, activeWords, deferredWordIds, onComplete, stop, studyIntent, persistAnswers, isAuthenticated, enqueue, onProgress]
   );
 
   // Jump to scheduling without submitting a review until the learner rates it.
@@ -364,6 +370,7 @@ export default function ContextLearning({
   // Keyboard controls
   useEffect(() => {
     function handleKeyDown(event: KeyboardEvent) {
+      if (suspended) return;
       const activeEl = document.activeElement;
       const isInput = activeEl?.tagName === "INPUT" || activeEl?.tagName === "TEXTAREA";
 
@@ -386,7 +393,7 @@ export default function ContextLearning({
 
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [step?.kind, skipTyping, feedback, handleAdvanceWord, handlePrevWord, handleNextWord]);
+  }, [step?.kind, skipTyping, feedback, handleAdvanceWord, handlePrevWord, handleNextWord, suspended]);
 
   // Drawer filtered words
   const drawerWords = useMemo(() => {

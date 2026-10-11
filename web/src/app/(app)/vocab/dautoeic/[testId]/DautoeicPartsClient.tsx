@@ -3,23 +3,41 @@
 import { useEffect, useState } from "react";
 import type { DauToeicVocabPartSummary } from "@/types/dautoeic";
 import { fetchWithTimeout } from "@/lib/client-request";
+import { useVocabReviewQueue } from "@/lib/vocab-review-queue";
 import DautoeicPartStudyButton from "./DautoeicPartStudyButton";
 
-export default function DautoeicPartsClient({ testId, parts, ready, tab }: {
-  testId: string; parts: DauToeicVocabPartSummary[]; ready: boolean; tab?: "view" | "learn" | "play";
+export default function DautoeicPartsClient({ testId, parts, ready, tab, userUid }: {
+  testId: string; parts: DauToeicVocabPartSummary[]; ready: boolean; tab?: "view" | "learn" | "play"; userUid?: string;
 }) {
+  useVocabReviewQueue(userUid, Boolean(userUid));
   const [progress, setProgress] = useState<DauToeicVocabPartSummary[] | null>(null);
   const [failed, setFailed] = useState(false);
   useEffect(() => {
-    const controller = new AbortController();
-    void fetchWithTimeout(`/api/dautoeic/vocab/tests/${encodeURIComponent(testId)}`, { signal: controller.signal, cache: "no-store" }, 8_000)
+    let controller: AbortController;
+    const refresh = () => {
+      controller?.abort();
+      controller = new AbortController();
+      const { signal } = controller;
+      void fetchWithTimeout(`/api/dautoeic/vocab/tests/${encodeURIComponent(testId)}`, { signal, cache: "no-store" }, 8_000)
       .then(async (response) => {
         const payload = await response.json();
         if (!response.ok || !payload.success || !Array.isArray(payload.data?.parts)) throw new Error("Progress unavailable");
-        if (!controller.signal.aborted) setProgress(payload.data.parts);
+        if (!signal.aborted) {
+          setProgress(payload.data.parts);
+          setFailed(false);
+        }
       })
-      .catch(() => { if (!controller.signal.aborted) setFailed(true); });
-    return () => controller.abort();
+      .catch(() => { if (!signal.aborted) setFailed(true); });
+    };
+    const onPageShow = (event: PageTransitionEvent) => { if (event.persisted) refresh(); };
+    refresh();
+    window.addEventListener("englishgo:vocab-progress-saved", refresh);
+    window.addEventListener("pageshow", onPageShow);
+    return () => {
+      controller.abort();
+      window.removeEventListener("englishgo:vocab-progress-saved", refresh);
+      window.removeEventListener("pageshow", onPageShow);
+    };
   }, [testId]);
 
   return <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">

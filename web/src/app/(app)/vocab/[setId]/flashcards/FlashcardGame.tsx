@@ -30,6 +30,7 @@ import { ClientRequestTimeoutError, fetchWithTimeout } from "@/lib/client-reques
 import { consolidateVocabGameAnswers } from "@/lib/vocab-game-results";
 import { matchesVocabAnswer, uniqueQuizAnswers } from "@/lib/vocab-quiz";
 import { useVocabReviewQueue } from "@/lib/vocab-review-queue";
+import { installStudyBackGuard } from "@/lib/study-back-guard";
 import { englishExampleForSpeech, findBestEnglishVoice } from "@/lib/vocab-speech";
 import type { VocabularyRoundResult } from "@/lib/vocab-arcade";
 import WordExplorer from "./WordExplorer";
@@ -334,7 +335,7 @@ export default function FlashcardGame({
 }: Props) {
   const router = useRouter();
   const reviewSync = useVocabReviewQueue(currentUserId, isAuthenticated);
-  const { masteryByWordId, reconcile } = reviewSync;
+  const { masteryByWordId, reconcile, pendingReviews } = reviewSync;
   const words = useMemo(() => session.words.map((word) => {
     const mastered = masteryByWordId.get(word.id);
     return mastered === undefined ? word : { ...word, mastered };
@@ -356,6 +357,19 @@ export default function FlashcardGame({
   const [workspaceTab, setWorkspaceTab] = useState<WorkspaceTab>(roomParam ? "play" : (initialTab ?? (startInPlay ? (["quiz", "matching", "blast", "rain"].includes(initialMode) ? "play" : "learn") : "view")));
   const [pendingTab, setPendingTab] = useState<WorkspaceTab | null>(null);
   const [pendingHref, setPendingHref] = useState<string | null>(null);
+  const [leaveTarget, setLeaveTarget] = useState<string | null>(null);
+  const [backSaving, setBackSaving] = useState(false);
+  const [backError, setBackError] = useState<string | null>(null);
+  const [studyChanged, setStudyChanged] = useState(() => pendingReviews.some((review) => session.words.some((word) => word.id === review.wordId)));
+  const saveInFlight = useRef(false);
+  const backGuard = useRef<ReturnType<typeof installStudyBackGuard> | null>(null);
+  const studyReturnHref = session.set.externalTestId
+    ? `/vocab/dautoeic/${encodeURIComponent(session.set.externalTestId)}`
+    : `/vocab/${setId}`;
+  const sessionWordIds = useMemo(() => new Set(session.words.map((word) => word.id)), [session.words]);
+  const hasPendingStudy = pendingReviews.some((review) => sessionWordIds.has(review.wordId));
+  const guardStudy = isAuthenticated && screen === "hub" && workspaceTab === "learn" && (studyChanged || hasPendingStudy);
+  const markStudyChanged = useCallback(() => setStudyChanged(true), []);
   const [sidebarOverride, setSidebarOpen] = useState<boolean | null>(null);
   const wideWorkspace = useSyncExternalStore(subscribeWorkspaceWidth, isWideWorkspace, serverWorkspaceWidth);
   const sidebarOpen = sidebarOverride ?? wideWorkspace;
@@ -371,6 +385,72 @@ export default function FlashcardGame({
   const [filterPending, setFilterPending] = useState(false);
   const [completionNotice, setCompletionNotice] = useState<string | null>(null);
   const completionTimerRef = useRef<number | null>(null);
+
+  useEffect(() => {
+    if (!guardStudy) return;
+    const guard = installStudyBackGuard(() => {
+      setBackError(null);
+      setLeaveTarget(studyReturnHref);
+    });
+    backGuard.current = guard;
+    const onLink = (event: MouseEvent) => {
+      if (event.defaultPrevented || event.button !== 0 || event.ctrlKey || event.metaKey || event.altKey || event.shiftKey) return;
+      const link = event.target instanceof Element ? event.target.closest<HTMLAnchorElement>("a[href]") : null;
+      if (!link || link.download || (link.target && link.target !== "_self")) return;
+      const target = new URL(link.href, window.location.href);
+      if (target.origin !== window.location.origin || target.href === window.location.href || target.hash) return;
+      event.preventDefault();
+      event.stopPropagation();
+      setBackError(null);
+      setLeaveTarget(`${target.pathname}${target.search}`);
+    };
+    document.addEventListener("click", onLink, true);
+    return () => {
+      guard.dispose();
+      backGuard.current = null;
+      document.removeEventListener("click", onLink, true);
+    };
+  }, [guardStudy, studyReturnHref]);
+
+  function navigateStudy(href: string) {
+    setBackError(null);
+    if (guardStudy) setLeaveTarget(href);
+    else router.push(href);
+  }
+
+  function finishStudyNavigation(saved: boolean) {
+    const href = leaveTarget ?? studyReturnHref;
+    // A fresh URL also refreshes a previously cached Test page after returning.
+    const target = new URL(href, window.location.origin);
+    target.searchParams.set("studyReturn", roundRequestId());
+    if (saved) target.searchParams.set("saved", "1");
+    const navigate = () => router.replace(`${target.pathname}${target.search}`);
+    if (backGuard.current) backGuard.current.leave(navigate);
+    else navigate();
+  }
+
+  async function saveBeforeBack() {
+    if (saveInFlight.current) return;
+    saveInFlight.current = true;
+    setBackSaving(true);
+    setBackError(null);
+    try {
+      if (!(await reviewSync.flush())) {
+        setBackError("Chưa lưu được tiến trình. Dữ liệu vẫn được giữ trên thiết bị; hãy thử lại khi có mạng.");
+        return;
+      }
+      finishStudyNavigation(true);
+    } catch {
+      setBackError("Chưa lưu được tiến trình. Hãy kiểm tra kết nối và thử lại.");
+    } finally {
+      saveInFlight.current = false;
+      setBackSaving(false);
+    }
+  }
+
+  function skipBeforeBack() {
+    if (!saveInFlight.current) finishStudyNavigation(false);
+  }
 
   useEffect(() => () => {
     if (completionTimerRef.current) window.clearTimeout(completionTimerRef.current);
@@ -511,6 +591,12 @@ export default function FlashcardGame({
   }
 
   function selectWorkspaceTab(next: WorkspaceTab) {
+    if (guardStudy && next !== "learn") {
+      const params = new URLSearchParams({ mode: "menu", tab: next, mastery: "all", order: "ordered", amount: "all" });
+      if (session.set.externalPartId) params.set("partId", session.set.externalPartId);
+      navigateStudy(`/vocab/${setId}/flashcards?${params}`);
+      return;
+    }
     if (screen === "play") { setPendingTab(next); return; }
     if (next === "learn" && workspaceTab !== "learn" && !words.some((word) => !word.mastered)) {
       openStudy("continue");
@@ -528,9 +614,9 @@ export default function FlashcardGame({
   }
 
   async function openStudy(intent: "continue" | "review") {
-    if (reviewSync.pendingCount > 0 && !(await reviewSync.flush())) return;
+    if (!guardStudy && reviewSync.pendingCount > 0 && !(await reviewSync.flush())) return;
     const params = new URLSearchParams({ mode: "menu", tab: "learn", intent, order: intent === "review" ? "oldest" : "ordered", amount: "all" });
-    router.push(`/vocab/${setId}/flashcards?${params}`);
+    navigateStudy(`/vocab/${setId}/flashcards?${params}`);
   }
 
   function applyFilters(next: {
@@ -539,7 +625,7 @@ export default function FlashcardGame({
     order?: string;
     amount?: string;
   }) {
-    setFilterPending(true);
+    if (!guardStudy) setFilterPending(true);
     const params = new URLSearchParams({
       mode: "menu",
       tab: workspaceTab,
@@ -551,7 +637,7 @@ export default function FlashcardGame({
       params.set("partId", session.set.externalPartId);
     }
     const targetSet = next.setId ?? setId;
-    router.push(`/vocab/${targetSet}/flashcards?${params.toString()}`);
+    navigateStudy(`/vocab/${targetSet}/flashcards?${params.toString()}`);
   }
 
   if (words.length === 0 && screen !== "hub") {
@@ -566,7 +652,7 @@ export default function FlashcardGame({
         </div>
       )}
 
-      <header className={styles.workspaceHeader}>
+      <header className={styles.workspaceHeader} inert={Boolean(leaveTarget)}>
       <button className={styles.button} aria-label={sidebarOpen ? "Ẩn các phần" : "Hiện các phần"} aria-expanded={sidebarOpen} aria-controls="vocab-part-sidebar" onClick={() => setSidebarOpen(!sidebarOpen)}><span aria-hidden="true">☷</span><span className={styles.workspaceMenuLabel}>{sidebarOpen ? "Ẩn các phần" : "Hiện các phần"}</span></button>
       <nav className={styles.tabs} role="tablist" aria-label="Hoạt động từ vựng" onKeyDown={(event) => {
         if (!["ArrowLeft", "ArrowRight", "Home", "End"].includes(event.key)) return;
@@ -603,8 +689,8 @@ export default function FlashcardGame({
         </span>
       </div>
       </header>
-      <div className={styles.workspaceBody} data-sidebar={sidebarOpen}>
-      {sidebarOpen && <div id="vocab-part-sidebar"><VocabularySidebar key={session.set.externalTestId ?? setId} testId={isAuthenticated ? session.set.externalTestId : undefined} partId={session.set.externalPartId} title={session.set.title} count={words.length} tab={workspaceTab} studyIntent={studyIntent} ready={partsReady} onNavigate={(href) => { if (screen === "play") setPendingHref(href); else router.push(href); }} /></div>}
+      <div className={styles.workspaceBody} data-sidebar={sidebarOpen} inert={Boolean(leaveTarget)}>
+      {sidebarOpen && <div id="vocab-part-sidebar"><VocabularySidebar key={session.set.externalTestId ?? setId} testId={isAuthenticated ? session.set.externalTestId : undefined} partId={session.set.externalPartId} title={session.set.title} count={words.length} tab={workspaceTab} studyIntent={studyIntent} ready={partsReady} onNavigate={(href) => { if (screen === "play") setPendingHref(href); else navigateStudy(href); }} /></div>}
       <div id="vocab-workspace-panel" className={styles.workspaceContent} role="tabpanel" aria-labelledby={`vocab-tab-${workspaceTab}`}>
       {reviewSync.error && (
         <aside role="alert" className="mb-3 flex flex-wrap items-center gap-2 text-xs text-muted">
@@ -639,6 +725,9 @@ export default function FlashcardGame({
           onClearHistory={() => persistHistory([])}
           onApplyFilters={applyFilters}
           onSelectTab={selectWorkspaceTab}
+          onStudyExit={() => navigateStudy(studyReturnHref)}
+          onStudyProgress={markStudyChanged}
+          studySuspended={Boolean(leaveTarget)}
           onRecordRound={recordHistory}
           onJoinRoom={handleJoinRoomFromHub}
         />
@@ -695,6 +784,16 @@ export default function FlashcardGame({
 
       {(pendingTab || pendingHref) && <LeaveSessionDialog onCancel={() => { setPendingTab(null); setPendingHref(null); }} onLeave={() => { if (pendingHref) { router.push(pendingHref); return; } setWorkspaceTab(pendingTab!); setScreen("hub"); setQuizChooser(false); setPendingTab(null); }} />}
 
+      {leaveTarget && (
+        <SaveProgressDialog
+          saving={backSaving}
+          error={backError}
+          onCancel={() => { if (!saveInFlight.current) setLeaveTarget(null); }}
+          onSkip={skipBeforeBack}
+          onSave={() => { void saveBeforeBack(); }}
+        />
+      )}
+
       {completionNotice ? (
         <div
           role="status"
@@ -735,6 +834,9 @@ function Hub({
   onClearHistory,
   onApplyFilters,
   onSelectTab,
+  onStudyExit,
+  onStudyProgress,
+  studySuspended,
   onRecordRound,
   studyIntent,
   onReview,
@@ -742,6 +844,9 @@ function Hub({
 }: {
   tab: WorkspaceTab;
   onSelectTab?: (tab: WorkspaceTab) => void;
+  onStudyExit: () => void;
+  onStudyProgress: () => void;
+  studySuspended: boolean;
   onRecordRound?: (record: HistoryEntry) => void;
   onJoinRoom?: (code: string) => void;
   studyIntent: "continue" | "review";
@@ -876,7 +981,9 @@ function Hub({
               wrongWords: result.answers.length - correctCount,
             });
           }}
-          onExit={() => (onSelectTab ? onSelectTab("view") : undefined)}
+          onExit={onStudyExit}
+          onProgress={onStudyProgress}
+          suspended={studySuspended}
           onNavigateTab={onSelectTab}
           activeTab={tab}
         />
@@ -993,6 +1100,29 @@ function LeaveSessionDialog({ onCancel, onLeave }: { onCancel: () => void; onLea
       <h2 id="leave-vocab-title" className="text-xl font-bold text-ink">Rời phiên hiện tại?</h2>
       <p className="text-sm text-ink2">Kết quả chưa lưu sẽ không được ghi vào tiến độ. Bạn có thể ở lại để hoàn thành lượt này.</p>
       <div className="flex flex-wrap gap-2"><button data-dialog-initial-focus className={`${styles.button} ${styles.primary}`} onClick={onCancel}>Ở lại học tiếp</button><button className={styles.button} onClick={onLeave}>Rời phiên</button></div>
+    </div>
+  </div>;
+}
+
+function SaveProgressDialog({ saving, error, onCancel, onSkip, onSave }: {
+  saving: boolean;
+  error: string | null;
+  onCancel: () => void;
+  onSkip: () => void;
+  onSave: () => void;
+}) {
+  const dialogRef = useRef<HTMLDivElement>(null);
+  useDialogFocus(true, onCancel, dialogRef);
+  return <div className="fixed inset-0 z-[90] grid place-items-center bg-black/60 p-4">
+    <div ref={dialogRef} role="dialog" aria-modal="true" aria-labelledby="save-vocab-progress-title" tabIndex={-1} className="w-full max-w-md space-y-4 rounded-2xl border border-line bg-surface p-6 shadow-xl">
+      <h2 id="save-vocab-progress-title" className="text-xl font-bold text-ink">Lưu tiến trình học?</h2>
+      <p className="text-sm text-ink2">Lưu tiến trình trước khi rời bài học. Các từ đã tự lưu sẽ được giữ lại; nếu không chờ lưu, phần còn lại sẽ tiếp tục đồng bộ khi bạn mở từ vựng.</p>
+      {error && <p role="alert" className="rounded-xl border border-danger-line bg-danger-soft px-3 py-2 text-sm text-danger-ink">{error}</p>}
+      <div className="flex flex-wrap justify-end gap-2">
+        <button type="button" className={styles.button} onClick={onCancel} disabled={saving}>Tiếp tục học</button>
+        <button type="button" className={styles.button} onClick={onSkip} disabled={saving}>Không chờ lưu</button>
+        <button type="button" className={`${styles.button} ${styles.primary}`} data-dialog-initial-focus onClick={onSave} disabled={saving}>{saving ? "Đang lưu..." : "Lưu tiến trình"}</button>
+      </div>
     </div>
   </div>;
 }
