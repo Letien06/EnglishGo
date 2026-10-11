@@ -17,9 +17,9 @@ export type ReadingProgressAction = {
   elapsedSeconds: number;
 };
 type Entry = { requestId: string; queuedAt: number; action: ReadingProgressAction };
-type Snapshot = { pending: readonly ReadingProgressAction[]; pendingCount: number; error: string | null; isSaving: boolean };
+type Snapshot = { pending: readonly ReadingProgressAction[]; pendingCount: number; error: string | null; isSaving: boolean; lastSavedAtMillis: number | null };
 type Skill = "reading" | "listening";
-const EMPTY: Snapshot = Object.freeze({ pending: Object.freeze([]), pendingCount: 0, error: null, isSaving: false });
+const EMPTY: Snapshot = Object.freeze({ pending: Object.freeze([]), pendingCount: 0, error: null, isSaving: false, lastSavedAtMillis: null });
 const queues = new Map<string, ReadingQueue>();
 let activeUid: string | undefined;
 let owner: ReadingQueue | undefined;
@@ -55,6 +55,7 @@ class ReadingQueue {
   blocked = false;
   storageError: string | null = null;
   requestError: string | null = null;
+  lastSavedAtMillis: number | null = null;
   timer: ReturnType<typeof setTimeout> | undefined;
   controller: AbortController | undefined;
 
@@ -91,7 +92,7 @@ class ReadingQueue {
   subscribe = (listener: () => void) => { this.listeners.add(listener); return () => { this.listeners.delete(listener); }; };
   getSnapshot = () => this.snapshot;
   publish() {
-    this.snapshot = Object.freeze({ pending: Object.freeze(this.entries.map((entry) => Object.freeze({ ...entry.action }))), pendingCount: this.entries.length, error: this.storageError ?? this.requestError, isSaving: owner === this });
+    this.snapshot = Object.freeze({ pending: Object.freeze(this.entries.map((entry) => Object.freeze({ ...entry.action }))), pendingCount: this.entries.length, error: this.storageError ?? this.requestError, isSaving: owner === this, lastSavedAtMillis: this.lastSavedAtMillis });
     this.listeners.forEach((listener) => listener());
   }
   persist(acknowledgedRequestId?: string) {
@@ -169,6 +170,24 @@ class ReadingQueue {
     this.publish();
     this.schedule(0);
   };
+  flush = (): Promise<boolean> => {
+    if (!this.entries.length) return Promise.resolve(!this.storageError);
+    if (!this.eligible() || navigator.onLine === false) return Promise.resolve(false);
+    this.retry();
+    return new Promise((resolve) => {
+      const finish = (saved: boolean) => {
+        clearTimeout(timeout);
+        unsubscribe();
+        resolve(saved);
+      };
+      const unsubscribe = this.subscribe(() => {
+        if (!this.eligible() || this.snapshot.error) finish(false);
+        else if (!this.entries.length) finish(true);
+      });
+      const timeout = setTimeout(() => finish(false), 55_000);
+      if (this.snapshot.error) finish(false);
+    });
+  };
   schedule(delay: number) {
     if (!this.eligible() || this.blocked || owner || this.timer || !this.entries.length || navigator.onLine === false) return;
     this.timer = setTimeout(() => { this.timer = undefined; void this.send(); }, delay);
@@ -235,6 +254,7 @@ class ReadingQueue {
       }
       this.attempts = 0;
       this.requestError = null;
+      this.lastSavedAtMillis = Date.now();
     } catch {
       if (this.eligible()) {
         this.requestError = this.blocked ? "Chưa lưu được. Hãy kiểm tra phiên đăng nhập và thử lưu lại." : "Chưa đồng bộ được. Các câu đang chờ sẽ được thử lưu lại.";
@@ -257,7 +277,8 @@ function useProgressQueue(skill: Skill, uid: string | null | undefined, authenti
   const snapshot = useSyncExternalStore(queue?.subscribe ?? (() => () => {}), queue?.getSnapshot ?? (() => EMPTY), () => EMPTY);
   const enqueue = useCallback((action: ReadingProgressAction) => queue?.enqueue(action), [queue]);
   const retry = useCallback(() => queue?.retry(), [queue]);
-  return { ...snapshot, enqueue, retry };
+  const flush = useCallback(() => queue?.flush() ?? Promise.resolve(true), [queue]);
+  return { ...snapshot, enqueue, retry, flush };
 }
 
 export function useReadingProgressQueue(uid: string | null | undefined, authenticated = true) {

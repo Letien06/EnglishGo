@@ -1,5 +1,6 @@
 import { normalizeVocabularyAnswer } from "./vocab-content";
 import { englishExampleForSpeech } from "./vocab-speech";
+import type { VocabWordCard } from "@/types/vocab";
 
 function normalizedMeaning(value: string): string {
   return value.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/đ/g, "d")
@@ -13,7 +14,29 @@ export function matchesVocabAnswer(input: string, expected: string, language: "e
   }
   const actual = normalizedMeaning(input);
   const target = normalizedMeaning(expected);
-  return Boolean(actual) && (actual === target || (actual.length >= 3 && ` ${target} `.includes(` ${actual} `)));
+  return Boolean(actual) && (actual === target || meaningAlternatives(expected).includes(actual));
+}
+
+function meaningAlternatives(value: string): string[] {
+  return value.split(/[;,/\n]/).map(normalizedMeaning).filter(Boolean);
+}
+
+function meaningsOverlap(left: string, right: string) {
+  const meanings = new Set(meaningAlternatives(left));
+  return meaningAlternatives(right).some((meaning) => meanings.has(meaning));
+}
+
+/** Exclude alternative senses of the same spelling and known equivalent meanings. */
+export function quizDistractors(word: VocabWordCard, words: VocabWordCard[], mode: "wordMeaning" | "context" | "meaningWord"): string[] {
+  const spelling = normalizeVocabularyAnswer(word.word);
+  const synonyms = new Set((word.synonyms ?? []).map(normalizeVocabularyAnswer));
+  const candidates = words.filter((candidate) => candidate.id !== word.id
+    && normalizeVocabularyAnswer(candidate.word) !== spelling
+    && !meaningsOverlap(candidate.meaning, word.meaning)
+    && !synonyms.has(normalizeVocabularyAnswer(candidate.word))
+    && !(candidate.synonyms ?? []).some((synonym) => normalizeVocabularyAnswer(synonym) === spelling));
+  const values = uniqueQuizAnswers(candidates.map((candidate) => mode === "wordMeaning" ? candidate.meaning : candidate.word));
+  return mode === "wordMeaning" ? values.filter((value, index) => !values.slice(0, index).some((earlier) => meaningsOverlap(value, earlier))) : values;
 }
 
 /** Keep visible answers unique, including case/spacing variants. */

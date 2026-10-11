@@ -27,12 +27,12 @@ function studyHref(setId: number, intent: "continue" | "review") {
   return `/vocab/${setId}/flashcards?mode=menu&tab=learn&intent=${intent}&order=${intent === "review" ? "oldest" : "ordered"}&amount=all`;
 }
 
-export default function VocabLearnTabClient({ groupId, userUid, initialCatalog = null }: {
-  groupId?: string; userUid?: string; initialCatalog?: DauToeicVocabCatalogView | null;
+export default function VocabLearnTabClient({ groupId, userUid, initialCatalog = null, initialFilter }: {
+  groupId?: string; userUid?: string; initialCatalog?: DauToeicVocabCatalogView | null; initialFilter?: string;
 }) {
   useVocabReviewQueue(userUid, Boolean(userUid));
   const [query, setQuery] = useState("");
-  const [filter, setFilter] = useState("all");
+  const [filter, setFilter] = useState(initialFilter === "due" ? "due" : "all");
   const [sort, setSort] = useState("catalog");
   const [selectedGroupOverride, setSelectedGroupOverride] = useState<string | undefined>(groupId);
   const [state, setState] = useState<LearnState>(() => {
@@ -139,6 +139,7 @@ export default function VocabLearnTabClient({ groupId, userUid, initialCatalog =
     const filters = [{ id: "all", label: "Tất cả" }, { id: "new", label: "Chưa học" }, { id: "learning", label: "Đang học" }, { id: "complete", label: "Đã thuộc" }, { id: "due", label: "Cần ôn" }];
     function clearFilters() { setFilter("all"); setQuery(""); }
     return <section>
+      <Link href="/vocab/review" className={`${vocabStyles.button} ${vocabStyles.primary} mb-4`}>Ôn các từ đến hạn hôm nay →</Link>
       <div className={vocabStyles.catalogIntro}>
         <div>
           <span className={vocabStyles.eyebrow}>HỌC ÍT MỖI NGÀY · NHỚ LÂU HƠN</span>

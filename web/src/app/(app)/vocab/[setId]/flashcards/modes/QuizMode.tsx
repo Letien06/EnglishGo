@@ -28,6 +28,8 @@ export default function QuizModeBody({ word, quizMode, options, selected, correc
       <div className="py-4 text-center">
         <p className="mb-4 text-xs font-bold uppercase tracking-widest text-muted">{quizMode === "context" && context ? "Chọn từ tiếng Anh điền vào chỗ trống" : quizMode !== "wordMeaning" ? "Chọn từ tiếng Anh" : "Chọn nghĩa đúng"}</p>
         <h2 className="break-words text-3xl font-bold text-ink sm:text-4xl">{quizMode === "context" ? context ?? word.meaning : quizMode === "meaningWord" ? word.meaning : word.word}</h2>
+        {word.partOfSpeech && <p className="mt-2 text-sm text-muted">{word.partOfSpeech}</p>}
+        {quizMode === "wordMeaning" && word.example && <p className="mt-3 text-sm text-ink2">{word.example}</p>}
         {quizMode === "context" && !context && <p className="mt-3 text-xs text-muted">Chưa có câu ví dụ phù hợp. Chọn từ theo nghĩa bên trên.</p>}
         <div className="mt-5 flex flex-wrap justify-center gap-2"><button type="button" onClick={onSpeakWord} className={styles.button}>♫ US {word.phoneticUs || word.phonetic}</button><button type="button" onClick={onSpeakWordUk} className={styles.button}>♫ UK {word.phoneticUk || word.phonetic}</button>{quizMode === "context" && <button type="button" onClick={onSpeakExample} className={styles.button}>Nghe câu</button>}</div>
       </div>

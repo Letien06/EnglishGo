@@ -10,9 +10,10 @@ type Snapshot = {
   pendingCount: number;
   error: string | null;
   isSaving: boolean;
+  lastSavedAtMillis: number | null;
   masteryByWordId: ReadonlyMap<number, boolean>;
 };
-const EMPTY: Snapshot = { pendingReviews: [], pendingCount: 0, error: null, isSaving: false, masteryByWordId: new Map() };
+const EMPTY: Snapshot = { pendingReviews: [], pendingCount: 0, error: null, isSaving: false, lastSavedAtMillis: null, masteryByWordId: new Map() };
 Object.freeze(EMPTY.pendingReviews);
 Object.freeze(EMPTY);
 const queues = new Map<string, ReviewQueue>();
@@ -33,6 +34,7 @@ class ReviewQueue {
   authBlocked = false;
   storageError: string | null = null;
   requestError: string | null = null;
+  lastSavedAtMillis: number | null = null;
   timer: ReturnType<typeof setTimeout> | undefined;
   request: Promise<void> | undefined;
 
@@ -92,6 +94,7 @@ class ReviewQueue {
       pendingCount: this.pending.size,
       error: this.storageError ?? this.requestError,
       isSaving: inFlightOwner?.queue === this,
+      lastSavedAtMillis: this.lastSavedAtMillis,
       masteryByWordId,
     });
     this.listeners.forEach((listener) => listener());
@@ -112,7 +115,7 @@ class ReviewQueue {
     this.schedule(100);
   };
   schedule(delay: number) {
-    if (!this.eligible() || this.authBlocked || this.timer || inFlightOwner || !this.pending.size) return;
+    if (!this.eligible() || this.authBlocked || this.timer || inFlightOwner || !this.pending.size || navigator.onLine === false) return;
     this.timer = setTimeout(() => {
       this.timer = undefined;
       this.request = this.sendBatch();
@@ -143,6 +146,7 @@ class ReviewQueue {
     if (changed) this.publish();
   };
   flush = async (): Promise<boolean> => {
+    if (navigator.onLine === false && this.pending.size) return false;
     if (!this.eligible() || this.authBlocked) return this.pending.size === 0;
     if (this.timer) clearTimeout(this.timer);
     this.timer = undefined;
@@ -217,6 +221,7 @@ class ReviewQueue {
       this.attempts = 0;
       this.requestError = null;
       this.persist();
+      this.lastSavedAtMillis = Date.now();
       if (typeof window !== "undefined") {
         window.dispatchEvent(new CustomEvent("englishgo:vocab-progress-saved", {
           detail: { wordIds: [...acknowledgements.keys()] },

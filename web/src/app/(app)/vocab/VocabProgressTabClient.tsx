@@ -108,10 +108,11 @@ export default function VocabProgressTabClient() {
           </Link>
         </div>
         <div className="mt-5 grid gap-4 md:grid-cols-2">
-          <div className="min-h-40 rounded-xl bg-[var(--info-soft)] p-4">
+          <Link href="/vocab/review" className="min-h-40 rounded-xl bg-[var(--info-soft)] p-4 transition hover:shadow-md">
             <p className="text-sm font-extrabold text-[var(--info-ink)]">Ôn tập</p>
             <p className="mt-2 text-3xl font-extrabold text-ink">{payload.dueWords} <span className="text-sm text-muted">từ</span></p>
-          </div>
+            <span className="mt-3 inline-block text-xs font-extrabold text-[var(--info-ink)]">Ôn các từ đến hạn →</span>
+          </Link>
           <div className="min-h-40 rounded-xl bg-[var(--success-soft)] p-4">
             <p className="text-sm font-extrabold text-[var(--success-ink)]">Từ mới</p>
             <p className="mt-2 text-3xl font-extrabold text-ink">{payload.studiedWordsToday}<span className="text-sm text-muted">/{dailyGoal} từ</span></p>

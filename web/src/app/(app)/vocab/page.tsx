@@ -32,7 +32,7 @@ export default async function VocabPage({
 
         {active === "learn" ? (
           <Suspense key={typeof params.studyReturn === "string" ? params.studyReturn : "catalog"} fallback={<VocabCatalogSkeleton />}>
-            <LearnTab groupId={groupId} userUid={user?.uid} />
+            <LearnTab groupId={groupId} userUid={user?.uid} initialFilter={typeof params.filter === "string" ? params.filter : undefined} />
           </Suspense>
         ) : active === "progress" ? (
           <VocabProgressTabClient />
@@ -56,9 +56,9 @@ export default async function VocabPage({
   );
 }
 
-async function LearnTab({ groupId, userUid }: { groupId?: string; userUid?: string }) {
+async function LearnTab({ groupId, userUid, initialFilter }: { groupId?: string; userUid?: string; initialFilter?: string }) {
   const catalog = await getVocabularyCatalogView().catch(() => null);
-  return <VocabLearnTabClient key={`${userUid ?? "guest"}:${groupId ?? "default"}`} groupId={groupId} userUid={userUid} initialCatalog={catalog} />;
+  return <VocabLearnTabClient key={`${userUid ?? "guest"}:${groupId ?? "default"}:${initialFilter ?? "all"}`} groupId={groupId} userUid={userUid} initialCatalog={catalog} initialFilter={initialFilter} />;
 }
 
 function normalizeTab(value: string): VocabTabKey {

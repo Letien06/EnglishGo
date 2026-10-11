@@ -6,6 +6,9 @@ import { decodeHTML } from "entities";
 import { parseVocabularyEntries, vocabularyRowsText } from "@/lib/practice-vocabulary";
 import Link from "@/components/IntentLink";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import PracticePrefetch from "@/components/PracticePrefetch";
+import StudySaveStatus from "@/components/StudySaveStatus";
+import PracticeSaveGuard from "@/components/PracticeSaveGuard";
 import PracticeHeader from "../../_components/PracticeHeader";
 import WorkspaceAnnotator, { WorkspaceAnnotationAnchor } from "@/components/WorkspaceAnnotator";
 import { usePracticeResume } from "@/lib/use-practice-resume";
@@ -75,7 +78,7 @@ export default function ListenPracticeClient({
   }, [level, partNum, progressQueue.pending, session.testId]);
   const [revealedMap, setRevealedMap] = useState<Record<string, number[]>>({});
   const [fillValues, setFillValues] = useState<Record<string, string>>({});
-  const { markInteraction, resumeStatus } = usePracticeResume({ skill: "listening", uid: userUid, part: partNum, level, testId: session.testId, items, setAnswers: setAnsweredMap, setIndex: setCurrentIndex, pendingAnswers });
+  const { markInteraction, resumeStatus } = usePracticeResume({ skill: "listening", uid: userUid, part: partNum, level, testId: session.testId, items, setAnswers: setAnsweredMap, setIndex: setCurrentIndex, pendingAnswers, currentAnswers: answeredMap, currentIndex });
   const [showNote, setShowNote] = useState(false);
   const [auto, setAuto] = useState(initialAuto);
   const [elapsed, setElapsed] = useState(0);
@@ -133,7 +136,7 @@ export default function ListenPracticeClient({
       if (auto) url.searchParams.set("auto", "1");
       else url.searchParams.delete("auto");
     }
-    window.history.replaceState(null, "", `${url.pathname}${url.search}`);
+    window.history.replaceState(window.history.state, "", `${url.pathname}${url.search}`);
   }, [activeAssist, activeMode, auto, currentIndex, level, offset, partId, session.testId, session.windowOffset]);
 
   const switchMode = useCallback((nextMode: PracticeMode) => {
@@ -297,10 +300,9 @@ export default function ListenPracticeClient({
   return (
     <main className="skill-workspace skill-workspace--listen design-system min-h-dvh bg-surface" onPointerDownCapture={markInteraction} onKeyDownCapture={markInteraction}>
       <PracticeHeader skill="listening" partId={partId} part={partNum} level={level} testId={session.testId} testName={session.testName} setName={session.setName} grouped={session.grouping === "balanced"} modes={modes} activeMode={activeMode} onModeChange={switchMode} auto={auto} onToggleAuto={() => setAuto((value) => !value)} elapsed={formatElapsed(elapsed)} assist={activeAssist} onAssistChange={switchAssist} />
-      {(progressQueue.pendingCount > 0 || progressQueue.error || resumeStatus) && <div className="practice-save-status flex flex-wrap items-center justify-between gap-2" role="status">
-        <span>{progressQueue.pendingCount > 0 ? `${progressQueue.pendingCount} câu đang chờ lưu${progressQueue.isSaving ? " · Đang đồng bộ…" : ""}${progressQueue.error ? ` · ${progressQueue.error}` : ""}` : progressQueue.error || resumeStatus}</span>
-        {(progressQueue.pendingCount > 0 || progressQueue.error) && <button type="button" onClick={progressQueue.retry} disabled={progressQueue.isSaving} className="rounded-lg border border-control-line bg-surface px-3 py-2 text-sm font-bold text-ink disabled:opacity-50">Thử lưu lại</button>}
-      </div>}
+      <PracticePrefetch session={session} index={currentIndex} />
+      <StudySaveStatus {...progressQueue} pendingLabel="câu" message={resumeStatus} />
+      <PracticeSaveGuard queue={progressQueue} backHref={`/listen?part=${partId}`} />
 
       <WorkspaceAnnotator uid={userUid} context={{ surface: "listen", resourceId: `${session.testId ?? `${partId}:level:${level}`}:${item.id}`, questionKey: "workspace" }} legacyContexts={item.questions.map((question) => ({ surface: "listen", resourceId: `${session.testId ?? `${partId}:level:${level}`}:${item.id}`, questionKey: question.id }))} className="practice-content grid min-h-[calc(100dvh-8rem)] lg:grid-cols-[1fr_1fr]">
         <section data-annotation-anchor="source" className="practice-source-pane border-b border-line px-4 py-5 sm:px-6 lg:border-b-0 lg:border-r lg:px-10 lg:py-8">

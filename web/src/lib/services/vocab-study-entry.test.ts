@@ -61,6 +61,13 @@ describe("getStudyEntrySession", () => {
     expect(session.words.map(({ id }) => id)).toEqual([3, 4]);
   });
 
+  it("advances to the next unmastered part when the requested part is complete", async () => {
+    mocks.progressGet.mockResolvedValue({ docs: [progress(1), progress(2)] });
+    const session = await getStudyEntrySession(12, "user-1", "continue", "lc");
+    expect(session.set.externalPartId).toBe("rc");
+    expect(session.words.map(({ id }) => id)).toEqual([3, 4]);
+  });
+
   it("starts LC before RC even when source words arrive in reverse part order", async () => {
     mocks.words.mockResolvedValue([word(3, "rc", 1), word(4, "rc", 2), word(2, "lc", 2), word(1, "lc", 1)]);
     const session = await getStudyEntrySession(12, "user-1", "continue");

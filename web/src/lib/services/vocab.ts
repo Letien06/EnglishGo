@@ -840,10 +840,17 @@ export async function getStudyEntrySession(
   let selectedPartId = requestedPartId;
   let scopedWords: VocabWordDoc[];
   if (intent === "continue") {
-    const selectedPart = requestedPartId
+    const requestedIndex = requestedPartId
+      ? orderedParts.findIndex(([partId]) => partId === requestedPartId)
+      : -1;
+    const selectedPart = requestedPartId && parts.get(requestedPartId)?.some((word) => !isMastered(word))
       ? [requestedPartId, parts.get(requestedPartId)!] as const
-      : orderedParts.find(([, partWords]) => partWords.some((word) => !isMastered(word)))
-        ?? orderedParts[0];
+      : requestedIndex >= 0
+        ? orderedParts.slice(requestedIndex + 1).find(([, partWords]) => partWords.some((word) => !isMastered(word)))
+          ?? orderedParts.find(([, partWords]) => partWords.some((word) => !isMastered(word)))
+          ?? [requestedPartId, parts.get(requestedPartId)!] as const
+        : orderedParts.find(([, partWords]) => partWords.some((word) => !isMastered(word)))
+          ?? orderedParts[0];
     selectedPartId = selectedPart?.[0];
     scopedWords = selectedPart?.[1] ?? [];
   } else {
@@ -1006,17 +1013,12 @@ export async function getReviewSession(
     .slice(0, safeSize);
   const wordMap = await wordsByIds(selected.map((progress) => progress.wordId));
 
-  const cards: VocabWordCard[] = [];
-  for (const p of selected) {
-    const word = wordMap.get(p.wordId);
-    if (word) {
-      cards.push(toWordCard(word, p.status === "MASTERED"));
-    }
-  }
-
   return {
     set: { id: 0, title: "Ôn tập", topic: "Review" },
-    words: shuffleArray(cards),
+    words: orderWordsForReview(
+      selected.flatMap((progress) => { const word = wordMap.get(progress.wordId); return word ? [word] : []; }),
+      new Map(selected.map((progress) => [progress.wordId, progress])), now,
+    ).map((word) => toWordCard(word, selected.some((progress) => progress.wordId === word.id && progress.status === "MASTERED"))),
   };
 }
 
@@ -2084,7 +2086,9 @@ function orderWordsForReview(
       - Number(leftProgress != null && isDueProgress(leftProgress, now));
     const leftReviewed = leftProgress?.lastReviewedAtMillis ?? Number.NEGATIVE_INFINITY;
     const rightReviewed = rightProgress?.lastReviewedAtMillis ?? Number.NEGATIVE_INFINITY;
-    return dueDifference || (leftReviewed === rightReviewed ? 0 : leftReviewed - rightReviewed);
+    const forgottenDifference = Number(rightProgress?.status === "LEARNING" && rightProgress.repetitions === 0)
+      - Number(leftProgress?.status === "LEARNING" && leftProgress.repetitions === 0);
+    return dueDifference || forgottenDifference || (leftReviewed === rightReviewed ? 0 : leftReviewed - rightReviewed);
   });
 }
 

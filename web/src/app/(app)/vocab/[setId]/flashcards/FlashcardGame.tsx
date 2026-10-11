@@ -25,10 +25,11 @@ import type {
   VocabSetSession,
   VocabWordCard,
 } from "@/types/vocab";
+import StudySaveStatus from "@/components/StudySaveStatus";
 import useDialogFocus from "@/components/useDialogFocus";
 import { ClientRequestTimeoutError, fetchWithTimeout } from "@/lib/client-request";
 import { consolidateVocabGameAnswers } from "@/lib/vocab-game-results";
-import { matchesVocabAnswer, uniqueQuizAnswers } from "@/lib/vocab-quiz";
+import { matchesVocabAnswer, quizDistractors } from "@/lib/vocab-quiz";
 import { useVocabReviewQueue } from "@/lib/vocab-review-queue";
 import { installStudyBackGuard } from "@/lib/study-back-guard";
 import { englishExampleForSpeech, findBestEnglishVoice } from "@/lib/vocab-speech";
@@ -692,12 +693,7 @@ export default function FlashcardGame({
       <div className={styles.workspaceBody} data-sidebar={sidebarOpen} inert={Boolean(leaveTarget)}>
       {sidebarOpen && <div id="vocab-part-sidebar"><VocabularySidebar key={session.set.externalTestId ?? setId} testId={isAuthenticated ? session.set.externalTestId : undefined} partId={session.set.externalPartId} title={session.set.title} count={words.length} tab={workspaceTab} studyIntent={studyIntent} ready={partsReady} onNavigate={(href) => { if (screen === "play") setPendingHref(href); else navigateStudy(href); }} /></div>}
       <div id="vocab-workspace-panel" className={styles.workspaceContent} role="tabpanel" aria-labelledby={`vocab-tab-${workspaceTab}`}>
-      {reviewSync.error && (
-        <aside role="alert" className="mb-3 flex flex-wrap items-center gap-2 text-xs text-muted">
-          <span>{reviewSync.error}</span>
-          <button type="button" className={styles.button} onClick={reviewSync.retry}>Thử lưu lại</button>
-        </aside>
-      )}
+      <StudySaveStatus {...reviewSync} />
 
       {screen === "hub" && (
         <Hub
@@ -1315,11 +1311,11 @@ function PlaySurface({
     if (mode !== "mixed") return mode;
     return (["flashcard", "quiz", "typing", "listening"] as PlayMode[])[index % 4];
   }, [mode, index]);
-  const quizAnswerValues = useMemo(() => uniqueQuizAnswers(words.map((item) => quizMode === "wordMeaning" ? item.meaning : item.word)), [words, quizMode]);
-  const quizNeedsRecall = requestedMode === "quiz" && quizAnswerValues.length < 2;
+  const word = words[index] ?? words[0];
+  const quizAnswerValues = useMemo(() => word ? quizDistractors(word, words, quizMode) : [], [word, words, quizMode]);
+  const quizNeedsRecall = requestedMode === "quiz" && quizAnswerValues.length === 0;
   const activeMode: PlayMode = quizNeedsRecall ? "typing" : requestedMode;
 
-  const word = words[index] ?? words[0];
   const resultAnswers = useMemo(
     () => consolidateVocabGameAnswers(answers).map(({ answer, needsReview }) => ({
       ...answer,
@@ -1468,10 +1464,7 @@ function PlaySurface({
     quizMode === "wordMeaning" ? word?.meaning ?? "" : word?.word ?? "";
   const options = useMemo(() => {
     if (activeMode !== "quiz") return [] as string[];
-    const valueOf = (w: VocabWordCard) =>
-      quizMode === "wordMeaning" ? w.meaning : w.word;
-    const pool = quizAnswerValues.filter((value) => !matchesVocabAnswer(value, valueOf(word), "english"));
-    return shuffle([quizCorrect, ...shuffle(pool).slice(0, 3)]).slice(0, 4);
+    return shuffle([quizCorrect, ...shuffle(quizAnswerValues).slice(0, 3)]);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeMode, quizMode, index, quizAnswerValues]);
 
@@ -2289,6 +2282,7 @@ function FeedbackOverlay({
         <button
           type="button"
           onClick={onSpeak}
+          aria-label={`Nghe đáp án đúng: ${item.word}`}
           className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-surface text-ink"
         >
           ♫
@@ -2313,9 +2307,10 @@ function FeedbackOverlay({
           <strong className="text-sm text-ink2">
             Nghĩa: {item.meaning || feedback.expected}
           </strong>
-          {item.example && (
-            <em className="block text-xs text-muted">Ví dụ: {item.example}</em>
-          )}
+          {!feedback.correct && <p className="text-sm text-ink">Bạn chọn: {feedback.selected || "Chưa trả lời"}. Đáp án đúng: <strong>{feedback.expected}</strong>.</p>}
+          {item.example && <em className="block text-sm text-ink2">Ví dụ: {item.example}</em>}
+          {item.exampleTranslation && <p className="text-sm text-ink2">{item.exampleTranslation}</p>}
+          <p className="mt-2 text-sm text-ink2">{item.toeicTip || `Trong bộ này, “${item.word}” được học với nghĩa “${item.meaning}”.`}</p>
         </div>
         <div className="flex shrink-0 items-center gap-2">
           <button
