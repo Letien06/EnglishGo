@@ -74,7 +74,7 @@
 .statCopy { flex:1; min-width:0; }
 .statCopy h3 { font-size:11px; text-transform:uppercase; letter-spacing:.035em; color:var(--ink3); font-weight:800; }
 .statCopy strong { display:block; font-size:21px; font-weight:800; line-height:1.35; margin:5px 0; white-space:nowrap; font-variant-numeric:tabular-nums; }
-.statCopy p { color:var(--ink3); font-size:11px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.statCopy p { color:var(--ink3); font-size:11px; line-height:1.4; overflow-wrap:anywhere; }
 .chevron { width:14px; height:14px; flex-shrink:0; color:var(--ink3); }
 .goals { display:grid; grid-template-columns:1fr 1fr; border-radius:22px; border:1px solid var(--dash-border); overflow:hidden; background:var(--surface); }
 .goalsSummary { padding:32px; background:color-mix(in srgb,var(--surface) 96%,var(--dash-blue)); }
