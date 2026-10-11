@@ -13,6 +13,12 @@ type Layout = { width: number; height: number; anchors: Map<string, Rect> };
 type Gesture = { pointer: number; layout: Layout; anchor: string; origin: Rect; stroke: WorkspaceStroke | null; previous: WorkspacePoint; erased: WorkspaceStroke[]; changed: boolean };
 type Props = { uid: string | null; context: QuestionAnnotationContext; legacyContexts?: QuestionAnnotationContext[]; disabled?: boolean; className?: string; children: ReactNode };
 
+// A finger is the palm-rest input on tablets. Only stylus and mouse pointers
+// can start an annotation gesture so a resting hand cannot steal the stroke.
+function canStartAnnotationPointer(event: PointerEvent) {
+  return event.pointerType === "pen" || event.pointerType === "mouse" || !event.pointerType;
+}
+
 const emptyLayout = (): Layout => ({ width: 0, height: 0, anchors: new Map() });
 const emptyState = (): WorkspaceAnnotationState => ({ strokes: [], legacyImported: false });
 const buttonClass = "inline-flex min-h-10 items-center justify-center rounded-lg border border-line bg-surface px-3 py-2 text-xs font-bold text-ink hover:bg-surface-soft focus-visible:outline-2 focus-visible:outline-teal-ink disabled:opacity-40";
@@ -216,7 +222,7 @@ function StoredWorkspace({ uid, context, legacyContexts = [], disabled = false, 
   };
   const controls = (target: EventTarget) => (target as Element).closest?.("[data-annotation-controls]");
   const down = (event: PointerEvent<HTMLDivElement>) => {
-    if (!drawing || controls(event.target) || !event.isPrimary || event.button > 0 || gesture.current) return;
+    if (!drawing || !canStartAnnotationPointer(event) || controls(event.target) || !event.isPrimary || event.button > 0 || gesture.current) return;
     measure();
     const currentLayout = layoutRef.current;
     if (!currentLayout.width || !currentLayout.height) return;

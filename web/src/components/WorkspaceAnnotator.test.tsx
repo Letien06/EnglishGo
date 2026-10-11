@@ -44,10 +44,11 @@ async function activate() {
   await waitFor(() => expect(screen.getByRole("button", { name: "Xong" })).toBeInTheDocument());
 }
 
-function draw(target: HTMLElement, from = [40, 70], to = [180, 95]) {
-  fireEvent.pointerDown(target, { pointerId: 1, isPrimary: true, button: 0, clientX: from[0], clientY: from[1] });
-  fireEvent.pointerMove(target, { pointerId: 1, isPrimary: true, clientX: to[0], clientY: to[1] });
-  fireEvent.pointerUp(target, { pointerId: 1, isPrimary: true, clientX: to[0], clientY: to[1] });
+function draw(target: HTMLElement, from = [40, 70], to = [180, 95], pointerType?: string, pointerId = 1) {
+  const input = { pointerId, pointerType, isPrimary: true, button: 0, clientX: from[0], clientY: from[1] };
+  fireEvent.pointerDown(target, input);
+  fireEvent.pointerMove(target, { ...input, clientX: to[0], clientY: to[1] });
+  fireEvent.pointerUp(target, { ...input, clientX: to[0], clientY: to[1] });
 }
 
 describe("workspace annotations", () => {
@@ -73,6 +74,31 @@ describe("workspace annotations", () => {
     const stopped = vi.spyOn(key, "stopPropagation");
     workspace.dispatchEvent(key);
     expect(stopped).toHaveBeenCalled();
+  });
+
+  it("ignores palm touch while accepting a physical pen stroke", async () => {
+    const view = renderWorkspace();
+    await activate();
+    const workspace = view.container.querySelector("[data-annotation-workspace]") as HTMLElement;
+    fireEvent.pointerDown(workspace, { pointerId: 10, pointerType: "touch", isPrimary: true, button: 0, clientX: 40, clientY: 70 });
+    fireEvent.pointerMove(workspace, { pointerId: 10, pointerType: "touch", isPrimary: true, clientX: 180, clientY: 95 });
+    fireEvent.pointerUp(workspace, { pointerId: 10, pointerType: "touch", isPrimary: true, button: 0, clientX: 180, clientY: 95 });
+    expect(workspace.querySelector("[data-annotation-ink] path")).not.toBeInTheDocument();
+
+    draw(workspace, [40, 70], [180, 95], "pen", 11);
+    await waitFor(() => expect(workspace.querySelector("[data-annotation-ink] path")).toBeInTheDocument());
+  });
+
+  it("keeps the pen gesture when a palm pointer appears or ends alongside it", async () => {
+    const view = renderWorkspace();
+    await activate();
+    const workspace = view.container.querySelector("[data-annotation-workspace]") as HTMLElement;
+    fireEvent.pointerDown(workspace, { pointerId: 21, pointerType: "pen", isPrimary: true, button: 0, clientX: 40, clientY: 70 });
+    fireEvent.pointerDown(workspace, { pointerId: 22, pointerType: "touch", isPrimary: false, button: 0, clientX: 44, clientY: 74 });
+    fireEvent.pointerMove(workspace, { pointerId: 21, pointerType: "pen", isPrimary: true, clientX: 180, clientY: 95 });
+    fireEvent.pointerUp(workspace, { pointerId: 22, pointerType: "touch", isPrimary: false, button: 0, clientX: 44, clientY: 74 });
+    fireEvent.pointerUp(workspace, { pointerId: 21, pointerType: "pen", isPrimary: true, button: 0, clientX: 180, clientY: 95 });
+    await waitFor(() => expect(workspace.querySelector("[data-annotation-ink] path")).toBeInTheDocument());
   });
 
   it("offers move mode so touch scrolling is restored while the answer stays protected", async () => {
