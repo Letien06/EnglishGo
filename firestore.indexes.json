@@ -96,6 +96,70 @@
       ]
     },
     {
+      "collectionGroup": "listeningProgress",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "correct", "order": "ASCENDING" },
+        { "fieldPath": "part", "order": "ASCENDING" },
+        { "fieldPath": "completedAtMillis", "order": "ASCENDING" },
+        { "fieldPath": "__name__", "order": "ASCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "listeningProgress",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "correct", "order": "ASCENDING" },
+        { "fieldPath": "part", "order": "ASCENDING" },
+        { "fieldPath": "level", "order": "ASCENDING" },
+        { "fieldPath": "completedAtMillis", "order": "ASCENDING" },
+        { "fieldPath": "__name__", "order": "ASCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "listeningProgress",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "correct", "order": "ASCENDING" },
+        { "fieldPath": "part", "order": "ASCENDING" },
+        { "fieldPath": "testId", "order": "ASCENDING" },
+        { "fieldPath": "completedAtMillis", "order": "ASCENDING" },
+        { "fieldPath": "__name__", "order": "ASCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "readingProgress",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "correct", "order": "ASCENDING" },
+        { "fieldPath": "part", "order": "ASCENDING" },
+        { "fieldPath": "completedAtMillis", "order": "ASCENDING" },
+        { "fieldPath": "__name__", "order": "ASCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "readingProgress",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "correct", "order": "ASCENDING" },
+        { "fieldPath": "part", "order": "ASCENDING" },
+        { "fieldPath": "level", "order": "ASCENDING" },
+        { "fieldPath": "completedAtMillis", "order": "ASCENDING" },
+        { "fieldPath": "__name__", "order": "ASCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "readingProgress",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "correct", "order": "ASCENDING" },
+        { "fieldPath": "part", "order": "ASCENDING" },
+        { "fieldPath": "testId", "order": "ASCENDING" },
+        { "fieldPath": "completedAtMillis", "order": "ASCENDING" },
+        { "fieldPath": "__name__", "order": "ASCENDING" }
+      ]
+    },
+    {
       "collectionGroup": "vocabSets",
       "queryScope": "COLLECTION",
       "fields": [

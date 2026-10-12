@@ -1,6 +1,6 @@
 type Name = "open" | "transition" | "sync";
 type Outcome = "success" | "failure";
-type Metric = { name: Name; skill: "reading" | "listening" | "vocab"; outcome: Outcome; count: number; totalMs: number; maxMs: number };
+type Metric = { name: Name; skill: "reading" | "listening" | "vocab"; outcome: Outcome; count: number; totalMs: number; maxMs: number; samples: number[] };
 const metrics = new Map<string, Metric>();
 let timer: ReturnType<typeof setTimeout> | undefined;
 let navigationStart: number | undefined;
@@ -29,8 +29,15 @@ export function recordStudyMetric(name: Name, skill: Metric["skill"], outcome: O
   if (process.env.NODE_ENV !== "production" || typeof window === "undefined" || document.visibilityState === "hidden" && name !== "sync") return;
   const duration = Math.min(300_000, Math.max(0, Math.round(performance.now() - startedAt)));
   const key = `${name}:${skill}:${outcome}`;
-  const metric = metrics.get(key) ?? { name, skill, outcome, count: 0, totalMs: 0, maxMs: 0 };
+  const metric = metrics.get(key) ?? { name, skill, outcome, count: 0, totalMs: 0, maxMs: 0, samples: [] };
   metric.count++; metric.totalMs += duration; metric.maxMs = Math.max(metric.maxMs, duration);
+  // A bounded reservoir keeps the beacon small while allowing the server to
+  // report useful p50/p95 latency instead of only an average.
+  if (metric.samples.length < 100) metric.samples.push(duration);
+  else {
+    const index = Math.floor(Math.random() * metric.count);
+    if (index < 100) metric.samples[index] = duration;
+  }
   metrics.set(key, metric);
   if (!timer) timer = setTimeout(flushStudyMetrics, 15_000);
 }

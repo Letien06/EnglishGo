@@ -56,7 +56,7 @@ describe("Drive material reader", () => {
   it("reads verified bundled content with no Drive request and returns isolated objects", async () => {
     const manifest = await storage.readText("manifest_12345");
     storage.readText.mockClear();
-    storage.readFile.mockImplementation(async (file: string) => file.endsWith("manifest.json") ? manifest : gzipSync(text));
+    storage.readFile.mockImplementation(async (file: string | URL) => String(file).endsWith("manifest.json") ? manifest : gzipSync(text));
     const results = await Promise.all(Array.from({ length: 6 }, () => reader.readDriveMaterial<Array<{ name: string }>>(key)));
     results[0][0].name = "changed";
     expect(results[1]).toEqual(JSON.parse(text));
@@ -68,7 +68,7 @@ describe("Drive material reader", () => {
     vi.spyOn(console, "error").mockImplementation(() => undefined);
     const manifest = await storage.readText("manifest_12345");
     storage.readText.mockClear();
-    storage.readFile.mockImplementation(async (file: string) => file.endsWith("manifest.json") ? manifest : "corrupt");
+    storage.readFile.mockImplementation(async (file: string | URL) => String(file).endsWith("manifest.json") ? manifest : "corrupt");
     await expect(reader.readDriveMaterial(key)).rejects.toMatchObject({ status: 503 });
     expect(storage.readText).not.toHaveBeenCalled();
   });
@@ -76,9 +76,9 @@ describe("Drive material reader", () => {
   it("falls back to legacy JSON only when gzip is absent", async () => {
     const manifest = await storage.readText("manifest_12345");
     storage.readText.mockClear();
-    storage.readFile.mockImplementation(async (file: string) => {
-      if (file.endsWith("manifest.json")) return manifest;
-      if (file.endsWith(".json.gz")) throw Object.assign(new Error("Missing"), { code: "ENOENT" });
+    storage.readFile.mockImplementation(async (file: string | URL) => {
+      if (String(file).endsWith("manifest.json")) return manifest;
+      if (String(file).endsWith(".json.gz")) throw Object.assign(new Error("Missing"), { code: "ENOENT" });
       return text;
     });
     await expect(reader.readDriveMaterial(key)).resolves.toEqual(JSON.parse(text));
@@ -90,7 +90,7 @@ describe("Drive material reader", () => {
     vi.spyOn(console, "error").mockImplementation(() => undefined);
     const manifest = await storage.readText("manifest_12345");
     storage.readText.mockClear();
-    storage.readFile.mockImplementation(async (file: string) => file.endsWith("manifest.json") ? manifest : gzipSync("x".repeat(Buffer.byteLength(text))));
+    storage.readFile.mockImplementation(async (file: string | URL) => String(file).endsWith("manifest.json") ? manifest : gzipSync("x".repeat(Buffer.byteLength(text))));
     await expect(reader.readDriveMaterial(key)).rejects.toMatchObject({ status: 503 });
     expect(storage.readFile).toHaveBeenCalledTimes(2);
     expect(storage.readText).not.toHaveBeenCalled();

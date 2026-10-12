@@ -1,30 +1,39 @@
 import type { NextConfig } from "next";
-import { readdirSync } from "node:fs";
+import { readFileSync } from "node:fs";
 import path from "node:path";
 
 const manifestId = process.env.GOOGLE_DRIVE_MANIFEST_ID ?? "";
 const hasManifestId = /^[a-zA-Z0-9_-]{10,200}$/.test(manifestId);
+// Do not hand NFT a wildcard rooted at every local snapshot when the build is
+// running without the Drive manifest. The runtime provider still works in
+// that mode, while this keeps local/preview builds from walking thousands of
+// stale chunks just to calculate a trace.
 const materialFolder = hasManifestId
   ? `./.content/dauenglish/${manifestId}`
-  : "./.content/dauenglish/**";
-// Keep verified archives available locally so opening a question never needs
-// an avoidable Drive round trip. Inactive snapshots are excluded below.
-const bundledArchives = [`${materialFolder}/*.json.gz`];
+  : "./.content/dauenglish";
 const cacheRoot = path.join(process.cwd(), ".content", "dauenglish");
-// Source material chunks are SHA-256 named files (64 lowercase hex chars).
-// Keep the generated catalog-part-*.json indexes in the trace: a broad `c*.json`
-// exclusion also matched those indexes and silently removed the fast path.
-const materialChunkGlob = `./.content/dauenglish/**/${"[0123456789abcdef]".repeat(8)}*.json`;
-let inactiveMaterialFolders: string[] = [];
-if (hasManifestId) {
+// Keep verified archives available locally so opening a question never needs
+// an avoidable Drive round trip. Only the active manifest is included below.
+function bundledMaterialPaths(): string[] {
+  if (!hasManifestId) return [];
   try {
-    inactiveMaterialFolders = readdirSync(cacheRoot, { withFileTypes: true })
-      .filter((entry) => entry.isDirectory() && entry.name !== manifestId)
-      .map((entry) => `./.content/dauenglish/${entry.name}/**/*`);
-  } catch (error) {
-    if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error;
+    const manifest = JSON.parse(readFileSync(path.join(cacheRoot, manifestId, "manifest.json"), "utf8")) as {
+      entries?: Record<string, { sha256?: string }>;
+    };
+    return Object.values(manifest.entries ?? {})
+      .map((entry) => entry.sha256)
+      .filter((sha): sha is string => /^[a-f0-9]{64}$/.test(sha ?? ""))
+      .map((sha) => `${materialFolder}/${sha}.json.gz`);
+  } catch {
+    // The prebuild step downloads/prepares this manifest before tracing. A
+    // clean checkout can still be traced without it and will use Drive at
+    // runtime, so avoid falling back to a directory wildcard here.
+    return [];
   }
 }
+const bundledArchives = bundledMaterialPaths();
+// Includes add back only the active snapshot's explicit file list.
+const materialTraceExclude = "./.content/dauenglish/**/*";
 
 const nextConfig: NextConfig = {
   poweredByHeader: false,
@@ -44,6 +53,7 @@ const nextConfig: NextConfig = {
       "/vocab/**",
       "/practice",
       "/practice/**",
+      "/review/**",
       "/api/dautoeic/**",
       "/api/vocab/**",
       "/api/listening/**",
@@ -52,10 +62,12 @@ const nextConfig: NextConfig = {
       "/api/dictation/**",
       "/api/admin/dautoeic-sync",
       "/api/grammar/**",
-    ].map((route) => [route, [`${materialFolder}/manifest.json`, `${materialFolder}/catalog-part-*.json`, `${materialFolder}/grammar-answers.json`, `${materialFolder}/grammar-dictionary.json.gz`, ...bundledArchives]]),
+    ].map((route) => [route, [
+      ...(hasManifestId ? [`${materialFolder}/manifest.json`, ...Array.from({ length: 7 }, (_, index) => `${materialFolder}/catalog-part-${index + 1}.json`), `${materialFolder}/grammar-answers.json`, `${materialFolder}/grammar-dictionary.json.gz`, ...bundledArchives] : []),
+    ]]),
   ),
   outputFileTracingExcludes: {
-    "/*": [materialChunkGlob].concat(inactiveMaterialFolders),
+    "/*": [materialTraceExclude],
   },
   allowedDevOrigins: ["127.0.0.1"],
   images: {
