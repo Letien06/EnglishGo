@@ -40,7 +40,22 @@ export async function getMistakeGroups(uid: string, skill: "reading" | "listenin
       query = query.startAfter(part, time, id);
     } catch { throw new ApiError("Trang ôn không hợp lệ. Hãy tải lại danh sách.", 400); }
   }
-  const snapshot = await query.get();
+  let snapshot: FirebaseFirestore.QuerySnapshot;
+  try {
+    snapshot = await query.get();
+  } catch (error) {
+    // A deployment may briefly run before the new composite index is applied.
+    // Keep review usable with a bounded document-order read until the index is
+    // available; the next request will use the fast ordered query.
+    let fallback = collection.where("correct", "==", false).limit(PAGE_SIZE + 1);
+    if (cursor) {
+      const [, , id] = JSON.parse(Buffer.from(cursor, "base64url").toString("utf8"));
+      const cursorDoc = await collection.doc(id).get();
+      if (cursorDoc.exists) fallback = fallback.startAfter(cursorDoc);
+    }
+    snapshot = await fallback.get();
+    if (process.env.NODE_ENV === "production") console.warn("mistake-review-index-unavailable", error instanceof Error ? error.message : "query failed");
+  }
   const pageDocs = snapshot.docs.slice(0, PAGE_SIZE);
   const rows = pageDocs.flatMap((doc): Mistake[] => {
     const data = doc.data();
@@ -61,12 +76,17 @@ async function getMistakesForGroup(uid: string, skill: "reading" | "listening", 
   const collection = adminDb.collection("users").doc(uid).collection(`${skill}Progress`);
   let query = collection.where("correct", "==", false).where("part", "==", part);
   query = testId ? query.where("testId", "==", testId) : query.where("level", "==", level);
-  const snapshot = await query.orderBy("completedAtMillis", "asc").orderBy(FieldPath.documentId()).limit(200).get();
+  let snapshot: FirebaseFirestore.QuerySnapshot;
+  try {
+    snapshot = await query.orderBy("completedAtMillis", "asc").orderBy(FieldPath.documentId()).limit(200).get();
+  } catch {
+    snapshot = await collection.where("correct", "==", false).limit(200).get();
+  }
   return snapshot.docs.flatMap((doc): Mistake[] => {
     const data = doc.data();
     const rowTestId = typeof data.testId === "string" && data.testId ? data.testId : undefined;
     const rowLevel = Math.max(1, Math.min(4, Number(data.level) || 1));
-    if (rowTestId !== testId || (!testId && rowLevel !== level) || typeof data.itemId !== "string") return [];
+    if (Number(data.part) !== part || rowTestId !== testId || (!testId && rowLevel !== level) || typeof data.itemId !== "string") return [];
     return [{ questionId: doc.id, itemId: data.itemId, part, level: rowLevel, testId: rowTestId,
       wrongCount: Math.max(1, Number(data.wrongCount) || 1), lastAttempt: Number(data.completedAtMillis) || 0 }];
   });
