@@ -1,6 +1,6 @@
 import { createHash } from "node:crypto";
 import { readFile } from "node:fs/promises";
-import path from "node:path";
+import { pathToFileURL } from "node:url";
 import { gunzipSync } from "node:zlib";
 import { unstable_cache } from "next/cache";
 import { serverEnv } from "../env";
@@ -19,13 +19,21 @@ const materialMemory = createTextMemoryCache(32_000_000, 128);
 const catalogIndexMemory = createTextMemoryCache(8_000_000, 7);
 const projectionMemory = createTextMemoryCache(16_000_000, 2);
 
+function bundledFile(manifestId: string, name: string): URL {
+  // Runtime file URLs are paired with the explicit manifest-based trace in
+  // next.config.ts. A dynamic readFile(path.join(cwd, id, name)) made the
+  // bundler expand an enormous wildcard over every inactive local snapshot.
+  if (!/^[a-zA-Z0-9_-]{10,200}$/.test(manifestId) || !/^(manifest\.json|catalog-part-[1-7]\.json|grammar-answers\.json|grammar-dictionary\.json\.gz|[a-f0-9]{64}\.json(?:\.gz)?)$/.test(name)) throw new Error("Invalid bundled material path.");
+  return new URL(`${manifestId}/${name}`, pathToFileURL(`${process.cwd()}/.content/dauenglish/`));
+}
+
 /** Build-generated metadata never falls back to scanning all question bodies. */
 export async function readGrammarProjection(name: "grammar-answers.json" | "grammar-dictionary.json.gz"): Promise<unknown> {
   if (!isDriveContentEnabled()) throw new ApiError("Grammar material is unavailable.", 503);
   const manifestId = driveFileId(serverEnv.googleDriveManifestId);
   try {
     const text = await projectionMemory.get(`${manifestId}:${name}`, async () => {
-      const buffer = await readFile(path.join(process.cwd(), ".content", "dauenglish", manifestId, name));
+      const buffer = await readFile(bundledFile(manifestId, name));
       const text = name.endsWith(".gz") ? gunzipSync(buffer, { maxOutputLength: 16_000_000 }).toString("utf8") : buffer.toString("utf8");
       const manifestText = await manifestMemory.get(manifestId, async () =>
         await bundledText(manifestId, "manifest.json") ?? JSON.stringify(await cachedManifest(manifestId)),
@@ -42,7 +50,7 @@ export async function readGrammarProjection(name: "grammar-answers.json" | "gram
 
 async function bundledText(manifestId: string, name: string): Promise<string | null> {
   try {
-    return await readFile(path.join(process.cwd(), ".content", "dauenglish", manifestId, name), "utf8");
+    return await readFile(bundledFile(manifestId, name), "utf8");
   } catch (error) {
     if ((error as NodeJS.ErrnoException).code === "ENOENT") return null;
     throw error;
@@ -52,7 +60,7 @@ async function bundledText(manifestId: string, name: string): Promise<string | n
 async function bundledMaterial(manifestId: string, entry: { bytes: number; sha256: string }): Promise<string | null> {
   let compressed: Buffer;
   try {
-    compressed = await readFile(path.join(process.cwd(), ".content", "dauenglish", manifestId, `${entry.sha256}.json.gz`));
+    compressed = await readFile(bundledFile(manifestId, `${entry.sha256}.json.gz`));
   } catch (error) {
     if ((error as NodeJS.ErrnoException).code === "ENOENT") return bundledText(manifestId, `${entry.sha256}.json`);
     throw error;
