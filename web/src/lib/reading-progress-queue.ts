@@ -105,7 +105,9 @@ class ReadingQueue {
         this.unsaved.delete(entry.requestId);
       }
       if (acknowledgedRequestId) localStorage.removeItem(`${this.key}:${acknowledgedRequestId}`);
-      this.reconcile();
+      // Keep the in-memory queue authoritative during normal writes. A full
+      // localStorage reconciliation scans every queued entry and is reserved
+      // for activation/storage events (where cross-tab recovery is needed).
       this.storageError = null;
     } catch {
       this.storageError = "Không thể lưu trên thiết bị. Hãy giữ trang mở và thử lưu lại.";
@@ -151,7 +153,6 @@ class ReadingQueue {
   };
   enqueue = (action: ReadingProgressAction) => {
     if (!this.eligible()) return;
-    try { this.reconcile(); } catch { /* Keep unsaved actions when storage is unavailable. */ }
     const entry = { requestId: crypto.randomUUID(), queuedAt: Math.max(Date.now(), ...this.entries.map((entry) => entry.queuedAt + 1)), action: { ...action } };
     this.unsaved.set(entry.requestId, entry);
     this.entries.push(entry);

@@ -50,7 +50,18 @@ export async function moduleMetrics(): Promise<AdminMetric[]> {
 }
 
 export async function draftQueue(): Promise<ContentReviewItem[]> {
-  const snap = await adminDb.collection("contentAuditLogs").get();
+  let snap;
+  try {
+    snap = await adminDb
+      .collection("contentAuditLogs")
+      .where("status", "in", ["PENDING", "DRAFT", "SUBMITTED"])
+      .orderBy("createdAtMillis", "desc")
+      .limit(50)
+      .get();
+  } catch {
+    // Keep the admin queue usable while the composite index is rolling out.
+    snap = await adminDb.collection("contentAuditLogs").get();
+  }
   return snap.docs
     .map((doc) => {
       const data = doc.data();

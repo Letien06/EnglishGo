@@ -21,11 +21,10 @@ export async function recentJobs(uid: string | null): Promise<AiWritingJob[]> {
     .collection("users")
     .doc(uid)
     .collection("aiWritingJobs")
+    .orderBy("createdAtMillis", "desc")
+    .limit(20)
     .get();
-  return snap.docs
-    .map(toJob)
-    .sort((a, b) => (b.createdAtMillis ?? 0) - (a.createdAtMillis ?? 0))
-    .slice(0, 20);
+  return snap.docs.map(toJob);
 }
 
 export async function submit(

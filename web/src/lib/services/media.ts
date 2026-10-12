@@ -96,7 +96,13 @@ export async function storeMedia(
 }
 
 export async function recentMedia(limit = 20): Promise<MediaAsset[]> {
-  const snap = await adminDb.collection("mediaAssets").get();
+  const safeLimit = Math.max(0, Math.min(100, Math.trunc(limit)));
+  if (safeLimit === 0) return [];
+  const snap = await adminDb
+    .collection("mediaAssets")
+    .orderBy("createdAtMillis", "desc")
+    .limit(safeLimit)
+    .get();
   return snap.docs
     .map((doc) => {
       const data = doc.data();
@@ -112,9 +118,7 @@ export async function recentMedia(limit = 20): Promise<MediaAsset[]> {
         uploadedByEmail: stringValue(data.uploadedByEmail) ?? "",
         createdAtMillis: numberValue(data.createdAtMillis) ?? 0,
       };
-    })
-    .sort((a, b) => b.createdAtMillis - a.createdAtMillis)
-    .slice(0, limit);
+    });
 }
 
 function validateContentType(mediaType: MediaType, contentType: string): void {
