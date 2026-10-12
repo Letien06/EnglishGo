@@ -1,5 +1,7 @@
 "use client";
 
+import { recordStudyMetric } from "./study-performance";
+
 import { useCallback, useEffect, useMemo, useSyncExternalStore } from "react";
 import { invalidateLearningLevels } from "./client-learning-progress-cache";
 
@@ -201,6 +203,7 @@ class ReadingQueue {
     // The global owner serializes requests across queue instances and hook mounts.
     // eslint-disable-next-line @typescript-eslint/no-this-alias
     owner = this;
+    const metricStarted = performance.now();
     const controller = new AbortController();
     this.controller = controller;
     this.publish();
@@ -255,8 +258,10 @@ class ReadingQueue {
       this.attempts = 0;
       this.requestError = null;
       this.lastSavedAtMillis = Date.now();
+      recordStudyMetric("sync", this.skill, "success", metricStarted);
     } catch {
       if (this.eligible()) {
+        recordStudyMetric("sync", this.skill, "failure", metricStarted);
         this.requestError = this.blocked ? "Chưa lưu được. Hãy kiểm tra phiên đăng nhập và thử lưu lại." : "Chưa đồng bộ được. Các câu đang chờ sẽ được thử lưu lại.";
         delay = Math.min(60_000, 1000 * 2 ** Math.min(this.attempts++, 6));
       }

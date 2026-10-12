@@ -1,8 +1,10 @@
 "use client";
 
+import { recordStudyMetric } from "./study-performance";
+
 import { useCallback, useEffect, useMemo, useSyncExternalStore } from "react";
 
-export type QueuedVocabReview = { wordId: number; mastered?: true; quality?: number };
+export type QueuedVocabReview = { wordId: number; mastered?: true; quality?: number; reviewTomorrow?: true };
 type Entry = { token: string; review: QueuedVocabReview };
 type Batch = { requestId: string; entries: Entry[] };
 type Snapshot = {
@@ -172,6 +174,7 @@ class ReviewQueue {
     inFlightOwner = { queue: this };
     this.publish();
     let retryDelay: number | undefined;
+    const metricStarted = performance.now();
     const controller = new AbortController();
     let timeout: ReturnType<typeof setTimeout> | undefined;
     try {
@@ -222,6 +225,7 @@ class ReviewQueue {
       this.requestError = null;
       this.persist();
       this.lastSavedAtMillis = Date.now();
+      recordStudyMetric("sync", "vocab", "success", metricStarted);
       if (typeof window !== "undefined") {
         window.dispatchEvent(new CustomEvent("englishgo:vocab-progress-saved", {
           detail: { wordIds: [...acknowledgements.keys()] },
@@ -229,6 +233,7 @@ class ReviewQueue {
       }
       retryDelay = 100;
     } catch (error) {
+      recordStudyMetric("sync", "vocab", "failure", metricStarted);
       this.requestError = "Tiến độ chưa đồng bộ. Bạn có thể tiếp tục học hoặc thử lưu lại.";
       const transient = !(error instanceof Error && "transient" in error) || Boolean((error as Error & { transient: boolean }).transient);
       if (transient && this.attempts < 5) retryDelay = Math.min(500 * 2 ** this.attempts++, 30000);

@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useRef, useState, type Dispatch, type SetStateAction } from "react";
 import type { DauToeicPracticeItem } from "@/types/dautoeic";
 
-export function usePracticeResume({ skill, uid, part, level, testId, items, setAnswers, setIndex, pendingAnswers, currentAnswers, currentIndex }: {
+export function usePracticeResume({ skill, uid, part, level, testId, items, setAnswers, setIndex, pendingAnswers, currentAnswers, currentIndex, reviewRun }: {
   skill: "listening" | "reading";
   uid: string | null;
   part: number;
@@ -15,15 +15,16 @@ export function usePracticeResume({ skill, uid, part, level, testId, items, setA
   pendingAnswers?: Record<string, string>;
   currentAnswers?: Record<string, string>;
   currentIndex?: number;
+  reviewRun?: string;
 }) {
   const interacted = useRef(false);
   const explicitPosition = useRef(typeof window !== "undefined" && new URLSearchParams(window.location.search).has("q"));
   const localAnswers = useRef<Record<string, string>>({});
   const [hydrated, setHydrated] = useState(false);
-  const storageKey = `englishgo:practice-position:${JSON.stringify([uid ?? "guest", skill, part, testId ?? level, items[0]?.id])}`;
+  const storageKey = `englishgo:practice-position:${JSON.stringify([uid ?? "guest", skill, part, testId ?? level, items[0]?.id, reviewRun ?? null])}`;
   const pendingRef = useRef(pendingAnswers);
   useEffect(() => { pendingRef.current = pendingAnswers; }, [pendingAnswers]);
-  const [status, setStatus] = useState(uid ? "Đang khôi phục tiến độ... Bạn có thể học ngay." : "");
+  const [status, setStatus] = useState(uid && !reviewRun ? "Đang khôi phục tiến độ... Bạn có thể học ngay." : "");
   const markInteraction = useCallback(() => { interacted.current = true; }, []);
 
   useEffect(() => {
@@ -53,7 +54,7 @@ export function usePracticeResume({ skill, uid, part, level, testId, items, setA
   }, [hydrated, currentAnswers, currentIndex, items, storageKey]);
 
   useEffect(() => {
-    if (!uid) return;
+    if (!uid || reviewRun) return;
     const controller = new AbortController();
     const selection = testId ? `testId=${encodeURIComponent(testId)}` : `level=${level}`;
     void fetch(`/api/${skill}/progress?part=${part}&${selection}`, { cache: "no-store", signal: controller.signal })
@@ -80,7 +81,7 @@ export function usePracticeResume({ skill, uid, part, level, testId, items, setA
         if (!controller.signal.aborted) setStatus("Chưa tải được tiến độ cũ. Câu trả lời mới vẫn được lưu khi có kết nối.");
       });
     return () => controller.abort();
-  }, [items, level, part, testId, setAnswers, setIndex, skill, uid]);
+  }, [items, level, part, testId, setAnswers, setIndex, skill, uid, reviewRun]);
 
   return { markInteraction, resumeStatus: status };
 }

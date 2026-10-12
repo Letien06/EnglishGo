@@ -7,6 +7,7 @@ import { parseVocabularyEntries, vocabularyRowsText } from "@/lib/practice-vocab
 import Link from "@/components/IntentLink";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import PracticePrefetch from "@/components/PracticePrefetch";
+import { useStudyPerformance } from "@/lib/use-study-performance";
 import StudySaveStatus from "@/components/StudySaveStatus";
 import PracticeSaveGuard from "@/components/PracticeSaveGuard";
 import PracticeHeader from "../../_components/PracticeHeader";
@@ -32,6 +33,7 @@ interface Props {
   userLoggedIn: boolean;
   initialIndex: number;
   initialAuto?: boolean;
+  reviewRun?: string;
   userUid: string | null;
 }
 
@@ -58,6 +60,7 @@ export default function ListenPracticeClient({
   userLoggedIn,
   initialIndex,
   initialAuto = false,
+  reviewRun,
 }: Props) {
   const initialMode = normalizeMode(mode);
   const router = useRouter();
@@ -71,14 +74,15 @@ export default function ListenPracticeClient({
   const enqueueProgress = progressQueue.enqueue;
   const pendingAnswers = useMemo(() => {
     const answers: Record<string, string> = {};
+    if (reviewRun) return answers;
     for (const action of progressQueue.pending) {
       if (action.part === partNum && action.level === level && action.testId === session.testId) answers[action.questionId] = action.selectedAnswer;
     }
     return answers;
-  }, [level, partNum, progressQueue.pending, session.testId]);
+  }, [level, partNum, progressQueue.pending, session.testId, reviewRun]);
   const [revealedMap, setRevealedMap] = useState<Record<string, number[]>>({});
   const [fillValues, setFillValues] = useState<Record<string, string>>({});
-  const { markInteraction, resumeStatus } = usePracticeResume({ skill: "listening", uid: userUid, part: partNum, level, testId: session.testId, items, setAnswers: setAnsweredMap, setIndex: setCurrentIndex, pendingAnswers, currentAnswers: answeredMap, currentIndex });
+  const { markInteraction, resumeStatus } = usePracticeResume({ skill: "listening", uid: userUid, part: partNum, level, testId: session.testId, items, setAnswers: setAnsweredMap, setIndex: setCurrentIndex, pendingAnswers, currentAnswers: answeredMap, currentIndex, reviewRun });
   const [showNote, setShowNote] = useState(false);
   const [auto, setAuto] = useState(initialAuto);
   const [elapsed, setElapsed] = useState(0);
@@ -90,6 +94,8 @@ export default function ListenPracticeClient({
   const startedAtRef = useRef(0);
   const autoAdvanceRef = useRef<number | null>(null);
   const item = items[currentIndex] ?? items[0];
+  const startTransitionTiming = useStudyPerformance("listening", item.id);
+
 
   useEffect(() => {
     setActiveLearnerId(userUid);
@@ -231,6 +237,7 @@ export default function ListenPracticeClient({
   const goTo = useCallback((index: number, options: { play?: boolean } = {}) => {
     const target = practiceNavigationTarget(session, index);
     if (!target) return;
+    startTransitionTiming(target.reload);
     if (autoAdvanceRef.current !== null) {
       window.clearTimeout(autoAdvanceRef.current);
       autoAdvanceRef.current = null;
@@ -288,7 +295,7 @@ export default function ListenPracticeClient({
     });
 
 
-  }, [activeAssist, activeMode, answeredMap, auto, currentIndex, elapsed, enqueueProgress, goTo, item.id, item.questions, level, offset, partNum, total, session.testId]);
+  }, [activeAssist, activeMode, answeredMap, auto, currentIndex, elapsed, enqueueProgress, goTo, item.id, item.questions, level, offset, partNum, total, session.testId, startTransitionTiming]);
 
   useEffect(() => () => {
     if (autoAdvanceRef.current !== null) window.clearTimeout(autoAdvanceRef.current);
@@ -302,7 +309,7 @@ export default function ListenPracticeClient({
       <PracticeHeader skill="listening" partId={partId} part={partNum} level={level} testId={session.testId} testName={session.testName} setName={session.setName} grouped={session.grouping === "balanced"} modes={modes} activeMode={activeMode} onModeChange={switchMode} auto={auto} onToggleAuto={() => setAuto((value) => !value)} elapsed={formatElapsed(elapsed)} assist={activeAssist} onAssistChange={switchAssist} />
       <PracticePrefetch session={session} index={currentIndex} />
       <StudySaveStatus {...progressQueue} pendingLabel="câu" message={resumeStatus} />
-      <PracticeSaveGuard queue={progressQueue} backHref={`/listen?part=${partId}`} />
+      <PracticeSaveGuard queue={progressQueue} backHref={reviewRun ? "/vocab/review" : `/listen?part=${partId}`} />
 
       <WorkspaceAnnotator uid={userUid} context={{ surface: "listen", resourceId: `${session.testId ?? `${partId}:level:${level}`}:${item.id}`, questionKey: "workspace" }} legacyContexts={item.questions.map((question) => ({ surface: "listen", resourceId: `${session.testId ?? `${partId}:level:${level}`}:${item.id}`, questionKey: question.id }))} className="practice-content grid min-h-[calc(100dvh-8rem)] lg:grid-cols-[1fr_1fr]">
         <section data-annotation-anchor="source" className="practice-source-pane border-b border-line px-4 py-5 sm:px-6 lg:border-b-0 lg:border-r lg:px-10 lg:py-8">

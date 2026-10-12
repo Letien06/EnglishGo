@@ -8,6 +8,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { markVisited, routeKey } from "@/lib/nav/session-nav";
 import { setActiveLearnerId } from "@/lib/client-learning-progress-cache";
 import PracticePrefetch from "@/components/PracticePrefetch";
+import { useStudyPerformance } from "@/lib/use-study-performance";
 import StudySaveStatus from "@/components/StudySaveStatus";
 import PracticeSaveGuard from "@/components/PracticeSaveGuard";
 import PracticeHeader from "../../_components/PracticeHeader";
@@ -31,6 +32,7 @@ interface Props {
   userLoggedIn: boolean;
   initialIndex: number;
   initialAuto?: boolean;
+  reviewRun?: string;
   userUid: string | null;
 }
 
@@ -52,6 +54,7 @@ export default function ReadPracticeClient({
   userLoggedIn,
   initialIndex,
   initialAuto = false,
+  reviewRun,
 }: Props) {
   const initialMode = normalizeMode(mode);
   const router = useRouter();
@@ -63,12 +66,13 @@ export default function ReadPracticeClient({
   const progressQueue = useReadingProgressQueue(userUid, userLoggedIn);
   const pendingAnswers = useMemo(() => {
     const answers: Record<string, string> = {};
+    if (reviewRun) return answers;
     for (const action of progressQueue.pending) {
       if (action.part === partNum && action.level === level && action.testId === session.testId && items.some((entry) => entry.id === action.itemId && entry.questions.some((question) => question.id === action.questionId))) answers[action.questionId] = action.selectedAnswer;
     }
     return answers;
-  }, [items, level, partNum, progressQueue.pending, session.testId]);
-  const { markInteraction, resumeStatus } = usePracticeResume({ skill: "reading", uid: userUid, part: partNum, level, testId: session.testId, items, setAnswers: setAnsweredMap, setIndex: setCurrentIndex, pendingAnswers, currentAnswers: answeredMap, currentIndex });
+  }, [items, level, partNum, progressQueue.pending, session.testId, reviewRun]);
+  const { markInteraction, resumeStatus } = usePracticeResume({ skill: "reading", uid: userUid, part: partNum, level, testId: session.testId, items, setAnswers: setAnsweredMap, setIndex: setCurrentIndex, pendingAnswers, currentAnswers: answeredMap, currentIndex, reviewRun });
   const enqueueProgress = progressQueue.enqueue;
   const [showNote, setShowNote] = useState(false);
   const [auto, setAuto] = useState(initialAuto);
@@ -78,6 +82,8 @@ export default function ReadPracticeClient({
   const startedAtRef = useRef(0);
   const autoAdvanceRef = useRef<number | null>(null);
   const item = items[currentIndex] ?? items[0];
+  const startTransitionTiming = useStudyPerformance("reading", item.id);
+
   const firstQuestion = item.questions[0];
   const passageTranslation = cleanDisplayText(item.translation);
   const showPassageTranslation = activeMode === "bilingual" || Boolean(passageTranslation && item.questions.some((question) => answeredMap[question.id]));
@@ -87,6 +93,7 @@ export default function ReadPracticeClient({
   }, [userUid]);
 
   useEffect(() => {
+    if (reviewRun) return;
     const pending = progressQueue.pending.filter((action) => action.part === partNum && action.level === level && action.testId === session.testId);
     if (!pending.length) return;
     // Restore answers from the external durable queue after client storage hydration.
@@ -102,7 +109,7 @@ export default function ReadPracticeClient({
       }
       return changed ? restored : previous;
     });
-  }, [items, level, partNum, progressQueue.pending, session.testId]);
+  }, [items, level, partNum, progressQueue.pending, session.testId, reviewRun]);
 
   useEffect(() => {
     let firstFrame = 0;
@@ -175,6 +182,7 @@ export default function ReadPracticeClient({
   const goTo = useCallback((index: number) => {
     const target = practiceNavigationTarget(session, index);
     if (!target) return;
+    startTransitionTiming(target.reload);
     if (autoAdvanceRef.current !== null) {
       window.clearTimeout(autoAdvanceRef.current);
       autoAdvanceRef.current = null;
@@ -225,7 +233,7 @@ export default function ReadPracticeClient({
     });
 
 
-  }, [activeMode, answeredMap, auto, currentIndex, elapsed, enqueueProgress, goTo, item.id, item.questions, level, offset, partNum, session.testId, total]);
+  }, [activeMode, answeredMap, auto, currentIndex, elapsed, enqueueProgress, goTo, item.id, item.questions, level, offset, partNum, session.testId, startTransitionTiming, total]);
 
   useEffect(() => () => {
     if (autoAdvanceRef.current !== null) window.clearTimeout(autoAdvanceRef.current);
@@ -258,7 +266,7 @@ export default function ReadPracticeClient({
       <PracticeHeader skill="reading" partId={partId} part={partNum} level={level} testId={session.testId} testName={session.testName} setName={session.setName} grouped={session.grouping === "balanced"} modes={modes} activeMode={activeMode} onModeChange={(nextMode) => { if (nextMode === "normal" || nextMode === "bilingual") switchMode(nextMode); }} auto={auto} onToggleAuto={() => setAuto((value) => !value)} elapsed={formatElapsed(elapsed)} />
       <PracticePrefetch session={session} index={currentIndex} />
       <StudySaveStatus {...progressQueue} pendingLabel="câu" message={resumeStatus} />
-      <PracticeSaveGuard queue={progressQueue} backHref={`/read?part=${partId}`} />
+      <PracticeSaveGuard queue={progressQueue} backHref={reviewRun ? "/vocab/review" : `/read?part=${partId}`} />
 
       <WorkspaceAnnotator uid={userUid} context={{ surface: "read", resourceId: `${session.testId ?? `${partId}:level:${level}`}:${item.id}`, questionKey: "workspace" }} legacyContexts={item.questions.map((question) => ({ surface: "read", resourceId: `${session.testId ?? `${partId}:level:${level}`}:${item.id}`, questionKey: question.id }))} className={`practice-content grid min-h-[calc(100dvh-8rem)] lg:grid-cols-[1fr_1fr] ${partNum === 5 ? "practice-content--single" : ""}`}>
         <section data-annotation-anchor="source" className="practice-source-pane border-b border-line px-4 py-5 sm:px-6 lg:border-b-0 lg:border-r lg:px-10 lg:py-6">

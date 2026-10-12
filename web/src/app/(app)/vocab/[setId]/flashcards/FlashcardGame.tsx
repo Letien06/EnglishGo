@@ -25,6 +25,7 @@ import type {
   VocabSetSession,
   VocabWordCard,
 } from "@/types/vocab";
+import WrongWordReview from "../../review/WrongWordReview";
 import StudySaveStatus from "@/components/StudySaveStatus";
 import useDialogFocus from "@/components/useDialogFocus";
 import { ClientRequestTimeoutError, fetchWithTimeout } from "@/lib/client-request";
@@ -1106,6 +1107,7 @@ function SaveProgressDialog({ saving, error, onCancel, onSkip, onSave }: {
   onCancel: () => void;
   onSkip: () => void;
   onSave: () => void;
+  currentUserId?: string;
 }) {
   const dialogRef = useRef<HTMLDivElement>(null);
   useDialogFocus(true, onCancel, dialogRef);
@@ -1972,6 +1974,7 @@ function PlaySurface({
         isAuthenticated={isAuthenticated}
         loginHref={loginHref}
         onSave={saveAndComplete}
+        currentUserId={currentUserId}
         onSpeak={(id) => {
           const item = resultAnswers.find((answer) => answer.id === id) || words.find((w) => w.id === id);
           if (item) speakItem(item as VocabWordCard);
@@ -2343,6 +2346,7 @@ function ResultScreen({
   isAuthenticated,
   loginHref,
   onSave,
+  currentUserId,
   onSpeak,
 }: {
   answers: AnswerRecord[];
@@ -2354,6 +2358,7 @@ function ResultScreen({
   isAuthenticated: boolean;
   loginHref: string;
   onSave: () => void;
+  currentUserId?: string;
   onSpeak: (id: number) => void;
 }) {
   const total = Math.max(1, answers.length || attempts);
@@ -2427,6 +2432,7 @@ function ResultScreen({
           Đăng nhập để lưu kết quả
         </Link>
       )}
+      {wrongItems.length > 0 && !saving && <WrongWordReview words={wrongItems.map((item) => ({ ...item, mastered: false }))} uid={currentUserId} authenticated={isAuthenticated} />}
       {saveError && <p className="text-center text-sm text-red-500">{saveError}</p>}
     </section>
   );

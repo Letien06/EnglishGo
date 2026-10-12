@@ -1,5 +1,6 @@
 "use client";
 
+import { flushStudyMetrics, startStudyNavigation } from "@/lib/study-performance";
 import { useEffect } from "react";
 
 type Metric = { name: string; value: number; navigationType?: string; route?: string };
@@ -21,6 +22,15 @@ export function markLearningReady(kind: "first-question" | "audio", value = perf
 
 export default function PerformanceTelemetry() {
   useEffect(() => {
+    const onClick = (event: MouseEvent) => {
+      if (event.defaultPrevented || event.button !== 0 || event.ctrlKey || event.metaKey || event.altKey || event.shiftKey) return;
+      const anchor = event.target instanceof Element ? event.target.closest<HTMLAnchorElement>("a[href]") : null;
+      if (anchor && (!anchor.target || anchor.target === "_self") && anchor.origin === location.origin && /\/(practice|flashcards)(?:$|\/)/.test(anchor.pathname)) startStudyNavigation();
+    };
+    const onHidden = () => { if (document.visibilityState === "hidden") flushStudyMetrics(); };
+    document.addEventListener("click", onClick, true);
+    document.addEventListener("visibilitychange", onHidden);
+    window.addEventListener("pagehide", flushStudyMetrics);
     const observers: PerformanceObserver[] = [];
     const observe = (type: string, handler: (entry: PerformanceEntry) => void, options?: PerformanceObserverInit & { durationThreshold?: number }) => {
       try { const observer = new PerformanceObserver(list => list.getEntries().forEach(handler)); observer.observe({ type, buffered: true, ...options } as PerformanceObserverInit); observers.push(observer); } catch { /* Unsupported metric. */ }
@@ -33,7 +43,7 @@ export default function PerformanceTelemetry() {
     if (navigation) send({ name: "TTFB", value: navigation.responseStart - navigation.requestStart, navigationType: navigation.type });
     const onReady = (event: Event) => { const detail = (event as CustomEvent<{ kind: "first-question" | "audio"; value: number }>).detail; send({ name: detail.kind, value: detail.value }); };
     window.addEventListener("englishgo:learning-ready", onReady);
-    return () => { observers.forEach(observer => observer.disconnect()); window.removeEventListener("englishgo:learning-ready", onReady); };
+    return () => { document.removeEventListener("click", onClick, true); document.removeEventListener("visibilitychange", onHidden); window.removeEventListener("pagehide", flushStudyMetrics); observers.forEach(observer => observer.disconnect()); window.removeEventListener("englishgo:learning-ready", onReady); };
   }, []);
   return null;
 }

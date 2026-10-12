@@ -93,7 +93,10 @@ export async function saveLearningProgress(input: {
       replaceProgress ? input.prepareProjection(tx, progress) : Promise.resolve(() => {}),
     ]);
     // All reads are complete before the first write, as Firestore requires.
-    if (replaceProgress) tx.set(progressRef, progress, { merge: true });
+    if (replaceProgress) tx.set(progressRef, {
+      ...progress,
+      ...(!progress.correct ? { wrongCount: FieldValue.increment(1) } : {}),
+    }, { merge: true });
     writeStudyActivityInTransaction(tx, uid, {
       module, activityType: "answer", metric: module, quantity: 1,
       sourceId: progress.questionId, durationSeconds: progress.elapsedSeconds,

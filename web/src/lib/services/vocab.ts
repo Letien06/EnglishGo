@@ -1539,6 +1539,7 @@ export type VocabBatchReviewInput = {
   wordId: number;
   quality?: number;
   mastered?: boolean;
+  reviewTomorrow?: true;
 };
 
 /**
@@ -1566,7 +1567,7 @@ export async function reviewBatch(
     if (!mastered && (typeof quality !== "number" || quality < 0 || quality > 5)) {
       throw BadRequest("Quality must be 0-5");
     }
-    uniqueReviews.set(wordId, { wordId, mastered, quality });
+    uniqueReviews.set(wordId, { wordId, mastered, quality, ...(reviewInput.reviewTomorrow ? { reviewTomorrow: true as const } : {}) });
   }
   const requested = [...uniqueReviews.values()];
   if (!requested.length) return [];
@@ -1620,6 +1621,12 @@ export async function reviewBatch(
         ? masteredProgress(baseProgress, now)
         : applySm2(baseProgress, reviewInput.quality ?? 0, now);
 
+      if (reviewInput.reviewTomorrow) {
+        updated.interval = 1;
+        updated.repetitions = 0;
+        updated.status = (reviewInput.quality ?? 0) >= 3 ? "REVIEWING" : "LEARNING";
+        updated.nextReviewAtMillis = now + 24 * 60 * 60 * 1000;
+      }
       masteredDelta += Number(updated.status === "MASTERED") - Number(previous?.status === "MASTERED");
       dueDelta += Number(isDueProgress(updated, now)) - Number(previous ? isDueProgress(previous, now) : false);
       nextProgressItems.push(updated);

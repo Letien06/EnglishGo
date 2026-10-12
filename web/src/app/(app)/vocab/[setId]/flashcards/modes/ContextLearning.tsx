@@ -1,4 +1,5 @@
 "use client";
+import WrongWordReview from "../../../review/WrongWordReview";
 import Image from "next/image";
 
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
@@ -331,6 +332,7 @@ export default function ContextLearning({
 
       if (!nextWord) {
         finished.current = true;
+        setAnswers(nextAnswers);
         setSessionFinished(true);
         onComplete({
           answers: nextAnswers,
@@ -418,6 +420,7 @@ export default function ContextLearning({
     return (
       <section className="p-8 text-center text-white" aria-label="Học theo ngữ cảnh">
         <p className="text-xl font-bold mb-3">{filterMode === "unmastered" && activeWords.length === 0 && words.length > 0 ? "Bạn đã thuộc tất cả từ trong phần này." : sessionFinished ? studyIntent === "review" ? "Đã hoàn thành phiên ôn." : "Đã hoàn thành phiên học." : studyIntent === "review" && words.length === 0 ? "Chưa có từ đã thuộc để ôn." : "Chưa có từ phù hợp để học."}</p>
+        {sessionFinished && <WrongWordReview words={answers.filter((answer) => !answer.correct).map((answer) => answer.item)} uid={currentUserId} authenticated={isAuthenticated} onProgress={onProgress} />}
         {filterMode === "unmastered" && words.length > 0 && onReview && (
           <button className={styles.button} onClick={onReview}>Ôn tập từ đã thuộc</button>
         )}

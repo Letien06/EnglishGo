@@ -10,6 +10,7 @@ const reviewSchema = z.union([
   z.object({
     wordId: wordIdSchema,
     quality: z.coerce.number().min(0).max(5),
+    reviewTomorrow: z.literal(true).optional(),
   }),
   z.object({
     wordId: wordIdSchema,

@@ -7,11 +7,14 @@ import ContextLearning from "../[setId]/flashcards/modes/ContextLearning";
 import StudySaveStatus from "@/components/StudySaveStatus";
 import PracticeSaveGuard from "@/components/PracticeSaveGuard";
 import { useVocabReviewQueue } from "@/lib/vocab-review-queue";
+import WrongWordReview from "./WrongWordReview";
+import type { VocabularyRoundResult } from "@/lib/vocab-arcade";
 
 export default function ReviewTodayClient({ uid, words }: { uid: string; words: VocabWordCard[] }) {
   const queue = useVocabReviewQueue(uid, true);
   const [started, setStarted] = useState(false);
   const [finished, setFinished] = useState(false);
+  const [wrongWords, setWrongWords] = useState<VocabWordCard[]>([]);
   return <main className="mx-auto w-full max-w-5xl space-y-4 p-4 sm:p-6">
     <Link href="/vocab">← Bộ từ vựng</Link>
     <h1 className="text-2xl font-extrabold text-ink">Ôn hôm nay</h1>
@@ -19,8 +22,8 @@ export default function ReviewTodayClient({ uid, words }: { uid: string; words: 
     <StudySaveStatus {...queue} />
     <PracticeSaveGuard queue={queue} backHref="/vocab" />
     {!words.length ? <p>Chưa có từ đến hạn. Bạn có thể học tiếp hoặc ôn từ đã thuộc trong từng bộ.</p>
-      : finished ? <section className="rounded-xl border border-line p-6"><h2 className="text-xl font-bold">Đã hoàn thành lượt ôn</h2><Link href="/vocab/review?next=1" onClick={() => window.location.assign("/vocab/review")}>Xem lượt ôn tiếp theo →</Link></section>
-      : started ? <ContextLearning words={words} currentUserId={uid} isAuthenticated studyIntent="review" onComplete={() => setFinished(true)} onExit={() => setStarted(false)} />
+      : finished ? <section className="space-y-4 rounded-xl border border-line p-6"><h2 className="text-xl font-bold">Đã hoàn thành lượt ôn</h2>{wrongWords.length > 0 && <WrongWordReview words={wrongWords} uid={uid} authenticated onProgress={queue.retry} />}<Link href="/vocab/review?next=1" onClick={() => window.location.assign("/vocab/review")}>Xem lượt ôn tiếp theo →</Link></section>
+      : started ? <ContextLearning words={words} currentUserId={uid} isAuthenticated studyIntent="review" onComplete={(result: VocabularyRoundResult) => { setWrongWords(result.answers.filter((answer) => !answer.correct).map((answer) => answer.item)); setFinished(true); }} onExit={() => setStarted(false)} />
       : <><button type="button" className="rounded-xl bg-primary px-5 py-3 font-bold text-gold-ink" onClick={() => setStarted(true)}>Ôn {words.length} từ đến hạn</button>
         <ul className="divide-y divide-line rounded-xl border border-line">{words.map((word) => <li key={word.id} className="flex flex-wrap justify-between gap-2 p-4"><strong>{word.word}</strong><span>{word.meaning}</span></li>)}</ul></>}
   </main>;

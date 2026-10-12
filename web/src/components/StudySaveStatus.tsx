@@ -17,9 +17,8 @@ export default function StudySaveStatus({ pendingCount, isSaving, error, lastSav
       : isSaving ? `Đang đồng bộ ${pendingCount} ${pendingLabel}… · ${pendingCount} ${pendingLabel} đang chờ lưu`
         : `Chờ đồng bộ ${pendingCount} ${pendingLabel}…`
     : lastSavedAtMillis ? "Đã lưu" : message);
-  if (!text) return null;
-  return <div className="practice-save-status flex min-h-10 flex-wrap items-center justify-between gap-2 text-sm" role={error ? "alert" : "status"} aria-live="polite">
-    <span>{text}</span>
+  return <div className="practice-save-status flex h-16 items-center justify-between gap-2 text-sm" role={text ? error ? "alert" : "status" : undefined} aria-live="polite">
+    <span className="min-w-0 max-h-full overflow-y-auto">{text}</span>
     {(error || (pendingCount > 0 && !isSaving)) && <button type="button" onClick={retry} disabled={isSaving} className="rounded-lg border border-line bg-surface px-3 py-2 text-sm font-bold text-ink disabled:opacity-50">Thử lưu lại</button>}
   </div>;
 }
