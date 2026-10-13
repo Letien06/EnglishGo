@@ -2,10 +2,10 @@
 
 import Link from "next/link";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import type { DictationLessonView } from "@/lib/services/dictation";
-import type { DictationAttemptResult, DictationProgressSummary, DictationPrompt, DictationSegmentProgress } from "@/types/dictation";
+import type { DictationLessonView, DictationProgressView } from "@/lib/services/dictation";
+import type { DictationAttemptResult, DictationPrompt } from "@/types/dictation";
 
-type Progress = { summary: DictationProgressSummary | null; segments: DictationSegmentProgress[] } | null;
+type Progress = DictationProgressView | null;
 type Mask = 30 | 50 | 100;
 type GuestProgress = { index?: number; mask?: Mask; completedIds?: string[]; masteredIds?: string[] };
 

@@ -1,6 +1,7 @@
 import { unstable_cache } from "next/cache";
 import { DAUTOEIC_SOURCE_VERSION, dauToeicApiHeaders } from "./dautoeic-source";
 import { adminDb } from "@/lib/firestore/db";
+import { FieldPath } from "firebase-admin/firestore";
 import { ApiError, NotFound } from "@/lib/api/response";
 import { serverEnv } from "@/lib/env";
 import { vocabularySnapshotSchema, type VocabularySnapshot } from "../storage/vocab-snapshot";
@@ -15,6 +16,7 @@ import type {
   DauToeicVocabWord,
 } from "@/types/dautoeic";
 import type { ContentStatus, SourceType, VocabProgressStatus, VocabSetDoc, VocabWordDoc } from "@/types/vocab";
+import { bootstrapVocabProgressProjection, readVocabProgressProjection } from "./vocab-progress-projection";
 
 const SETS = "vocabSets";
 const WORDS = "vocabWords";
@@ -510,6 +512,14 @@ async function progressStatsForSetIds(
   const stats = new Map<number, ProgressStats>();
   if (!uid || !wanted.size) return stats;
   const now = Date.now();
+  let projected = await readVocabProgressProjection(uid).catch(() => null);
+  if (!projected) {
+    projected = await bootstrapVocabProgressProjection(uid, adminDb.collection("users").doc(uid).collection(PROGRESS)).catch(() => null);
+  }
+  if (projected) {
+    for (const row of projected) if (wanted.has(row.setId)) addProgress(stats, row.setId, row, now);
+    return stats;
+  }
   const chunks: number[][] = [];
   for (let offset = 0; offset < setIds.length; offset += 30) chunks.push(setIds.slice(offset, offset + 30));
   const snapshots = await Promise.all(chunks.map((chunk) => adminDb
@@ -549,29 +559,40 @@ async function progressStatsForParts(
   uid: string,
   setId: number,
 ): Promise<Map<string, ProgressStats>> {
-  const [wordParts, progressSnap] = await Promise.all([
-    isDriveContentEnabled()
-      ? findDriveVocabWords(setId).then((words) => (words ?? []).map((word) => [word.id, word.externalPartId ?? ""] as const))
-      : adminDb.collection(WORDS).where("setId", "==", setId).get().then((snapshot) => snapshot.docs.map((doc) => [numVal(doc.data(), "id") ?? Number(doc.id), text(doc.data(), "externalPartId") ?? ""] as const)),
-    adminDb
-      .collection("users")
-      .doc(uid)
-      .collection(PROGRESS)
-      .where("setId", "==", setId)
-      .get(),
-  ]);
+  const wordParts: Array<readonly [number, string]> = isDriveContentEnabled()
+    ? (await findDriveVocabWords(setId) ?? []).map((word) => [word.id, word.externalPartId ?? ""] as const)
+    : (await adminDb.collection(WORDS).where("setId", "==", setId).get()).docs.map((doc) => [numVal(doc.data(), "id") ?? Number(doc.id), text(doc.data(), "externalPartId") ?? ""] as const);
   const partByWordId = new Map(wordParts);
+  const projected = await readVocabProgressProjection(uid).catch(() => null);
+  const progressRows = projected
+    ? projected.filter((row) => partByWordId.has(row.wordId))
+    : await readProgressForWordIds(uid, wordParts);
 
   const now = Date.now();
   const stats = new Map<string, ProgressStats>();
-  for (const doc of progressSnap.docs) {
-    const data = doc.data() ?? {};
-    const wordId = numVal(data, "wordId") ?? Number(doc.id);
+  for (const data of progressRows) {
+    const wordId = numVal(data, "wordId");
+    if (typeof wordId !== "number") continue;
     const partId = partByWordId.get(wordId);
     if (!partId) continue;
     addProgress(stats, partId, data, now);
   }
   return stats;
+}
+
+async function readProgressForWordIds(
+  uid: string,
+  wordParts: Array<readonly [number, string]>,
+): Promise<Record<string, unknown>[]> {
+  const ids = [...new Set(wordParts.map(([wordId]) => wordId).filter((id) => Number.isFinite(id)))];
+  const collection = adminDb.collection("users").doc(uid).collection(PROGRESS);
+  const rows: Record<string, unknown>[] = [];
+  for (let offset = 0; offset < ids.length; offset += 30 * 4) {
+    const chunks = Array.from({ length: Math.min(4, Math.ceil((ids.length - offset) / 30)) }, (_, index) => ids.slice(offset + index * 30, offset + (index + 1) * 30));
+    const snapshots = await Promise.all(chunks.filter((chunk) => chunk.length).map((chunk) => collection.where(FieldPath.documentId(), "in", chunk.map(String)).select("wordId", "setId", "status", "nextReviewAtMillis").get()));
+    rows.push(...snapshots.flatMap((snapshot) => snapshot.docs.map((doc) => ({ ...(doc.data() ?? {}), wordId: numVal(doc.data() ?? {}, "wordId") ?? Number(doc.id) }))));
+  }
+  return rows;
 }
 
 function addProgress<K>(

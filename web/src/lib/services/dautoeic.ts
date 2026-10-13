@@ -65,7 +65,7 @@ export async function listTests(setId?: string | null): Promise<DauToeicTest[]> 
     const tests = await readDriveMaterial<DauToeicTest[]>(mirrorKey("tests", "all"));
     return cleanSetId ? tests.filter((test) => test.setId === cleanSetId) : tests;
   }
-  const canonical = await readCanonicalTests(cleanSetId).catch(() => []);
+  const canonical = await cachedReadCanonicalTests(cleanSetId).catch(() => []);
   if (canonical.length > 0) return canonical;
   const key = mirrorKey("tests", cleanSetId);
   const tests = await mirrorJsonFirst(key, () => cachedListTests(cleanSetId), "tests");
@@ -291,6 +291,12 @@ export async function fetchReadingDifficultySessionFromSource(
 const cachedListSets = unstable_cache(
   uncachedListSets,
   ["dautoeic-sets", DAUTOEIC_SOURCE_VERSION],
+  { revalidate: 600 },
+);
+
+const cachedReadCanonicalTests = unstable_cache(
+  (setId: string | null) => readCanonicalTests(setId),
+  ["dautoeic-canonical-tests", DAUTOEIC_SOURCE_VERSION],
   { revalidate: 600 },
 );
 

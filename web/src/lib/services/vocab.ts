@@ -8,6 +8,8 @@
  */
 import { adminDb } from "@/lib/firestore/db";
 import { cache } from "react";
+import { readServerCache } from "../server-cache";
+import { revalidateTag } from "next/cache";
 import { vocabularyDetails } from "@/lib/vocab-content";
 import { FieldPath, FieldValue } from "firebase-admin/firestore";
 import { createHash, randomInt } from "crypto";
@@ -45,6 +47,7 @@ import { getStoredStudyStreakSummary, getStudyStreak, recordStudyActivity, study
 import { invalidateLearnerActivityCaches } from "./learner-cache";
 import { enforceDailyActionLimit } from "./rate-limit";
 import { findDriveVocabSet, findDriveVocabWords, findDriveVocabWordsByIds, listDriveVocabSets } from "./dautoeic-vocab";
+import { bootstrapVocabProgressProjection, prepareVocabProgressProjection, readVocabProgressProjection } from "./vocab-progress-projection";
 
 /* ------------------------------------------------------------------ */
 /*  Collection constants                                               */
@@ -219,8 +222,38 @@ async function resolveLegacyWordCounts(sets: VocabSetDoc[]): Promise<VocabSetDoc
 }
 
 async function userProgressDocs(uid: string): Promise<VocabProgressDoc[]> {
-  const snap = await progressCollection(uid).get();
-  return snap.docs.map(toProgressDoc);
+  // Summary and set-selection callers do not need SM-2 scheduling details.
+  // Project only their fields; word ids remain available from document ids.
+  let projected: Awaited<ReturnType<typeof readVocabProgressProjection>> = null;
+  try {
+    projected = await readVocabProgressProjection(uid);
+  } catch {
+    projected = null;
+  }
+  if (projected) return projected.map((row) => ({ uid, interval: 0, easeFactor: 2.5, repetitions: 0, ...row } as VocabProgressDoc));
+  let migrated: Awaited<ReturnType<typeof bootstrapVocabProgressProjection>> = null;
+  try {
+    migrated = await bootstrapVocabProgressProjection(uid, progressCollection(uid));
+  } catch {
+    migrated = null;
+  }
+  if (migrated) return migrated.map((row) => ({ uid, interval: 0, easeFactor: 2.5, repetitions: 0, ...row } as VocabProgressDoc));
+  return readServerCache(async () => {
+    const snap = await progressCollection(uid)
+      .select("setId", "status", "nextReviewAtMillis", "lastReviewedAtMillis")
+      .get();
+    return snap.docs.map(toProgressDoc);
+  }, ["vocab-progress-summary", uid], { revalidate: 60, tags: [vocabProgressCacheTag(uid)] });
+}
+
+function vocabProgressCacheTag(uid: string) { return `vocab-progress:${uid}`; }
+
+function invalidateVocabProgressCache(uid: string) {
+  try {
+    revalidateTag(vocabProgressCacheTag(uid), { expire: 0 });
+  } catch {
+    // Unit tests and non-Next callers do not have an incremental cache.
+  }
 }
 
 function progressCollection(uid: string) {
@@ -309,14 +342,17 @@ async function saveProgress(progress: VocabProgressDoc): Promise<void> {
     const dueDelta = Number(nextDue) - Number(previousDue);
     const nextDueAtMillis = nextSummaryDueAtMillis(userData, [progress]);
 
-    tx.set(progressRef, data, { merge: true });
+    const projectionWrite = await prepareVocabProgressProjection(tx, progress.uid, [data]);
     writeProgressSummary(tx, userRef, userData, {
       masteredDelta,
       dueDelta,
       nextDueAtMillis,
       now,
     });
+    tx.set(progressRef, data, { merge: true });
+    projectionWrite();
   });
+  invalidateVocabProgressCache(progress.uid);
 }
 
 function progressPayload(progress: VocabProgressDoc): Record<string, unknown> {
@@ -442,13 +478,24 @@ export async function refreshVocabHubSummary(uid: string): Promise<{
 }> {
   requireUid(uid);
   const now = Date.now();
-  const progress = await userProgressDocs(uid);
-  const mastered = progress.filter((item) => item.status === "MASTERED").length;
-  const due = progress.filter((item) => isDueProgress(item, now)).length;
-  const nextDueAtMillis = progress
-    .map((item) => item.nextReviewAtMillis)
-    .filter((value): value is number => typeof value === "number" && value > now)
-    .reduce<number | null>((min, value) => min == null ? value : Math.min(min, value), null);
+  const [mastered, dueSnapshot, nextDueSnapshot] = await Promise.all([
+    countProgressByStatuses(uid, ["MASTERED"]),
+    progressCollection(uid)
+      .where("status", "in", ["LEARNING", "REVIEWING", "MASTERED"])
+      .where("nextReviewAtMillis", "<=", now)
+      .count()
+      .get(),
+    progressCollection(uid)
+      .where("nextReviewAtMillis", ">", now)
+      .orderBy("nextReviewAtMillis", "asc")
+      .limit(1)
+      .select("nextReviewAtMillis")
+      .get(),
+  ]);
+  const due = dueSnapshot.data().count;
+  const nextDueAtMillis = nextDueSnapshot.docs.length
+    ? numVal(nextDueSnapshot.docs[0].data() ?? {}, "nextReviewAtMillis") ?? null
+    : null;
   await adminDb.collection("users").doc(uid).set({
     vocabMasteredWords: mastered,
     vocabDueWords: due,
@@ -1630,13 +1677,20 @@ export async function reviewBatch(
       masteredDelta += Number(updated.status === "MASTERED") - Number(previous?.status === "MASTERED");
       dueDelta += Number(isDueProgress(updated, now)) - Number(previous ? isDueProgress(previous, now) : false);
       nextProgressItems.push(updated);
-      tx.set(progressRefs[index], progressPayload(updated), { merge: true });
       return {
         wordId: updated.wordId,
         newStatus: updated.status,
         nextReviewAtMillis: updated.nextReviewAtMillis,
       } satisfies VocabReviewResponse;
     });
+
+    const projectionWrite = await prepareVocabProgressProjection(
+      tx,
+      uid,
+      nextProgressItems.map(progressPayload),
+    );
+    nextProgressItems.forEach((item, index) => tx.set(progressRefs[index], progressPayload(item), { merge: true }));
+    projectionWrite();
 
     writeProgressSummary(tx, userRef, userData, {
       masteredDelta,

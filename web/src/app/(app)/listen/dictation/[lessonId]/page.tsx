@@ -14,6 +14,6 @@ export default async function DictationLessonPage({ params }: { params: Promise<
   } catch {
     notFound();
   }
-  const progress = user ? await dictation.getUserLessonProgress(user.uid, lessonId) : null;
+  const progress = user ? await dictation.getUserLessonProgressView(user.uid, lessonId) : null;
   return <DictationLessonClient lesson={lesson} initialProgress={progress} isAuthenticated={Boolean(user)} />;
 }

@@ -27,6 +27,23 @@
       ]
     },
     {
+      "collectionGroup": "tests",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "source", "order": "ASCENDING" },
+        { "fieldPath": "sourceVersion", "order": "ASCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "tests",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "source", "order": "ASCENDING" },
+        { "fieldPath": "sourceVersion", "order": "ASCENDING" },
+        { "fieldPath": "setId", "order": "ASCENDING" }
+      ]
+    },
+    {
       "collectionGroup": "dauToeicTestIndex",
       "queryScope": "COLLECTION",
       "fields": [

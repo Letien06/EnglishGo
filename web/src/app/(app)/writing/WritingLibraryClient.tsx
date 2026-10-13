@@ -29,6 +29,21 @@ type PromptScore = {
   submittedAtMillis: number;
 };
 
+type CacheEntry<T> = { value: T; cachedAt: number };
+
+const PROMPT_CACHE_TTL_MS = 5 * 60 * 1000;
+const SCORE_CACHE_TTL_MS = 60 * 1000;
+
+function readFreshCache<T>(cache: Map<WritingPart, CacheEntry<T>>, part: WritingPart, ttl: number): T | undefined {
+  const entry = cache.get(part);
+  if (!entry) return undefined;
+  if (Date.now() - entry.cachedAt >= ttl) {
+    cache.delete(part);
+    return undefined;
+  }
+  return entry.value;
+}
+
 const LEGACY_PART_ONE_CATEGORIES: Record<string, WritingPartOneGrammarCategory> = {
   "p1-meeting-preparation": "V_N",
   "p1-restaurant-service": "V_N",
@@ -152,8 +167,8 @@ export default function WritingLibraryClient() {
   const [loadedPart, setLoadedPart] = useState<WritingPart | null>(null);
   const [scoresLoadedPart, setScoresLoadedPart] = useState<WritingPart | null>(null);
   const [scoresAuthenticated, setScoresAuthenticated] = useState(authenticated);
-  const promptCache = useRef(new Map<WritingPart, WritingPromptCardSummary[]>());
-  const scoreCache = useRef(new Map<WritingPart, Record<string, PromptScore>>());
+  const promptCache = useRef(new Map<WritingPart, CacheEntry<WritingPromptCardSummary[]>>());
+  const scoreCache = useRef(new Map<WritingPart, CacheEntry<Record<string, PromptScore>>>());
   const initialLoading = loading && loadedPart !== part;
 
   // Reset private state as authentication changes, before painting another
@@ -169,6 +184,15 @@ export default function WritingLibraryClient() {
   useEffect(() => {
     let cancelled = false;
 
+    const cachedPrompts = readFreshCache(promptCache.current, part, PROMPT_CACHE_TTL_MS);
+    if (cachedPrompts) {
+      setPrompts(cachedPrompts);
+      setLoadedPart(part);
+      setError(null);
+      setLoading(false);
+      return () => { cancelled = true; };
+    }
+
     fetch(`/api/writing/prompts?part=${part}`)
       .then(async (response) => {
         const body = await response.json() as ApiEnvelope<unknown>;
@@ -178,7 +202,7 @@ export default function WritingLibraryClient() {
       .then((next) => {
         if (!cancelled) {
           setPrompts(next);
-          promptCache.current.set(part, next);
+          promptCache.current.set(part, { value: next, cachedAt: Date.now() });
           setLoadedPart(part);
           setError(null);
         }
@@ -203,6 +227,14 @@ export default function WritingLibraryClient() {
 
     let cancelled = false;
 
+    const cachedScores = readFreshCache(scoreCache.current, part, SCORE_CACHE_TTL_MS);
+    if (cachedScores) {
+      setLatestScores(cachedScores);
+      setScoresLoadedPart(part);
+      setScoreStatus("ready");
+      return () => { cancelled = true; };
+    }
+
     // Score badges are private, so fetch them only after the shell has
     // confirmed an authenticated session.
     fetch(`/api/writing/attempts/history?part=${part}&limit=30`, { cache: "no-store" })
@@ -215,7 +247,7 @@ export default function WritingLibraryClient() {
       .then((attempts) => {
         if (!cancelled) {
           const scores = scoreByPromptId(attempts);
-          scoreCache.current.set(part, scores);
+          scoreCache.current.set(part, { value: scores, cachedAt: Date.now() });
           setLatestScores(scores);
           setScoresLoadedPart(part);
           setScoreStatus("ready");
@@ -234,16 +266,20 @@ export default function WritingLibraryClient() {
     setError(null);
     setTag("all");
     setPartOneCategory("all");
-    setPrompts(promptCache.current.get(nextPart) ?? []);
-    setLoadedPart(promptCache.current.has(nextPart) ? nextPart : null);
-    setLatestScores(scoreCache.current.get(nextPart) ?? {});
-    setScoreStatus(scoreCache.current.has(nextPart) ? "ready" : "loading");
-    setScoresLoadedPart(scoreCache.current.has(nextPart) ? nextPart : null);
+    const cachedPrompts = readFreshCache(promptCache.current, nextPart, PROMPT_CACHE_TTL_MS);
+    const cachedScores = readFreshCache(scoreCache.current, nextPart, SCORE_CACHE_TTL_MS);
+    setPrompts(cachedPrompts ?? []);
+    setLoadedPart(cachedPrompts ? nextPart : null);
+    setLatestScores(cachedScores ?? {});
+    setScoreStatus(cachedScores ? "ready" : "loading");
+    setScoresLoadedPart(cachedScores ? nextPart : null);
     setStatusFilter("all");
     setPart(nextPart);
   }
 
   function retryLoad() {
+    promptCache.current.delete(part);
+    scoreCache.current.delete(part);
     setLoading(true);
     setError(null);
     setReloadKey((value) => value + 1);

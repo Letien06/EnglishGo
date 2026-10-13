@@ -52,12 +52,11 @@ describe("writing dashboard", () => {
     expect(fetcher).toHaveBeenCalledWith("/api/writing/attempts/history?part=2&limit=30", { cache: "no-store" });
   });
 
-  it("retains a visited Part and its scores during refresh and after refresh failure", async () => {
-    let rejectRefresh!: (reason: Error) => void;
+  it("retains a visited Part and its scores from the client cache", async () => {
     let promptLoads = 0;
     const fetcher = vi.fn((url: string) => {
       if (url.includes("history")) return Promise.resolve(response([{ promptId: "picture", promptPart: 1, submittedAtMillis: 1, feedback: { score: 2, maxScore: 3 } }]));
-      if (url.endsWith("part=1") && ++promptLoads === 2) return new Promise<Response>((_resolve, reject) => { rejectRefresh = reject; });
+      if (url.endsWith("part=1")) promptLoads++;
       return Promise.resolve(response([url.endsWith("part=2") ? { ...prompt, id: "email", part: 2, title: "Reply to a client" } : prompt]));
     });
     vi.stubGlobal("fetch", fetcher);
@@ -69,9 +68,8 @@ describe("writing dashboard", () => {
     expect(screen.getByRole("heading", { name: "Office meeting" })).toBeInTheDocument();
     expect(screen.getByText("Điểm AI: 2/3")).toBeInTheDocument();
     expect(screen.queryByRole("status", { name: "Đang tải đề viết" })).not.toBeInTheDocument();
-    await act(async () => rejectRefresh(new Error("Offline")));
-    expect(screen.getByRole("heading", { name: "Office meeting" })).toBeInTheDocument();
-    expect(screen.getByText(/Chưa cập nhật được thư viện/)).toBeInTheDocument();
+    expect(promptLoads).toBe(1);
+    expect(screen.queryByText(/Chưa cập nhật được thư viện/)).not.toBeInTheDocument();
   });
 
   it("clears cached private scores across sign-out and sign-in on the same mount", async () => {

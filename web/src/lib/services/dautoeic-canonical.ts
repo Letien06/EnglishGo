@@ -229,15 +229,24 @@ export async function readCanonicalTests(setId?: string | null): Promise<DauToei
   const meta = await adminDb.collection(META_COLLECTION).doc(TEST_CATALOG_DOC).get();
   if (!meta.exists || meta.get("complete") !== true) return [];
   if (meta.get("sourceVersion") !== DAUTOEIC_SOURCE_VERSION) return [];
-  const snap = await adminDb
+  const cleanSetId = setId?.trim() || null;
+  let query = adminDb
     .collection(COLLECTIONS.tests)
     .where("source", "==", SOURCE)
-    .get();
+    .where("sourceVersion", "==", DAUTOEIC_SOURCE_VERSION);
+  if (cleanSetId) query = query.where("setId", "==", cleanSetId);
+  let snap;
+  try {
+    snap = await query.get();
+  } catch {
+    // Keep older deployments usable while the equality index rolls out.
+    snap = await adminDb.collection(COLLECTIONS.tests).where("source", "==", SOURCE).get();
+  }
   const tests = snap.docs
     .filter((doc) => doc.get("sourceVersion") === DAUTOEIC_SOURCE_VERSION)
     .map((doc) => toTest(doc.data()))
     .filter((test): test is DauToeicTest => Boolean(test?.id))
-    .filter((test) => !setId?.trim() || test.setId === setId.trim());
+    .filter((test) => !cleanSetId || test.setId === cleanSetId);
   tests.sort((a, b) => (a.orderIndex ?? 999_999) - (b.orderIndex ?? 999_999) || a.id.localeCompare(b.id));
   return tests;
 }

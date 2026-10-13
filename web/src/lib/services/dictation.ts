@@ -197,11 +197,47 @@ export async function checkBlankAnswer(lessonId: string, segmentId: string, inpu
 
 export async function getUserLessonProgress(uid: string, lessonId: string): Promise<{ summary: DictationProgressSummary | null; segments: DictationSegmentProgress[] }> {
   const summaryRef = userLessonRef(uid, lessonId);
-  const [summarySnap, segmentsSnap] = await Promise.all([summaryRef.get(), summaryRef.collection("segments").get()]);
+  const [summarySnap, segmentsSnap] = await Promise.all([
+    summaryRef.get(),
+    summaryRef.collection("segments")
+      .select("segmentIndex", "attemptCount", "replayCount", "hintCount", "lastMaskPercent", "highestPassedMaskPercent", "lastScorePercent", "lastAnswer", "completedAtMillis", "masteredAtMillis", "lastStudiedAtMillis", "updatedAtMillis")
+      .get(),
+  ]);
   return {
     summary: summarySnap.exists ? toSummary(lessonId, summarySnap.data()) : null,
     segments: segmentsSnap.docs.map((doc) => toSegmentProgress(lessonId, doc.id, doc.data())).filter((item): item is DictationSegmentProgress => item !== null),
   };
+}
+
+export type DictationProgressMarker = Pick<DictationSegmentProgress, "segmentId" | "completedAtMillis" | "masteredAtMillis">;
+export interface DictationProgressView {
+  summary: DictationProgressSummary | null;
+  segments: DictationProgressMarker[];
+}
+
+/** The lesson sidebar uses compact markers, persisted alongside its summary. */
+export async function getUserLessonProgressView(uid: string, lessonId: string): Promise<DictationProgressView> {
+  const ref = userLessonRef(uid, lessonId);
+  return adminDb.runTransaction(async tx => {
+    const snap = await tx.get(ref);
+    const data = snap.data();
+    if (data?.segmentMarkersVersion === 1 && Array.isArray(data.segmentMarkers)) {
+      return { summary: toSummary(lessonId, data), segments: data.segmentMarkers as DictationProgressMarker[] };
+    }
+    // Bootstrap legacy progress under the same transaction as the summary
+    // write, so a concurrent attempt cannot be overwritten by this backfill.
+    const legacy = await tx.get(ref.collection("segments").select("completedAtMillis", "masteredAtMillis"));
+    const segments = legacy.docs.map(doc => progressMarker(doc.id, doc.data())).filter(isProgressMarker);
+    if (snap.exists) tx.update(ref, { segmentMarkersVersion: 1, segmentMarkers: segments });
+    return { summary: snap.exists ? toSummary(lessonId, data) : null, segments };
+  });
+}
+
+function progressMarker(segmentId: string, data: Record<string, unknown> | undefined): DictationProgressMarker {
+  return { segmentId, completedAtMillis: nullableNumber(data?.completedAtMillis), masteredAtMillis: nullableNumber(data?.masteredAtMillis) };
+}
+function isProgressMarker(marker: DictationProgressMarker): boolean {
+  return Boolean(marker.completedAtMillis || marker.masteredAtMillis);
 }
 
 export async function listUserLessonProgress(uid: string): Promise<DictationProgressSummary[]> {
@@ -409,6 +445,10 @@ async function saveProgress(uid: string, lesson: DictationLesson, segment: Dicta
   const segmentRef = summaryRef.collection("segments").doc(segment.id);
   const recordedCompletion = await adminDb.runTransaction(async (tx) => {
     const [summarySnap, segmentSnap] = await Promise.all([tx.get(summaryRef), tx.get(segmentRef)]);
+    const summaryData = summarySnap.data();
+    const existingMarkers: DictationProgressMarker[] = summaryData?.segmentMarkersVersion === 1 && Array.isArray(summaryData.segmentMarkers)
+      ? summaryData.segmentMarkers
+      : (await tx.get(summaryRef.collection("segments").select("completedAtMillis", "masteredAtMillis"))).docs.map(doc => progressMarker(doc.id, doc.data())).filter(isProgressMarker);
     const old = segmentSnap.exists ? toSegmentProgress(lesson.id, segment.id, segmentSnap.data()) : null;
     const wasCompleted = Boolean(old?.completedAtMillis);
     const wasMastered = Boolean(old?.masteredAtMillis);
@@ -426,6 +466,9 @@ async function saveProgress(uid: string, lesson: DictationLesson, segment: Dicta
     const completionAccounting = firstLessonCompletion
       ? await Promise.all([tx.get(studyActivityDayRef(uid, now)), tx.get(adminDb.collection("users").doc(uid))])
       : null;
+    const marker = { segmentId: segment.id, completedAtMillis: old?.completedAtMillis ?? (isCompleted ? now : null), masteredAtMillis: old?.masteredAtMillis ?? (isMastered ? now : null) };
+    const segmentMarkers = existingMarkers.filter(item => item.segmentId !== segment.id);
+    if (isProgressMarker(marker)) segmentMarkers.push(marker);
     tx.set(segmentRef, {
       lessonId: lesson.id, segmentId: segment.id, segmentIndex: segment.index,
       attemptCount: (old?.attemptCount ?? 0) + 1,
@@ -438,6 +481,7 @@ async function saveProgress(uid: string, lesson: DictationLesson, segment: Dicta
       lastStudiedAtMillis: now, updatedAtMillis: now, updatedAt: FieldValue.serverTimestamp(),
     }, { merge: true });
     tx.set(summaryRef, {
+      segmentMarkersVersion: 1, segmentMarkers,
       lessonId: lesson.id, lessonTitleSnapshot: lesson.title, sourceNameSnapshot: lesson.sourceName,
       levelSnapshot: lesson.level, segmentCountSnapshot: lesson.segmentCount, completedCount, masteredCount,
       lastSegmentIndex: segment.index, lastMaskPercent: mask, startedAtMillis: summary?.startedAtMillis ?? now,
