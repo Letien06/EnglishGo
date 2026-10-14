@@ -38,6 +38,7 @@ import {
   writeCanonicalTest,
   writeCanonicalTests,
 } from "./dautoeic-canonical";
+import { normalizeDauToeicImageUrl } from "./dautoeic-media";
 
 /* ------------------------------------------------------------------ */
 /*  Public API                                                         */
@@ -139,13 +140,24 @@ export async function getPart(testId: string, part: number): Promise<{
     throw new ApiError("TOEIC part must be between 1 and 7", 400);
   }
   const cleanTestId = testId.trim();
-  if (isDriveContentEnabled()) return readDriveMaterial(mirrorKey("test-part", cleanTestId, part));
+  if (isDriveContentEnabled()) {
+    const content = await readDriveMaterial<Awaited<ReturnType<typeof uncachedGetPart>>>(mirrorKey("test-part", cleanTestId, part));
+    return normalizePartMedia(content);
+  }
   const canonical = await readCanonicalPart(routeTestId(cleanTestId), part).catch(() => null);
-  if (canonical) return canonical;
+  if (canonical) return normalizePartMedia(canonical);
   const key = mirrorKey("test-part", cleanTestId, part);
   const partContent = await mirrorJsonFirst(key, () => cachedGetPart(cleanTestId, part), "test-part");
   await writeCanonicalPart(partContent).catch(() => undefined);
-  return partContent;
+  return normalizePartMedia(partContent);
+}
+
+function normalizePartMedia<T extends { questions: DauToeicQuestion[]; passages: DauToeicPassage[] }>(content: T): T {
+  return {
+    ...content,
+    questions: content.questions.map((question) => ({ ...question, imageUrl: normalizeDauToeicImageUrl(question.imageUrl) })),
+    passages: content.passages.map((passage) => ({ ...passage, imageUrl: normalizeDauToeicImageUrl(passage.imageUrl) })),
+  };
 }
 
 async function uncachedGetPart(testId: string, part: number) {
