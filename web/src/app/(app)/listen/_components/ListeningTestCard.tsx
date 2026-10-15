@@ -6,7 +6,7 @@ import ListeningIcon from "./ListeningIcon";
 import { estimatedMinutes, practiceHref, testProgress, type ListeningTestMetadata } from "./listening-view-model";
 import styles from "./listening.module.css";
 
-const STATUS_LABELS = { new: "Mới", learning: "Đang học", complete: "Hoàn thành" };
+const STATUS_LABELS = { new: "Mới", learning: "Đang học", complete: "Hoàn thành", due: "Đến hạn ôn" };
 
 export function ListeningProgressRing({ percent, label, ready = true }: { percent: number; label: string; ready?: boolean }) {
   return <div className={styles.ring} role="progressbar" aria-label={label} aria-valuemin={0} aria-valuemax={100} aria-valuenow={ready ? percent : undefined} aria-valuetext={ready ? `${percent}%` : "Chưa có tiến độ"}>
@@ -18,7 +18,7 @@ export function ListeningProgressRing({ percent, label, ready = true }: { percen
 export default function ListeningTestCard({ test, progressReady, metadata }: { test: DauToeicPartTest; index: number; progressReady: boolean; metadata?: ListeningTestMetadata }) {
   const skill = test.part >= 5 ? "reading" : "listening";
   const progress = testProgress(test);
-  const cta = progress.status === "complete" ? "Ôn lại" : progress.status === "learning" ? "Học tiếp" : "Bắt đầu";
+  const cta = progress.status === "due" ? "Ôn câu sai" : progress.status === "complete" ? "Ôn lại" : progress.status === "learning" ? "Học tiếp" : "Bắt đầu";
   return <article className={styles.card} data-status={progressReady ? progress.status : "unknown"} aria-label={`${test.testName} - ${test.setName}`}>
     <div className={styles.cardTop}><span className={styles.cardLabel}>LUYỆN {skill === "reading" ? "ĐỌC" : "NGHE"} · PART {test.part}</span><span className={styles.badge} data-status={progressReady ? progress.status : "unknown"}><span />{progressReady ? STATUS_LABELS[progress.status] : "Chưa có tiến độ"}</span></div>
     <div className={styles.cardHeading}><div><h4>{test.testName}</h4><p>{progressReady ? `${progress.done}/${progress.total} đã học` : "Mở bài mà không cần chờ"}</p></div><ListeningProgressRing percent={progress.percent} ready={progressReady} label={`Tiến độ ${test.testName} - ${test.setName}`} /></div>

@@ -64,14 +64,15 @@ export default function GrammarLibraryClient({ catalog, learnerId, answerKeys }:
             const progress = getGrammarProgress(answerKeys[topic.id] ?? {}, answersByTopic[topic.id] ?? {});
             const progressKnown = progressReady && storageAvailable;
             const percent = topic.questionCount ? Math.round(progress.answered / topic.questionCount * 100) : 0;
-            const status = progressKnown && progress.answered >= topic.questionCount ? "complete" : progressKnown && progress.answered > 0 ? "learning" : "new";
-            const cta = status === "complete" ? "Ôn lại" : status === "learning" ? "Học tiếp" : "Học ngay";
+            const status = progressKnown && progress.answered >= topic.questionCount ? (progress.wrong > 0 ? "due" : "complete") : progressKnown && progress.answered > 0 ? "learning" : "new";
+            const cta = status === "due" ? "Ôn câu sai" : status === "complete" ? "Ôn lại" : status === "learning" ? "Học tiếp" : "Học ngay";
+            const href = status === "due" ? `/read/grammar/${encodeURIComponent(topic.slug)}?mode=wrong` : `/read/grammar/${encodeURIComponent(topic.slug)}`;
             return <article key={topic.id} className={styles.card} data-status={progressKnown ? status : "unknown"} aria-label={`Ngữ pháp ${topic.title}`}>
-              <div className={styles.cardTop}><span className={styles.cardLabel}>NGỮ PHÁP · {group.toUpperCase()}</span><span className={styles.badge} data-status={progressKnown ? status : "unknown"}><span />{progressKnown ? status === "complete" ? "Hoàn thành" : status === "learning" ? "Đang học" : "Mới" : "Chưa có tiến độ"}</span></div>
+              <div className={styles.cardTop}><span className={styles.cardLabel}>NGỮ PHÁP · {group.toUpperCase()}</span><span className={styles.badge} data-status={progressKnown ? status : "unknown"}><span />{progressKnown ? status === "due" ? "Đến hạn ôn" : status === "complete" ? "Hoàn thành" : status === "learning" ? "Đang học" : "Mới" : "Chưa có tiến độ"}</span></div>
               <div className={styles.cardHeading}><div><h4>{topic.title}</h4><p>{progressKnown ? `${progress.answered}/${topic.questionCount} đã học` : `${topic.questionCount} câu hỏi`}</p></div><ListeningProgressRing percent={percent} ready={progressKnown} label={`Tiến độ ${topic.title}`} /></div>
               <div className={styles.answerStats}><span data-tone="good"><i /><strong>{progressKnown ? progress.correct : "—"}</strong> đúng</span><span data-tone="bad"><i /><strong>{progressKnown ? progress.wrong : "—"}</strong> sai</span><span><i /><strong>{progressKnown ? Math.max(0, topic.questionCount - progress.answered) : "—"}</strong> còn lại</span></div>
               <div className={styles.metadata}><span><ListeningIcon name="book" />{topic.subtopics.length} chuyên đề</span><span><ListeningIcon name="check" />{topic.questionCount} câu hỏi</span><span>{!progressReady ? "Đang đọc tiến độ…" : !storageAvailable ? "Thiết bị chưa sẵn sàng" : "Lưu trên thiết bị"}</span></div>
-              <footer className={styles.cardFooter}><Link className={styles.cardCta} href={`/read/grammar/${encodeURIComponent(topic.slug)}`} aria-label={`${cta} ${topic.title}`}>{cta}<ListeningIcon name="arrow" /></Link></footer>
+              <footer className={styles.cardFooter}><Link className={styles.cardCta} href={href} aria-label={`${cta} ${topic.title}`}>{cta}<ListeningIcon name="arrow" /></Link></footer>
             </article>;
           })}
         </div>

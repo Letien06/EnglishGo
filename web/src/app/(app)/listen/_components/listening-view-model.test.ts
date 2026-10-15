@@ -24,6 +24,7 @@ describe("listening presentation model", () => {
     expect(testProgress(test)).toEqual({ done: 2, total: 6, percent: 33, remaining: 4, status: "learning" });
     expect(summarizeTests([test])).toMatchObject({ done: 2, total: 6, accuracy: 50 });
     expect(testProgress({ ...test, done: 8 }).percent).toBe(100);
+    expect(testProgress({ ...test, done: 6 }).status).toBe("due");
     expect(testProgress({ ...test, questionCount: 0 }).status).toBe("new");
     expect(summarizeTests([]).accuracy).toBeNull();
   });

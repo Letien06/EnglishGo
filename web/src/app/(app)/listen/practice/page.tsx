@@ -27,7 +27,7 @@ function partNumber(partId: string): number {
 export default async function ListenPracticePage({
   searchParams,
 }: {
-  searchParams: Promise<{ part?: string; level?: string; testId?: string; mode?: string; q?: string; assist?: string; auto?: string }>;
+  searchParams: Promise<{ part?: string; level?: string; testId?: string; mode?: string; q?: string; assist?: string; auto?: string; review?: string }>;
 }) {
   const params = await searchParams;
   const partId = params.part && ["part1", "part2", "part3", "part4"].includes(params.part)
@@ -102,6 +102,7 @@ export default async function ListenPracticePage({
       assist={assist}
       userLoggedIn={!!user}
       userUid={user?.uid ?? null}
+      reviewRun={params.review === "all" ? "all" : undefined}
     />
   );
 }

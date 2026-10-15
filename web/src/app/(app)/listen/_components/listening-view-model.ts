@@ -7,7 +7,7 @@ export const LISTENING_PARTS = [
   { number: 4, name: "Bài nói ngắn", description: "Bắt ý chính, nắm chi tiết", icon: "broadcast", tip: "Xác định loại bài nói ngay từ câu đầu: thông báo, tin nhắn hay hướng dẫn. Ghi nhớ mục đích và hành động người nghe cần làm." },
 ] as const;
 
-export type TestStatus = "new" | "learning" | "complete";
+export type TestStatus = "new" | "learning" | "complete" | "due";
 export type StudySkill = "listening" | "reading";
 export const READING_PARTS = [
   { number: 5, name: "Hoàn thành câu", description: "Vững từ vựng & ngữ pháp", icon: "pen", tip: "Xác định từ loại cần điền trước khi đọc đáp án. Với câu hỏi ngữ pháp, chú ý chủ ngữ, thì và cấu trúc của cả câu." },
@@ -32,7 +32,7 @@ export function testProgress(test: DauToeicPartTest) {
   const total = Math.max(0, test.questionCount);
   const done = Math.min(total, Math.max(0, test.done));
   const percent = total ? Math.round(done / total * 100) : 0;
-  const status: TestStatus = total > 0 && done >= total ? "complete" : done > 0 ? "learning" : "new";
+  const status: TestStatus = total > 0 && done >= total ? (test.wrong > 0 ? "due" : "complete") : done > 0 ? "learning" : "new";
   return { done, total, percent, remaining: total - done, status };
 }
 
@@ -50,6 +50,12 @@ export function summarizeTests(tests: DauToeicPartTest[]) {
 }
 
 export function practiceHref(test: DauToeicPartTest) {
+  if (testProgress(test).status === "due") {
+    const skill = test.part >= 5 ? "reading" : "listening";
+    const params = new URLSearchParams({ skill, part: String(test.part), level: "1", run: "dashboard" });
+    if (test.testId) params.set("testId", test.testId);
+    return `/review/practice?${params}`;
+  }
   return `/${test.part >= 5 ? "read" : "listen"}/practice?part=part${test.part}&testId=${encodeURIComponent(test.testId)}&mode=normal&q=${test.nextIndex}`;
 }
 

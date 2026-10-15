@@ -217,7 +217,9 @@ export default function WritingPracticeClient({ promptId }: { promptId: string }
   const [attempt, setAttempt] = useState<AttemptView | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
+  const [draftStatus, setDraftStatus] = useState("");
   const startedAtRef = useRef<number | null>(null);
+  const draftKey = `englishgo:writing-draft:v1:${promptId}`;
 
   const requestPrompt = useCallback(async () => {
     const response = await fetch(`/api/writing/prompts/${encodeURIComponent(promptId)}`);
@@ -234,7 +236,10 @@ export default function WritingPracticeClient({ promptId }: { promptId: string }
       .then((nextPrompt) => {
         if (cancelled) return;
         setPrompt(nextPrompt);
-        setAnswer("");
+        let draft = "";
+        try { draft = localStorage.getItem(draftKey) ?? ""; } catch { /* Continue without a local draft when storage is unavailable. */ }
+        setAnswer(draft);
+        setDraftStatus(draft ? "Đã khôi phục bản nháp trên thiết bị này." : "");
         setAttempt(null);
         setElapsedSeconds(0);
         setRevealedHintCount(0);
@@ -247,7 +252,19 @@ export default function WritingPracticeClient({ promptId }: { promptId: string }
       })
       .finally(() => { if (!cancelled) setLoading(false); });
     return () => { cancelled = true; };
-  }, [requestPrompt]);
+  }, [draftKey, requestPrompt]);
+
+  useEffect(() => {
+    if (!prompt || attempt) return;
+    const timer = window.setTimeout(() => {
+      try {
+        if (answer.trim()) localStorage.setItem(draftKey, answer);
+        else localStorage.removeItem(draftKey);
+        setDraftStatus(answer.trim() ? "Bản nháp đã lưu" : "");
+      } catch { /* Draft persistence is best effort and must not block writing. */ }
+    }, 250);
+    return () => window.clearTimeout(timer);
+  }, [answer, attempt, draftKey, prompt]);
 
   async function loadPrompt() {
     setLoading(true);
@@ -306,6 +323,7 @@ export default function WritingPracticeClient({ promptId }: { promptId: string }
       });
       const body = await response.json() as ApiEnvelope<unknown>;
       if (!response.ok || body.success === false) throw new Error(body.error || "Không thể chấm bài lúc này.");
+      try { localStorage.removeItem(draftKey); } catch { /* Ignore unavailable storage. */ }
       setAttempt(normalizeAttempt(unwrap(body)));
     } catch (reason) {
       setSubmitError(reason instanceof Error ? reason.message : "Không thể chấm bài lúc này.");
@@ -316,6 +334,7 @@ export default function WritingPracticeClient({ promptId }: { promptId: string }
 
   function retry() {
     setAnswer("");
+    try { localStorage.removeItem(draftKey); } catch { /* Ignore unavailable storage. */ }
     setAttempt(null);
     setSubmitError(null);
     setElapsedSeconds(0);
@@ -383,7 +402,7 @@ export default function WritingPracticeClient({ promptId }: { promptId: string }
                   <p className="text-xs font-extrabold uppercase tracking-[0.14em] text-primary">Bài làm của bạn</p>
                   <p className="mt-1 text-sm text-muted">Viết tự nhiên trước, rồi dùng gợi ý khi thật sự cần.</p>
                 </div>
-                <span className="rounded-lg bg-surface-soft px-2.5 py-1.5 text-xs font-extrabold text-ink2">{responseWordCount} từ</span>
+                <div className="flex items-center gap-2"><span role="status" className="text-xs font-bold text-muted">{draftStatus}</span><span className="rounded-lg bg-surface-soft px-2.5 py-1.5 text-xs font-extrabold text-ink2">{responseWordCount} từ</span></div>
               </div>
               <label className="mt-4 block">
                 <span className="sr-only">Nhập bài viết bằng tiếng Anh</span>

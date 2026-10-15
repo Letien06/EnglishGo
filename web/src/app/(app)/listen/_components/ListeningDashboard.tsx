@@ -40,7 +40,7 @@ export default function ListeningDashboard({ tests, part, skill = "listening", i
   const activeSort = !progressReady && sort.startsWith("progress") ? "catalog" : sort;
   const visible = filterTests(tests, progressReady ? filter : "all", query, activeSort, metadata);
   const groups = [...new Set(visible.map((test) => test.setName))];
-  const counts = tests.reduce((result, test) => { result[testProgress(test).status] += 1; return result; }, { all: tests.length, new: 0, learning: 0, complete: 0 });
+  const counts = tests.reduce((result, test) => { result[testProgress(test).status] += 1; return result; }, { all: tests.length, new: 0, learning: 0, complete: 0, due: 0 });
   const progress = { ...partProgress, ...otherParts, ...(progressReady && !initialError ? { [part]: summary } : {}) };
 
   return <main className={styles.dashboard} aria-busy={catalogLoading || undefined}>

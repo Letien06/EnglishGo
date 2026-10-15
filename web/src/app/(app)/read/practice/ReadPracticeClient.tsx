@@ -82,6 +82,11 @@ export default function ReadPracticeClient({
   const startedAtRef = useRef(0);
   const autoAdvanceRef = useRef<number | null>(null);
   const item = items[currentIndex] ?? items[0];
+  const sessionQuestionIds = useMemo(() => items.flatMap((entry) => entry.questions.map((question) => question.id)), [items]);
+  const allVisibleQuestionsAnswered = sessionQuestionIds.length > 0 && sessionQuestionIds.every((questionId) => Boolean(answeredMap[questionId]));
+  const reachedEnd = offset + currentIndex >= total - 1;
+  const showCompletion = !reviewRun && reachedEnd && allVisibleQuestionsAnswered;
+  const reviewHref = `/review/practice?skill=reading&part=${partNum}&level=${level}${session.testId ? `&testId=${encodeURIComponent(session.testId)}` : ""}&run=read-complete`;
   const startTransitionTiming = useStudyPerformance("reading", item.id);
 
   const firstQuestion = item.questions[0];
@@ -219,7 +224,7 @@ export default function ReadPracticeClient({
       }, 450);
     }
 
-    enqueueProgress({
+    if (!reviewRun) enqueueProgress({
       part: partNum,
       level,
       testId: session.testId,
@@ -366,6 +371,12 @@ export default function ReadPracticeClient({
           )}
         </section>
       </WorkspaceAnnotator>
+
+      {showCompletion && <section className="fixed inset-x-4 bottom-20 z-50 mx-auto max-w-xl rounded-2xl border border-success-line bg-success-soft p-5 text-center shadow-2xl" role="dialog" aria-modal="true" aria-labelledby="read-complete-title">
+        <h2 id="read-complete-title" className="text-xl font-extrabold text-success-ink">Bạn đã hoàn thành bài Part {partNum}</h2>
+        <p className="mt-2 text-sm text-success-ink">Tiến độ đã được ghi nhận. Hãy ôn lại câu sai để củng cố điểm yếu.</p>
+        <div className="mt-4 flex flex-wrap justify-center gap-2"><Link href={reviewHref} className="rounded-xl bg-primary px-4 py-2.5 text-sm font-extrabold text-gold-ink no-underline">Ôn câu sai</Link><button type="button" onClick={() => { const url = new URL(window.location.href); url.searchParams.set("q", "0"); url.searchParams.delete("review"); router.push(`${url.pathname}${url.search}`); }} className="rounded-xl border border-success-line bg-surface px-4 py-2.5 text-sm font-extrabold text-success-ink">Ôn lại từ đầu</button><Link href={`/read?part=${partId}`} className="rounded-xl border border-success-line bg-surface px-4 py-2.5 text-sm font-extrabold text-success-ink no-underline">Về danh sách</Link></div>
+      </section>}
 
       <footer className="skill-workspace-footer sticky bottom-0 z-40 flex h-16 items-center justify-between gap-2 px-3 sm:px-7">
         <div className="flex gap-2 sm:gap-3">

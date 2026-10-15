@@ -33,18 +33,25 @@ async function requestData<T>(url: string, init?: RequestInit): Promise<T> {
 }
 
 export default function DictationLessonClient({ lesson, initialProgress, isAuthenticated }: { lesson: DictationLessonView; initialProgress: Progress; isAuthenticated: boolean }) {
-  const initialIndex = Math.max(0, Math.min(lesson.segments.length - 1, (initialProgress?.summary?.lastSegmentIndex ?? 1) - 1));
   const guestState = () => {
     if (isAuthenticated || typeof window === "undefined") return null;
     try { return JSON.parse(localStorage.getItem(`englishweb:dictation-progress:v1:${lesson.id}`) ?? "null") as GuestProgress | null; } catch { return null; }
   };
+  const savedGuestState = guestState();
+  const savedCompletedIds = new Set(isAuthenticated
+    ? (initialProgress?.segments ?? []).filter((item) => item.completedAtMillis).map((item) => item.segmentId)
+    : savedGuestState?.completedIds ?? []);
+  const initialIncompleteIndex = lesson.segments.findIndex((segment) => !savedCompletedIds.has(segment.id));
+  const initialIndex = initialIncompleteIndex >= 0
+    ? initialIncompleteIndex
+    : isAuthenticated
+      ? Math.max(0, Math.min(lesson.segments.length - 1, (initialProgress?.summary?.lastSegmentIndex ?? 1) - 1))
+      : Math.max(0, Math.min(lesson.segments.length - 1, savedGuestState?.index ?? 0));
   const [index, setIndex] = useState(() => {
-    const saved = guestState();
-    return typeof saved?.index === "number" ? Math.max(0, Math.min(lesson.segments.length - 1, saved.index)) : initialIndex;
+    return initialIndex;
   });
   const [mask, setMask] = useState<Mask>(() => {
-    const saved = guestState();
-    return [30, 50, 100].includes(saved?.mask ?? 0) ? saved!.mask! : initialProgress?.summary?.lastMaskPercent ?? 30;
+    return [30, 50, 100].includes(savedGuestState?.mask ?? 0) ? savedGuestState!.mask! : initialProgress?.summary?.lastMaskPercent ?? 30;
   });
   const [prompt, setPrompt] = useState<DictationPrompt | null>(null);
   const [promptError, setPromptError] = useState<string | null>(null);
@@ -71,8 +78,8 @@ export default function DictationLessonClient({ lesson, initialProgress, isAuthe
   const active = lesson.segments[index];
   const loadingPrompt = !prompt || prompt.segmentId !== active?.id || prompt.maskPercent !== mask;
   const progressBySegment = useMemo(() => new Map((initialProgress?.segments ?? []).map((item) => [item.segmentId, item])), [initialProgress]);
-  const [completedIds, setCompletedIds] = useState(() => new Set(isAuthenticated ? (initialProgress?.segments ?? []).filter((item) => item.completedAtMillis).map((item) => item.segmentId) : guestState()?.completedIds ?? []));
-  const [masteredIds, setMasteredIds] = useState(() => new Set(isAuthenticated ? (initialProgress?.segments ?? []).filter((item) => item.masteredAtMillis).map((item) => item.segmentId) : guestState()?.masteredIds ?? []));
+  const [completedIds, setCompletedIds] = useState(() => savedCompletedIds);
+  const [masteredIds, setMasteredIds] = useState(() => new Set(isAuthenticated ? (initialProgress?.segments ?? []).filter((item) => item.masteredAtMillis).map((item) => item.segmentId) : savedGuestState?.masteredIds ?? []));
 
   const playerCommand = useCallback((func: string, args: unknown[] = []) => {
     frameRef.current?.contentWindow?.postMessage(JSON.stringify({ event: "command", func, args }), "https://www.youtube-nocookie.com");
@@ -253,6 +260,12 @@ export default function DictationLessonClient({ lesson, initialProgress, isAuthe
   const completed = completedIds.has(active.id);
   const finished = completedIds.size === lesson.segments.length;
   const firstIncompleteIndex = lesson.segments.findIndex((segment) => !completedIds.has(segment.id));
+  const firstUnmasteredIndex = lesson.segments.findIndex((segment) => !masteredIds.has(segment.id));
+  const reviewUnmastered = () => {
+    if (firstUnmasteredIndex < 0) return;
+    setMask(100);
+    goTo(firstUnmasteredIndex);
+  };
   return <main className="min-h-[calc(100dvh-4rem)] bg-bg px-3 py-4 sm:px-6 lg:px-8">
     <section className="mx-auto max-w-7xl">
       <header className="mb-4 flex flex-wrap items-center gap-3"><Link href="/listen/dictation" className="rounded-xl border border-line bg-surface px-3 py-2 text-sm font-bold text-ink no-underline">← Thư viện</Link><span className="rounded-full bg-primary/10 px-3 py-1 text-xs font-extrabold text-primary">{lesson.level}</span><p className="min-w-0 flex-1 truncate text-sm font-bold text-muted">{lesson.sourceName}</p><a href={lesson.sourceUrl} target="_blank" rel="noreferrer" className="text-sm font-bold text-primary">Video gốc ↗</a></header>
@@ -266,7 +279,7 @@ export default function DictationLessonClient({ lesson, initialProgress, isAuthe
         </section>
         <aside className="rounded-2xl bg-surface p-4 shadow-sm"><div className="mb-3 flex items-center justify-between"><h2 className="font-extrabold text-ink">Tiến độ</h2><span className="text-sm font-bold text-primary">{completedIds.size}/{lesson.segments.length}</span></div><p className="mb-3 text-xs text-muted">Chọn đoạn để phát ngay từ đầu đoạn.</p><div className="max-h-[65dvh] space-y-2 overflow-y-auto pr-1">{lesson.segments.map((segment, segmentIndex) => { const item = progressBySegment.get(segment.id); const activeClass = segmentIndex === index ? "border-teal-line bg-teal-soft" : "border-transparent bg-surface-soft hover:bg-surface-soft"; return <button type="button" key={segment.id} onClick={() => goTo(segmentIndex, { autoplay: true })} className={`flex w-full items-center gap-3 rounded-xl border p-3 text-left ${activeClass}`}><span className={`h-3 w-3 shrink-0 rounded-full ${masteredIds.has(segment.id) || item?.masteredAtMillis ? "bg-success-soft0" : completedIds.has(segment.id) || item?.completedAtMillis ? "bg-teal-soft0" : "bg-control-line"}`} /><span className="min-w-0 flex-1"><b className="block text-sm text-ink">#{segment.index}</b><span className="text-xs text-muted">{formatTime(segment.startSeconds)} – {formatTime(segment.endSeconds)}</span></span></button>; })}</div></aside>
       </div>
-      {finished && <section className="mx-auto mt-5 max-w-3xl rounded-2xl border border-success-line bg-success-soft p-5 text-center"><p className="text-lg font-extrabold text-success-ink">Bạn đã hoàn thành toàn bộ video</p><p className="mt-1 text-sm text-success-ink">Đã thành thạo {masteredIds.size}/{lesson.segments.length} đoạn ở mức che 100% không dùng gợi ý.</p><div className="mt-4 flex flex-wrap justify-center gap-2"><button type="button" onClick={() => goTo(0)} className="rounded-lg border border-success-line bg-surface px-4 py-2 text-sm font-bold text-success-ink">Ôn lại từ đầu</button><Link href="/listen/dictation" className="rounded-lg bg-primary px-4 py-2 text-sm font-bold text-gold-ink no-underline">Về thư viện</Link></div></section>}
+      {finished && <section className="mx-auto mt-5 max-w-3xl rounded-2xl border border-success-line bg-success-soft p-5 text-center"><p className="text-lg font-extrabold text-success-ink">Bạn đã hoàn thành toàn bộ video</p><p className="mt-1 text-sm text-success-ink">Đã thành thạo {masteredIds.size}/{lesson.segments.length} đoạn ở mức che 100% không dùng gợi ý.</p><div className="mt-4 flex flex-wrap justify-center gap-2">{firstUnmasteredIndex >= 0 && <button type="button" onClick={reviewUnmastered} className="rounded-lg bg-primary px-4 py-2 text-sm font-bold text-gold-ink">Ôn đoạn chưa thành thạo</button>}<button type="button" onClick={() => goTo(0)} className="rounded-lg border border-success-line bg-surface px-4 py-2 text-sm font-bold text-success-ink">Ôn lại từ đầu</button><Link href="/listen/dictation" className="rounded-lg border border-success-line bg-surface px-4 py-2 text-sm font-bold text-success-ink no-underline">Về thư viện</Link></div></section>}
       {!finished && firstIncompleteIndex >= 0 && completedIds.size > 0 && <p className="mt-4 text-center text-xs text-muted">Còn {lesson.segments.length - completedIds.size} đoạn. Bạn có thể chọn bất kỳ đoạn nào trong danh sách để tiếp tục.</p>}
       <p className="mt-5 text-center text-xs text-muted">{lesson.publicAttribution}</p>
     </section>

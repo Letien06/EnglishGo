@@ -16,20 +16,23 @@ export default function ListeningHero({ tests, part, skill = "listening", authen
   const label = skill === "listening" ? "nghe" : "đọc";
   const icon = skill === "listening" ? "headphones" : "book";
   const summary = summarizeTests(tests);
-  const resume = progressReady ? tests.find((test) => testProgress(test).status === "learning") : undefined;
+  const resume = progressReady
+    ? tests.find((test) => testProgress(test).status === "learning" || testProgress(test).status === "due")
+    : undefined;
   const next = resume ?? tests.find((test) => test.questionCount > 0 && testProgress(test).status === "new") ?? tests.find((test) => test.questionCount > 0);
+  const resumeIsDue = resume ? testProgress(resume).status === "due" : false;
   const streak = useListeningStreak(authenticated);
 
   return <section className={styles.hero} aria-label={`Tổng quan luyện ${label}`}>
     <div className={styles.resume}>
       <div className={styles.heroDecoration} aria-hidden="true"><ListeningIcon name={icon} />{skill === "listening" && <div className={styles.soundwave}>{[3, 6, 4, 9, 5, 12, 7, 10, 4, 7, 3].map((height, index) => <i key={index} style={{ height: `${height * 4}px` }} />)}</div>}</div>
       <span className={styles.eyebrow}><span className={styles.liveDot} /> MỖI NGÀY, TIẾN MỘT CHÚT</span>
-      <h2>{resume ? "Tiếp tục nhịp học của bạn" : `Một bài ${label}, thêm tự tin.`}</h2>
-      <p>{resume ? `${resume.testName} · Part ${part} · ${resumePosition(resume)}` : "Không cần học thật nhiều. Chỉ cần bắt đầu và đều đặn."}</p>
+      <h2>{resume ? (resumeIsDue ? "Ôn lại điểm cần củng cố" : "Tiếp tục nhịp học của bạn") : `Một bài ${label}, thêm tự tin.`}</h2>
+      <p>{resume ? `${resume.testName} · Part ${part} · ${resumeIsDue ? "Có câu sai cần ôn" : resumePosition(resume)}` : "Không cần học thật nhiều. Chỉ cần bắt đầu và đều đặn."}</p>
       <span className={styles.resumeSource} aria-hidden={!resume || undefined}>{resume ? `${resume.setName} · Đã làm ${resume.done}/${resume.questionCount} câu` : "\u00a0"}</span>
       <div className={styles.resumeActions}>
-        {next ? <Link className={styles.primaryButton} href={practiceHref(next)} aria-label={resume ? `Tiếp tục học ${resume.testName} - ${resume.setName}` : `Bắt đầu bài ${label} được gợi ý`}>
-          <ListeningIcon name={icon} />{resume ? "Tiếp tục học" : `Bắt đầu luyện ${label}`}<ListeningIcon name="arrow" />
+        {next ? <Link className={styles.primaryButton} href={practiceHref(next)} aria-label={resume ? `${resumeIsDue ? "Ôn câu sai" : "Tiếp tục học"} ${resume.testName} - ${resume.setName}` : `Bắt đầu bài ${label} được gợi ý`}>
+          <ListeningIcon name={icon} />{resume ? (resumeIsDue ? "Ôn câu sai" : "Tiếp tục học") : `Bắt đầu luyện ${label}`}<ListeningIcon name="arrow" />
         </Link> : <a className={styles.primaryButton} href="#listening-library">Khám phá bài {label}<ListeningIcon name="arrow" /></a>}
         <span className={styles.heroNote}><ListeningIcon name="spark" /> Từng câu nhỏ, tiến bộ lớn</span>
       </div>

@@ -7,6 +7,7 @@ export const TEST_FILTERS = [
   { value: "new", label: "Chưa làm" },
   { value: "learning", label: "Đang học" },
   { value: "complete", label: "Hoàn thành" },
+  { value: "due", label: "Đến hạn ôn" },
 ] as const;
 
 export default function ListeningToolbar({ filter, query, sort, counts, onFilter, onQuery, onSort, progressReady, hasYears }: {

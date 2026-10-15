@@ -21,7 +21,7 @@ function SourceParagraphs({ text }: { text: string }) {
 }
 const button = "rounded-xl border border-line bg-surface px-4 py-2.5 text-sm font-bold text-ink transition-colors hover:bg-surface-soft focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-teal-ink disabled:opacity-40";
 
-export default function GrammarPracticeClient({ topic, metadata, learnerId }: { topic: GrammarTopic; metadata: GrammarCatalog["topics"][number]; learnerId: string }) {
+export default function GrammarPracticeClient({ topic, metadata, learnerId, reviewMode = false }: { topic: GrammarTopic; metadata: GrammarCatalog["topics"][number]; learnerId: string; reviewMode?: boolean }) {
   const [subtopicId, setSubtopicId] = useState("all");
   const [index, setIndex] = useState(0);
   const [answers, setAnswers] = useState<GrammarAnswers>({});
@@ -31,6 +31,7 @@ export default function GrammarPracticeClient({ topic, metadata, learnerId }: { 
   const [progressKnown, setProgressKnown] = useState(false);
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [panels, setPanels] = useState({ explanation: true, translation: true, vocabulary: false });
+  const [reviewQuestionIds, setReviewQuestionIds] = useState<string[]>([]);
   const vocabularyPool = useMemo(() => topic.questions.map((entry) => entry.vocabulary), [topic.questions]);
   const storageKey = grammarStorageKey(learnerId, topic.topicId);
   const answerKey = useMemo(() => grammarAnswerKey(topic), [topic]);
@@ -43,27 +44,40 @@ export default function GrammarPracticeClient({ topic, metadata, learnerId }: { 
         valid = readGrammarAnswers(localStorage.getItem(storageKey), answerKey);
         setProgressKnown(true);
       } catch { setStorageStatus("Không thể đọc tiến độ trên thiết bị này."); }
+      const wrongIds = topic.questions.filter((question) => valid[question.id] && valid[question.id] !== question.answer).map((question) => question.id);
+      setReviewQuestionIds(wrongIds);
       const unanswered = topic.questions.findIndex((question) => !valid[question.id]);
-      setAnswers(valid);
+      const startingAnswers = reviewMode
+        ? Object.fromEntries(Object.entries(valid).filter(([id]) => !wrongIds.includes(id)))
+        : valid;
+      setAnswers(startingAnswers);
       setSubtopicId("all");
-      setIndex(Math.max(0, unanswered));
+      setIndex(reviewMode ? 0 : Math.max(0, unanswered));
       setLoaded(true);
     });
     return () => { cancelled = true; };
-  }, [storageKey, topic.questions, answerKey]);
-  const questions = useMemo(() => topic.questions.filter((question) => subtopicId === "all" || question.subtopicId === subtopicId), [subtopicId, topic.questions]);
+  }, [reviewMode, storageKey, topic.questions, answerKey]);
+  const questions = useMemo(() => topic.questions.filter((question) => (!reviewMode || reviewQuestionIds.includes(question.id)) && (subtopicId === "all" || question.subtopicId === subtopicId)), [reviewMode, reviewQuestionIds, subtopicId, topic.questions]);
   const question = questions[index];
   const selected = question ? answers[question.id] : undefined;
   const activeSubtopic = metadata.subtopics.find((entry) => entry.id === question?.subtopicId);
   const { answered: done, correct } = getGrammarProgress(answerKey, answers);
+  const wrongCount = Math.max(0, done - correct);
+  const completed = loaded && !reviewMode && done >= topic.questions.length;
   const vocabulary = question ? parseVocabularyEntries(typeof question.vocabulary === "string" ? question.vocabulary : JSON.stringify(question.vocabulary ?? "")) : [];
   const answer = useCallback((letter: string) => {
     if (!loaded || !question || selected || !/^[A-D]$/.test(letter) || !question.options[letter as "A" | "B" | "C" | "D"]?.trim()) return;
     const updated = { ...answers, [question.id]: letter };
     setAnswers(updated);
-    try { localStorage.setItem(storageKey, JSON.stringify(updated)); }
-    catch { setStorageStatus("Không thể lưu tiến độ. Bạn vẫn có thể tiếp tục luyện tập."); }
-  }, [loaded, question, selected, answers, storageKey]);
+    if (reviewMode && letter === question.answer) {
+      setReviewQuestionIds((ids) => ids.filter((id) => id !== question.id));
+      setIndex((value) => Math.max(0, Math.min(value, Math.max(0, questions.length - 2))));
+    }
+    if (!reviewMode) {
+      try { localStorage.setItem(storageKey, JSON.stringify(updated)); }
+      catch { setStorageStatus("Không thể lưu tiến độ. Bạn vẫn có thể tiếp tục luyện tập."); }
+    }
+  }, [loaded, question, selected, answers, reviewMode, questions.length, storageKey]);
   useEffect(() => {
     const keydown = (event: KeyboardEvent) => {
       if (event.defaultPrevented || document.querySelector('[aria-modal="true"]') || event.ctrlKey || event.metaKey || event.altKey || event.shiftKey || event.repeat || (event.target instanceof HTMLElement && event.target.closest("input, textarea, select, [contenteditable='true']"))) return;
@@ -75,9 +89,25 @@ export default function GrammarPracticeClient({ topic, metadata, learnerId }: { 
     return () => window.removeEventListener("keydown", keydown);
   }, [answer, index, questions.length]);
   function selectSubtopic(id: string) {
-    const group = topic.questions.filter((entry) => id === "all" || entry.subtopicId === id);
+    const group = topic.questions.filter((entry) => (!reviewMode || reviewQuestionIds.includes(entry.id)) && (id === "all" || entry.subtopicId === id));
     setSubtopicId(id);
     setIndex(Math.max(0, group.findIndex((entry) => !answers[entry.id])));
+  }
+  function restartTopic() {
+    try { localStorage.removeItem(storageKey); } catch { /* Continue in memory when storage is unavailable. */ }
+    setAnswers({});
+    setReviewQuestionIds([]);
+    setSubtopicId("all");
+    setIndex(0);
+  }
+  function retryCurrent() {
+    if (!question) return;
+    const updated = { ...answers };
+    delete updated[question.id];
+    setAnswers(updated);
+    if (!reviewMode) {
+      try { localStorage.setItem(storageKey, JSON.stringify(updated)); } catch { setStorageStatus("Không thể lưu tiến độ. Bạn vẫn có thể tiếp tục luyện tập."); }
+    }
   }
   function subtopicButton(id: string, title: string, total: number) {
     const group = topic.questions.filter((entry) => id === "all" || entry.subtopicId === id);
@@ -105,7 +135,8 @@ export default function GrammarPracticeClient({ topic, metadata, learnerId }: { 
       </aside>
       <section className="min-w-0" aria-label="Luyện câu hỏi">
         <div className="mb-3 flex flex-wrap items-center justify-between gap-3"><p className="text-sm font-bold text-muted">{activeSubtopic?.title || "Tất cả chuyên đề"}</p><button type="button" className={button} aria-pressed={bilingual} onClick={() => setBilingual((value) => !value)}>Song ngữ</button></div>
-        {!question ? <div className="rounded-2xl border border-line bg-surface p-7 text-muted">Chuyên đề này chưa có câu hỏi.</div> : <article className="min-h-[380px] rounded-2xl border border-line bg-surface p-5 md:p-7">
+        {completed && <section className="mb-4 rounded-2xl border border-success-line bg-success-soft p-5 text-center"><p className="text-lg font-extrabold text-success-ink">Bạn đã hoàn thành chủ đề này</p><p className="mt-1 text-sm text-success-ink">Đúng {correct}/{topic.questions.length} câu. Chọn cách ôn tiếp theo để củng cố kiến thức.</p><div className="mt-4 flex flex-wrap justify-center gap-2">{wrongCount > 0 && <Link href={`/read/grammar/${encodeURIComponent(metadata.slug)}?mode=wrong`} className="rounded-xl bg-primary px-4 py-2 text-sm font-extrabold text-gold-ink no-underline">Ôn câu sai ({wrongCount})</Link>}<button type="button" onClick={restartTopic} className={button}>Ôn lại toàn bộ</button><Link href="/read/grammar" className={button}>Về thư viện</Link></div></section>}
+        {reviewMode && !question ? <section className="rounded-2xl border border-success-line bg-success-soft p-7 text-center"><p className="text-xl font-extrabold text-success-ink">Không còn câu sai cần ôn</p><p className="mt-2 text-sm text-success-ink">Bạn đã sửa hết các câu trong lượt ôn này.</p><Link href={`/read/grammar/${encodeURIComponent(metadata.slug)}`} className={`${button} mt-5 inline-flex no-underline`}>Học tiếp chủ đề</Link></section> : !question ? <div className="rounded-2xl border border-line bg-surface p-7 text-muted">Chuyên đề này chưa có câu hỏi.</div> : <article className="min-h-[380px] rounded-2xl border border-line bg-surface p-5 md:p-7">
           <div className="flex items-center justify-between gap-3"><p className="text-sm font-extrabold tabular-nums text-muted">Câu {index + 1}/{questions.length}</p><span className="text-xs text-muted">Chọn đáp án 1–4</span></div>
           <h2 className="mt-6 whitespace-pre-wrap text-xl font-extrabold leading-relaxed text-ink">{display(question.text)}</h2>
           {bilingual && question.translation && <p className="mt-4 whitespace-pre-wrap rounded-xl bg-teal-soft p-4 text-teal-ink" lang="vi">{display(question.translation)}</p>}
@@ -113,7 +144,7 @@ export default function GrammarPracticeClient({ topic, metadata, learnerId }: { 
             const isCorrect = Boolean(selected) && letter === question.answer;
             const isWrong = selected === letter && letter !== question.answer;
             return <button type="button" key={letter} disabled={!loaded || Boolean(selected)} aria-pressed={selected === letter} onClick={() => answer(letter)} className={`flex min-h-14 w-full items-center gap-3 rounded-xl border p-4 text-left font-bold transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-teal-ink ${isCorrect ? "border-teal-line bg-teal-soft text-teal-ink" : isWrong ? "border-rose-300 bg-rose-50 text-rose-800" : "border-line bg-surface text-ink enabled:hover:bg-surface-soft"}`}><span>{letter}.</span><span>{display(question.options[letter])}</span>{isCorrect && <span className="ml-auto" aria-label="Đáp án đúng">✓</span>}{isWrong && <span className="ml-auto" aria-label="Đáp án sai">✕</span>}</button>;
-          })}</div>
+          })}</div>{reviewMode && selected && <button type="button" onClick={retryCurrent} className={`${button} mt-5`}>Làm lại câu này</button>}
         </article>}
         <nav aria-label="Chuyển câu hỏi" className="mt-4 flex items-center justify-between gap-3"><button type="button" disabled={index === 0} onClick={() => setIndex((value) => value - 1)} className={button}>← Câu trước</button><button type="button" disabled={index >= questions.length - 1} onClick={() => setIndex((value) => value + 1)} className={button}>Câu tiếp →</button></nav>
         <details className="mt-5 rounded-xl border border-line bg-surface"><summary className="cursor-pointer p-4 text-sm font-bold text-ink">Danh sách câu ({questions.length})</summary><nav aria-label="Danh sách câu hỏi" className="flex flex-wrap gap-2 border-t border-line p-4">{questions.map((entry, position) => <button type="button" key={entry.id} onClick={() => setIndex(position)} aria-label={`Câu ${position + 1}${answers[entry.id] ? answers[entry.id] === entry.answer ? ", đã trả lời đúng" : ", đã trả lời sai" : ", chưa làm"}`} aria-current={position === index ? "true" : undefined} className={`h-10 min-w-10 rounded-lg border text-sm font-bold ${position === index ? "border-teal-ink ring-1 ring-teal-ink" : "border-line"} ${answers[entry.id] ? answers[entry.id] === entry.answer ? "bg-teal-soft text-teal-ink" : "bg-rose-50 text-rose-800" : "bg-surface text-muted"}`}>{position + 1}</button>)}</nav></details>

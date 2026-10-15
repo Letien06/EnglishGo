@@ -12,13 +12,17 @@ export const dynamic = "force-dynamic";
 
 interface Props {
   params: Promise<{ attemptId: string }>;
+  searchParams: Promise<{ filter?: string }>;
 }
 
-export default async function PracticeReviewPage({ params }: Props) {
+export default async function PracticeReviewPage({ params, searchParams }: Props) {
   const user = await requireUserForRead();
   const { attemptId } = await params;
+  const { filter } = await searchParams;
   const review = await getAttemptReview(user.uid, Number(attemptId));
   const attempt = review.attempt;
+  const wrongAnswers = review.answers.filter((answer) => !answer.correct);
+  const filteredAnswers = filter === "wrong" ? wrongAnswers : review.answers;
   const scoreBreakdown = attempt.scoreBreakdown;
   const accuracy = attempt.questionCount > 0 ? Math.round((attempt.correctCount * 100) / attempt.questionCount) : 0;
   const retryHref = `/practice/session/${attempt.testId}?mode=${attempt.mode}&parts=${attempt.parts.join(",")}&time=${attempt.durationMinutes}`;
@@ -110,13 +114,17 @@ export default async function PracticeReviewPage({ params }: Props) {
             <Link href={retryHref} className="rounded-lg border border-line bg-surface px-4 py-2 text-sm font-bold text-ink">
               Làm lại
             </Link>
+            {wrongAnswers.length > 0 ? <Link href={`/practice/review/${attempt.attemptId}?filter=wrong#review-answers`} className="rounded-lg border border-rose-200 bg-rose-50 px-4 py-2 text-sm font-extrabold text-rose-700">
+              Ôn câu sai ({wrongAnswers.length})
+            </Link> : null}
             <Link href="/practice" className="rounded-lg bg-accent px-4 py-2 text-sm font-extrabold text-gold-ink">
               Quay lại danh sách
             </Link>
           </section>
 
           <section id="review-answers" className="space-y-4">
-            {review.answers.map((answer, index) => (
+            <div className="flex flex-wrap items-center justify-between gap-2"><h2 className="text-lg font-extrabold text-ink">{filter === "wrong" ? `Câu sai cần ôn (${wrongAnswers.length})` : `Đáp án (${review.answers.length})`}</h2>{filter === "wrong" ? <Link href={`/practice/review/${attempt.attemptId}#review-answers`} className="text-sm font-bold text-primary">Xem tất cả câu</Link> : wrongAnswers.length > 0 ? <Link href={`/practice/review/${attempt.attemptId}?filter=wrong#review-answers`} className="text-sm font-bold text-primary">Chỉ xem câu sai</Link> : null}</div>
+            {filteredAnswers.map((answer, index) => (
               <article key={`${answer.questionId}-${index}`} className="rounded-xl border border-line bg-surface p-5 shadow-sm">
                 <div className="flex flex-wrap items-center justify-between gap-2">
                   <h2 className="font-bold text-ink">Câu {index + 1} <span className="text-xs text-muted">(Phần {answer.part})</span></h2>

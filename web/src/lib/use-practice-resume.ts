@@ -28,6 +28,12 @@ export function usePracticeResume({ skill, uid, part, level, testId, items, setA
   const markInteraction = useCallback(() => { interacted.current = true; }, []);
 
   useEffect(() => {
+    if (reviewRun) {
+      // Review sessions intentionally start blank; never rehydrate the learner's
+      // completed answers into an error-only or full replay session.
+      setHydrated(true);
+      return;
+    }
     try {
       const saved = JSON.parse(localStorage.getItem(storageKey) ?? "null");
       if (saved && saved.answers && typeof saved.answers === "object") {
@@ -44,7 +50,7 @@ export function usePracticeResume({ skill, uid, part, level, testId, items, setA
     } catch { /* Server history and the durable queue remain available. */ }
     // eslint-disable-next-line react-hooks/set-state-in-effect
     setHydrated(true);
-  }, [storageKey, items, setAnswers, setIndex]);
+  }, [reviewRun, storageKey, items, setAnswers, setIndex]);
 
   useEffect(() => {
     if (!hydrated || !currentAnswers || currentIndex === undefined) return;

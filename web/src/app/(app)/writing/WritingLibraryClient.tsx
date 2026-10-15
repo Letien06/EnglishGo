@@ -305,7 +305,14 @@ export default function WritingLibraryClient() {
   }, [part, partOneCategory, prompts, query, tag, sort, statusFilter, latestScores, authenticated]);
   const scoresReady = authenticated && scoresLoadedPart === part;
   const scoredPrompts = prompts.filter((prompt) => latestScores[prompt.id]);
-  const nextPrompt = prompts.find((prompt) => !latestScores[prompt.id]) ?? prompts[0];
+  const nextPrompt = prompts.find((prompt) => !latestScores[prompt.id])
+    ?? [...prompts].sort((left, right) => {
+      const leftScore = latestScores[left.id];
+      const rightScore = latestScores[right.id];
+      const leftPercent = leftScore && leftScore.maxScore > 0 ? leftScore.score / leftScore.maxScore : 1;
+      const rightPercent = rightScore && rightScore.maxScore > 0 ? rightScore.score / rightScore.maxScore : 1;
+      return leftPercent - rightPercent || (leftScore?.submittedAtMillis ?? 0) - (rightScore?.submittedAtMillis ?? 0);
+    })[0] ?? prompts[0];
   const average = scoredPrompts.length ? Math.round(scoredPrompts.reduce((sum, prompt) => {
     const score = latestScores[prompt.id];
     return sum + (score.maxScore > 0 ? score.score / score.maxScore * 100 : 0);
@@ -368,11 +375,11 @@ function WritingPromptCard({ prompt, latestScore, scoresReady, scoreError, index
   const percent = latestScore && latestScore.maxScore > 0 ? Math.min(100, Math.max(0, Math.round(latestScore.score / latestScore.maxScore * 100))) : 0;
   return <article className={styles.card} style={{ "--card-delay": `${Math.min(index, 5) * 35}ms` } as CSSProperties}>
     {prompt.part === 1 && prompt.thumbnailUrl && <div className={styles.cardImage}><Image src={prompt.thumbnailUrl} alt={prompt.imageAlt || prompt.title} fill sizes="(max-width: 640px) 100vw, (max-width: 1050px) 50vw, 33vw" loading="lazy" className="object-cover" /></div>}
-    <div className={styles.cardTop}><span className={styles.cardLabel}>LUYỆN VIẾT · PART {prompt.part}</span><span className={styles.badge} data-status={latestScore ? "complete" : "new"}><span />{latestScore ? "Đã chấm gần đây" : "Đề luyện viết"}</span></div>
+    <div className={styles.cardTop}><span className={styles.cardLabel}>LUYỆN VIẾT · PART {prompt.part}</span><span className={styles.badge} data-status={!latestScore ? "new" : percent < 70 ? "due" : "complete"}><span />{!latestScore ? "Mới" : percent < 70 ? "Đến hạn ôn" : "Hoàn thành"}</span></div>
     <div className={styles.cardHeading}><div><h3>{prompt.title}</h3>{prompt.titleVi && <p>{prompt.titleVi}</p>}<p>{latestScore ? `Điểm AI: ${latestScore.score}/${latestScore.maxScore}` : scoresReady ? "Chưa có điểm gần đây" : scoreError ? "Chưa tải được điểm" : "Đang tải điểm cá nhân…"}</p></div><ListeningProgressRing percent={percent} ready={Boolean(latestScore)} label={`Điểm AI so với tối đa: ${prompt.title}`} /></div>
     <p className={styles.cardDescription}>{prompt.summary}</p>
     <div className={styles.answerStats}>{prompt.requiredTerms?.slice(0, 3).map((term) => <span key={term} data-tone="good"><i />{term}</span>)}</div>
     <div className={styles.metadata}><span><Icon name="clock" />{prompt.timeLimitMinutes} phút</span><span><Icon name="bars" />{{ BEGINNER: "Cơ bản", INTERMEDIATE: "Trung cấp", ADVANCED: "Nâng cao" }[prompt.difficulty]}</span>{grammarCategory && <span>{WRITING_PART_ONE_GRAMMAR_CATEGORY_LABELS[grammarCategory]}</span>}{prompt.tags?.slice(0, 2).map((tag) => <span key={tag}>#{tag}</span>)}</div>
-    <footer className={styles.cardFooter}><Link className={styles.cardCta} href={`/writing/practice/${encodeURIComponent(prompt.id)}`}>{latestScore ? "Luyện viết lại" : "Luyện viết"}<Icon name="arrow" /></Link></footer>
+    <footer className={styles.cardFooter}><Link className={styles.cardCta} href={`/writing/practice/${encodeURIComponent(prompt.id)}`}>{!latestScore ? "Luyện viết" : percent < 70 ? "Sửa lỗi và viết lại" : "Thử lại để nâng điểm"}<Icon name="arrow" /></Link></footer>
   </article>;
 }
