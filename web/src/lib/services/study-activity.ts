@@ -33,6 +33,8 @@ export interface StudyStreakSummary {
   todayActivityCount: number;
   todayModules: StudyModule[];
   todayDateKey: string;
+  onlineSecondsToday?: number;
+  onlineQualifiedToday?: boolean;
 }
 
 export interface StudyStreakLeaderboardEntry {
@@ -294,40 +296,50 @@ async function readStudyStreak(uid: string): Promise<StudyStreakSummary> {
     .limit(STREAK_LOOKBACK_LIMIT)
     .get();
 
-  const byDate = new Map<string, { activityCount: number; modules: StudyModule[]; lastActivityAtMillis: number | null }>();
+  const byDate = new Map<string, { activityCount: number; modules: StudyModule[]; lastActivityAtMillis: number | null; onlineSeconds: number; streakEligible: boolean }>();
   for (const doc of snap.docs) {
     const data = doc.data();
     const dateKey = typeof data.dateKey === "string" ? data.dateKey : doc.id;
-    if (!/^\d{4}-\d{2}-\d{2}$/.test(dateKey) || (numberValue(data.activityCount) ?? 0) <= 0) continue;
+    const activityCount = numberValue(data.activityCount) ?? 0;
+    const streakEligible = data.streakEligible === true;
+    const onlineSeconds = numberValue(data.onlineSeconds) ?? 0;
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(dateKey) || (activityCount <= 0 && !streakEligible && onlineSeconds <= 0)) continue;
     byDate.set(dateKey, {
-      activityCount: typeof data.activityCount === "number" ? data.activityCount : 0,
+      activityCount,
       modules: parseModules(data.modules),
       lastActivityAtMillis: numberValue(data.lastActivityAtMillis),
+      onlineSeconds,
+      streakEligible,
     });
   }
 
   const todayKey = dateKeyForMillis(Date.now());
   const today = byDate.get(todayKey);
+  const todayIsEligible = Boolean(today && (today.activityCount > 0 || today.streakEligible));
   let streakDays = 0;
   let expected = todayKey;
 
-  if (!today) {
+  if (!todayIsEligible) {
     expected = addDaysToDateKey(todayKey, -1);
   }
   const latestActiveDay = byDate.get(expected);
 
-  while (byDate.has(expected)) {
+  while (true) {
+    const day = byDate.get(expected);
+    if (!day || (day.activityCount <= 0 && !day.streakEligible)) break;
     streakDays++;
     expected = addDaysToDateKey(expected, -1);
   }
 
   return {
     streakDays,
-    studiedToday: Boolean(today),
+    studiedToday: todayIsEligible,
     todayActivityCount: today?.activityCount ?? 0,
     todayModules: today?.modules ?? [],
     todayDateKey: todayKey,
     lastActivityAtMillis: latestActiveDay?.lastActivityAtMillis ?? null,
+    onlineSecondsToday: today?.onlineSeconds ?? 0,
+    onlineQualifiedToday: today?.streakEligible === true,
   };
 }
 
@@ -362,6 +374,8 @@ async function readStoredStudyStreakSummary(
     ...current,
     lastActivityAtMillis: numberValue(data.lastStudyActivityAtMillis),
     todayModules: current.studiedToday ? parseModules(data.studyTodayModules) : [],
+    onlineSecondsToday: data.studyTodayOnlineDateKey === todayKey ? numberValue(data.studyTodayOnlineSeconds) ?? 0 : 0,
+    onlineQualifiedToday: data.studyOnlineQualifiedDateKey === todayKey,
   };
 }
 
@@ -463,6 +477,8 @@ function emptySummary(): StudyStreakSummary {
     todayActivityCount: 0,
     todayModules: [],
     todayDateKey: dateKeyForMillis(Date.now()),
+    onlineSecondsToday: 0,
+    onlineQualifiedToday: false,
   };
 }
 

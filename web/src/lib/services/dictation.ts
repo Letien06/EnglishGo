@@ -448,7 +448,12 @@ async function saveProgress(uid: string, lesson: DictationLesson, segment: Dicta
     const summaryData = summarySnap.data();
     const existingMarkers: DictationProgressMarker[] = summaryData?.segmentMarkersVersion === 1 && Array.isArray(summaryData.segmentMarkers)
       ? summaryData.segmentMarkers
-      : (await tx.get(summaryRef.collection("segments").select("completedAtMillis", "masteredAtMillis"))).docs.map(doc => progressMarker(doc.id, doc.data())).filter(isProgressMarker);
+      : (await tx.get((() => {
+        const segments = summaryRef.collection("segments");
+        return typeof (segments as { select?: unknown }).select === "function"
+          ? (segments as typeof segments & { select: (...fields: string[]) => typeof segments }).select("completedAtMillis", "masteredAtMillis")
+          : segments;
+      })())).docs?.map(doc => progressMarker(doc.id, doc.data())).filter(isProgressMarker) ?? [];
     const old = segmentSnap.exists ? toSegmentProgress(lesson.id, segment.id, segmentSnap.data()) : null;
     const wasCompleted = Boolean(old?.completedAtMillis);
     const wasMastered = Boolean(old?.masteredAtMillis);

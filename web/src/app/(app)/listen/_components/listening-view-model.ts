@@ -50,12 +50,6 @@ export function summarizeTests(tests: DauToeicPartTest[]) {
 }
 
 export function practiceHref(test: DauToeicPartTest) {
-  if (testProgress(test).status === "due") {
-    const skill = test.part >= 5 ? "reading" : "listening";
-    const params = new URLSearchParams({ skill, part: String(test.part), level: "1", run: "dashboard" });
-    if (test.testId) params.set("testId", test.testId);
-    return `/review/practice?${params}`;
-  }
   return `/${test.part >= 5 ? "read" : "listen"}/practice?part=part${test.part}&testId=${encodeURIComponent(test.testId)}&mode=normal&q=${test.nextIndex}`;
 }
 

@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { usePathname } from "next/navigation";
 import { LEARNING_LEVELS_UPDATED_EVENT } from "@/lib/client-learning-progress-cache";
+import { ONLINE_PRESENCE_EVENT, onlineTimeLabel, readOnlinePresence, type OnlinePresence } from "@/lib/client-online-presence";
 import { publishStudyStreak, readStudyStreakCache, seedStudyStreak, studyDateKey, STUDY_STREAK_TTL_MS, STUDY_STREAK_UPDATED_EVENT, type StudyStreakSnapshot } from "@/lib/client-study-streak-cache";
 
 export default function StudyStreakBadge({
@@ -35,7 +36,7 @@ export default function StudyStreakBadge({
       const entry = readStudyStreakCache(uid);
       if (!disposed && entry) setSnapshot({ uid, data: entry.data });
       else if (!disposed) setSnapshot((current) => current?.uid === uid && current.data.todayDateKey !== studyDateKey()
-        ? { uid, data: { ...current.data, todayDateKey: studyDateKey(), studiedToday: false, todayActivityCount: 0 } }
+        ? { uid, data: { ...current.data, todayDateKey: studyDateKey(), studiedToday: false, todayActivityCount: 0, onlineSecondsToday: 0, onlineQualifiedToday: false } }
         : current);
       return entry;
     };
@@ -118,9 +119,34 @@ export default function StudyStreakBadge({
     ? "border-primary/25 bg-primary/10 text-primary"
     : "border-line bg-surface-soft text-muted";
   return (
-    <span className={`inline-flex h-9 items-center gap-1.5 rounded-xl border px-3 text-sm font-extrabold ${statusClass} ${className ?? ""}`} title={title} aria-label={title}>
+    <div className={`inline-flex items-center gap-1.5 ${className ?? ""}`}>
+    <span className={`inline-flex h-9 items-center gap-1.5 rounded-xl border px-2.5 text-sm font-extrabold ${statusClass}`} title={studiedToday ? "Đã giữ chuỗi hôm nay" : "Online đủ 10 phút hoặc hoàn thành một hoạt động học để giữ chuỗi"} aria-label={title}>
       <span aria-hidden="true">🔥</span>
       <span>{streakDays}</span>
     </span>
+    {uid && <OnlineClock key={uid} uid={uid} confirmed={data?.onlineSecondsToday} qualified={studiedToday} />}
+    </div>
   );
+}
+
+function OnlineClock({ uid, confirmed, qualified }: { uid: string; confirmed?: number; qualified: boolean }) {
+  const [presence, setPresence] = useState<OnlinePresence | undefined>(() => readOnlinePresence(uid));
+  useEffect(() => {
+    const update = (event: Event) => {
+      if ((event as CustomEvent<{ uid: string }>).detail.uid === uid) setPresence(readOnlinePresence(uid));
+    };
+    window.addEventListener(ONLINE_PRESENCE_EVENT, update);
+    return () => window.removeEventListener(ONLINE_PRESENCE_EVENT, update);
+  }, [uid]);
+  const current = presence?.dateKey === studyDateKey() ? presence : undefined;
+  const seconds = current?.seconds ?? confirmed;
+  const label = seconds == null ? "--:--" : onlineTimeLabel(seconds);
+  const detail = `Hôm nay: ${label}. ${qualified ? "Đã giữ chuỗi hôm nay." : "Online đủ 10 phút hoặc hoàn thành một hoạt động học để giữ chuỗi."} ${current ? `Tổng thời gian truy cập: ${onlineTimeLabel(current.totalSeconds)}. ${!current.synced ? "Đang chờ kết nối." : !current.running ? "Bộ đếm đang tạm dừng." : "Đang tính thời gian."}` : "Đang tải thời gian."}`;
+  return <details className="relative text-sm">
+    <summary aria-label="Thời gian truy cập" className="inline-flex h-9 cursor-pointer list-none items-center gap-1 rounded-xl border border-line bg-surface-soft px-2.5 font-bold text-ink tabular-nums focus-visible:outline-2 focus-visible:outline-primary" title={detail}>
+      <svg aria-hidden="true" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8"><circle cx="12" cy="12" r="9" /><path d="M12 6v6l4 2" /></svg>
+      <span>{label}</span><span className="text-xs text-muted">{qualified ? "✓" : "/ 10:00"}</span>
+    </summary>
+    <div className="absolute right-0 top-full z-50 mt-2 w-64 max-w-[calc(100vw-2rem)] rounded-xl border border-line bg-surface p-3 text-xs leading-relaxed text-ink shadow-lg">{detail}</div>
+  </details>;
 }

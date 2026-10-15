@@ -6,5 +6,5 @@ import HubReadySignal from "./HubReadySignal";
 export default async function HubPage() {
   const user = await requireUserForRead();
   const initial = await getDashboardView(user.uid, user.displayName || user.email);
-  return <><HubReadySignal /><DashboardClient key={user.uid} initial={initial} /></>;
+  return <><HubReadySignal /><DashboardClient key={user.uid} uid={user.uid} initial={initial} /></>;
 }

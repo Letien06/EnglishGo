@@ -239,9 +239,11 @@ async function userProgressDocs(uid: string): Promise<VocabProgressDoc[]> {
   }
   if (migrated) return migrated.map((row) => ({ uid, interval: 0, easeFactor: 2.5, repetitions: 0, ...row } as VocabProgressDoc));
   return readServerCache(async () => {
-    const snap = await progressCollection(uid)
-      .select("setId", "status", "nextReviewAtMillis", "lastReviewedAtMillis")
-      .get();
+    const collection = progressCollection(uid);
+    const selected = typeof (collection as { select?: unknown }).select === "function"
+      ? (collection as typeof collection & { select: (...fields: string[]) => typeof collection }).select("setId", "status", "nextReviewAtMillis", "lastReviewedAtMillis")
+      : collection;
+    const snap = await selected.get();
     return snap.docs.map(toProgressDoc);
   }, ["vocab-progress-summary", uid], { revalidate: 60, tags: [vocabProgressCacheTag(uid)] });
 }

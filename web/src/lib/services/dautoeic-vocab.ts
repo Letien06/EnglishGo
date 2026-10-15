@@ -589,7 +589,13 @@ async function readProgressForWordIds(
   const rows: Record<string, unknown>[] = [];
   for (let offset = 0; offset < ids.length; offset += 30 * 4) {
     const chunks = Array.from({ length: Math.min(4, Math.ceil((ids.length - offset) / 30)) }, (_, index) => ids.slice(offset + index * 30, offset + (index + 1) * 30));
-    const snapshots = await Promise.all(chunks.filter((chunk) => chunk.length).map((chunk) => collection.where(FieldPath.documentId(), "in", chunk.map(String)).select("wordId", "setId", "status", "nextReviewAtMillis").get()));
+    const snapshots = await Promise.all(chunks.filter((chunk) => chunk.length).map((chunk) => {
+      const query = collection.where(FieldPath.documentId(), "in", chunk.map(String));
+      const selected = typeof (query as { select?: unknown }).select === "function"
+        ? (query as typeof query & { select: (...fields: string[]) => typeof query }).select("wordId", "setId", "status", "nextReviewAtMillis")
+        : query;
+      return selected.get();
+    }));
     rows.push(...snapshots.flatMap((snapshot) => snapshot.docs.map((doc) => ({ ...(doc.data() ?? {}), wordId: numVal(doc.data() ?? {}, "wordId") ?? Number(doc.id) }))));
   }
   return rows;

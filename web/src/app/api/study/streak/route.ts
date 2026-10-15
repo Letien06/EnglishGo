@@ -17,6 +17,8 @@ export const GET = withErrorHandling<StudyStreakSummary & { authenticated: boole
       todayActivityCount: 0,
       todayModules: [],
       todayDateKey: "",
+      onlineSecondsToday: 0,
+      onlineQualifiedToday: false,
       authenticated: false,
     });
   }

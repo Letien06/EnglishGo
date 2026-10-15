@@ -34,6 +34,7 @@ export function coherentProfileStudyStreak(profile: Record<string, unknown>, tod
   const current = normalizeStudyStreak(profile, todayDateKey);
   if (current.streakDays > 0 && (typeof profile.lastStudyActivityAtMillis !== "number" || !Number.isFinite(profile.lastStudyActivityAtMillis) || profile.lastStudyActivityAtMillis <= 0)) return null;
   if (typeof profile.studyStreakDays !== "number" || !Number.isFinite(profile.studyStreakDays) || profile.studyStreakDays !== current.streakDays || profile.studyStudiedToday !== current.studiedToday) return null;
-  if (current.studiedToday && (current.todayActivityCount <= 0 || current.streakDays <= 0)) return null;
+  if (current.studiedToday && current.todayActivityCount <= 0 && profile.studyOnlineQualifiedDateKey !== todayDateKey) return null;
+  if (current.studiedToday && current.streakDays <= 0) return null;
   return current;
 }

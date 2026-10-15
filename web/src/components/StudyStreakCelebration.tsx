@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
+import { readStudyStreakCache, STUDY_STREAK_UPDATED_EVENT } from "@/lib/client-study-streak-cache";
 
 type MilestoneResponse = {
   success: boolean;
@@ -15,6 +16,7 @@ export default function StudyStreakCelebration() {
   const [secondsRemaining, setSecondsRemaining] = useState(AUTO_DISMISS_SECONDS);
   const [reduceMotion, setReduceMotion] = useState(false);
   const checking = useRef(false);
+  const lastQualified = useRef("");
 
   useEffect(() => {
     const query = window.matchMedia("(prefers-reduced-motion: reduce)");
@@ -43,6 +45,20 @@ export default function StudyStreakCelebration() {
       checking.current = false;
     }
   }, [milestone]);
+
+  useEffect(() => {
+    const onStreak = (event: Event) => {
+      const uid = (event as CustomEvent<{ uid?: string }>).detail?.uid;
+      const data = uid ? readStudyStreakCache(uid)?.data : null;
+      if (!data?.studiedToday) return;
+      const key = `${uid}:${data.todayDateKey}:${data.streakDays}`;
+      if (lastQualified.current === key) return;
+      lastQualified.current = key;
+      void checkForMilestone();
+    };
+    window.addEventListener(STUDY_STREAK_UPDATED_EVENT, onStreak);
+    return () => window.removeEventListener(STUDY_STREAK_UPDATED_EVENT, onStreak);
+  }, [checkForMilestone]);
 
   useEffect(() => {
     if (checkedThisSession) return;

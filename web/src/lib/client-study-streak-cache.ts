@@ -4,6 +4,8 @@ export type StudyStreakSnapshot = {
   todayActivityCount: number;
   todayDateKey: string;
   authenticated: boolean;
+  onlineSecondsToday?: number;
+  onlineQualifiedToday?: boolean;
 };
 
 export const STUDY_STREAK_UPDATED_EVENT = "englishgo:study-streak-updated";

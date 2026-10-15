@@ -11,6 +11,7 @@ import NavIcon, { type NavIconName } from "./NavIcon";
 import MobileNavigationMenu from "./MobileNavigationMenu";
 import PwaInstallPrompt from "./PwaInstallPrompt";
 import HeaderJoinRoomButton from "./HeaderJoinRoomButton";
+import StudyOnlineTracker from "./StudyOnlineTracker";
 import { clearActiveLearnerCache, setActiveLearnerId } from "@/lib/client-learning-progress-cache";
 import { useVocabReviewQueue } from "@/lib/vocab-review-queue";
 import { useReadingProgressQueue, useListeningProgressQueue } from "@/lib/reading-progress-queue";
@@ -117,11 +118,9 @@ export default function AppShell({ children }: { children: ReactNode }) {
     return () => { cancelled = true; };
   }, []);
 
-  if (isPracticeWorkspace) {
-    return <>{children}{scratchPaper}</>;
-  }
-
-  return (
+  return <>
+    <StudyOnlineTracker uid={scratchUid} />
+    {isPracticeWorkspace ? <>{children}{scratchPaper}</> : (
     <AuthenticatedSessionProvider authenticated={sessionAuthenticated || authenticated}>
       <div className="app-shell design-system min-h-dvh text-ink">
       <header className="app-shell-header app-primary-nav sticky top-0 z-50 border-b bg-glass/90 backdrop-blur-xl">
@@ -135,7 +134,7 @@ export default function AppShell({ children }: { children: ReactNode }) {
             </strong>
           </Link>
 
-          <nav className="hidden items-center gap-2 xl:flex" aria-label="Điều hướng học tập">
+          <nav className="hidden items-center gap-2 2xl:flex" aria-label="Điều hướng học tập">
             {navItems.map((item) => {
               const active =
                 item.href === "/hub" ? pathname === "/hub" : pathname.startsWith(item.href);
@@ -158,12 +157,12 @@ export default function AppShell({ children }: { children: ReactNode }) {
           </nav>
 
           <div className="ml-auto flex items-center gap-3">
-            <MobileNavigationMenu />
+            <MobileNavigationMenu wideHeader />
             <PwaInstallPrompt />
             <HeaderJoinRoomButton />
-            <span className="hidden h-9 w-[4.5rem] shrink-0 sm:inline-flex" data-streak-slot>
+            <div className="hidden h-9 min-w-48 shrink-0 items-center gap-1.5 sm:inline-flex" data-streak-slot>
               {authenticated ? <StudyStreakBadge uid={session ? session.user?.uid ?? null : bootstrap?.user?.uid ?? null} className="w-full justify-center tabular-nums" initialStreak={session?.user?.uid && session.user.uid !== bootstrap?.user?.uid ? null : bootstrap?.streak ?? null} /> : !bootstrap ? <span aria-hidden="true" className="h-full w-full rounded-xl border border-line bg-surface-soft opacity-50" /> : null}
-            </span>
+            </div>
             <ThemeToggle className="!hidden border border-line bg-surface-soft text-ink xl:!inline-flex" />
             <Link
               href="/account"
@@ -178,6 +177,9 @@ export default function AppShell({ children }: { children: ReactNode }) {
             </Link>
           </div>
         </div>
+        <div className="flex justify-end px-4 pb-2 sm:hidden">
+          <StudyStreakBadge uid={scratchUid} className="tabular-nums" />
+        </div>
       </header>
 
         {children}
@@ -185,5 +187,6 @@ export default function AppShell({ children }: { children: ReactNode }) {
         {authenticated && <StudyStreakCelebration />}
       </div>
     </AuthenticatedSessionProvider>
-  );
+    )}
+  </>;
 }

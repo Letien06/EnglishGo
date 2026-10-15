@@ -155,8 +155,8 @@ export async function getPart(testId: string, part: number): Promise<{
 function normalizePartMedia<T extends { questions: DauToeicQuestion[]; passages: DauToeicPassage[] }>(content: T): T {
   return {
     ...content,
-    questions: content.questions.map((question) => ({ ...question, imageUrl: normalizeDauToeicImageUrl(question.imageUrl) })),
-    passages: content.passages.map((passage) => ({ ...passage, imageUrl: normalizeDauToeicImageUrl(passage.imageUrl) })),
+    questions: (content.questions ?? []).map((question) => ({ ...question, imageUrl: normalizeDauToeicImageUrl(question.imageUrl) })),
+    passages: (content.passages ?? []).map((passage) => ({ ...passage, imageUrl: normalizeDauToeicImageUrl(passage.imageUrl) })),
   };
 }
 

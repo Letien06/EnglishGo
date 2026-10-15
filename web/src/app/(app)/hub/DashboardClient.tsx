@@ -8,6 +8,7 @@ import { GOAL_KEYS, isDashboardDate, type DashboardPeriod, type DashboardPrefere
 import { DashboardIcon, StudyCompanion } from "./DashboardArt";
 import styles from "./dashboard.module.css";
 import CompanionEncouragement from "./CompanionEncouragement";
+import { readStudyStreakCache, STUDY_STREAK_UPDATED_EVENT } from "@/lib/client-study-streak-cache";
 
 const skills: Record<GoalKey, { label: string; unit: string; href: string; max: number; color: string }> = {
   reading: { label: "Đọc", unit: "câu", href: "/read", max: 200, color: "#52cdb0" },
@@ -75,7 +76,20 @@ function timeLabel(seconds: number) {
 }
 function displayDate(date: string) { return date.split("-").reverse().join("/"); }
 
-export default function DashboardClient({ initial }: { initial: DashboardView }) {
+export default function DashboardClient({ initial, uid }: { initial: DashboardView; uid?: string }) {
+  const [streakDays, setStreakDays] = useState(initial.streakDays);
+  const [longestStreakDays, setLongestStreakDays] = useState(initial.longestStreakDays);
+  useEffect(() => {
+    const update = (event: Event) => {
+      if (!uid || (event as CustomEvent<{ uid?: string }>).detail?.uid !== uid) return;
+      const data = readStudyStreakCache(uid)?.data;
+      if (!data) return;
+      setStreakDays(data.streakDays);
+      setLongestStreakDays(previous => data.streakDays > 0 ? Math.max(previous ?? 0, data.streakDays) : previous);
+    };
+    window.addEventListener(STUDY_STREAK_UPDATED_EVENT, update);
+    return () => window.removeEventListener(STUDY_STREAK_UPDATED_EVENT, update);
+  }, [uid]);
   const [preferences, setPreferences] = useState(initial.preferences);
   const [scoreDraft, setScoreDraft] = useState({ currentScore: initial.preferences.currentScore, targetScore: initial.preferences.targetScore });
   const [scoreStatus, setScoreStatus] = useState("");
@@ -169,7 +183,7 @@ export default function DashboardClient({ initial }: { initial: DashboardView })
         </article>
         <article className={`${styles.overviewCard} ${styles.scoreProgress}`}><h2>Điểm còn thiếu</h2><Ring percent={current == null ? 0 : (current / Math.max(1, preferences.targetScore)) * 100}><strong>{remaining == null ? "—" : remaining > 0 ? `+${remaining}` : "✓"}</strong><span>{remaining == null ? "Nhập điểm hiện tại" : remaining > 0 ? "điểm cần đạt thêm" : "Đã đạt mục tiêu!"}</span></Ring><p className={styles.helper}>Mục tiêu <b>{preferences.targetScore}</b> / 990 điểm</p></article>
         <article className={`${styles.overviewCard} ${styles.examCard}`}><h2>Số ngày đến ngày thi</h2><div className={styles.examContent}><span className={styles.largeIcon}><DashboardIcon name="calendar" /></span>{daysToExam == null ? <h3>Chưa đặt ngày thi</h3> : <><strong className={styles.countdown}>{Math.max(0, daysToExam)}<small>ngày</small></strong><p>{daysToExam < 0 ? "Đã qua ngày thi · " : daysToExam === 0 ? "Ngày thi hôm nay · " : "Ngày thi · "}{displayDate(preferences.examDate!)}</p></>}<button className={styles.primaryButton} onClick={() => openModal("exam")}><DashboardIcon name="calendar" />{daysToExam == null ? "Đặt ngày thi" : "Đổi ngày thi"}</button></div></article>
-        <article className={styles.overviewCard}><h2>Động lực học</h2><div className={styles.motivation}><span className={`${styles.iconTile} ${styles.flame}`}><DashboardIcon name="flame" /></span><div><span>Chuỗi ngày học</span><strong className={styles.streak}>{initial.streakDays} <small>ngày</small></strong><p>Dài nhất đã ghi nhận: {initial.longestStreakDays == null ? "—" : `${initial.longestStreakDays} ngày`}</p></div></div><div className={styles.motivation}><span className={styles.iconTile}><DashboardIcon name="target" /></span><div><span>XP trọn đời</span><strong>{initial.totalXp.toLocaleString("vi-VN")} <small>XP</small></strong><p>Tích lũy từ hoạt động học</p></div></div><Link href="/leaderboard" className={styles.textButton}>Xem bảng xếp hạng <DashboardIcon name="arrow" /></Link></article>
+        <article className={styles.overviewCard}><h2>Động lực học</h2><div className={styles.motivation}><span className={`${styles.iconTile} ${styles.flame}`}><DashboardIcon name="flame" /></span><div><span>Chuỗi ngày học</span><strong className={styles.streak}>{streakDays} <small>ngày</small></strong><p>Dài nhất đã ghi nhận: {longestStreakDays == null ? "—" : `${longestStreakDays} ngày`}</p></div></div><div className={styles.motivation}><span className={styles.iconTile}><DashboardIcon name="target" /></span><div><span>XP trọn đời</span><strong>{initial.totalXp.toLocaleString("vi-VN")} <small>XP</small></strong><p>Tích lũy từ hoạt động học</p></div></div><Link href="/leaderboard" className={styles.textButton}>Xem bảng xếp hạng <DashboardIcon name="arrow" /></Link></article>
       </section>
 
       <section aria-label="Thống kê học tập">
