@@ -32,4 +32,14 @@ describe("study entry routes", () => {
     await expect(Page({ params: Promise.resolve({ setId: "123" }), searchParams: Promise.resolve({ intent: "review" }) })).rejects.toThrow(`REDIRECT:/login?redirect=${encodeURIComponent(destination)}`);
     expect(mocks.entry).not.toHaveBeenCalled();
   });
+
+  it("closes a fully mastered DauToeic set instead of reopening Part 1", async () => {
+    mocks.entry.mockResolvedValueOnce({
+      set: { id: 123, title: "Test", externalTestId: "source" },
+      words: [],
+      studyComplete: true,
+    });
+    await expect(Page({ params: Promise.resolve({ setId: "123" }), searchParams: Promise.resolve({ tab: "learn", intent: "continue" }) }))
+      .rejects.toThrow("REDIRECT:/vocab/dautoeic/source?tab=learn&completed=1");
+  });
 });

@@ -616,9 +616,17 @@ export default function FlashcardGame({
   }
 
   async function openStudy(intent: "continue" | "review") {
-    if (!guardStudy && reviewSync.pendingCount > 0 && !(await reviewSync.flush())) return;
+    // The completion action asks the server to choose the next unmastered Part.
+    // Persist optimistic mastery first so it cannot reopen the Part just finished.
+    if (reviewSync.pendingCount > 0 && !(await reviewSync.flush())) return;
     const params = new URLSearchParams({ mode: "menu", tab: "learn", intent, order: intent === "review" ? "oldest" : "ordered", amount: "all" });
-    navigateStudy(`/vocab/${setId}/flashcards?${params}`);
+    const href = `/vocab/${setId}/flashcards?${params}`;
+    if (intent === "continue") {
+      setStudyChanged(false);
+      router.push(href);
+      return;
+    }
+    navigateStudy(href);
   }
 
   function applyFilters(next: {

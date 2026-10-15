@@ -98,8 +98,8 @@ describe("getStudyEntrySession", () => {
   it("keeps a fully mastered set completed and respects an explicit part", async () => {
     mocks.progressGet.mockResolvedValue({ docs: [1, 2, 3, 4].map((id) => progress(id)) });
     const completed = await getStudyEntrySession(12, "user-1", "continue");
-    expect(completed.set.externalPartId).toBe("lc");
-    expect(completed.words.every(({ mastered }) => mastered)).toBe(true);
+    expect(completed.studyComplete).toBe(true);
+    expect(completed.words).toEqual([]);
     expect(completed.masteredWords).toBe(completed.totalWords);
     const explicit = await getStudyEntrySession(12, "user-1", "continue", " rc ");
     expect(explicit.words.map(({ id }) => id)).toEqual([3, 4]);

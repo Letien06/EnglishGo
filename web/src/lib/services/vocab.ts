@@ -890,13 +890,29 @@ export async function getStudyEntrySession(
     const requestedIndex = requestedPartId
       ? orderedParts.findIndex(([partId]) => partId === requestedPartId)
       : -1;
+    const nextUnmasteredPart = orderedParts.find(([, partWords]) => partWords.some((word) => !isMastered(word)));
+    if (!requestedPartId && !nextUnmasteredPart) {
+      return {
+        set: {
+          id: set.id,
+          title: set.title,
+          topic: set.topic,
+          sourceType: set.sourceType,
+          externalTestId: set.externalTestId,
+        },
+        words: [],
+        masteredWords: words.length,
+        totalWords: words.length,
+        studyComplete: true,
+      };
+    }
     const selectedPart = requestedPartId && parts.get(requestedPartId)?.some((word) => !isMastered(word))
       ? [requestedPartId, parts.get(requestedPartId)!] as const
       : requestedIndex >= 0
         ? orderedParts.slice(requestedIndex + 1).find(([, partWords]) => partWords.some((word) => !isMastered(word)))
-          ?? orderedParts.find(([, partWords]) => partWords.some((word) => !isMastered(word)))
+          ?? nextUnmasteredPart
           ?? [requestedPartId, parts.get(requestedPartId)!] as const
-        : orderedParts.find(([, partWords]) => partWords.some((word) => !isMastered(word)))
+        : nextUnmasteredPart
           ?? orderedParts[0];
     selectedPartId = selectedPart?.[0];
     scopedWords = selectedPart?.[1] ?? [];

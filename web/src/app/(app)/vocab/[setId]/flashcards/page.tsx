@@ -71,6 +71,12 @@ export default async function FlashcardsPage({ params, searchParams }: Props) {
 
   const session = await sessionPromise;
 
+  // A continue request with no remaining words means every source Part is
+  // mastered. Return to the Part overview instead of reopening Part 1.
+  if (intent === "continue" && session.studyComplete && session.set.externalTestId) {
+    redirect(`/vocab/dautoeic/${encodeURIComponent(session.set.externalTestId)}?tab=learn&completed=1`);
+  }
+
   return (
     <FlashcardGame
       key={returnPath}

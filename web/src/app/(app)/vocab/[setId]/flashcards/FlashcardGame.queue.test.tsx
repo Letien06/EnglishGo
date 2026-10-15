@@ -106,6 +106,24 @@ it("keeps the dialog open on failure and retries before navigating", async () =>
   expect(queue.flush).toHaveBeenCalledTimes(2);
 });
 
+it("flushes mastery before continuing to the next vocabulary Part", async () => {
+  const props = {
+    ...studyProps,
+    session: {
+      ...studyProps.session,
+      set: { ...studyProps.session.set, externalTestId: "test-1", externalPartId: "lc" },
+      words: [{ id: 1, word: "apple", meaning: "táo", mastered: false }],
+    },
+  };
+  queue.pendingCount = 1;
+  render(<FlashcardGame {...props} />);
+  fireEvent.click(await screen.findByTitle("Đánh dấu đã thuộc"));
+  fireEvent.click(screen.getByRole("button", { name: "Tốt" }));
+  fireEvent.click(await screen.findByRole("button", { name: "Học tiếp bộ này" }));
+  await waitFor(() => expect(queue.flush).toHaveBeenCalledOnce());
+  expect(router.push).toHaveBeenCalledWith("/vocab/42/flashcards?mode=menu&tab=learn&intent=continue&order=ordered&amount=all");
+});
+
 it("leaves without waiting while retaining pending reviews", async () => {
   queue.pendingReviews = [{ wordId: 1, mastered: true }];
   queue.pendingCount = 1;

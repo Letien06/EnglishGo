@@ -231,6 +231,8 @@ export interface VocabSetSession {
   history?: VocabStudyHistoryCard[];
   masteredWords?: number;
   totalWords?: number;
+  /** Continue mode sets this when every Part in the source set is mastered. */
+  studyComplete?: boolean;
 }
 
 export interface AiVocabCandidate {

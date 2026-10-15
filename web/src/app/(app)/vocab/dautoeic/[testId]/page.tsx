@@ -7,12 +7,12 @@ import { isDriveContentEnabled } from "@/lib/services/dautoeic-drive";
 
 interface Props {
   params: Promise<{ testId: string }>;
-  searchParams: Promise<{ tab?: string; intent?: string; studyReturn?: string; saved?: string }>;
+  searchParams: Promise<{ tab?: string; intent?: string; studyReturn?: string; saved?: string; completed?: string }>;
 }
 
 export default async function DautoeicVocabTestPage({ params, searchParams }: Props) {
   const { testId } = await params;
-  const { tab: requestedTab, intent: requestedIntent, studyReturn, saved } = await searchParams;
+  const { tab: requestedTab, intent: requestedIntent, studyReturn, saved, completed } = await searchParams;
   const tab = requestedTab === "view" || requestedTab === "learn" || requestedTab === "play" ? requestedTab : undefined;
   const user = await getCurrentUserForRead();
   const intent = requestedIntent === "review" ? "review" : "continue";
@@ -24,7 +24,7 @@ export default async function DautoeicVocabTestPage({ params, searchParams }: Pr
 
   const view = await dautoeicVocab.getDautoeicVocabTestView(testId);
   const firstPart = view.parts.find((part) => part.wordCount > 0);
-  if (tab && firstPart && isDriveContentEnabled()) {
+  if (tab && firstPart && isDriveContentEnabled() && completed !== "1") {
     if (tab === "learn") {
       redirect(`/vocab/${firstPart.internalSetId}/flashcards?mode=menu&tab=learn&intent=${intent}&order=ordered&amount=all`);
     }
@@ -52,6 +52,7 @@ export default async function DautoeicVocabTestPage({ params, searchParams }: Pr
           </section>
 
           {saved === "1" && <p role="status" className="text-sm font-bold text-success-ink">Đã lưu tiến trình học từ vựng.</p>}
+          {completed === "1" && <p role="status" className="rounded-xl border border-success-line bg-success-soft px-4 py-3 text-sm font-bold text-success-ink">Bạn đã hoàn thành toàn bộ từ vựng trong bộ này. Các Part đã được đóng; hãy chọn Ôn lại khi cần.</p>}
           <DautoeicPartsClient key={`${user.uid}:${testId}:${studyReturn ?? ""}`} userUid={user.uid} testId={testId} parts={view.parts} ready={isDriveContentEnabled()} tab={tab} />
         </div>
       </main>
