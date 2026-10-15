@@ -386,6 +386,7 @@ export default function FlashcardGame({
   const historyChanged = useRef(false);
   const [filterPending, setFilterPending] = useState(false);
   const [completionNotice, setCompletionNotice] = useState<string | null>(null);
+  const [partCompletion, setPartCompletion] = useState<{ partName: string; continueHref: string; overviewHref: string } | null>(null);
   const completionTimerRef = useRef<number | null>(null);
 
   useEffect(() => {
@@ -457,6 +458,12 @@ export default function FlashcardGame({
   useEffect(() => () => {
     if (completionTimerRef.current) window.clearTimeout(completionTimerRef.current);
   }, []);
+
+  useEffect(() => {
+    if (!partCompletion) return;
+    const timer = window.setTimeout(() => router.push(partCompletion.continueHref), 2500);
+    return () => window.clearTimeout(timer);
+  }, [partCompletion, router]);
 
   async function handleJoinRoomFromHub(code: string) {
     try {
@@ -763,6 +770,15 @@ export default function FlashcardGame({
             const destination = session.set.sourceType === "DAUTOEIC" && session.set.externalTestId
               ? `/vocab/dautoeic/${encodeURIComponent(session.set.externalTestId)}`
               : `/vocab/${setId}`;
+            if (mode === "learn" && studyIntent === "continue" && session.set.sourceType === "DAUTOEIC" && session.set.externalTestId && session.set.externalPartId) {
+              const partName = session.words[0]?.externalPartName || session.set.externalPartId;
+              setPartCompletion({
+                partName,
+                overviewHref: destination,
+                continueHref: `/vocab/${setId}/flashcards?mode=menu&tab=learn&intent=continue&partId=${encodeURIComponent(session.set.externalPartId)}&order=ordered&amount=all`,
+              });
+              return;
+            }
             setCompletionNotice(
               session.set.sourceType === "DAUTOEIC"
                 ? "Đã lưu kết quả. Đang quay lại chọn Part…"
@@ -807,6 +823,24 @@ export default function FlashcardGame({
         >
           <span aria-hidden="true">✓</span>
           <span>{completionNotice}</span>
+        </div>
+      ) : null}
+
+      {partCompletion ? (
+        <div className="fixed inset-0 z-[80] flex items-center justify-center bg-slate-950/50 p-4" role="dialog" aria-modal="true" aria-labelledby="part-completion-title">
+          <section className="w-full max-w-md rounded-2xl border border-emerald-200 bg-surface p-6 shadow-2xl">
+            <div className="flex items-start gap-3">
+              <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-emerald-100 text-xl text-emerald-700" aria-hidden="true">✓</span>
+              <div>
+                <h2 id="part-completion-title" className="text-xl font-extrabold text-ink">Hoàn thành {partCompletion.partName}</h2>
+                <p className="mt-2 text-sm leading-6 text-muted">Bạn đã học xong Part này. Sau vài giây, hệ thống sẽ mở Part tiếp theo cho bạn.</p>
+              </div>
+            </div>
+            <div className="mt-6 flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
+              <button type="button" onClick={() => router.push(partCompletion.overviewHref)} className="rounded-xl border border-line px-4 py-2 text-sm font-bold text-ink2">Chọn Part khác</button>
+              <button type="button" onClick={() => router.push(partCompletion.continueHref)} className="rounded-xl bg-primary px-4 py-2 text-sm font-extrabold text-white">Sang Part tiếp theo</button>
+            </div>
+          </section>
         </div>
       ) : null}
     </main>

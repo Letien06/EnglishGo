@@ -54,7 +54,16 @@ export default function DautoeicPartsClient({ testId, parts, ready, tab, userUid
           {current ? <><span>{current.masteredWords}/{part.wordCount} từ đã thuộc</span>{current.dueWords > 0 && <span className="text-danger-ink">{current.dueWords} cần ôn</span>}</>
             : <span>{failed ? "Chưa tải được tiến độ. Bạn vẫn có thể vào học." : "Đang tải tiến độ..."}</span>}
         </div>
-        <DautoeicPartStudyButton testId={testId} partId={part.id} setId={part.internalSetId} ready={ready} tab={tab} />
+        <DautoeicPartStudyButton
+          testId={testId}
+          partId={part.id}
+          setId={part.internalSetId}
+          ready={ready}
+          tab={tab}
+          masteredWords={current?.masteredWords}
+          wordCount={part.wordCount}
+          partName={part.name}
+        />
       </article>;
     })}
   </section>;

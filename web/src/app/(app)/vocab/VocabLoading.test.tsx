@@ -85,6 +85,19 @@ describe("vocabulary loading", () => {
     expect(vi.mocked(fetch).mock.calls[0][1]?.method).not.toBe("POST");
   });
 
+  it("asks before reopening a completed Part", async () => {
+    vi.mocked(fetch).mockResolvedValueOnce(new Response(JSON.stringify({
+      success: true,
+      data: { parts: parts.map((part) => part.id === "lc" ? { ...part, masteredWords: 80 } : part) },
+    })));
+    render(<DautoeicPartsClient testId="source-test" parts={parts} ready />);
+    await waitFor(() => expect(screen.getByText("80/80 từ đã thuộc")).toBeInTheDocument());
+    const buttons = screen.getAllByRole("button", { name: "Vào học" });
+    fireEvent.click(buttons[0]);
+    expect(screen.getByRole("dialog", { name: "LC đã hoàn thành" })).toBeInTheDocument();
+    expect(screen.getByText("Bạn đã học thuộc 80 từ. Bạn có muốn học lại toàn bộ LC không?")).toBeInTheDocument();
+  });
+
   it("keeps the Parts usable if progress fails instead of reporting zero mastered words", async () => {
     vi.mocked(fetch).mockRejectedValue(new Error("Quota unavailable"));
     render(<DautoeicPartsClient testId="source-test" parts={parts} ready />);
