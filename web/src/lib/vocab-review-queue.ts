@@ -5,6 +5,7 @@ import { recordStudyMetric } from "./study-performance";
 import { useCallback, useEffect, useMemo, useSyncExternalStore } from "react";
 
 export type QueuedVocabReview = { wordId: number; mastered?: true; quality?: number; reviewTomorrow?: true };
+type EnqueueOptions = { immediate?: boolean };
 type Entry = { token: string; review: QueuedVocabReview };
 type Batch = { requestId: string; entries: Entry[] };
 type Snapshot = {
@@ -37,6 +38,7 @@ class ReviewQueue {
   storageError: string | null = null;
   requestError: string | null = null;
   lastSavedAtMillis: number | null = null;
+  immediatePending = false;
   timer: ReturnType<typeof setTimeout> | undefined;
   request: Promise<void> | undefined;
 
@@ -109,12 +111,18 @@ class ReviewQueue {
       this.storageError = "Không thể lưu tiến độ chờ đồng bộ trên thiết bị. Hãy giữ trang mở và thử lại.";
     }
   }
-  enqueue = (review: QueuedVocabReview) => {
+  enqueue = (review: QueuedVocabReview, options: EnqueueOptions = {}) => {
     if (!this.eligible()) return;
     this.pending.set(review.wordId, { token: identifier(), review: { ...review } });
     this.persist();
     this.publish();
-    this.schedule(100);
+    if (options.immediate) {
+      this.immediatePending = true;
+      if (!inFlightOwner && !this.request) this.request = this.sendBatch();
+      else this.schedule(0);
+    } else {
+      this.schedule(100);
+    }
   };
   schedule(delay: number) {
     if (!this.eligible() || this.authBlocked || this.timer || inFlightOwner || !this.pending.size || navigator.onLine === false) return;
@@ -174,6 +182,7 @@ class ReviewQueue {
     inFlightOwner = { queue: this };
     this.publish();
     let retryDelay: number | undefined;
+    let completed = false;
     const metricStarted = performance.now();
     const controller = new AbortController();
     let timeout: ReturnType<typeof setTimeout> | undefined;
@@ -223,6 +232,7 @@ class ReviewQueue {
       this.batch = undefined;
       this.attempts = 0;
       this.requestError = null;
+      completed = true;
       this.persist();
       this.lastSavedAtMillis = Date.now();
       recordStudyMetric("sync", "vocab", "success", metricStarted);
@@ -241,7 +251,10 @@ class ReviewQueue {
       if (timeout) clearTimeout(timeout);
       inFlightOwner = undefined;
       this.publish();
-      if (retryDelay !== undefined) this.schedule(retryDelay);
+      const sendImmediately = completed && this.immediatePending && this.pending.size > 0;
+      this.immediatePending = false;
+      if (retryDelay !== undefined && sendImmediately && this.eligible() && !inFlightOwner) this.request = this.sendBatch();
+      else if (retryDelay !== undefined) this.schedule(retryDelay);
       // Account switches never dispatch work for the previous account.
       if (activeUid !== this.uid && activeUid) queues.get(activeUid)?.schedule(100);
     }
@@ -268,8 +281,9 @@ export function useVocabReviewQueue(uid: string | undefined, enabled: boolean) {
     return queue.activate();
   }, [queue]);
   const enqueue = useCallback((review: QueuedVocabReview) => queue?.enqueue(review), [queue]);
+  const enqueueImmediate = useCallback((review: QueuedVocabReview) => queue?.enqueue(review, { immediate: true }), [queue]);
   const retry = useCallback(() => queue?.retry(), [queue]);
   const reconcile = useCallback((words: { id: number; mastered?: boolean }[]) => queue?.reconcile(words), [queue]);
   const flush = useCallback(() => queue?.flush() ?? Promise.resolve(true), [queue]);
-  return { ...snapshot, enqueue, retry, reconcile, flush };
+  return { ...snapshot, enqueue, enqueueImmediate, retry, reconcile, flush };
 }

@@ -38,7 +38,6 @@ it("advances immediately through root queue publications and ACKs without skippi
   fireEvent.click(screen.getByRole("button", { name: "Tốt" }));
   expect(card()).toHaveTextContent("banana");
   expect(onComplete).not.toHaveBeenCalled();
-  await act(async () => { await vi.advanceTimersByTimeAsync(100); });
   expect(saves).toHaveLength(1);
   expect(saves[0].ids).toEqual([1]);
   fireEvent.click(screen.getByTitle("Đánh dấu đã thuộc"));
@@ -52,7 +51,6 @@ it("advances immediately through root queue publications and ACKs without skippi
   };
   await acknowledge(0);
   expect(card()).toHaveTextContent("cherry");
-  await act(async () => { await vi.advanceTimersByTimeAsync(100); });
   expect(saves).toHaveLength(2);
   expect(saves[1].ids).toEqual([2]);
   await acknowledge(1);

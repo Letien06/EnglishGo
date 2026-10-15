@@ -78,7 +78,7 @@ export default function ContextLearning({
   isAuthenticated = true,
   currentUserId,
 }: ContextLearningProps) {
-  const { masteryByWordId, enqueue } = useVocabReviewQueue(currentUserId, isAuthenticated);
+  const { masteryByWordId, enqueue, enqueueImmediate } = useVocabReviewQueue(currentUserId, isAuthenticated);
   const [masteryOverrides, setMasteryOverrides] = useState<Map<number, boolean>>(() => new Map());
   const [filterMode, setFilterMode] = useState<FilterMode>(studyIntent === "review" ? "all" : "unmastered");
   const [showWordDrawer, setShowWordDrawer] = useState(false);
@@ -146,6 +146,9 @@ export default function ContextLearning({
   const safeIndex = selectedIndex >= 0 ? selectedIndex : Math.min(cursor.index, Math.max(0, activeWords.length - 1));
   const word = activeWords[safeIndex];
   const isCurrentMastered = word ? isWordMastered(word) : false;
+  const persistReview = useCallback((review: Parameters<typeof enqueue>[0]) => {
+    (enqueueImmediate ?? enqueue)(review);
+  }, [enqueue, enqueueImmediate]);
 
   useEffect(() => {
     if (!word || suspended) return;
@@ -241,7 +244,7 @@ export default function ContextLearning({
       const nextMastered = !currentlyMastered;
       if (isAuthenticated) {
         onProgress?.();
-        enqueue(nextMastered
+        persistReview(nextMastered
           ? { wordId: targetWord.id, mastered: true }
           : { wordId: targetWord.id, quality: 1 });
       }
@@ -256,7 +259,7 @@ export default function ContextLearning({
       }
       setMasteryOverrides((prev) => new Map(prev).set(targetWord.id, nextMastered));
     },
-    [isWordMastered, word?.id, stop, isAuthenticated, enqueue, onProgress]
+    [isWordMastered, word?.id, stop, isAuthenticated, persistReview, onProgress]
   );
 
   // Auto-pronounce word or phrase when entering step or on demand
@@ -302,7 +305,7 @@ export default function ContextLearning({
       // Queue this answer first, then advance without waiting for the database.
       if (isAuthenticated && persistAnswers && (markMastered || effectiveQuality !== undefined)) {
         onProgress?.();
-        enqueue(markMastered
+        persistReview(markMastered
           ? { wordId: word.id, mastered: true }
           : { wordId: word.id, quality: effectiveQuality });
       }
@@ -349,7 +352,7 @@ export default function ContextLearning({
         setSkipTyping(false);
       }
     },
-    [word, answers, forgotten, typed, safeIndex, activeWords, deferredWordIds, onComplete, stop, studyIntent, persistAnswers, isAuthenticated, enqueue, onProgress]
+    [word, answers, forgotten, typed, safeIndex, activeWords, deferredWordIds, onComplete, stop, studyIntent, persistAnswers, isAuthenticated, persistReview, onProgress]
   );
 
   // Jump to scheduling without submitting a review until the learner rates it.
