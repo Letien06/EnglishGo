@@ -320,7 +320,7 @@ export default function WritingLibraryClient() {
   function clearFilters() { setQuery(""); setTag("all"); setPartOneCategory("all"); setStatusFilter("all"); }
   return <main className={styles.dashboard}>
     <span className={styles.eyebrow}>KHÔNG GIAN LUYỆN TẬP</span>
-    <header className={styles.intro}><div><h1>Luyện viết<span>.</span></h1><p>Từng ý tưởng nhỏ. Từng câu viết tốt hơn.</p></div><Link className={styles.dictationLink} href="/writing/history"><Icon name="clock" />Lịch sử bài viết<Icon name="arrow" /></Link></header>
+    <header className={styles.intro}><div><h1>Luyện viết<span>.</span></h1><p>Từng ý tưởng nhỏ. Từng câu viết tốt hơn.</p></div><div className="flex flex-wrap items-center gap-2"><Link className={styles.dictationLink} href="/ai/writing"><Icon name="pen" />Chấm viết tự do với AI<Icon name="arrow" /></Link><Link className={styles.dictationLink} href="/writing/history"><Icon name="clock" />Lịch sử bài viết<Icon name="arrow" /></Link></div></header>
     <LearningHero icon="pen" title="Biến ý tưởng thành câu chữ." description={initialLoading ? "Chọn một dạng bài. Viết, nhận phản hồi và thử lại." : nextPrompt ? `Bài gợi ý · ${nextPrompt.titleVi || nextPrompt.title}` : "Khám phá đề viết theo tranh, email và bài luận."}
       href={!initialLoading && nextPrompt ? `/writing/practice/${encodeURIComponent(nextPrompt.id)}` : undefined} cta="Bắt đầu luyện viết" note="Một bài viết, một bước tiến"
       stats={[
