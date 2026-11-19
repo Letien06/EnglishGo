@@ -145,13 +145,22 @@ const statusLabels: Record<WritingPromptStatus, string> = {
   ARCHIVED: "Đã lưu trữ",
 };
 
-export default function WritingAdminClient() {
-  const [items, setItems] = useState<WritingPrompt[]>([]);
-  const [overview, setOverview] = useState<WritingOverview>(emptyOverview);
+export default function WritingAdminClient({
+  initialItems,
+  initialOverview,
+}: {
+  initialItems?: WritingPrompt[];
+  initialOverview?: WritingOverview;
+} = {}) {
+  const hasInitial = Array.isArray(initialItems);
+  const [items, setItems] = useState<WritingPrompt[]>(() => initialItems ?? []);
+  const [overview, setOverview] = useState<WritingOverview>(() =>
+    initialOverview ? { ...emptyOverview, ...initialOverview } : emptyOverview,
+  );
   const [selected, setSelected] = useState<EditorDraft | null>(null);
   const [partFilter, setPartFilter] = useState<"ALL" | WritingPart>("ALL");
   const [statusFilter, setStatusFilter] = useState<"ALL" | WritingPromptStatus>("ALL");
-  const [isLoading, setIsLoading] = useState(true);
+  const [isLoading, setIsLoading] = useState(!hasInitial);
   const [isSaving, setIsSaving] = useState(false);
   const [isSeeding, setIsSeeding] = useState(false);
   const [notice, setNotice] = useState<{ tone: "success" | "error" | "info"; text: string } | null>(null);
@@ -172,25 +181,26 @@ export default function WritingAdminClient() {
   };
 
   useEffect(() => {
-    let cancelled = false;
-    fetch("/api/admin/writing/prompts", { cache: "no-store" })
+    if (hasInitial) return;
+    const controller = new AbortController();
+    fetch("/api/admin/writing/prompts", { cache: "no-store", signal: controller.signal })
       .then(async (response) => ({ response, body: await response.json() }))
       .then(({ response, body }) => {
-        if (cancelled) return;
+        if (controller.signal.aborted) return;
         if (!response.ok || !body.success) throw new Error(body.error || "Không thể tải dữ liệu Writing.");
         setItems(Array.isArray(body.data?.items) ? body.data.items : []);
         setOverview({ ...emptyOverview, ...(body.data?.overview ?? {}) });
       })
       .catch((error: unknown) => {
-        if (!cancelled) setNotice({ tone: "error", text: error instanceof Error ? error.message : "Không thể tải dữ liệu Writing." });
+        if (!controller.signal.aborted) setNotice({ tone: "error", text: error instanceof Error ? error.message : "Không thể tải dữ liệu Writing." });
       })
       .finally(() => {
-        if (!cancelled) setIsLoading(false);
+        if (!controller.signal.aborted) setIsLoading(false);
       });
     return () => {
-      cancelled = true;
+      controller.abort();
     };
-  }, []);
+  }, [hasInitial]);
 
   const filteredItems = useMemo(
     () => items.filter((item) => (partFilter === "ALL" || item.part === partFilter) && (statusFilter === "ALL" || item.status === statusFilter)),

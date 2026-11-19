@@ -19,7 +19,9 @@ export function invalidateLearnerActivityCaches(uid: string): void {
   if (!uid?.trim()) return;
   revalidateTag(dashboardCacheTag(uid), { expire: 0 });
   revalidateTag(studyStreakCacheTag(uid), { expire: 0 });
-  revalidateTag(STUDY_STREAK_LEADERBOARD_CACHE_TAG, "max");
+  // Do NOT invalidate the global streak leaderboard on every single learner
+  // answer — it relies on its 60-second time-based revalidation to prevent
+  // every user action from triggering a multi-page users scan.
 }
 
 export function invalidateProgressReportCache(uid: string): void {

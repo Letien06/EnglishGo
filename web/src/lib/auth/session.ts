@@ -65,7 +65,7 @@ const cachedSessionRevocationStatus = unstable_cache(
  */
 export async function verifyIdToken(token: string) {
   try {
-    return await adminAuth.verifyIdToken(token);
+    return await adminAuth.verifyIdToken(token, true);
   } catch {
     throw Unauthorized("Invalid or expired Firebase ID token");
   }
@@ -296,7 +296,7 @@ async function getCurrentUserFromRequest(
   if (authHeader?.startsWith("Bearer ")) {
     const token = authHeader.slice(7);
     try {
-      const decoded = await adminAuth.verifyIdToken(token);
+      const decoded = await adminAuth.verifyIdToken(token, true);
       return getStoredOrProvisionedUser(decoded);
     } catch {
       return null;
@@ -362,10 +362,36 @@ async function getStoredOrProvisionedUser(decoded: {
   return await cachedStoredUser(decoded.uid) ?? provisionUser(decoded);
 }
 
-async function getFreshStoredUser(uid: string): Promise<AppUser | null> {
+export async function getFreshStoredUser(uid: string): Promise<AppUser | null> {
   const snap = await adminDb.collection(USERS_COLLECTION).doc(uid).get();
   if (!snap.exists) return null;
   return toAppUser(uid, snap.data() ?? {});
+}
+
+export async function requireRecentAuth(maxAgeSeconds = 300): Promise<{ uid: string; authTime: number }> {
+  const cookieStore = await cookies();
+  const sessionCookie = cookieStore.get("session")?.value;
+  let decoded: { uid: string; auth_time?: number } | null = null;
+  if (sessionCookie) {
+    decoded = await verifySessionCookie(sessionCookie);
+  }
+  if (!decoded) {
+    const authHeader = (await headers()).get("authorization");
+    if (authHeader?.startsWith("Bearer ")) {
+      try {
+        decoded = await adminAuth.verifyIdToken(authHeader.slice(7), true);
+      } catch {
+        decoded = null;
+      }
+    }
+  }
+  if (!decoded) throw Unauthorized();
+  const authTime = typeof decoded.auth_time === "number" ? decoded.auth_time : 0;
+  const nowSeconds = Math.floor(Date.now() / 1000);
+  if (authTime <= 0 || nowSeconds - authTime > maxAgeSeconds) {
+    throw Forbidden("Phiên đăng nhập đã cũ. Vui lòng đăng xuất và đăng nhập lại trước khi đổi mật khẩu.");
+  }
+  return { uid: decoded.uid, authTime };
 }
 
 export function invalidateCurrentUserProfileCache(): void {

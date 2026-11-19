@@ -81,6 +81,37 @@ const publishedSets = cache(async (): Promise<VocabSetDoc[]> => {
   return [...sets.filter((set) => !driveIds.has(set.id)), ...driveSets];
 });
 
+async function publicSharedFolders(): Promise<VocabFolderDoc[]> {
+  try {
+    const snap = await adminDb
+      .collection(FOLDERS)
+      .where("publicShared", "==", true)
+      .where("deletedAtMillis", "==", null)
+      .get();
+    return snap.docs.map(toFolderDoc).filter((f) => f.publicShared && !f.deletedAtMillis);
+  } catch {
+    return (await liveFolders()).filter((f) => f.publicShared);
+  }
+}
+
+async function publishedSetsInFolder(folderId: number): Promise<VocabSetDoc[]> {
+  const snap = await adminDb
+    .collection(SETS)
+    .where("folderId", "==", folderId)
+    .where("status", "==", "PUBLISHED")
+    .get();
+  return snap.docs
+    .map(toSetDoc)
+    .filter((s) => s.folderId === folderId && s.status === "PUBLISHED" && !s.deletedAtMillis);
+}
+
+async function findPublicFolderById(folderId: number): Promise<VocabFolderDoc | null> {
+  const snap = await adminDb.collection(FOLDERS).doc(String(folderId)).get();
+  if (!snap.exists) return null;
+  const folder = toFolderDoc(snap);
+  return folder.publicShared && !folder.deletedAtMillis ? folder : null;
+}
+
 async function liveFolders(): Promise<VocabFolderDoc[]> {
   const snap = await adminDb
     .collection(FOLDERS)
@@ -558,8 +589,10 @@ export async function findMySetCards(
   folderId?: number | null,
 ): Promise<MyVocabSetCard[]> {
   if (!uid) return [];
-  const sets = await liveOwnerSets(uid);
-  const folders = await liveOwnerFolders(uid);
+  const [sets, folders] = await Promise.all([
+    liveOwnerSets(uid),
+    liveOwnerFolders(uid),
+  ]);
   const foldersById = new Map(folders.map((folder) => [folder.id, folder]));
 
   let mySets = sets.filter((s) => s.ownerUid === uid);
@@ -588,9 +621,12 @@ export async function findMyFolderCards(
   search?: string | null,
 ): Promise<MyVocabFolderCard[]> {
   requireUid(uid);
-  const sets = await liveOwnerSets(uid);
+  const [sets, allMyFolders] = await Promise.all([
+    liveOwnerSets(uid),
+    liveOwnerFolders(uid),
+  ]);
 
-  let myFolders = await liveOwnerFolders(uid);
+  let myFolders = allMyFolders;
   if (search) {
     const lower = search.toLowerCase();
     myFolders = myFolders.filter((f) => f.name.toLowerCase().includes(lower));
@@ -662,53 +698,57 @@ export async function findMyTabCards(
 export async function findCommunityFolderCards(
   search?: string | null,
 ): Promise<CommunityVocabFolderCard[]> {
-  const folders = await liveFolders();
-  const sets = await publishedSets();
-
-  let shared = folders.filter((f) => f.publicShared);
+  let shared = await publicSharedFolders();
   if (search) {
     const lower = search.toLowerCase();
     shared = shared.filter((f) => f.name.toLowerCase().includes(lower));
   }
+  if (!shared.length) return [];
+
+  const counts = await Promise.all(
+    shared.map(async (folder) => ({
+      id: folder.id,
+      count: (await publishedSetsInFolder(folder.id)).length,
+    })),
+  );
+  const countByFolderId = new Map(counts.map((entry) => [entry.id, entry.count]));
 
   return shared.map((folder) => ({
     id: folder.id,
     name: folder.name,
     ownerName: folder.ownerName,
-    setCount: sets.filter((s) => s.folderId === folder.id).length,
+    setCount: countByFolderId.get(folder.id) ?? 0,
   }));
 }
 
 export async function getCommunityFolderCard(
   folderId: number,
 ): Promise<CommunityVocabFolderCard | null> {
-  const folders = await liveFolders();
-  const folder = folders.find((f) => f.id === folderId && f.publicShared);
+  const [folder, folderSets] = await Promise.all([
+    findPublicFolderById(folderId),
+    publishedSetsInFolder(folderId),
+  ]);
   if (!folder) return null;
-  const sets = await publishedSets();
   return {
     id: folder.id,
     name: folder.name,
     ownerName: folder.ownerName,
-    setCount: sets.filter((s) => s.folderId === folder.id).length,
+    setCount: folderSets.length,
   };
 }
 
 export async function findCommunitySetCards(
   folderId: number,
 ): Promise<CommunityVocabSetCard[]> {
-  const sets = await publishedSets();
-  const folderSets = await resolveLegacyWordCounts(
-    sets.filter((s) => s.folderId === folderId),
-  );
+  const sets = await publishedSetsInFolder(folderId);
+  const folderSets = await resolveLegacyWordCounts(sets);
 
-  return folderSets
-    .map((set) => ({
-      id: set.id,
-      title: set.title,
-      topic: set.topic,
-      wordCount: set.wordCount ?? 0,
-    }));
+  return folderSets.map((set) => ({
+    id: set.id,
+    title: set.title,
+    topic: set.topic,
+    wordCount: set.wordCount ?? 0,
+  }));
 }
 
 /* ------------------------------------------------------------------ */
@@ -1078,12 +1118,13 @@ export async function getReviewSession(
     .slice(0, safeSize);
   const wordMap = await wordsByIds(selected.map((progress) => progress.wordId));
 
+  const progressByWordId = new Map(selected.map((progress) => [progress.wordId, progress]));
   return {
     set: { id: 0, title: "Ôn tập", topic: "Review" },
     words: orderWordsForReview(
       selected.flatMap((progress) => { const word = wordMap.get(progress.wordId); return word ? [word] : []; }),
-      new Map(selected.map((progress) => [progress.wordId, progress])), now,
-    ).map((word) => toWordCard(word, selected.some((progress) => progress.wordId === word.id && progress.status === "MASTERED"))),
+      progressByWordId, now,
+    ).map((word) => toWordCard(word, progressByWordId.get(word.id)?.status === "MASTERED")),
   };
 }
 
@@ -1098,8 +1139,10 @@ export async function getSetDetail(
   const set = await findPublishedSet(setId);
   if (!set) throw NotFound("Set not found");
 
-  const words = await wordsForSet(setId);
-  const progress = uid ? await progressForSet(uid, setId) : [];
+  const [words, progress] = await Promise.all([
+    wordsForSet(setId),
+    uid ? progressForSet(uid, setId) : Promise.resolve([]),
+  ]);
   const progressByWordId = new Map(progress.map((p) => [p.wordId, p]));
 
   const wordCards = words.map((w) => {
@@ -1353,17 +1396,29 @@ export async function deleteMyFolder(
   await requireOwnedFolder(uid, folderId);
   const sets = await liveOwnerSets(uid);
   const folderSets = sets.filter((s) => s.folderId === folderId);
-  const batch = adminDb.batch();
-  for (const set of folderSets) {
-    batch.update(adminDb.collection(SETS).doc(String(set.id)), {
-      folderId: FieldValue.delete(),
-      updatedAtMillis: Date.now(),
+  const now = Date.now();
+  const CHUNK_SIZE = 450;
+  for (let start = 0; start < folderSets.length; start += CHUNK_SIZE) {
+    const batch = adminDb.batch();
+    const end = Math.min(start + CHUNK_SIZE, folderSets.length);
+    for (let i = start; i < end; i++) {
+      batch.update(adminDb.collection(SETS).doc(String(folderSets[i].id)), {
+        folderId: FieldValue.delete(),
+        updatedAtMillis: now,
+      });
+    }
+    if (end === folderSets.length) {
+      batch.update(adminDb.collection(FOLDERS).doc(String(folderId)), {
+        deletedAtMillis: now,
+      });
+    }
+    await batch.commit();
+  }
+  if (folderSets.length === 0) {
+    await adminDb.collection(FOLDERS).doc(String(folderId)).update({
+      deletedAtMillis: now,
     });
   }
-  batch.update(adminDb.collection(FOLDERS).doc(String(folderId)), {
-    deletedAtMillis: Date.now(),
-  });
-  await batch.commit();
 }
 
 export async function renameMySet(
@@ -1514,17 +1569,15 @@ export async function copyCommunityFolder(
   folderId: number,
 ): Promise<{ id: number }> {
   requireUid(uid);
-  const folders = await liveFolders();
-  const sourceFolder = folders.find(
-    (f) => f.id === folderId && f.publicShared,
-  );
+  const sourceFolder = await findPublicFolderById(folderId);
   if (!sourceFolder) throw NotFound("Community folder not found");
 
-  const folderName = await uniqueFolderName(uid, sourceFolder.name);
+  const [folderName, folderSets] = await Promise.all([
+    uniqueFolderName(uid, sourceFolder.name),
+    publishedSetsInFolder(folderId),
+  ]);
   const newFolder = await createMyFolder(uid, folderName);
 
-  const sets = await publishedSets();
-  const folderSets = sets.filter((s) => s.folderId === folderId);
   for (const set of folderSets) {
     await copySetAsNew(uid, set, newFolder.id);
   }
@@ -1538,17 +1591,16 @@ export async function copyCommunitySet(
   targetSetId?: number | null,
 ): Promise<number> {
   requireUid(uid);
-  const sets = await publishedSets();
-  const sourceSet = sets.find((s) => s.id === sourceSetId);
+  const sourceSet = await findPublishedSet(sourceSetId);
   if (!sourceSet) throw NotFound("Source set not found");
 
   if (targetSetId) {
     await requireOwnedSet(uid, targetSetId);
     return copyWords(sourceSetId, targetSetId);
   } else {
-    await copySetAsNew(uid, sourceSet, null);
-    const words = await wordsForSet(sourceSetId);
-    return words.length;
+    const newSetId = await copySetAsNew(uid, sourceSet, null);
+    const createdSnap = await adminDb.collection(SETS).doc(String(newSetId)).get();
+    return typeof createdSnap.get("wordCount") === "number" ? (createdSnap.get("wordCount") as number) : 0;
   }
 }
 
@@ -1732,6 +1784,7 @@ export async function reviewBatch(
     }
     return responses;
   });
+  invalidateVocabProgressCache(uid);
   invalidateLearnerActivityCaches(uid);
   return result;
 }
@@ -2021,20 +2074,27 @@ async function copyWords(
   sourceSetId: number,
   targetSetId: number,
 ): Promise<number> {
-  const sourceWords = await wordsForSet(sourceSetId);
-  const existingWords = (await wordsForSet(targetSetId)).map((w) =>
-    w.word.toLowerCase().trim(),
-  );
+  const [sourceWords, targetWords] = await Promise.all([
+    wordsForSet(sourceSetId),
+    wordsForSet(targetSetId),
+  ]);
+  const existingWords = targetWords.map((w) => w.word.toLowerCase().trim());
   const existingSet = new Set(existingWords);
 
-  const writes: Array<{ id: number; data: Record<string, unknown> }> = [];
+  const toCopy: VocabWordDoc[] = [];
   for (const word of sourceWords) {
     const normalized = word.word.toLowerCase().trim();
     if (existingSet.has(normalized)) continue;
+    existingSet.add(normalized);
+    toCopy.push(word);
+  }
+  if (toCopy.length === 0) return 0;
 
-    const wordId = await newNumericId(WORDS);
-    const now = Date.now();
-    writes.push({
+  const ids = await newNumericIds(WORDS, toCopy.length);
+  const now = Date.now();
+  const writes: Array<{ id: number; data: Record<string, unknown> }> = toCopy.map((word, index) => {
+    const wordId = ids[index];
+    return {
       id: wordId,
       data: {
         id: wordId,
@@ -2054,19 +2114,13 @@ async function copyWords(
         publishedAtMillis: now,
         updatedAtMillis: now,
       },
-    });
-    existingSet.add(normalized);
-  }
-  await commitWordWrites(
-    writes,
-    writes.length > 0
-      ? {
-          setId: targetSetId,
-          wordCount: existingWords.length + writes.length,
-          updatedAtMillis: Date.now(),
-        }
-      : undefined,
-  );
+    };
+  });
+  await commitWordWrites(writes, {
+    setId: targetSetId,
+    wordCount: existingWords.length + writes.length,
+    updatedAtMillis: Date.now(),
+  });
   return writes.length;
 }
 

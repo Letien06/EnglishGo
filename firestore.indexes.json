@@ -31,14 +31,6 @@
       "queryScope": "COLLECTION",
       "fields": [
         { "fieldPath": "source", "order": "ASCENDING" },
-        { "fieldPath": "sourceVersion", "order": "ASCENDING" }
-      ]
-    },
-    {
-      "collectionGroup": "tests",
-      "queryScope": "COLLECTION",
-      "fields": [
-        { "fieldPath": "source", "order": "ASCENDING" },
         { "fieldPath": "sourceVersion", "order": "ASCENDING" },
         { "fieldPath": "setId", "order": "ASCENDING" }
       ]
@@ -72,14 +64,6 @@
     },
     {
       "collectionGroup": "comments",
-      "queryScope": "COLLECTION_GROUP",
-      "fields": [
-        { "fieldPath": "deletedAtMillis", "order": "ASCENDING" },
-        { "fieldPath": "createdAtMillis", "order": "DESCENDING" }
-      ]
-    },
-    {
-      "collectionGroup": "comments",
       "queryScope": "COLLECTION",
       "fields": [
         { "fieldPath": "deletedAtMillis", "order": "ASCENDING" },
@@ -98,24 +82,6 @@
       "collectionGroup": "listeningProgress",
       "queryScope": "COLLECTION",
       "fields": [
-        { "fieldPath": "part", "order": "ASCENDING" },
-        { "fieldPath": "level", "order": "ASCENDING" },
-        { "fieldPath": "itemId", "order": "ASCENDING" }
-      ]
-    },
-    {
-      "collectionGroup": "readingProgress",
-      "queryScope": "COLLECTION",
-      "fields": [
-        { "fieldPath": "part", "order": "ASCENDING" },
-        { "fieldPath": "level", "order": "ASCENDING" },
-        { "fieldPath": "itemId", "order": "ASCENDING" }
-      ]
-    },
-    {
-      "collectionGroup": "listeningProgress",
-      "queryScope": "COLLECTION",
-      "fields": [
         { "fieldPath": "correct", "order": "ASCENDING" },
         { "fieldPath": "part", "order": "ASCENDING" },
         { "fieldPath": "completedAtMillis", "order": "ASCENDING" },
@@ -174,15 +140,22 @@
         { "fieldPath": "testId", "order": "ASCENDING" },
         { "fieldPath": "completedAtMillis", "order": "ASCENDING" },
         { "fieldPath": "__name__", "order": "ASCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "vocabFolders",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "publicShared", "order": "ASCENDING" },
+        { "fieldPath": "deletedAtMillis", "order": "ASCENDING" }
       ]
     },
     {
       "collectionGroup": "vocabSets",
       "queryScope": "COLLECTION",
       "fields": [
-        { "fieldPath": "status", "order": "ASCENDING" },
-        { "fieldPath": "deletedAtMillis", "order": "ASCENDING" },
-        { "fieldPath": "updatedAtMillis", "order": "DESCENDING" }
+        { "fieldPath": "folderId", "order": "ASCENDING" },
+        { "fieldPath": "status", "order": "ASCENDING" }
       ]
     },
     {
@@ -190,8 +163,7 @@
       "queryScope": "COLLECTION",
       "fields": [
         { "fieldPath": "setId", "order": "ASCENDING" },
-        { "fieldPath": "status", "order": "ASCENDING" },
-        { "fieldPath": "deletedAtMillis", "order": "ASCENDING" }
+        { "fieldPath": "status", "order": "ASCENDING" }
       ]
     }
   ],

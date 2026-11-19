@@ -291,7 +291,18 @@ export async function getStudyStreak(uid: string): Promise<StudyStreakSummary> {
 
 async function readStudyStreak(uid: string): Promise<StudyStreakSummary> {
 
-  const snap = await activityCollection(uid)
+  const activityRef = activityCollection(uid);
+  const activityQuery = typeof (activityRef as { select?: unknown }).select === "function"
+    ? (activityRef as typeof activityRef & { select: (...fields: string[]) => typeof activityRef }).select(
+        "dateKey",
+        "activityCount",
+        "modules",
+        "lastActivityAtMillis",
+        "onlineSeconds",
+        "streakEligible",
+      )
+    : activityRef;
+  const snap = await activityQuery
     .orderBy("dateKey", "desc")
     .limit(STREAK_LOOKBACK_LIMIT)
     .get();
@@ -413,8 +424,26 @@ const cachedStudyStreakLeaderboard = unstable_cache(
   let cursor: FirebaseFirestore.QueryDocumentSnapshot | undefined;
   let cutoffStreak: number | undefined;
   let reachedCutoff = false;
-  while (true) {
-    let query = adminDb.collection("users").orderBy("studyStreakDays", "desc").limit(100);
+  const MAX_LEADERBOARD_PAGES = 10;
+  let pagesRead = 0;
+  while (pagesRead < MAX_LEADERBOARD_PAGES) {
+    pagesRead++;
+    const usersRef = adminDb.collection("users");
+    const projectedUsers = typeof (usersRef as { select?: unknown }).select === "function"
+      ? (usersRef as typeof usersRef & { select: (...fields: string[]) => typeof usersRef }).select(
+          "displayName",
+          "email",
+          "avatarUrl",
+          "studyStreakDays",
+          "studyStudiedToday",
+          "studyTodayActivityCount",
+          "studyTodayDateKey",
+          "lastStudyActivityAtMillis",
+        )
+      : usersRef;
+    let query = projectedUsers
+      .orderBy("studyStreakDays", "desc")
+      .limit(100);
     if (cursor) query = query.startAfter(cursor);
     const snap = await query.get();
     for (const doc of snap.docs) {

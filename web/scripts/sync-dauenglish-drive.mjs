@@ -127,6 +127,20 @@ if (mode === "connect") {
     }
     await ensureFolder();
     const archiveFileId = await ensureText(json, "materials.json", "application/json");
+    let mediaManifestFileId = null;
+    let sourceArchiveFileId = null;
+    const mediaManifestPath = `${input}.media-manifest.json`;
+    try {
+      const mediaManifest = await readFile(mediaManifestPath, "utf8");
+      mediaManifestFileId = await ensureText(mediaManifest, "media-manifest.json", "application/json");
+      const sourcePath = JSON.parse(mediaManifest).snapshotSource;
+      if (typeof sourcePath === "string" && path.resolve(sourcePath) !== path.resolve(input)) {
+        const sourceJson = await readFile(sourcePath, "utf8");
+        sourceArchiveFileId = await ensureText(sourceJson, "materials.source.json", "application/json");
+      }
+    } catch (error) {
+      if (error.code !== "ENOENT") throw error;
+    }
     console.log(JSON.stringify({ archiveVerified: true, archiveFileId, ...prepared.counts }));
     const fileIds = new Map();
     let uploaded = 0;
@@ -144,6 +158,6 @@ if (mode === "connect") {
     const environmentFile = path.join(folder, ".env.drive.production");
     const environment = { DAUTOEIC_CONTENT_STORAGE: "google-drive", GOOGLE_DRIVE_CLIENT_ID: credentials.clientId, GOOGLE_DRIVE_CLIENT_SECRET: credentials.clientSecret, GOOGLE_DRIVE_REFRESH_TOKEN: credentials.refreshToken, GOOGLE_DRIVE_MANIFEST_ID: manifestId };
     await writeFile(environmentFile, Object.entries(environment).map(([name, value]) => `${name}=${JSON.stringify(value)}`).join("\n") + "\n", { encoding: "utf8", mode: 0o600 });
-    console.log(JSON.stringify({ complete: true, accountEmail: credentials.accountEmail, archiveFileId, manifestId, folderId: state.folderId, verifiedMaterials: Object.keys(manifest.entries).length, reusedChunks: [...prepared.files.keys()].filter((digest) => state.files[digest]?.reusedFrom).length, environmentFile, deployed: false, credentialsPrinted: false }, null, 2));
+    console.log(JSON.stringify({ complete: true, accountEmail: credentials.accountEmail, archiveFileId, sourceArchiveFileId, mediaManifestFileId, manifestId, folderId: state.folderId, verifiedMaterials: Object.keys(manifest.entries).length, reusedChunks: [...prepared.files.keys()].filter((digest) => state.files[digest]?.reusedFrom).length, environmentFile, deployed: false, credentialsPrinted: false }, null, 2));
   }
 }

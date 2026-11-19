@@ -36,6 +36,7 @@ export default function PublicHeader({ user }: PublicHeaderProps) {
   const menuDialogRef = useRef<HTMLElement>(null);
 
   useEffect(() => {
+    if (user !== undefined) return;
     const controller = new AbortController();
 
     async function loadSession() {
@@ -57,7 +58,7 @@ export default function PublicHeader({ user }: PublicHeaderProps) {
 
     void loadSession();
     return () => controller.abort();
-  }, []);
+  }, [user]);
 
   useEffect(() => {
     const timer = window.setTimeout(() => setMenuOpen(false), 0);
@@ -87,18 +88,18 @@ export default function PublicHeader({ user }: PublicHeaderProps) {
                 key={item.key}
                 href={item.href}
                 aria-current={isActive ? "page" : undefined}
-                className={`public-nav-link flex items-center gap-2 text-sm font-extrabold ${
+                className={`public-nav-link flex shrink-0 items-center gap-1.5 whitespace-nowrap text-sm font-extrabold ${
                   isActive ? "is-active text-primary" : "text-ink3 hover:text-ink"
                 }`}
               >
-                <NavIcon name={item.icon} className={`h-4 w-4 ${item.color}`} />
+                <NavIcon name={item.icon} className={`h-4 w-4 shrink-0 ${item.color}`} />
                 <span>{item.label}</span>
               </Link>
             );
           })}
         </nav>
 
-        <div className="flex items-center gap-2 sm:gap-3">
+        <div className="flex shrink-0 items-center gap-2 sm:gap-3">
           <button
             type="button"
             onClick={() => setMenuOpen((open) => !open)}
@@ -125,13 +126,13 @@ export default function PublicHeader({ user }: PublicHeaderProps) {
             <>
               <Link
                 href="/login"
-                className="public-login hidden text-base font-extrabold text-ink sm:inline-flex"
+                className="public-login hidden shrink-0 whitespace-nowrap text-base font-extrabold text-ink sm:inline-flex"
               >
                 Đăng nhập
               </Link>
               <Link
                 href="/login?mode=register"
-                className="public-register inline-flex h-12 items-center rounded-xl bg-primary px-6 text-base font-extrabold text-gold-ink"
+                className="public-register inline-flex h-12 shrink-0 items-center whitespace-nowrap rounded-xl bg-primary px-6 text-base font-extrabold text-gold-ink"
               >
                 Đăng ký
               </Link>

@@ -33,26 +33,18 @@ async function requestData<T>(url: string, init?: RequestInit): Promise<T> {
 }
 
 export default function DictationLessonClient({ lesson, initialProgress, isAuthenticated }: { lesson: DictationLessonView; initialProgress: Progress; isAuthenticated: boolean }) {
-  const guestState = () => {
-    if (isAuthenticated || typeof window === "undefined") return null;
-    try { return JSON.parse(localStorage.getItem(`englishweb:dictation-progress:v1:${lesson.id}`) ?? "null") as GuestProgress | null; } catch { return null; }
-  };
-  const savedGuestState = guestState();
-  const savedCompletedIds = new Set(isAuthenticated
+  const serverCompletedIds = new Set(isAuthenticated
     ? (initialProgress?.segments ?? []).filter((item) => item.completedAtMillis).map((item) => item.segmentId)
-    : savedGuestState?.completedIds ?? []);
-  const initialIncompleteIndex = lesson.segments.findIndex((segment) => !savedCompletedIds.has(segment.id));
+    : []);
+  const initialIncompleteIndex = lesson.segments.findIndex((segment) => !serverCompletedIds.has(segment.id));
   const initialIndex = initialIncompleteIndex >= 0
     ? initialIncompleteIndex
     : isAuthenticated
       ? Math.max(0, Math.min(lesson.segments.length - 1, (initialProgress?.summary?.lastSegmentIndex ?? 1) - 1))
-      : Math.max(0, Math.min(lesson.segments.length - 1, savedGuestState?.index ?? 0));
-  const [index, setIndex] = useState(() => {
-    return initialIndex;
-  });
-  const [mask, setMask] = useState<Mask>(() => {
-    return [30, 50, 100].includes(savedGuestState?.mask ?? 0) ? savedGuestState!.mask! : initialProgress?.summary?.lastMaskPercent ?? 30;
-  });
+      : 0;
+  const [index, setIndex] = useState(initialIndex);
+  const [mask, setMask] = useState<Mask>(() => initialProgress?.summary?.lastMaskPercent ?? 30);
+  const guestHydratedRef = useRef(isAuthenticated);
   const [prompt, setPrompt] = useState<DictationPrompt | null>(null);
   const [promptError, setPromptError] = useState<string | null>(null);
   const [promptRetry, setPromptRetry] = useState(0);
@@ -78,8 +70,28 @@ export default function DictationLessonClient({ lesson, initialProgress, isAuthe
   const active = lesson.segments[index];
   const loadingPrompt = !prompt || prompt.segmentId !== active?.id || prompt.maskPercent !== mask;
   const progressBySegment = useMemo(() => new Map((initialProgress?.segments ?? []).map((item) => [item.segmentId, item])), [initialProgress]);
-  const [completedIds, setCompletedIds] = useState(() => savedCompletedIds);
-  const [masteredIds, setMasteredIds] = useState(() => new Set(isAuthenticated ? (initialProgress?.segments ?? []).filter((item) => item.masteredAtMillis).map((item) => item.segmentId) : savedGuestState?.masteredIds ?? []));
+  const [completedIds, setCompletedIds] = useState(() => serverCompletedIds);
+  const [masteredIds, setMasteredIds] = useState(() => new Set(isAuthenticated ? (initialProgress?.segments ?? []).filter((item) => item.masteredAtMillis).map((item) => item.segmentId) : []));
+
+  useEffect(() => {
+    if (isAuthenticated) return;
+    const timer = window.setTimeout(() => {
+      try {
+        const saved = JSON.parse(localStorage.getItem(`englishweb:dictation-progress:v1:${lesson.id}`) ?? "null") as GuestProgress | null;
+        if (saved) {
+          if (Array.isArray(saved.completedIds)) setCompletedIds(new Set(saved.completedIds));
+          if (Array.isArray(saved.masteredIds)) setMasteredIds(new Set(saved.masteredIds));
+          if ([30, 50, 100].includes(saved.mask ?? 0)) setMask(saved.mask!);
+          const nextIdx = typeof saved.index === "number"
+            ? Math.max(0, Math.min(lesson.segments.length - 1, saved.index))
+            : 0;
+          setIndex(nextIdx);
+        }
+      } catch { /* Ignore storage errors in private/restricted browsers. */ }
+      guestHydratedRef.current = true;
+    }, 0);
+    return () => window.clearTimeout(timer);
+  }, [isAuthenticated, lesson.id, lesson.segments.length]);
 
   const playerCommand = useCallback((func: string, args: unknown[] = []) => {
     frameRef.current?.contentWindow?.postMessage(JSON.stringify({ event: "command", func, args }), "https://www.youtube-nocookie.com");
@@ -150,8 +162,11 @@ export default function DictationLessonClient({ lesson, initialProgress, isAuthe
   }, [active, lesson.id, mask, promptRetry]);
 
   useEffect(() => {
+    if (isAuthenticated || !guestHydratedRef.current) return;
     const key = `englishweb:dictation-progress:v1:${lesson.id}`;
-    if (!isAuthenticated) localStorage.setItem(key, JSON.stringify({ index, mask, completedIds: [...completedIds], masteredIds: [...masteredIds] }));
+    try {
+      localStorage.setItem(key, JSON.stringify({ index, mask, completedIds: [...completedIds], masteredIds: [...masteredIds] }));
+    } catch { /* Ignore storage quota errors. */ }
   }, [completedIds, index, isAuthenticated, lesson.id, mask, masteredIds]);
 
   const goTo = useCallback((next: number, options?: { autoplay?: boolean }) => {
@@ -277,7 +292,7 @@ export default function DictationLessonClient({ lesson, initialProgress, isAuthe
             <div className="mt-4 flex flex-wrap items-center gap-3"><button type="button" onClick={submit} disabled={submitting || loadingPrompt} className="rounded-xl bg-primary px-5 py-2.5 text-sm font-extrabold text-gold-ink disabled:opacity-50">{submitting ? "Đang chấm..." : mask === 100 ? "Kiểm tra toàn bộ (Enter)" : "Kiểm tra tất cả ô"}</button>{mask !== 100 && <><span className="text-xs font-semibold text-muted">Ấn ✓ cạnh mỗi ô để kiểm tra riêng.</span><button type="button" onClick={showHint} className="rounded-xl border border-line px-4 py-2.5 text-sm font-bold text-ink">Gợi ý</button></>}<button type="button" onClick={() => setAutoNext((value) => !value)} className={`rounded-xl border px-4 py-2.5 text-sm font-bold ${autoNext ? "border-teal-line bg-teal-soft text-teal-ink" : "border-line text-ink"}`}>Tự động tiếp: {autoNext ? "Bật" : "Tắt"}</button>{completed && <span className="text-sm font-bold text-success-ink">✓ Đã hoàn thành</span>}</div>
             {actionError && <p role="alert" className="mt-4 rounded-xl border border-danger-line bg-danger-soft p-3 text-sm font-semibold text-danger-ink">{actionError} Câu trả lời vẫn được giữ lại; bạn có thể bấm kiểm tra để thử lại.</p>}{result && <Feedback result={result} />}</article>
         </section>
-        <aside className="rounded-2xl bg-surface p-4 shadow-sm"><div className="mb-3 flex items-center justify-between"><h2 className="font-extrabold text-ink">Tiến độ</h2><span className="text-sm font-bold text-primary">{completedIds.size}/{lesson.segments.length}</span></div><p className="mb-3 text-xs text-muted">Chọn đoạn để phát ngay từ đầu đoạn.</p><div className="max-h-[65dvh] space-y-2 overflow-y-auto pr-1">{lesson.segments.map((segment, segmentIndex) => { const item = progressBySegment.get(segment.id); const activeClass = segmentIndex === index ? "border-teal-line bg-teal-soft" : "border-transparent bg-surface-soft hover:bg-surface-soft"; return <button type="button" key={segment.id} onClick={() => goTo(segmentIndex, { autoplay: true })} className={`flex w-full items-center gap-3 rounded-xl border p-3 text-left ${activeClass}`}><span className={`h-3 w-3 shrink-0 rounded-full ${masteredIds.has(segment.id) || item?.masteredAtMillis ? "bg-success-soft0" : completedIds.has(segment.id) || item?.completedAtMillis ? "bg-teal-soft0" : "bg-control-line"}`} /><span className="min-w-0 flex-1"><b className="block text-sm text-ink">#{segment.index}</b><span className="text-xs text-muted">{formatTime(segment.startSeconds)} – {formatTime(segment.endSeconds)}</span></span></button>; })}</div></aside>
+        <aside className="rounded-2xl bg-surface p-4 shadow-sm"><div className="mb-3 flex items-center justify-between"><h2 className="font-extrabold text-ink">Tiến độ</h2><span className="text-sm font-bold text-primary">{completedIds.size}/{lesson.segments.length}</span></div><p className="mb-3 text-xs text-muted">Chọn đoạn để phát ngay từ đầu đoạn.</p><div className="max-h-[65dvh] space-y-2 overflow-y-auto pr-1">{lesson.segments.map((segment, segmentIndex) => { const item = progressBySegment.get(segment.id); const activeClass = segmentIndex === index ? "border-teal-line bg-teal-soft" : "border-transparent bg-surface-soft hover:bg-surface-soft"; return <button type="button" key={segment.id} onClick={() => goTo(segmentIndex, { autoplay: true })} className={`flex w-full items-center gap-3 rounded-xl border p-3 text-left ${activeClass}`}><span className={`h-3 w-3 shrink-0 rounded-full ${masteredIds.has(segment.id) || item?.masteredAtMillis ? "bg-emerald-500" : completedIds.has(segment.id) || item?.completedAtMillis ? "bg-teal-500" : "bg-control-line"}`} /><span className="min-w-0 flex-1"><b className="block text-sm text-ink">#{segment.index}</b><span className="text-xs text-muted">{formatTime(segment.startSeconds)} – {formatTime(segment.endSeconds)}</span></span></button>; })}</div></aside>
       </div>
       {finished && <section className="mx-auto mt-5 max-w-3xl rounded-2xl border border-success-line bg-success-soft p-5 text-center"><p className="text-lg font-extrabold text-success-ink">Bạn đã hoàn thành toàn bộ video</p><p className="mt-1 text-sm text-success-ink">Đã thành thạo {masteredIds.size}/{lesson.segments.length} đoạn ở mức che 100% không dùng gợi ý.</p><div className="mt-4 flex flex-wrap justify-center gap-2">{firstUnmasteredIndex >= 0 && <button type="button" onClick={reviewUnmastered} className="rounded-lg bg-primary px-4 py-2 text-sm font-bold text-gold-ink">Ôn đoạn chưa thành thạo</button>}<button type="button" onClick={() => goTo(0)} className="rounded-lg border border-success-line bg-surface px-4 py-2 text-sm font-bold text-success-ink">Ôn lại từ đầu</button><Link href="/listen/dictation" className="rounded-lg border border-success-line bg-surface px-4 py-2 text-sm font-bold text-success-ink no-underline">Về thư viện</Link></div></section>}
       {!finished && firstIncompleteIndex >= 0 && completedIds.size > 0 && <p className="mt-4 text-center text-xs text-muted">Còn {lesson.segments.length - completedIds.size} đoạn. Bạn có thể chọn bất kỳ đoạn nào trong danh sách để tiếp tục.</p>}

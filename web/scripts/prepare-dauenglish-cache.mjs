@@ -1,5 +1,5 @@
 import { createHash } from "node:crypto";
-import { mkdir, readFile, writeFile } from "node:fs/promises";
+import { access, mkdir, readdir, readFile, rm, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { createJiti } from "jiti";
 import { gzip } from "node:zlib";
@@ -21,18 +21,32 @@ if (process.env.DAUTOEIC_CONTENT_STORAGE !== "google-drive") {
   const { driveManifestSchema } = await jiti.import("../src/lib/storage/drive-manifest.ts");
   const { decodeBundledMaterial } = await jiti.import("../src/lib/storage/bundled-material.ts");
   const { buildTestPartCatalogEntry, testPartCatalogIndexSchema } = await jiti.import("../src/lib/storage/test-part-catalog-index.ts");
-  const client = createDriveClient({ clientId: process.env.GOOGLE_DRIVE_CLIENT_ID, clientSecret: process.env.GOOGLE_DRIVE_CLIENT_SECRET, refreshToken: process.env.GOOGLE_DRIVE_REFRESH_TOKEN });
+  const client = createDriveClient({
+    clientId: process.env.GOOGLE_DRIVE_CLIENT_ID,
+    clientSecret: process.env.GOOGLE_DRIVE_CLIENT_SECRET,
+    refreshToken: process.env.GOOGLE_DRIVE_REFRESH_TOKEN,
+  });
   const manifestId = driveFileId(process.env.GOOGLE_DRIVE_MANIFEST_ID ?? "");
-  const folder = path.resolve(".content/dauenglish", manifestId);
+  const contentRoot = path.resolve(".content/dauenglish");
+  const folder = path.resolve(contentRoot, manifestId);
   const manifestText = await readDriveTextWithRetry(client, manifestId, 1_000_000, { DriveError, timeoutMs: 90_000 });
   const manifest = driveManifestSchema.parse(JSON.parse(manifestText));
   const preparedMarker = path.join(folder, ".prepared-manifest.json");
   const preparedSnapshot = await readFile(preparedMarker, "utf8").then((text) => JSON.parse(text)).catch(() => null);
-  const indexesPresent = await Promise.all([
-    readFile(path.join(folder, "manifest.json")),
-    ...Array.from({ length: 7 }, (_, index) => readFile(path.join(folder, `catalog-part-${index + 1}.json`))),
-  ]).then(() => true).catch(() => false);
-  if (indexesPresent && preparedSnapshot?.snapshotSha256 === manifest.snapshotSha256 && preparedSnapshot?.sourceVersion === manifest.sourceVersion) {
+  const hasGrammar = Object.values(manifest.entries).some((entry) => entry.kind === "grammar-catalog" || entry.kind === "grammar-topic");
+  const requiredFiles = [
+    path.join(folder, "manifest.json"),
+    ...Array.from({ length: 7 }, (_, index) => path.join(folder, `catalog-part-${index + 1}.json`)),
+    ...(hasGrammar ? [path.join(folder, "grammar-answers.json"), path.join(folder, "grammar-dictionary.json.gz")] : []),
+  ];
+  const indexesPresent = await Promise.all(requiredFiles.map((file) => access(file)))
+    .then(() => true)
+    .catch(() => false);
+  if (
+    indexesPresent &&
+    preparedSnapshot?.snapshotSha256 === manifest.snapshotSha256 &&
+    preparedSnapshot?.sourceVersion === manifest.sourceVersion
+  ) {
     console.log(`[materials] Snapshot ${manifest.snapshotSha256} already prepared; skipped ${Object.keys(manifest.entries).length} content validations.`);
     process.exit(0);
   }
@@ -62,9 +76,6 @@ if (process.env.DAUTOEIC_CONTENT_STORAGE !== "google-drive") {
         if (Buffer.byteLength(text) !== entry.bytes || hash(text) !== entry.sha256) throw new Error("Content bundle material checksum mismatch.");
         await writeFile(output, await compress(text, { level: 9 }));
       }
-      // Keep a tiny catalog index beside the full materials. The practice
-      // dashboard only needs counts and IDs; loading every test-part JSON at
-      // request time made the first page render O(number of tests * part size).
       if (entry.kind === "test-part") {
         const payload = JSON.parse(text);
         const projected = buildTestPartCatalogEntry(payload);
@@ -81,9 +92,23 @@ if (process.env.DAUTOEIC_CONTENT_STORAGE !== "google-drive") {
   const grammar = await writeGrammarIndexes(folder, manifest);
   if (grammar) console.log(`[materials] Grammar projections: ${JSON.stringify(grammar)}`);
   for (let part = 1; part <= 7; part++) {
-    const index = testPartCatalogIndexSchema.parse({ sourceVersion: manifest.sourceVersion, snapshotSha256: manifest.snapshotSha256, part, entries: catalogParts[part - 1] });
+    const index = testPartCatalogIndexSchema.parse({
+      sourceVersion: manifest.sourceVersion,
+      snapshotSha256: manifest.snapshotSha256,
+      part,
+      entries: catalogParts[part - 1],
+    });
     await writeFile(path.join(folder, `catalog-part-${part}.json`), JSON.stringify(index), "utf8");
   }
   await writeFile(preparedMarker, JSON.stringify({ sourceVersion: manifest.sourceVersion, snapshotSha256: manifest.snapshotSha256 }), "utf8");
+
+  // Prune stale historical manifest directories to prevent unbounded disk growth.
+  const existingDirs = await readdir(contentRoot, { withFileTypes: true }).catch(() => []);
+  for (const dirent of existingDirs) {
+    if (dirent.isDirectory() && dirent.name !== manifestId) {
+      await rm(path.join(contentRoot, dirent.name), { recursive: true, force: true }).catch(() => undefined);
+    }
+  }
+
   console.log(`[materials] Ready: ${completed} verified materials, ${(bytes / 1_000_000).toFixed(1)} MB. Server-only bundle; no runtime Drive round trip needed.`);
 }

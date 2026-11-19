@@ -79,7 +79,7 @@ function projectionRows(snapshot: FirebaseFirestore.QuerySnapshot): VocabProgres
   for (const id of shardIds) {
     const data = docs.get(id)?.data();
     const bucket = rowsFromShard(data?.rows);
-    if (!bucket || Object.keys(bucket).some((wordId) => shardId(Number(wordId)) !== id || !fits(bucket))) return null;
+    if (!bucket || !fits(bucket) || Object.keys(bucket).some((wordId) => shardId(Number(wordId)) !== id)) return null;
     rows.push(...Object.values(bucket));
   }
   return rows;
@@ -100,12 +100,19 @@ export async function bootstrapVocabProgressProjection(
   uid: string,
   source: FirebaseFirestore.CollectionReference,
 ): Promise<VocabProgressProjectionRow[] | null> {
-  const existing = await readVocabProgressProjection(uid);
+  const initialSnap = await queryFor(uid, [INDEX, ...Array.from({ length: SHARDS }, (_, index) => String(index))]).get();
+  const initialIndex = initialSnap.docs.find((doc) => doc.id === INDEX)?.data();
+  // Short-circuit when an earlier attempt explicitly marked overflow so reads
+  // do not repeatedly scan the entire collection inside a transaction.
+  if (initialIndex?.schema === SCHEMA && initialIndex?.ready === false) return null;
+  const existing = projectionRows(initialSnap);
   if (existing) return existing;
   return adminDb.runTransaction(async (tx) => {
     const projectionRef = collection(uid);
     const indexRef = projectionRef.doc(INDEX);
     const existingSnap = await tx.get(queryFor(uid, [INDEX, ...Array.from({ length: SHARDS }, (_, index) => String(index))]));
+    const indexData = existingSnap.docs.find((doc) => doc.id === INDEX)?.data();
+    if (indexData?.schema === SCHEMA && indexData?.ready === false) return null;
     const existingRows = projectionRows(existingSnap);
     if (existingRows) return existingRows;
     const sourceSnap = await tx.get(source.select("wordId", "setId", "status", "nextReviewAtMillis", "lastReviewedAtMillis"));

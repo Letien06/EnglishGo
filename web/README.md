@@ -71,9 +71,27 @@ node scripts/sync-dauenglish-drive.mjs upload <new-materials.json>
 ```
 
 The public exporter validates catalog counts and membership, excludes Pro tests, and
-does not write to Firestore. After read-back verification, update the production
-`GOOGLE_DRIVE_MANIFEST_ID` and redeploy. Audio/image URLs remain source URLs;
-the JSON backup is not a backup of the media files themselves.
+does not write to Firestore. To make the media independent from the provider, run the
+media sync after preparing a snapshot and before uploading it to Drive:
+
+```bash
+npm run sync:media -- <source-materials.json> <materials-with-media.json>
+node scripts/sync-dauenglish-drive.mjs upload <materials-with-media.json>
+```
+
+The sync downloads each image/audio once, stores it at a stable
+`dauenglish/<testId>/part-<part>/...` path in Firebase Storage, writes a SHA-256
+checksum into Storage metadata, and skips the upload when the checksum and byte size
+already match. It also writes `<materials-with-media.json>.media-manifest.json`.
+The Drive upload keeps that manifest and the original source snapshot as
+`materials.source.json`, while the active `materials.json` contains only internal
+Firebase Storage URLs. Set `FIREBASE_SERVICE_ACCOUNT_JSON`, `FIREBASE_PROJECT_ID`,
+and `FIREBASE_STORAGE_BUCKET` in the sync environment; never commit the service
+account or generated media manifest.
+
+After read-back verification, update the production `GOOGLE_DRIVE_MANIFEST_ID` and
+redeploy. The web UI then reads only the internal Storage URLs from the immutable
+Drive snapshot.
 
 For provider-authorized Pro imports, use the authenticated workflow in
 [`docs/deployment.md`](../docs/deployment.md#importing-provider-authorized-pro-material).

@@ -104,7 +104,12 @@ export async function saveLearningProgress(input: {
     }, daySnap, userSnap.data() ?? {});
     writeAward(userSnap.data() ?? {});
     writeProjection();
-    if (receiptRef) tx.set(receiptRef, { requestFingerprint, response, createdAt: FieldValue.serverTimestamp() });
+    if (receiptRef) tx.set(receiptRef, {
+      requestFingerprint,
+      response,
+      createdAt: FieldValue.serverTimestamp(),
+      expiresAt: new Date(Date.now() + 7 * 86_400_000),
+    });
     return response;
   });
   invalidateLearnerActivityCaches(uid);

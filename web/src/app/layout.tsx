@@ -8,10 +8,11 @@ import PwaServiceWorker from "@/components/PwaServiceWorker";
 import PerformanceTelemetry from "@/components/PerformanceTelemetry";
 import "./globals.css";
 
-const SITE_URL = "https://www.englishgo.io.vn";
+const SITE_URL = process.env.NEXT_PUBLIC_SITE_URL?.trim() || "https://www.dautoiec.tech";
 const SITE_TITLE = "ENGLISHGO - Luyện TOEIC miễn phí";
 const SITE_DESCRIPTION =
-  "Nền tảng luyện thi TOEIC toàn diện: luyện nghe, ngữ pháp, từ vựng, đề thi thử và đọc hiểu.";
+  "Nền tảng luyện thi TOEIC toàn diện: luyện nghe, đọc hiểu, viết, ngữ pháp, từ vựng và đề thi thử.";
+const ENABLE_VERCEL_ANALYTICS = process.env.NEXT_PUBLIC_ENABLE_VERCEL_ANALYTICS === "true";
 
 const plusJakartaSans = Plus_Jakarta_Sans({
   subsets: ["latin", "vietnamese"],
@@ -20,9 +21,10 @@ const plusJakartaSans = Plus_Jakarta_Sans({
   variable: "--font-plus-jakarta",
 });
 
+// Load only the 3 essential weights (400/600/700) to reduce initial .woff2 downloads.
 const beVietnamPro = Be_Vietnam_Pro({
   subsets: ["latin", "vietnamese"],
-  weight: ["400", "500", "600", "700", "800"],
+  weight: ["400", "600", "700"],
   display: "swap",
   variable: "--font-be-vietnam",
 });
@@ -77,7 +79,7 @@ export default function RootLayout({
         <PwaServiceWorker />
         <PerformanceTelemetry />
         {children}
-        <Analytics />
+        {ENABLE_VERCEL_ANALYTICS && <Analytics />}
         <SpeedInsights />
       </body>
     </html>

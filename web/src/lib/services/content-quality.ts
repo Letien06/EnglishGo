@@ -1,3 +1,4 @@
+import { FieldValue } from "firebase-admin/firestore";
 import { adminDb } from "@/lib/firestore/db";
 import { BadRequest, NotFound } from "@/lib/api/response";
 import { enforceDailyActionLimit } from "./rate-limit";
@@ -49,64 +50,77 @@ export interface ContentQualityDashboard {
 }
 
 const SUMMARY_REF = ["contentQualitySummary", "current"] as const;
+const BATCH_CHUNK_SIZE = 200;
 
 /**
  * Maintains aggregate-only admin analytics while an attempt is submitted.
- * It stores no learner identifiers or answer text in the quality collections.
+ * Uses lock-free atomic increments on the global summary and batched reads +
+ * WriteBatches for per-question quality stats instead of a 201-doc transaction.
  */
 export async function recordContentQualityAttempt(input: ContentQualityAttemptInput): Promise<void> {
   const answers = uniqueAnswers(input.answers);
   if (answers.length === 0) return;
+
   const summaryRef = adminDb.collection(SUMMARY_REF[0]).doc(SUMMARY_REF[1]);
-  const qualityRefs = answers.map((answer) => adminDb.collection("contentQuestionQuality").doc(questionQualityId(input.testId, answer.questionId)));
+  const qualityRefs = answers.map((answer) =>
+    adminDb.collection("contentQuestionQuality").doc(questionQualityId(input.testId, answer.questionId)),
+  );
+  const secondsPerQuestion = Math.max(0, input.elapsedMillis / answers.length / 1_000);
+  const correctInAttempt = answers.filter((answer) => answer.correct).length;
+  const wrongInAttempt = answers.length - correctInAttempt;
 
-  await adminDb.runTransaction(async (transaction) => {
-    const snapshots = await Promise.all([
-      transaction.get(summaryRef),
-      ...qualityRefs.map((ref) => transaction.get(ref)),
-    ]);
-    const summary = recordValue(snapshots[0].data());
-    const secondsPerQuestion = Math.max(0, input.elapsedMillis / answers.length / 1_000);
-    const currentQuestions = numberValue(summary.questions) ?? 0;
-    const currentCorrect = numberValue(summary.correct) ?? 0;
-    const currentWrong = numberValue(summary.wrong) ?? 0;
-    const currentElapsed = numberValue(summary.totalElapsedMillis) ?? 0;
-    const correctInAttempt = answers.filter((answer) => answer.correct).length;
-    const wrongInAttempt = answers.length - correctInAttempt;
+  // Fetch existing question stats in one batched getAll call (no transaction locks).
+  const snapshots = await adminDb.getAll(...qualityRefs);
 
-    transaction.set(summaryRef, {
-      attempts: (numberValue(summary.attempts) ?? 0) + 1,
-      questions: currentQuestions + answers.length,
-      correct: currentCorrect + correctInAttempt,
-      wrong: currentWrong + wrongInAttempt,
-      totalElapsedMillis: currentElapsed + Math.max(0, input.elapsedMillis),
-      reports: numberValue(summary.reports) ?? 0,
-      updatedAtMillis: input.submittedAtMillis,
-    }, { merge: true });
+  for (let start = 0; start < answers.length; start += BATCH_CHUNK_SIZE) {
+    const batch = adminDb.batch();
+    if (start === 0) {
+      batch.set(
+        summaryRef,
+        {
+          attempts: FieldValue.increment(1),
+          questions: FieldValue.increment(answers.length),
+          correct: FieldValue.increment(correctInAttempt),
+          wrong: FieldValue.increment(wrongInAttempt),
+          totalElapsedMillis: FieldValue.increment(Math.max(0, input.elapsedMillis)),
+          updatedAtMillis: input.submittedAtMillis,
+        },
+        { merge: true },
+      );
+    }
 
-    answers.forEach((answer, index) => {
-      const existing = recordValue(snapshots[index + 1].data());
+    const end = Math.min(start + BATCH_CHUNK_SIZE, answers.length);
+    for (let index = start; index < end; index++) {
+      const answer = answers[index];
+      const existing = recordValue(snapshots[index]?.data());
       const attempts = (numberValue(existing.attempts) ?? 0) + 1;
       const correct = (numberValue(existing.correct) ?? 0) + (answer.correct ? 1 : 0);
       const wrong = (numberValue(existing.wrong) ?? 0) + (answer.correct ? 0 : 1);
       const reports = numberValue(existing.reports) ?? 0;
-      transaction.set(qualityRefs[index], {
-        testId: input.testId,
-        questionId: answer.questionId,
-        part: answer.part,
-        weakTag: answer.weakTag,
-        attempts,
-        correct,
-        wrong,
-        reports,
-        accuracy: percent(correct, attempts),
-        averageSeconds: round2(((numberValue(existing.averageSeconds) ?? 0) * (attempts - 1) + secondsPerQuestion) / attempts),
-        riskScore: qualityRiskScore(wrong, attempts, reports),
-        lastAttemptAtMillis: input.submittedAtMillis,
-        updatedAtMillis: input.submittedAtMillis,
-      }, { merge: true });
-    });
-  });
+      batch.set(
+        qualityRefs[index],
+        {
+          testId: input.testId,
+          questionId: answer.questionId,
+          part: answer.part,
+          weakTag: answer.weakTag,
+          attempts,
+          correct,
+          wrong,
+          reports,
+          accuracy: percent(correct, attempts),
+          averageSeconds: round2(
+            ((numberValue(existing.averageSeconds) ?? 0) * (attempts - 1) + secondsPerQuestion) / attempts,
+          ),
+          riskScore: qualityRiskScore(wrong, attempts, reports),
+          lastAttemptAtMillis: input.submittedAtMillis,
+          updatedAtMillis: input.submittedAtMillis,
+        },
+        { merge: true },
+      );
+    }
+    await batch.commit();
+  }
 }
 
 export async function reportContentQuestion(
@@ -134,10 +148,9 @@ export async function reportContentQuestion(
   const now = Date.now();
   const reason = cleanReason(input.reason);
   const created = await adminDb.runTransaction(async (transaction) => {
-    const [existingReport, quality, summary] = await Promise.all([
+    const [existingReport, quality] = await Promise.all([
       transaction.get(reportRef),
       transaction.get(qualityRef),
-      transaction.get(summaryRef),
     ]);
     if (existingReport.exists) return false;
 
@@ -145,7 +158,6 @@ export async function reportContentQuestion(
     const reports = (numberValue(qualityData.reports) ?? 0) + 1;
     const attempts = numberValue(qualityData.attempts) ?? 0;
     const wrong = numberValue(qualityData.wrong) ?? 0;
-    const summaryData = recordValue(summary.data());
     transaction.set(reportRef, {
       uid,
       attemptId: input.attemptId,
@@ -157,20 +169,28 @@ export async function reportContentQuestion(
       status: "OPEN",
       createdAtMillis: now,
     });
-    transaction.set(qualityRef, {
-      testId,
-      questionId: input.questionId,
-      part: numberValue(answer.part) ?? 0,
-      weakTag: stringValue(answer.weakTag) ?? "general",
-      reports,
-      riskScore: qualityRiskScore(wrong, attempts, reports),
-      lastReportedAtMillis: now,
-      updatedAtMillis: now,
-    }, { merge: true });
-    transaction.set(summaryRef, {
-      reports: (numberValue(summaryData.reports) ?? 0) + 1,
-      updatedAtMillis: now,
-    }, { merge: true });
+    transaction.set(
+      qualityRef,
+      {
+        testId,
+        questionId: input.questionId,
+        part: numberValue(answer.part) ?? 0,
+        weakTag: stringValue(answer.weakTag) ?? "general",
+        reports,
+        riskScore: qualityRiskScore(wrong, attempts, reports),
+        lastReportedAtMillis: now,
+        updatedAtMillis: now,
+      },
+      { merge: true },
+    );
+    transaction.set(
+      summaryRef,
+      {
+        reports: FieldValue.increment(1),
+        updatedAtMillis: now,
+      },
+      { merge: true },
+    );
     return true;
   });
   return { created };
@@ -197,8 +217,16 @@ export async function getContentQualityDashboard(): Promise<ContentQualityDashbo
       averageSecondsPerQuestion: totalQuestions > 0 ? round2(elapsedMillis / totalQuestions / 1_000) : null,
       reports: numberValue(summaryData.reports) ?? 0,
     },
-    highRiskQuestions: riskSnapshot.docs.map((doc) => toQualityQuestion(doc.id, doc.data())).filter((item): item is ContentQualityQuestion => item != null).filter((item) => item.attempts >= 3).slice(0, 12),
-    reportedQuestions: reportsSnapshot.docs.map((doc) => toQualityQuestion(doc.id, doc.data())).filter((item): item is ContentQualityQuestion => item != null).filter((item) => item.reports > 0).slice(0, 12),
+    highRiskQuestions: riskSnapshot.docs
+      .map((doc) => toQualityQuestion(doc.id, doc.data()))
+      .filter((item): item is ContentQualityQuestion => item != null)
+      .filter((item) => item.attempts >= 3)
+      .slice(0, 12),
+    reportedQuestions: reportsSnapshot.docs
+      .map((doc) => toQualityQuestion(doc.id, doc.data()))
+      .filter((item): item is ContentQualityQuestion => item != null)
+      .filter((item) => item.reports > 0)
+      .slice(0, 12),
   };
 }
 
@@ -258,7 +286,7 @@ function round2(value: number): number {
 }
 
 function recordValue(value: unknown): Record<string, unknown> {
-  return value && typeof value === "object" ? value as Record<string, unknown> : {};
+  return value && typeof value === "object" ? (value as Record<string, unknown>) : {};
 }
 
 function arrayValue(value: unknown): unknown[] {

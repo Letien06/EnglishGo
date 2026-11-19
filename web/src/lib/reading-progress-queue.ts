@@ -276,11 +276,14 @@ class ReadingQueue {
   }
 }
 
+const noSubscribe = () => () => {};
+const emptySnapshot = () => EMPTY;
+
 function useProgressQueue(skill: Skill, uid: string | null | undefined, authenticated: boolean) {
   const key = `${skill}:${uid}`;
   const queue = useMemo(() => uid && authenticated && typeof window !== "undefined" ? queues.get(key) ?? (() => { const next = new ReadingQueue(uid, skill); queues.set(key, next); return next; })() : undefined, [key, skill, uid, authenticated]);
   useEffect(() => queue?.activate(), [queue]);
-  const snapshot = useSyncExternalStore(queue?.subscribe ?? (() => () => {}), queue?.getSnapshot ?? (() => EMPTY), () => EMPTY);
+  const snapshot = useSyncExternalStore(queue?.subscribe ?? noSubscribe, queue?.getSnapshot ?? emptySnapshot, emptySnapshot);
   const enqueue = useCallback((action: ReadingProgressAction) => queue?.enqueue(action), [queue]);
   const retry = useCallback(() => queue?.retry(), [queue]);
   const flush = useCallback(() => queue?.flush() ?? Promise.resolve(true), [queue]);

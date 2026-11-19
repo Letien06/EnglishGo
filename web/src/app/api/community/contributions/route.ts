@@ -6,9 +6,9 @@ import { getCurrentUser } from "@/lib/auth/session";
 import { submitContribution } from "@/lib/services/community";
 
 const schema = z.object({
-  title: z.string().min(1),
-  content: z.string().min(1),
-  sourceNote: z.string().nullable().optional(),
+  title: z.string().trim().min(1).max(200),
+  content: z.string().trim().min(1).max(10_000),
+  sourceNote: z.string().trim().max(500).nullable().optional(),
   ownsRights: z.boolean(),
 });
 

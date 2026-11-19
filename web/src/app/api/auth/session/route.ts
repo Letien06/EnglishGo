@@ -2,7 +2,7 @@ import { NextRequest } from "next/server";
 import { cookies } from "next/headers";
 import { withErrorHandling } from "@/lib/api/handler";
 import { ok, fail } from "@/lib/api/response";
-import { getCurrentUserForRead, provisionUser } from "@/lib/auth/session";
+import { getCurrentUserForRead, provisionUser, verifySessionCookie } from "@/lib/auth/session";
 import { adminAuth } from "@/lib/firebase/admin";
 
 const SESSION_COOKIE = "session";
@@ -14,17 +14,24 @@ const SESSION_MAX_AGE = 60 * 60 * 24 * 5; // 5 days
  * create a session cookie, and provision user in Firestore.
  */
 export const POST = withErrorHandling(async (req: NextRequest) => {
-  const body = await req.json();
+  let body: { idToken?: unknown } | null = null;
+  try {
+    body = (await req.json()) as { idToken?: unknown };
+  } catch {
+    return fail("Invalid JSON payload", 400);
+  }
   const idToken = body?.idToken;
 
   if (!idToken || typeof idToken !== "string") {
     return fail("Missing idToken", 400);
   }
 
-  // Verify the ID token
-  const decodedToken = await adminAuth.verifyIdToken(idToken);
-  if (!decodedToken) {
-    return fail("Invalid token", 401);
+  // Verify the ID token with revocation check
+  let decodedToken;
+  try {
+    decodedToken = await adminAuth.verifyIdToken(idToken, true);
+  } catch {
+    return fail("Invalid or revoked token", 401);
   }
 
   // Create a session cookie using Firebase Admin
@@ -54,10 +61,17 @@ export const POST = withErrorHandling(async (req: NextRequest) => {
 
 /**
  * DELETE /api/auth/session
- * Clear the session cookie (logout).
+ * Revoke Firebase refresh tokens (invalidating stolen cookies) and clear cookie.
  */
 export const DELETE = withErrorHandling(async () => {
   const cookieStore = await cookies();
+  const existing = cookieStore.get(SESSION_COOKIE)?.value;
+  if (existing) {
+    const decoded = await verifySessionCookie(existing);
+    if (decoded?.uid) {
+      await adminAuth.revokeRefreshTokens(decoded.uid).catch(() => undefined);
+    }
+  }
   cookieStore.set(SESSION_COOKIE, "", {
     httpOnly: true,
     secure: process.env.NODE_ENV === "production",
@@ -82,6 +96,7 @@ export const GET = withErrorHandling(async () => {
     uid: user.uid,
     email: user.email,
     displayName: user.displayName,
+    avatarUrl: user.avatarUrl,
     role: user.role,
   });
 });

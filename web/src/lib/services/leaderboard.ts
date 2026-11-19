@@ -145,14 +145,17 @@ export async function buildPracticeLeaderboardDecision(
     return decision;
   }
 
-  const previous = await adminDb
+  const previousQuery = adminDb
     .collection("users")
     .doc(uid)
     .collection("practiceAttempts")
     .where("canonicalAttemptKey", "==", decision.canonicalAttemptKey)
     .where("eligibility", "==", "VERIFIED")
-    .limit(1)
-    .get();
+    .limit(1);
+  const previous = await (typeof (previousQuery as { select?: unknown }).select === "function"
+    ? (previousQuery as typeof previousQuery & { select: (...fields: string[]) => typeof previousQuery }).select()
+    : previousQuery
+  ).get();
 
   if (!previous.empty) {
     return {

@@ -11,19 +11,20 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "test:e2e": "playwright test",
-    "backfill:vocab-word-count": "node --env-file=.env.local scripts/backfill-vocab-word-count.mjs"
+    "backfill:vocab-word-count": "node --env-file-if-exists=.env.local scripts/backfill-vocab-word-count.mjs",
+    "sync:media": "node --env-file-if-exists=.env.local scripts/sync-dauenglish-media.mjs"
   },
   "dependencies": {
     "@vercel/analytics": "^2.0.1",
     "@vercel/speed-insights": "^2.0.0",
     "entities": "^8.1.0",
+    "exceljs": "^4.4.0",
     "firebase": "^12.15.0",
     "firebase-admin": "^14.1.0",
     "next": "16.2.10",
     "pdf-parse": "^2.4.5",
     "react": "19.2.4",
     "react-dom": "19.2.4",
-    "xlsx": "^0.18.5",
     "zod": "^4.4.3"
   },
   "overrides": {
@@ -36,7 +37,6 @@
     "@tailwindcss/postcss": "^4",
     "@testing-library/jest-dom": "^6.9.1",
     "@testing-library/react": "^16.3.2",
-    "@testing-library/user-event": "^14.6.1",
     "@types/node": "^20",
     "@types/react": "^19",
     "@types/react-dom": "^19",

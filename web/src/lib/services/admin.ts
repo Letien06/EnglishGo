@@ -36,8 +36,8 @@ export async function dashboardMetrics(): Promise<AdminMetric[]> {
 
 export async function moduleMetrics(): Promise<AdminMetric[]> {
   const [listening, reading, vocabWords, mockTests] = await Promise.all([
-    countCollection("listeningProgress"),
-    countCollection("readingProgress"),
+    countCollectionGroup("listeningProgress"),
+    countCollectionGroup("readingProgress"),
     countCollection("vocabWords"),
     countCollection("tests"),
   ]);
@@ -59,8 +59,12 @@ export async function draftQueue(): Promise<ContentReviewItem[]> {
       .limit(50)
       .get();
   } catch {
-    // Keep the admin queue usable while the composite index is rolling out.
-    snap = await adminDb.collection("contentAuditLogs").get();
+    // Bounded fallback while the composite index is rolling out.
+    snap = await adminDb
+      .collection("contentAuditLogs")
+      .orderBy("createdAtMillis", "desc")
+      .limit(200)
+      .get();
   }
   return snap.docs
     .map((doc) => {
@@ -103,6 +107,15 @@ export async function createGeneratorDraft(
 async function countCollection(collection: string): Promise<number> {
   try {
     const snap = await adminDb.collection(collection).count().get();
+    return snap.data().count;
+  } catch {
+    return 0;
+  }
+}
+
+async function countCollectionGroup(collection: string): Promise<number> {
+  try {
+    const snap = await adminDb.collectionGroup(collection).count().get();
     return snap.data().count;
   } catch {
     return 0;

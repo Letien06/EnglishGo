@@ -1,36 +1,34 @@
+import { createHash, timingSafeEqual } from "node:crypto";
 import { NextRequest } from "next/server";
-import { ok, fail } from "@/lib/api/response";
+import { withErrorHandling } from "@/lib/api/handler";
+import { ok, Unauthorized, ApiError } from "@/lib/api/response";
 import { serverEnv } from "@/lib/env";
 import { runDauToeicMirrorSync } from "@/lib/services/dautoeic-sync";
 
 export const maxDuration = 60;
 export const dynamic = "force-dynamic";
 
-export async function GET(request: NextRequest) {
-  const auth = authorizeCron(request);
-  if (!auth.authorized) {
-    return fail(auth.message, 401);
-  }
+export const GET = withErrorHandling(async (request: NextRequest) => {
+  authorizeCron(request);
   const force = request.nextUrl.searchParams.get("force") === "1";
   const result = await runDauToeicMirrorSync({ force });
   return ok(result);
-}
+});
 
-export async function POST(request: NextRequest) {
-  return GET(request);
-}
+export const POST = GET;
 
-function authorizeCron(request: NextRequest): { authorized: true } | { authorized: false; message: string } {
+function authorizeCron(request: NextRequest): void {
   const secret = serverEnv.cronSecret;
   if (!secret && process.env.NODE_ENV !== "production") {
-    return { authorized: true };
+    return;
   }
   if (!secret) {
-    return { authorized: false, message: "Cron secret is not configured" };
+    throw new ApiError("Cron secret is not configured", 503);
   }
   const authorization = request.headers.get("authorization") ?? "";
-  if (authorization === `Bearer ${secret}`) {
-    return { authorized: true };
+  const supplied = authorization.startsWith("Bearer ") ? authorization.slice(7) : "";
+  const digest = (value: string) => createHash("sha256").update(value).digest();
+  if (!supplied || !timingSafeEqual(digest(supplied), digest(secret))) {
+    throw Unauthorized("Unauthorized cron request");
   }
-  return { authorized: false, message: "Unauthorized cron request" };
 }

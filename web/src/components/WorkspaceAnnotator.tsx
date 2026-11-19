@@ -157,6 +157,7 @@ function StoredWorkspace({ uid, context, legacyContexts = [], disabled = false, 
           for (const stroke of mark.strokes) imported.push({ id: id(), anchor, layoutWidth: layout.width, anchorWidth: rect.width, color: stroke.color, width: Math.min(24, Math.max(0.5, stroke.width * Math.max(rect.width, rect.height))), points: stroke.points.map((point) => ({ x: point.x * rect.width, y: point.y * rect.height })) });
         }
       }
+      if (imported.length === 0) return;
       const next = { strokes: [...stateRef.current.strokes, ...imported], legacyImported: true };
       if (validWorkspaceAnnotations(next)) persist(next);
       else setNotice("Chú thích cũ vượt giới hạn; bản cũ vẫn được giữ trên thiết bị.");
@@ -237,7 +238,7 @@ function StoredWorkspace({ uid, context, legacyContexts = [], disabled = false, 
   const move = (event: PointerEvent<HTMLDivElement>) => {
     const current = gesture.current;
     if (!current || event.pointerId !== current.pointer) return;
-    event.preventDefault(); event.stopPropagation(); measure();
+    event.preventDefault(); event.stopPropagation();
     if (gesture.current !== current) return;
     advance(current, point(event)); paintPreview();
   };

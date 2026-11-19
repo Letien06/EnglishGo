@@ -6,14 +6,14 @@ import { requireUser } from "@/lib/auth/session";
 import { leaveRoom } from "@/lib/services/game-room";
 
 const schema = z.object({
-  code: z.string().length(6)
+  code: z.string().trim().regex(/^[A-Za-z0-9]{6}$/),
 });
 
 export const POST = withErrorHandling(async (req) => {
   const user = await requireUser();
   const body = await parseBody(req, schema);
-  
-  await leaveRoom(user, body.code);
-  
+
+  await leaveRoom(user, body.code.toUpperCase());
+
   return ok({ success: true });
 });

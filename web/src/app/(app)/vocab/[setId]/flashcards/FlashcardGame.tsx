@@ -514,19 +514,21 @@ export default function FlashcardGame({
     }
   }
 
+  const historyStorageKey = `englishgo-vocab-history-${currentUserId || "guest"}-${setId}`;
+
   // Load history from localStorage after mount (avoids hydration mismatch).
   useEffect(() => {
     if (session.history?.length) return;
     const timer = window.setTimeout(() => {
       try {
-        const raw = localStorage.getItem(`englishgo-vocab-history-${setId}`);
+        const raw = localStorage.getItem(historyStorageKey);
         setHistory(raw ? (JSON.parse(raw) as HistoryEntry[]) : []);
       } catch {
         setHistory([]);
       }
     }, 0);
     return () => window.clearTimeout(timer);
-  }, [setId, session.history]);
+  }, [historyStorageKey, session.history]);
 
   useEffect(() => {
     if (!loadExtrasInBackground || !isAuthenticated) return;
@@ -552,15 +554,12 @@ export default function FlashcardGame({
       const trimmed = next.slice(0, 8);
       setHistory(trimmed);
       try {
-        localStorage.setItem(
-          `englishgo-vocab-history-${setId}`,
-          JSON.stringify(trimmed),
-        );
+        localStorage.setItem(historyStorageKey, JSON.stringify(trimmed));
       } catch {
         /* ignore */
       }
     },
-    [setId],
+    [historyStorageKey],
   );
 
   const recordHistory = useCallback(
@@ -1349,7 +1348,16 @@ function PlaySurface({
   const submissionRef = useRef<FrozenRoundSubmission | undefined>(undefined);
   const [initialRequestIds] = useState(() => ({ review: roundRequestId(), history: roundRequestId() }));
   const requestIdsRef = useRef(initialRequestIds);
-  const draftStorageKey = `englishgo-vocab-draft-${setId}-${externalPartId ?? "all"}-${mode}-${quizMode}`;
+  const draftStorageKey = `englishgo-vocab-draft-${currentUserId || "guest"}-${setId}-${externalPartId ?? "all"}-${mode}-${quizMode}`;
+  const readSafeStorage = (key: string): string | null => {
+    try { return window.localStorage.getItem(key); } catch { return null; }
+  };
+  const writeSafeStorage = (key: string, value: string): void => {
+    try { window.localStorage.setItem(key, value); } catch { /* ignore quota/private storage errors */ }
+  };
+  const removeSafeStorage = (key: string): void => {
+    try { window.localStorage.removeItem(key); } catch { /* ignore */ }
+  };
 
   const requestedMode: PlayMode = useMemo(() => {
     if (mode !== "mixed") return mode;
@@ -1428,7 +1436,7 @@ function PlaySurface({
   useEffect(() => {
     if (hydratedDraftRef.current) return;
     let cancelled = false;
-    const localDraft = parseGameDraft(window.localStorage.getItem(draftStorageKey));
+    const localDraft = parseGameDraft(readSafeStorage(draftStorageKey));
     if (localDraft && (!localRound || localDraft.showResult)) {
       window.setTimeout(() => {
         if (!cancelled) applyDraft(localDraft);
@@ -1457,7 +1465,7 @@ function PlaySurface({
         const serverDraft = parseGameDraft(result.data.payload);
         if (!serverDraft) return;
         if ((serverDraft.updatedAtMillis || result.data.updatedAtMillis || 0) <= (localDraft?.updatedAtMillis ?? 0)) return;
-        window.localStorage.setItem(draftStorageKey, result.data.payload);
+        writeSafeStorage(draftStorageKey, result.data.payload);
         applyDraft(serverDraft);
         hydratedDraftRef.current = true;
       })
@@ -1473,7 +1481,7 @@ function PlaySurface({
   useEffect(() => {
     if (localRound || !hydratedDraftRef.current) return;
     const payload = makeDraftPayload();
-    window.localStorage.setItem(draftStorageKey, payload);
+    writeSafeStorage(draftStorageKey, payload);
     if (showResult) { void saveDraftToServer(payload); return; }
     if (draftTimerRef.current) window.clearTimeout(draftTimerRef.current);
     draftTimerRef.current = window.setTimeout(() => {
@@ -1672,7 +1680,7 @@ function PlaySurface({
     reviewsSavedRef.current = false;
     submissionRef.current = undefined;
     requestIdsRef.current = { review: roundRequestId(), history: roundRequestId() };
-    window.localStorage.removeItem(draftStorageKey);
+    removeSafeStorage(draftStorageKey);
     if (activeMode === "matching") {
       setMatchedIds([]);
       setLives(5);
@@ -1834,14 +1842,14 @@ function PlaySurface({
   async function saveAndComplete() {
     if (saving) return;
     if (!isAuthenticated) {
-      window.localStorage.setItem(draftStorageKey, makeDraftPayload());
+      writeSafeStorage(draftStorageKey, makeDraftPayload());
       setSaveError("Đăng nhập để lưu tiến độ, lịch ôn và phần thưởng của phiên học này.");
       return;
     }
     setSaving(true);
     setSaveError("");
     try {
-      window.localStorage.setItem(draftStorageKey, makeDraftPayload());
+      writeSafeStorage(draftStorageKey, makeDraftPayload());
       const outcomes = consolidateVocabGameAnswers(answers);
       const answered = outcomes.length || attempts;
       const correctWords = resultAnswers.filter((answer) => answer.correct).length;
@@ -1876,7 +1884,7 @@ function PlaySurface({
       const submission = submissionRef.current;
       const persistSubmission = () => {
         const payload = makeDraftPayload();
-        window.localStorage.setItem(draftStorageKey, payload);
+        writeSafeStorage(draftStorageKey, payload);
 
       };
       persistSubmission();
@@ -1920,7 +1928,7 @@ function PlaySurface({
         return;
       }
       await draftWriteRef.current;
-      window.localStorage.removeItem(draftStorageKey);
+      removeSafeStorage(draftStorageKey);
       const draftParams = new URLSearchParams({
         setId: String(setId),
         mode,

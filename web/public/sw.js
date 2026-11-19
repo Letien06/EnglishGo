@@ -6,6 +6,7 @@
  * remote media: those can be private, copyrighted, or must stay current.
  */
 const BUILD_VERSION = new URL(self.location.href).searchParams.get("v") || "development";
+const PRECACHE_NAME = `englishgo-precache-${BUILD_VERSION}`;
 const SHELL_CACHE_NAME = `englishgo-shell-${BUILD_VERSION}`;
 const CONTENT_CACHE_NAME = `englishgo-content-${BUILD_VERSION}`;
 const CACHE_PREFIX = "englishgo-";
@@ -15,15 +16,20 @@ const CACHED_AT_HEADER = "x-englishgo-cached-at";
 const SHELL_ASSETS = ["/offline.html", "/icon.svg"];
 
 self.addEventListener("install", (event) => {
-  event.waitUntil(caches.open(SHELL_CACHE_NAME).then((cache) => cache.addAll(SHELL_ASSETS)).then(() => self.skipWaiting()));
+  // Store critical offline fallback assets in a dedicated precache so runtime
+  // FIFO eviction in SHELL_CACHE_NAME can never evict /offline.html or /icon.svg.
+  event.waitUntil(
+    caches.open(PRECACHE_NAME).then((cache) => cache.addAll(SHELL_ASSETS)).then(() => self.skipWaiting()),
+  );
 });
 
 self.addEventListener("activate", (event) => {
+  const activeCaches = new Set([PRECACHE_NAME, SHELL_CACHE_NAME, CONTENT_CACHE_NAME]);
   event.waitUntil(
     caches.keys()
       .then((keys) => Promise.all(
         keys
-          .filter((key) => key.startsWith(CACHE_PREFIX) && key !== SHELL_CACHE_NAME && key !== CONTENT_CACHE_NAME)
+          .filter((key) => key.startsWith(CACHE_PREFIX) && !activeCaches.has(key))
           .map((key) => caches.delete(key)),
       ))
       .then(() => self.clients.claim()),
@@ -34,16 +40,17 @@ self.addEventListener("fetch", (event) => {
   const request = event.request;
   const url = new URL(request.url);
   if (request.method !== "GET" || url.origin !== self.location.origin) return;
+  if (url.pathname === "/sw.js") return;
 
   if (request.mode === "navigate") {
-    event.respondWith(fetch(request).catch(() => caches.match("/offline.html")));
+    event.respondWith(
+      fetch(request).catch(async () => (await caches.match("/offline.html")) || new Response("Offline", { status: 503 })),
+    );
     return;
   }
 
   if (isPublicCatalogRequest(url)) {
     const refresh = refreshPublicContent(request);
-    // Keep the worker alive after returning stale data, until it has persisted
-    // the refreshed copy. A detached promise alone can be terminated by the UA.
     event.waitUntil(refresh.then(() => undefined));
     event.respondWith(publicContentStaleWhileRevalidate(request, refresh));
     return;
@@ -59,12 +66,16 @@ function isPublicCatalogRequest(url) {
 }
 
 function isShellAsset(url) {
+  if (url.pathname.startsWith("/api/")) return false;
   return url.pathname.startsWith("/_next/static/") ||
     url.pathname === "/icon.svg" ||
     /\.(?:css|js|mjs|svg|png|jpg|jpeg|webp|ico|woff2)$/i.test(url.pathname);
 }
 
 async function shellCacheFirst(request) {
+  const precached = await caches.open(PRECACHE_NAME).then((cache) => cache.match(request));
+  if (precached) return precached;
+
   const cache = await caches.open(SHELL_CACHE_NAME);
   const cached = await cache.match(request);
   if (cached) return cached;
@@ -74,7 +85,7 @@ async function shellCacheFirst(request) {
     try {
       await cache.put(request, response.clone());
       const keys = await cache.keys();
-      await Promise.all(keys.slice(0, Math.max(0, keys.length - MAX_SHELL_ENTRIES)).map(key => cache.delete(key)));
+      await Promise.all(keys.slice(0, Math.max(0, keys.length - MAX_SHELL_ENTRIES)).map((key) => cache.delete(key)));
     } catch { /* Storage eviction must not turn a successful fetch into an error. */ }
   }
   return response;

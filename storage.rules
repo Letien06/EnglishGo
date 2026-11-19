@@ -2,27 +2,16 @@ rules_version = '2';
 
 service firebase.storage {
   match /b/{bucket}/o {
-    function signedIn() {
-      return request.auth != null;
-    }
-
+    // Public media reads; all uploads are authenticated and validated on the
+    // server via Firebase Admin SDK (POST /api/admin/media).
     match /audio/{fileName} {
       allow read: if true;
-      allow write: if signedIn()
-        && request.resource.contentType in [
-          'audio/mpeg',
-          'audio/mp3',
-          'audio/x-mpeg'
-        ];
+      allow write: if false;
     }
 
     match /images/{fileName} {
       allow read: if true;
-      allow write: if signedIn()
-        && request.resource.contentType in [
-          'image/jpeg',
-          'image/png'
-        ];
+      allow write: if false;
     }
 
     match /{allPaths=**} {

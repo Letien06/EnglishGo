@@ -12,6 +12,12 @@
     "src/app/api/admin/media/route.ts": {
       "maxDuration": 60
     },
+    "src/app/api/admin/generate/route.ts": {
+      "maxDuration": 60
+    },
+    "src/app/api/writing/attempts/route.ts": {
+      "maxDuration": 60
+    },
     "src/app/api/vocab/sets/[setId]/ai-words/preview/route.ts": {
       "maxDuration": 60
     }

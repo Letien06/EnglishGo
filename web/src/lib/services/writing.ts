@@ -1,7 +1,9 @@
 import { FieldValue } from "firebase-admin/firestore";
 import { recordStudyActivity } from "./study-activity";
+import { invalidateLearnerActivityCaches } from "./learner-cache";
 import { revalidateTag, unstable_cache } from "next/cache";
-import { BadRequest, NotFound } from "@/lib/api/response";
+import { BadRequest, NotFound, Unauthorized } from "@/lib/api/response";
+import { logServerError } from "@/lib/logging";
 import { adminDb } from "@/lib/firestore/db";
 import { generateJson } from "@/lib/services/gemini";
 import { enforceDailyActionLimit } from "@/lib/services/rate-limit";
@@ -568,7 +570,7 @@ export async function updateWritingPrompt(
 
 /** Grade, persist, and return one authenticated learner attempt. */
 export async function submitWritingAttempt(user: AppUser | null, input: WritingAttemptInput): Promise<WritingAttempt> {
-  if (!user) throw BadRequest("Bạn cần đăng nhập để lưu bài viết.");
+  if (!user) throw Unauthorized("Bạn cần đăng nhập để lưu bài viết.");
   const promptId = cleanId(input.promptId);
   const prompt = await findPromptRecord(promptId);
   if (!prompt || prompt.status !== "PUBLISHED") throw NotFound("Writing prompt not found");
@@ -578,8 +580,10 @@ export async function submitWritingAttempt(user: AppUser | null, input: WritingA
   await enforceDailyActionLimit(user.uid, "writing-ai-grade", ATTEMPTS_PER_DAY);
 
   const deterministicChecks = buildDeterministicChecks(prompt, responseText);
-  const feedback = await gradeWritingAttempt(prompt, responseText, deterministicChecks)
-    .catch(() => buildFallbackFeedback(prompt, responseText, deterministicChecks));
+  const feedback = await gradeWritingAttempt(prompt, responseText, deterministicChecks).catch((error) => {
+    logServerError("writing-ai-grade-fallback", error instanceof Error ? error.message : "unknown", { promptId: prompt.id });
+    return buildFallbackFeedback(prompt, responseText, deterministicChecks);
+  });
   const now = Date.now();
   const elapsedSeconds = normalizeElapsedSeconds(input.elapsedSeconds);
   const usedHintLevels = normalizeHintLevels(input.usedHintLevels);
@@ -603,6 +607,7 @@ export async function submitWritingAttempt(user: AppUser | null, input: WritingA
     module: "writing", activityType: "writing_graded_submission", metric: "writing", quantity: 1,
     sourceId: ref.id, occurredAtMillis: now, durationSeconds: elapsedSeconds,
   }).catch(() => undefined);
+  invalidateLearnerActivityCaches(user.uid);
   return { id: ref.id, ...data };
 }
 
@@ -3358,10 +3363,14 @@ function countWords(value: string): number {
   return value.match(/[A-Za-z]+(?:['’-][A-Za-z]+)*/g)?.length ?? 0;
 }
 
+const ABBREVIATIONS = /\b(?:Mr|Mrs|Ms|Dr|Prof|Sr|Jr|St|Co|Inc|Ltd|vs|etc|e\.g|i\.e|a\.m|p\.m)\./gi;
+
 function countSentences(value: string): number {
   const stripped = value.trim();
   if (!stripped) return 0;
-  const sentenceMatches = stripped.match(/[.!?]+(?=\s|$)|[.!?]+$/g);
+  // Strip common abbreviations (Mr., Ms., a.m., p.m.) before counting terminal punctuation.
+  const withoutAbbrev = stripped.replace(ABBREVIATIONS, (match) => match.replace(/\./g, ""));
+  const sentenceMatches = withoutAbbrev.match(/[.!?]+(?=\s|$)|[.!?]+$/g);
   return sentenceMatches?.length ?? 1;
 }
 

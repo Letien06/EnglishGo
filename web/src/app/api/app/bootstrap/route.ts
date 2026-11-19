@@ -6,7 +6,7 @@ import type { StudyStreakSummary } from "@/lib/services/study-activity";
 
 type AppBootstrapPayload = {
   authenticated: boolean;
-  user: Pick<AppUser, "uid" | "email" | "displayName" | "role"> | null;
+  user: Pick<AppUser, "uid" | "email" | "displayName" | "avatarUrl" | "role"> | null;
   streak: (StudyStreakSummary & { authenticated: true }) | null;
 };
 
@@ -26,6 +26,7 @@ export const GET = withErrorHandling(async () => {
       uid: user.uid,
       email: user.email,
       displayName: user.displayName,
+      avatarUrl: user.avatarUrl,
       role: user.role,
     },
     streak: null,

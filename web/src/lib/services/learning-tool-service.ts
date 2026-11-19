@@ -123,22 +123,39 @@ export function createLearningToolService(
     return new Set(levels.find((entry) => entry.level === level)?.itemIds ?? []);
   }
 
-  async function scoringLevelFor(request: ProgressRequest): Promise<number> {
+  async function scoringAndAnswerFor(request: ProgressRequest): Promise<{ scoringLevel: number; correctAnswer: string | null }> {
     const part = request.part!;
     const level = request.level!;
+    const itemId = request.itemId?.trim() ?? "";
+    const questionId = request.questionId?.trim() ?? "";
     const levels = config.module === "listening"
       ? await listDifficultyLevels(part)
       : await listReadingDifficultyLevels(part);
-    if (levels.find((entry) => entry.level === level)?.grouping !== "balanced") return level;
+    const matchedLevel = levels.find((entry) => entry.level === level);
+    if (matchedLevel && matchedLevel.itemIds.length > 0 && !matchedLevel.itemIds.includes(itemId)) {
+      throw new ApiError("Question does not belong to this practice group.", 400);
+    }
+    if (matchedLevel?.grouping !== "balanced") {
+      return { scoringLevel: level, correctAnswer: request.correctAnswer };
+    }
     const session = config.module === "listening"
       ? await getDifficultySession(part, level, null)
       : await getReadingDifficultySession(part, level, null);
-    const item = session.items.find((entry) => entry.id === request.itemId?.trim() && entry.questions.some((question) => question.id === request.questionId?.trim()));
+    const item = session.items.find((entry) => entry.id === itemId && entry.questions.some((question) => question.id === questionId));
     if (!item) throw new ApiError("Question does not belong to this practice group.", 400);
     if (item.sourceLevel == null || !Number.isInteger(item.sourceLevel) || item.sourceLevel < 1 || item.sourceLevel > DAUTOEIC_LEVEL_COUNT) {
       throw new ApiError("Practice group is missing its original scoring level.", 503);
     }
-    return item.sourceLevel;
+    const question = item.questions.find((entry) => entry.id === questionId);
+    const canonical = question?.correctAnswer && /^[A-D]$/.test(normalizeAnswer(question.correctAnswer))
+      ? question.correctAnswer
+      : request.correctAnswer;
+    return { scoringLevel: item.sourceLevel, correctAnswer: canonical };
+  }
+
+  async function scoringLevelFor(request: ProgressRequest): Promise<number> {
+    const resolved = await scoringAndAnswerFor(request);
+    return resolved.scoringLevel;
   }
 
   async function findProgressByParts(
@@ -346,7 +363,10 @@ export function createLearningToolService(
               ? await scoringLevelFor({ ...request, level: original.level })
               : item.sourceLevel ?? 1;
           } else {
-            scoringLevel = await scoringLevelFor(request);
+            const resolved = await scoringAndAnswerFor(request);
+            scoringLevel = resolved.scoringLevel;
+            correctAnswer = resolved.correctAnswer;
+            isCorrect = normalizeAnswer(request.selectedAnswer) === normalizeAnswer(correctAnswer);
           }
           const questionId = request.questionId!.trim();
           const now = Date.now();

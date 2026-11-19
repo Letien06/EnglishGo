@@ -36,7 +36,7 @@ describe("new vocabulary modes integrate with results", () => {
   it("splits frozen 160-word results and retries the lost chunk unchanged", async () => {
     const reviews = Array.from({ length: 160 }, (_, i) => ({ wordId: i + 1, quality: 4 }));
     const history = { setId: 1, title: "Original title", mode: "Học từ", startedAtMillis: 123456, totalWords: 160, correctWords: 160, wrongWords: 0, accuracy: 100, score: 160, requestId: "stable-history" };
-    localStorage.setItem("englishgo-vocab-draft-1-all-learn-wordMeaning", JSON.stringify({ index: 0, score: 160, attempts: 160, answers: [], updatedAtMillis: Date.now(), showResult: true, reviewRequestId: "stable-review", historyRequestId: "stable-history", submission: { reviews, confirmedChunks: 0, history } }));
+    localStorage.setItem("englishgo-vocab-draft-guest-1-all-learn-wordMeaning", JSON.stringify({ index: 0, score: 160, attempts: 160, answers: [], updatedAtMillis: Date.now(), showResult: true, reviewRequestId: "stable-review", historyRequestId: "stable-history", submission: { reviews, confirmedChunks: 0, history } }));
     let batches = 0;
     const fetcher = vi.fn(async (url: string, options?: RequestInit) => {
       if (url === "/api/vocab/reviews/batch") {
@@ -71,7 +71,7 @@ describe("new vocabulary modes integrate with results", () => {
   });
 
   it("finishes pending server draft writes before deleting the completed draft", async () => {
-    localStorage.setItem("englishgo-vocab-draft-1-all-typing-wordMeaning", JSON.stringify({ index: 0, score: 0, attempts: 1, answers: [{ id: 1, word: "carry", meaning: "mang", correct: true }], updatedAtMillis: Date.now(), showResult: true }));
+    localStorage.setItem("englishgo-vocab-draft-guest-1-all-typing-wordMeaning", JSON.stringify({ index: 0, score: 0, attempts: 1, answers: [{ id: 1, word: "carry", meaning: "mang", correct: true }], updatedAtMillis: Date.now(), showResult: true }));
     const operations: string[] = [];
     const fetcher = vi.fn(async (url: string, options?: RequestInit) => {
       if (url.startsWith("/api/vocab/game-draft")) {
@@ -89,7 +89,7 @@ describe("new vocabulary modes integrate with results", () => {
     await waitFor(() => expect(operations).toContain("DELETE"));
     expect(operations.at(-1)).toBe("DELETE");
     expect(operations.filter((value) => value === "PUT completed").length).toBeGreaterThan(0);
-    expect(localStorage.getItem("englishgo-vocab-draft-1-all-typing-wordMeaning")).toBeNull();
+    expect(localStorage.getItem("englishgo-vocab-draft-guest-1-all-typing-wordMeaning")).toBeNull();
   });
 
   it("guards tab navigation with an accessible cancelable dialog", async () => {

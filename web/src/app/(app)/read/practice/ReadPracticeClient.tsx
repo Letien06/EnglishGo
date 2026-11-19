@@ -207,7 +207,7 @@ export default function ReadPracticeClient({
     setShowNote(false);
     setFavorite(false);
     window.scrollTo({ top: 0, behavior: "smooth" });
-  }, [activeMode, auto, level, partId, router, session]);
+  }, [activeMode, auto, level, partId, router, session, startTransitionTiming]);
 
   const handleAnswer = useCallback((question: DauToeicQuestion, selected: string) => {
     if (answeredMap[question.id]) return;
@@ -238,7 +238,7 @@ export default function ReadPracticeClient({
     });
 
 
-  }, [activeMode, answeredMap, auto, currentIndex, elapsed, enqueueProgress, goTo, item.id, item.questions, level, offset, partNum, session.testId, startTransitionTiming, total]);
+  }, [activeMode, answeredMap, auto, currentIndex, elapsed, enqueueProgress, goTo, item.id, item.questions, level, offset, partNum, reviewRun, session.testId, total]);
 
   useEffect(() => () => {
     if (autoAdvanceRef.current !== null) window.clearTimeout(autoAdvanceRef.current);

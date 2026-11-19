@@ -94,11 +94,11 @@ export default async function HomePage() {
               Bắt đầu luyện tập <NavIcon name="arrow-right" className="h-5 w-5" />
             </Link>
             <Link
-              href="/practice"
+              href="/writing"
               className="premium-secondary inline-flex min-h-16 gap-2 px-10 text-lg text-ink2"
             >
-              <NavIcon name="practice" className="h-5 w-5 text-terracotta" />
-              Làm bài test thử (demo)
+              <NavIcon name="writing" className="h-5 w-5 text-terracotta" />
+              Luyện viết thử miễn phí
             </Link>
           </div>
           <div className="landing-proof landing-reveal mt-10 flex flex-wrap justify-center gap-x-12 gap-y-3 text-base font-medium text-muted">

@@ -150,12 +150,13 @@ export function useVocabRace({ roomCode, initialRoom, initialPlayers, currentUse
     let finalizationBusy = false;
     let finalizationRequest: AbortController | undefined;
     const clock = setInterval(() => {
+      if (document.hidden || roomRef.current.status === "finished") return;
       const serverTime = Date.now() + offset.current;
       setNow(serverTime);
       if (clockReady.current && roomRef.current.matchEndsAt && serverTime >= roomRef.current.matchEndsAt && local.current.status === "playing") {
         submit({ type: "finish", questionIndex: local.current.currentIndex });
       }
-      if (clockReady.current && roomRef.current.matchEndsAt && serverTime >= roomRef.current.matchEndsAt + 15_000 && roomRef.current.status !== "finished" && !finalizationBusy && serverTime - lastFinalization >= 3_000) {
+      if (clockReady.current && roomRef.current.matchEndsAt && serverTime >= roomRef.current.matchEndsAt + 15_000 && !finalizationBusy && serverTime - lastFinalization >= 3_000) {
         lastFinalization = serverTime; finalizationBusy = true;
         const controller = new AbortController();
         finalizationRequest = controller;

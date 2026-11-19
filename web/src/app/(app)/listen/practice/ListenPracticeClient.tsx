@@ -268,7 +268,7 @@ export default function ListenPracticeClient({
     if (options.play) {
       window.setTimeout(() => audioRef.current?.play().catch(() => undefined), 100);
     }
-  }, [activeAssist, activeMode, auto, level, partId, router, session]);
+  }, [activeAssist, activeMode, auto, level, partId, router, session, startTransitionTiming]);
 
   const handleAnswer = useCallback((question: DauToeicQuestion, selected: string) => {
     if (answeredMap[question.id]) return;
@@ -300,7 +300,7 @@ export default function ListenPracticeClient({
     });
 
 
-  }, [activeAssist, activeMode, answeredMap, auto, currentIndex, elapsed, enqueueProgress, goTo, item.id, item.questions, level, offset, partNum, total, session.testId, startTransitionTiming]);
+  }, [activeAssist, activeMode, answeredMap, auto, currentIndex, elapsed, enqueueProgress, goTo, item.id, item.questions, level, offset, partNum, reviewRun, total, session.testId]);
 
   useEffect(() => () => {
     if (autoAdvanceRef.current !== null) window.clearTimeout(autoAdvanceRef.current);

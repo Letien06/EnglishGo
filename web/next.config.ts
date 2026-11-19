@@ -4,85 +4,110 @@ import path from "node:path";
 
 const manifestId = process.env.GOOGLE_DRIVE_MANIFEST_ID ?? "";
 const hasManifestId = /^[a-zA-Z0-9_-]{10,200}$/.test(manifestId);
-// Do not hand NFT a wildcard rooted at every local snapshot when the build is
-// running without the Drive manifest. The runtime provider still works in
-// that mode, while this keeps local/preview builds from walking thousands of
-// stale chunks just to calculate a trace.
 const materialFolder = hasManifestId
   ? `./.content/dauenglish/${manifestId}`
   : "./.content/dauenglish";
 const cacheRoot = path.join(process.cwd(), ".content", "dauenglish");
-// Keep verified archives available locally so opening a question never needs
-// an avoidable Drive round trip. Only the active manifest is included below.
-function bundledMaterialPaths(): string[] {
+
+type ManifestEntryMeta = { sha256?: string; kind?: string };
+
+function readManifestEntries(): ManifestEntryMeta[] {
   if (!hasManifestId) return [];
   try {
     const manifest = JSON.parse(readFileSync(path.join(cacheRoot, manifestId, "manifest.json"), "utf8")) as {
-      entries?: Record<string, { sha256?: string }>;
+      entries?: Record<string, ManifestEntryMeta>;
     };
-    return Object.values(manifest.entries ?? {})
-      .map((entry) => entry.sha256)
-      .filter((sha): sha is string => /^[a-f0-9]{64}$/.test(sha ?? ""))
-      .map((sha) => `${materialFolder}/${sha}.json.gz`);
+    return Object.values(manifest.entries ?? {});
   } catch {
-    // The prebuild step downloads/prepares this manifest before tracing. A
-    // clean checkout can still be traced without it and will use Drive at
-    // runtime, so avoid falling back to a directory wildcard here.
     return [];
   }
 }
-const bundledArchives = bundledMaterialPaths();
-// Includes add back only the active snapshot's explicit file list.
+
+function archivesForKinds(entries: ManifestEntryMeta[], kinds: readonly string[] | null): string[] {
+  if (!hasManifestId) return [];
+  const allowed = kinds ? new Set(kinds) : null;
+  const unique = new Set<string>();
+  for (const entry of entries) {
+    if (allowed && (!entry.kind || !allowed.has(entry.kind))) continue;
+    if (/^[a-f0-9]{64}$/.test(entry.sha256 ?? "")) {
+      unique.add(`${materialFolder}/${entry.sha256}.json.gz`);
+    }
+  }
+  return [...unique];
+}
+
+const manifestEntries = readManifestEntries();
+const baseManifest = hasManifestId ? [`${materialFolder}/manifest.json`] : [];
+const catalogParts = (parts: number[]) =>
+  hasManifestId ? parts.map((p) => `${materialFolder}/catalog-part-${p}.json`) : [];
+const grammarProjections = hasManifestId
+  ? [`${materialFolder}/grammar-answers.json`, `${materialFolder}/grammar-dictionary.json.gz`]
+  : [];
+
+const vocabArchives = archivesForKinds(manifestEntries, ["vocabulary"]);
+const grammarArchives = archivesForKinds(manifestEntries, ["grammar-catalog", "grammar-topic"]);
+const dictationArchives = archivesForKinds(manifestEntries, ["dictation-catalog", "dictation-set"]);
+const listeningReadingPracticeArchives = archivesForKinds(manifestEntries, [
+  "tests",
+  "test-part",
+  "difficulty-levels",
+  "difficulty-session",
+]);
+const allArchives = archivesForKinds(manifestEntries, null);
+
 const materialTraceExclude = "./.content/dauenglish/**/*";
+
+function routeTraceEntries(routes: string[], files: string[]): Array<[string, string[]]> {
+  return routes.map((route) => [route, files]);
+}
 
 const nextConfig: NextConfig = {
   poweredByHeader: false,
   env: {
     NEXT_PUBLIC_BUILD_VERSION: process.env.VERCEL_GIT_COMMIT_SHA || process.env.BUILD_VERSION || String(Date.now()),
   },
-  // The material bundle is read only by study pages and their content APIs.
-  // Keeping it out of the landing/auth traces avoids copying every compressed
-  // lesson chunk into the cold root function package.
-  outputFileTracingIncludes: Object.fromEntries(
-    [
-      "/listen",
-      "/listen/**",
-      "/read",
-      "/read/**",
-      "/vocab",
-      "/vocab/**",
-      "/practice",
-      "/practice/**",
-      "/review/**",
-      "/api/dautoeic/**",
-      "/api/vocab/**",
-      "/api/listening/**",
-      "/api/reading/**",
-      "/api/practice/**",
-      "/api/dictation/**",
-      "/api/admin/dautoeic-sync",
-      "/api/grammar/**",
-    ].map((route) => [route, [
-      ...(hasManifestId ? [`${materialFolder}/manifest.json`, ...Array.from({ length: 7 }, (_, index) => `${materialFolder}/catalog-part-${index + 1}.json`), `${materialFolder}/grammar-answers.json`, `${materialFolder}/grammar-dictionary.json.gz`, ...bundledArchives] : []),
-    ]]),
-  ),
+  // Narrow each route family's file trace to only the material slice it reads,
+  // avoiding bundling all 40+ MB of archives into unrelated serverless functions.
+  outputFileTracingIncludes: Object.fromEntries([
+    ...routeTraceEntries(
+      ["/listen", "/listen/**", "/api/listening/**"],
+      [...baseManifest, ...catalogParts([1, 2, 3, 4]), ...listeningReadingPracticeArchives, ...dictationArchives],
+    ),
+    ...routeTraceEntries(
+      ["/read", "/read/**", "/api/reading/**"],
+      [...baseManifest, ...catalogParts([5, 6, 7]), ...grammarProjections, ...grammarArchives, ...listeningReadingPracticeArchives],
+    ),
+    ...routeTraceEntries(
+      ["/api/grammar/**"],
+      [...baseManifest, ...grammarProjections, ...grammarArchives],
+    ),
+    ...routeTraceEntries(
+      ["/api/dictation/**"],
+      [...baseManifest, ...dictationArchives],
+    ),
+    ...routeTraceEntries(
+      ["/vocab", "/vocab/**", "/api/vocab/**"],
+      [...baseManifest, ...vocabArchives],
+    ),
+    ...routeTraceEntries(
+      ["/practice", "/practice/**", "/review/**", "/api/practice/**"],
+      [...baseManifest, ...catalogParts([1, 2, 3, 4, 5, 6, 7]), ...listeningReadingPracticeArchives],
+    ),
+    ...routeTraceEntries(
+      ["/api/dautoeic/**", "/api/admin/dautoeic-sync"],
+      [...baseManifest, ...catalogParts([1, 2, 3, 4, 5, 6, 7]), ...grammarProjections, ...allArchives],
+    ),
+  ]),
   outputFileTracingExcludes: {
     "/*": [materialTraceExclude],
   },
   allowedDevOrigins: ["127.0.0.1"],
   images: {
-    // Vercel Image Optimization stores one optimized variant per URL/size.
-    // TOEIC media has many remote images, so use browser-native loading to avoid
-    // growing Vercel Images Storage while keeping next/image layout behavior.
     unoptimized: true,
     remotePatterns: [
       {
         protocol: "https",
         hostname: "firebasestorage.googleapis.com",
-      },
-      {
-        protocol: "https",
-        hostname: "qfhmnlvgweznzcsoijyr.supabase.co",
       },
       {
         protocol: "https",
@@ -113,9 +138,6 @@ const nextConfig: NextConfig = {
           },
         ],
       },
-      // The Writing catalog is public, self-authored metadata. It deliberately
-      // excludes learner data, audio, and test questions, so it can use a
-      // short CDN cache while all other API routes stay private/no-store.
       {
         source: "/api/writing/prompts",
         headers: [
@@ -125,8 +147,10 @@ const nextConfig: NextConfig = {
           },
         ],
       },
+      // Versioned static assets under /writing/*-v1.webp and /_next/static can be
+      // cached immutably; keep unversioned root icons/OG images revalidatable.
       {
-        source: "/:all*(svg|png|jpg|jpeg|webp|ico|woff2)",
+        source: "/writing/:path*-v1.webp",
         headers: [
           {
             key: "Cache-Control",
@@ -144,6 +168,18 @@ const nextConfig: NextConfig = {
           {
             key: "Referrer-Policy",
             value: "strict-origin-when-cross-origin",
+          },
+          {
+            key: "X-Frame-Options",
+            value: "SAMEORIGIN",
+          },
+          {
+            key: "Strict-Transport-Security",
+            value: "max-age=63072000; includeSubDomains",
+          },
+          {
+            key: "Permissions-Policy",
+            value: "camera=(), geolocation=(), interest-cohort=()",
           },
         ],
       },

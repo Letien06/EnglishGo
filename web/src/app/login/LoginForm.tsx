@@ -10,7 +10,7 @@ import {
   signInWithRedirect,
 } from "firebase/auth";
 import ThemeToggle from "@/components/ThemeToggle";
-import { getClientAuth } from "@/lib/firebase/client";
+import { getClientAuth } from "@/lib/firebase/client-auth";
 
 type AuthMode = "login" | "register";
 

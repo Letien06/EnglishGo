@@ -1,10 +1,10 @@
-import { adminDb } from "@/lib/firebase/admin";
+import { adminDb } from "@/lib/firestore/db";
 import { FieldValue } from "firebase-admin/firestore";
 import { BadRequest, NotFound, Forbidden } from "@/lib/api/response";
 import type { AppUser } from "@/types";
 import { COLLECTIONS } from "@/lib/firestore/collections";
 import { arcadeCountdownMs, WORD_BLAST_QUESTION_MS, wordBlastQuestionMs } from "@/lib/word-blast-timing";
-import { randomUUID } from "node:crypto";
+import { randomInt, randomUUID } from "node:crypto";
 import { advanceRacePlayer, createRacePlayer, type RaceEvent, type RacePlayer, type RaceRoom } from "@/lib/vocab-race";
 
 function summary(player: Partial<RacePlayer> & { uid: string }) {
@@ -15,7 +15,7 @@ export const generateRoomCode = () => {
   const chars = "ABCDEFGHJKMNPQRSTUVWXYZ23456789";
   let result = "";
   for (let i = 0; i < 6; i++) {
-    result += chars.charAt(Math.floor(Math.random() * chars.length));
+    result += chars.charAt(randomInt(0, chars.length));
   }
   return result;
 };
@@ -43,6 +43,7 @@ export const createRoom = async (
     throw BadRequest("Could not generate unique room code");
   }
 
+  const now = Date.now();
   const roomData = {
     raceVersion: 2,
     code,
@@ -55,6 +56,7 @@ export const createRoom = async (
     maxPlayers: 5,
     wordCount: words.length,
     createdAt: FieldValue.serverTimestamp(),
+    expiresAt: new Date(now + 24 * 60 * 60 * 1000),
   };
 
   const batch = adminDb.batch();
@@ -616,9 +618,9 @@ export const advanceQuestion = async (user: AppUser, code: string, questionIndex
     }
 
     const playersSnapshot = await transaction.get(roomRef.collection("players"));
+    const caller = playersSnapshot.docs.find((doc) => doc.id === user.uid || doc.data().uid === user.uid);
+    if (!caller) throw Forbidden("You are not a player in this room");
     if (room.gameMode !== "rain") {
-      const player = playersSnapshot.docs.find((doc) => doc.id === user.uid || doc.data().uid === user.uid);
-      if (!player) throw Forbidden("You are not a player in this room");
       const now = Date.now();
       const startedAt = typeof room.roundStartedAt === "number" ? room.roundStartedAt : room.countdownEndsAt;
       const activePlayers = playersSnapshot.docs.filter((doc) => (doc.data().lives ?? 3) > 0);
@@ -684,6 +686,8 @@ export const expireRainDrop = async (
     }
 
     const playersSnapshot = await transaction.get(roomRef.collection("players"));
+    const caller = playersSnapshot.docs.find((doc) => doc.id === user.uid || doc.data().uid === user.uid);
+    if (!caller) throw Forbidden("You are not a player in this room");
     const remainingDrops = activeDrops.filter((d) => d.index !== dropIndex);
     let nextIndex = typeof room.nextIndex === "number" ? room.nextIndex : (room.currentIndex || 0) + 1;
     let newStatus = room.status === "countdown" ? "playing" : room.status;

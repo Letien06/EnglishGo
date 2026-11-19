@@ -265,18 +265,33 @@ export default function PracticeSessionClient({ session, userUid }: { session: P
   });
 
   useEffect(() => {
-    const timer = window.setInterval(() => {
-      setRemaining((value) => {
-        if (value <= 1) {
-          window.clearInterval(timer);
-          submitRef.current("timeout");
-          return 0;
-        }
-        return value - 1;
-      });
-    }, 1000);
-    return () => window.clearInterval(timer);
-  }, []);
+    // Compute remaining time from an absolute wall-clock deadline so browser
+    // background-tab timer throttling cannot cause the exam clock to drift.
+    const deadlineMs = session.expiresAtMillis > 0
+      ? session.expiresAtMillis
+      : Date.now() + initialRemainingSeconds(session) * 1000;
+    let timedOut = false;
+
+    const syncClock = () => {
+      const next = Math.max(0, Math.ceil((deadlineMs - Date.now()) / 1000));
+      setRemaining(next);
+      if (next <= 0 && !timedOut) {
+        timedOut = true;
+        window.clearInterval(timer);
+        submitRef.current("timeout");
+      }
+    };
+
+    const timer = window.setInterval(syncClock, 1000);
+    const onVisibility = () => {
+      if (document.visibilityState === "visible") syncClock();
+    };
+    document.addEventListener("visibilitychange", onVisibility);
+    return () => {
+      window.clearInterval(timer);
+      document.removeEventListener("visibilitychange", onVisibility);
+    };
+  }, [session]);
 
   useEffect(() => {
     const onBeforeUnload = (event: BeforeUnloadEvent) => {

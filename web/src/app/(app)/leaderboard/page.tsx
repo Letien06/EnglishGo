@@ -318,6 +318,11 @@ function Avatar({ name, avatarUrl }: { name: string; avatarUrl: string | null })
       <img
         src={avatarUrl}
         alt=""
+        width={44}
+        height={44}
+        loading="lazy"
+        decoding="async"
+        referrerPolicy="no-referrer"
         className="h-8 w-8 shrink-0 sm:h-11 sm:w-11 rounded-full object-cover ring-2 ring-line"
       />
     );

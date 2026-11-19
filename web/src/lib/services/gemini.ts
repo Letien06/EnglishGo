@@ -204,11 +204,14 @@ async function requestGemini(
     },
   };
 
-  const url = `${baseUrl}/models/${model}:generateContent?key=${apiKey}`;
+  const url = `${baseUrl}/models/${model}:generateContent`;
 
   const res = await fetchWithTimeout(url, {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
+    headers: {
+      "Content-Type": "application/json",
+      "x-goog-api-key": apiKey,
+    },
     body: JSON.stringify(body),
   });
 
@@ -289,18 +292,35 @@ function parseWords(response: unknown): GeneratedVocabWord[] {
     }));
 }
 
-function extractJson(text: string): string {
-  const arrayStart = text.indexOf("[");
-  const arrayEnd = text.lastIndexOf("]");
-  const objectStart = text.indexOf("{");
-  const objectEnd = text.lastIndexOf("}");
-  if (arrayStart !== -1 && arrayEnd > arrayStart) {
-    return text.substring(arrayStart, arrayEnd + 1);
+export function extractJson(text: string): string {
+  const trimmed = text.trim();
+  const fenced = trimmed.match(/^```(?:json)?\s*([\s\S]*?)\s*```$/i);
+  const candidate = fenced ? fenced[1].trim() : trimmed;
+  if (candidate.startsWith("{") || candidate.startsWith("[")) {
+    try {
+      JSON.parse(candidate);
+      return candidate;
+    } catch {
+      // Fall through to delimiter extraction when prose wraps the JSON payload.
+    }
   }
-  if (objectStart !== -1 && objectEnd > objectStart) {
-    return text.substring(objectStart, objectEnd + 1);
+  const arrayStart = candidate.indexOf("[");
+  const arrayEnd = candidate.lastIndexOf("]");
+  const objectStart = candidate.indexOf("{");
+  const objectEnd = candidate.lastIndexOf("}");
+  const hasArray = arrayStart !== -1 && arrayEnd > arrayStart;
+  const hasObject = objectStart !== -1 && objectEnd > objectStart;
+
+  // Prefer whichever top-level JSON structure opens first so JSON objects
+  // containing nested arrays (e.g. writing grading feedback) are not sliced
+  // from the first inner `[` to the last inner `]`.
+  if (hasObject && (!hasArray || objectStart < arrayStart)) {
+    return candidate.substring(objectStart, objectEnd + 1);
   }
-  return text;
+  if (hasArray) {
+    return candidate.substring(arrayStart, arrayEnd + 1);
+  }
+  return candidate;
 }
 
 function basePrompt(count: number): string {

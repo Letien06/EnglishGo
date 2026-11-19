@@ -8,11 +8,11 @@ import * as vocab from "@/lib/services/vocab";
 import { enforceDailyActionLimit } from "@/lib/services/rate-limit";
 
 const previewSchema = z.object({
-  mode: z.string().optional(),
-  input: z.string().optional(),
-  count: z.coerce.number().optional(),
-  image: z.string().optional(),
-  imageMimeType: z.string().optional(),
+  mode: z.enum(["text", "topic", "reading", "image", "suggest"]).optional(),
+  input: z.string().max(15_000).optional(),
+  count: z.coerce.number().int().min(1).max(50).optional(),
+  image: z.string().max(6_000_000).optional(),
+  imageMimeType: z.enum(["image/jpeg", "image/png", "image/webp"]).optional(),
 });
 
 export const POST = withErrorHandling(

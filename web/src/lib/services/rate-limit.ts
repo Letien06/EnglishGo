@@ -31,6 +31,7 @@ export async function enforceDailyActionLimit(
       dateKey,
       count: FieldValue.increment(1),
       updatedAtMillis: Date.now(),
+      expiresAt: new Date(Date.now() + 3 * 86_400_000),
     }, { merge: true });
   });
 }

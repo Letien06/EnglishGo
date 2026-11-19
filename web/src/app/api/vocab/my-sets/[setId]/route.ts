@@ -2,8 +2,6 @@
  * PATCH  /api/vocab/my-sets/:setId  — rename set
  * DELETE /api/vocab/my-sets/:setId  — delete set
  * POST   /api/vocab/my-sets/:setId  — assign folder / add words / import file
- *
- * Port of VocabularyController my-sets mutation endpoints.
  */
 import { NextRequest } from "next/server";
 import { z } from "zod";
@@ -12,9 +10,12 @@ import { ok, BadRequest } from "@/lib/api/response";
 import { parseBody } from "@/lib/api/validate";
 import { requireUser } from "@/lib/auth/session";
 import * as vocab from "@/lib/services/vocab";
+import { enforceDailyActionLimit } from "@/lib/services/rate-limit";
+
+const MAX_IMPORT_FILE_BYTES = 5 * 1024 * 1024; // 5 MB
 
 const renameSchema = z.object({
-  title: z.string().trim().min(1, "Title is required"),
+  title: z.string().trim().min(1, "Title is required").max(160),
 });
 
 const actionSchema = z.discriminatedUnion("action", [
@@ -24,7 +25,7 @@ const actionSchema = z.discriminatedUnion("action", [
   }),
   z.object({
     action: z.literal("manual"),
-    rowsText: z.string().trim().min(1, "Word data is required"),
+    rowsText: z.string().trim().min(1, "Word data is required").max(200_000),
   }),
 ]);
 
@@ -75,9 +76,13 @@ export const POST = withErrorHandling(
 
     // Handle file import via multipart/form-data
     if (contentType.includes("multipart/form-data")) {
+      await enforceDailyActionLimit(user.uid, "vocab-file-import", 30);
       const formData = await req.formData();
       const file = formData.get("file") as File | null;
-      if (!file) throw BadRequest("File is required");
+      if (!file || file.size === 0) throw BadRequest("File is required");
+      if (file.size > MAX_IMPORT_FILE_BYTES) {
+        throw BadRequest("Tệp tải lên vượt quá giới hạn 5 MB.");
+      }
 
       const buffer = Buffer.from(await file.arrayBuffer());
       const count = await vocab.importWords(user.uid, id, buffer, file.name);

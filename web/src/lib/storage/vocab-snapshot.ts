@@ -26,14 +26,48 @@ export const vocabularySnapshotSchema = z.object({
   const sets = new Set(snapshot.catalog.sets.map((set) => set.id));
   const tests = new Map(snapshot.catalog.tests.map((test) => [test.testId, test]));
   const parts = new Map(snapshot.parts.map((part) => [part.id, part]));
-  if (sets.size !== snapshot.catalog.sets.length || tests.size !== snapshot.catalog.tests.length ||
-      parts.size !== snapshot.parts.length || new Set(snapshot.words.map((word) => word.id)).size !== snapshot.words.length) fail("Duplicate vocabulary IDs.");
-  for (const part of snapshot.parts) if (!tests.has(part.testId)) fail("Unknown vocabulary test.");
-  for (const word of snapshot.words) if (!parts.has(word.partId)) fail("Unknown vocabulary part.");
+  if (
+    sets.size !== snapshot.catalog.sets.length ||
+    tests.size !== snapshot.catalog.tests.length ||
+    parts.size !== snapshot.parts.length ||
+    new Set(snapshot.words.map((word) => word.id)).size !== snapshot.words.length
+  ) {
+    fail("Duplicate vocabulary IDs.");
+  }
+
+  // Linear O(T + P + W) aggregation instead of O(T * (P + W)) nested filters.
+  const partCountByTest = new Map<string, number>();
+  for (const part of snapshot.parts) {
+    if (!tests.has(part.testId)) {
+      fail("Unknown vocabulary test.");
+      continue;
+    }
+    partCountByTest.set(part.testId, (partCountByTest.get(part.testId) ?? 0) + 1);
+  }
+
+  const wordCountByTest = new Map<string, number>();
+  for (const word of snapshot.words) {
+    const part = parts.get(word.partId);
+    if (!part) {
+      fail("Unknown vocabulary part.");
+      continue;
+    }
+    wordCountByTest.set(part.testId, (wordCountByTest.get(part.testId) ?? 0) + 1);
+  }
+
   for (const test of snapshot.catalog.tests) {
-    if (!sets.has(test.setId) || (test.accessLevel?.trim().toLowerCase() === "pro" && snapshot.accessScope !== "provider-authorized")) fail("Unavailable vocabulary test.");
-    const testParts = new Set(snapshot.parts.filter((part) => part.testId === test.testId).map((part) => part.id));
-    if (testParts.size !== test.partCount || snapshot.words.filter((word) => testParts.has(word.partId)).length !== test.wordCount) fail(`Vocabulary count mismatch: ${test.testId}`);
+    if (
+      !sets.has(test.setId) ||
+      (test.accessLevel?.trim().toLowerCase() === "pro" && snapshot.accessScope !== "provider-authorized")
+    ) {
+      fail("Unavailable vocabulary test.");
+    }
+    if (
+      (partCountByTest.get(test.testId) ?? 0) !== test.partCount ||
+      (wordCountByTest.get(test.testId) ?? 0) !== test.wordCount
+    ) {
+      fail(`Vocabulary count mismatch: ${test.testId}`);
+    }
   }
 });
 

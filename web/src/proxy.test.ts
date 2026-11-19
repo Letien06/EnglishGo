@@ -14,6 +14,35 @@ beforeEach(() => {
   mock.enforce.mockResolvedValue({ enabled: true, allowed: true });
   vi.stubEnv("RATE_LIMIT_VOCAB_RACE_PER_MIN", "");
   vi.stubEnv("RATE_LIMIT_WRITE_PER_MIN", "");
+  vi.stubEnv("RATE_LIMIT_SEPAY_WEBHOOK_PER_MIN", "");
+});
+
+describe("SePay webhook capacity policy", () => {
+  it("allows provider callbacks without a learner session and isolates their capacity", async () => {
+    const response = await proxy(request("/api/payments/sepay/webhook", false));
+    await proxy(request("/api/account/profile", false));
+    expect(response.status).toBe(200);
+    const policies = mock.enforce.mock.calls.map(call => call[0] as EdgeRateLimitPolicy);
+    expect(policies[0]).toMatchObject({ key: expect.stringContaining("rate-limit:sepay-webhook:"), limit: 600 });
+    expect(policies[1]).toMatchObject({ key: expect.stringContaining("rate-limit:write:"), limit: 120 });
+  });
+
+  it("honors the webhook override only for POST to the exact callback path", async () => {
+    vi.stubEnv("RATE_LIMIT_SEPAY_WEBHOOK_PER_MIN", "900");
+    await proxy(request("/api/payments/sepay/webhook", false));
+    await proxy(request("/api/payments/sepay/webhook", false, "GET"));
+    await proxy(request("/api/payments/sepay/webhook/other", false));
+    expect(mock.enforce.mock.calls.map(call => call[0].limit)).toEqual([900, 600, 120]);
+    expect(mock.enforce.mock.calls[1][0].key).toContain("rate-limit:public-read:");
+    expect(mock.enforce.mock.calls[2][0].key).toContain("rate-limit:write:");
+  });
+
+  it("returns a retriable failure when provider capacity is exhausted", async () => {
+    mock.enforce.mockResolvedValue({ enabled: true, allowed: false, retryAfterSeconds: 60 });
+    const response = await proxy(request("/api/payments/sepay/webhook", false));
+    expect(response.status).toBe(429);
+    expect(response.headers.get("Retry-After")).toBe("60");
+  });
 });
 afterEach(() => vi.unstubAllEnvs());
 

@@ -38,7 +38,7 @@ function percentile(samples, p) {
 }
 
 function isLoopback(url) {
-  return ["127.0.0.1", "localhost", "::1"].includes(url.hostname);
+  return ["127.0.0.1", "localhost", "::1", "[::1]"].includes(url.hostname);
 }
 
 const baseUrl = new URL(readOption("base-url", DEFAULT_BASE_URL));
@@ -47,11 +47,10 @@ const concurrency = toPositiveInt(readOption("concurrency", "100"), "concurrency
 const requests = toPositiveInt(readOption("requests", String(concurrency * 10)), "requests", MAX_LOCAL_REQUESTS);
 const timeoutMs = toPositiveInt(readOption("timeout-ms", "5000"), "timeout-ms", 60_000);
 
-if (!isLoopback(baseUrl)) {
-  throw new Error("This harness only accepts a loopback --base-url. Do not use it against a deployed site.");
-}
-
 const target = new URL(path, baseUrl);
+if (!isLoopback(baseUrl) || !isLoopback(target)) {
+  throw new Error("This harness only accepts a loopback --base-url and --path. Do not use it against a deployed site.");
+}
 const durations = [];
 const statusCounts = new Map();
 const errors = new Map();
@@ -125,6 +124,6 @@ const result = {
 
 console.log(JSON.stringify(result, null, 2));
 
-if (timedOut > 0 || [...statusCounts.entries()].some(([status]) => status >= 500)) {
+if (timedOut > 0 || errors.size > 0 || [...statusCounts.entries()].some(([status]) => status >= 500)) {
   process.exitCode = 2;
 }

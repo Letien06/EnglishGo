@@ -218,18 +218,25 @@ export interface DictationProgressView {
 /** The lesson sidebar uses compact markers, persisted alongside its summary. */
 export async function getUserLessonProgressView(uid: string, lessonId: string): Promise<DictationProgressView> {
   const ref = userLessonRef(uid, lessonId);
+  const initialSnap = await ref.get();
+  if (!initialSnap.exists) {
+    return { summary: null, segments: [] };
+  }
+  const initialData = initialSnap.data();
+  if (initialData?.segmentMarkersVersion === 1 && Array.isArray(initialData.segmentMarkers)) {
+    return { summary: toSummary(lessonId, initialData), segments: initialData.segmentMarkers as DictationProgressMarker[] };
+  }
   return adminDb.runTransaction(async tx => {
     const snap = await tx.get(ref);
+    if (!snap.exists) return { summary: null, segments: [] };
     const data = snap.data();
     if (data?.segmentMarkersVersion === 1 && Array.isArray(data.segmentMarkers)) {
       return { summary: toSummary(lessonId, data), segments: data.segmentMarkers as DictationProgressMarker[] };
     }
-    // Bootstrap legacy progress under the same transaction as the summary
-    // write, so a concurrent attempt cannot be overwritten by this backfill.
     const legacy = await tx.get(ref.collection("segments").select("completedAtMillis", "masteredAtMillis"));
     const segments = legacy.docs.map(doc => progressMarker(doc.id, doc.data())).filter(isProgressMarker);
-    if (snap.exists) tx.update(ref, { segmentMarkersVersion: 1, segmentMarkers: segments });
-    return { summary: snap.exists ? toSummary(lessonId, data) : null, segments };
+    tx.update(ref, { segmentMarkersVersion: 1, segmentMarkers: segments });
+    return { summary: toSummary(lessonId, data), segments };
   });
 }
 
@@ -357,6 +364,16 @@ export async function importPublishedBatch(items: DictationBatchImportLesson[], 
   return { created, skippedYoutubeVideoIds };
 }
 
+async function commitChunked(ops: Array<(batch: FirebaseFirestore.WriteBatch) => void>): Promise<void> {
+  const CHUNK_SIZE = 450;
+  for (let start = 0; start < ops.length; start += CHUNK_SIZE) {
+    const batch = adminDb.batch();
+    const end = Math.min(start + CHUNK_SIZE, ops.length);
+    for (let i = start; i < end; i++) ops[i](batch);
+    await batch.commit();
+  }
+}
+
 export async function importTranscript(lessonId: string, transcript: string, uid: string): Promise<{ segmentCount: number }> {
   const lesson = await getLesson(lessonId);
   if (lesson.status === "PUBLISHED") throw new ApiError("Archive lesson before replacing its transcript.");
@@ -364,23 +381,23 @@ export async function importTranscript(lessonId: string, transcript: string, uid
   if (!cues.length) throw new ApiError("Transcript does not contain valid captions.");
   const collection = adminDb.collection(LESSONS).doc(lessonId).collection("segments");
   const previous = await collection.get();
-  const batch = adminDb.batch();
-  previous.docs.forEach((doc) => batch.delete(doc.ref));
   const now = Date.now();
+  const ops: Array<(batch: FirebaseFirestore.WriteBatch) => void> = [];
+  previous.docs.forEach((doc) => ops.push((batch) => batch.delete(doc.ref)));
   cues.forEach((cue, position) => {
     const id = `s${String(position + 1).padStart(3, "0")}`;
-    batch.set(collection.doc(id), {
+    ops.push((batch) => batch.set(collection.doc(id), {
       lessonId, index: position + 1, startSeconds: cue.startSeconds, endSeconds: cue.endSeconds,
       leadInSeconds: 0.4, tailSeconds: 0.3, speaker: null, expectedText: cue.text,
       acceptedNormalizedAnswers: [], translationVi: null, wordCount: wordCount(cue.text),
       status: "DRAFT", createdAtMillis: now, updatedAtMillis: now,
-    });
+    }));
   });
-  batch.update(adminDb.collection(LESSONS).doc(lessonId), {
+  ops.push((batch) => batch.update(adminDb.collection(LESSONS).doc(lessonId), {
     segmentCount: cues.length, wordCount: cues.reduce((sum, cue) => sum + wordCount(cue.text), 0),
     estimatedWpm: estimateWpm(cues), updatedAtMillis: now, updatedByUid: uid, updatedAt: FieldValue.serverTimestamp(),
-  });
-  await batch.commit();
+  }));
+  await commitChunked(ops);
   await audit("IMPORT_TRANSCRIPT", lessonId, uid);
   return { segmentCount: cues.length };
 }
@@ -393,11 +410,22 @@ export async function publishLesson(lessonId: string, uid: string): Promise<Dict
   const segments = await getSegments(lessonId, false);
   if (!segments.length) throw new ApiError("Import at least one transcript segment before publishing.");
   const now = Date.now();
-  const batch = adminDb.batch();
-  batch.update(adminDb.collection(LESSONS).doc(lessonId), { status: "PUBLISHED", publishedAtMillis: now, updatedAtMillis: now, updatedByUid: uid, updatedAt: FieldValue.serverTimestamp() });
-  segments.forEach((segment) => batch.update(adminDb.collection(LESSONS).doc(lessonId).collection("segments").doc(segment.id), { status: "PUBLISHED", updatedAtMillis: now }));
-  updateDictationCatalog(batch, lessonId, toCard({ ...lesson, publishedAtMillis: now }));
-  await batch.commit();
+  const segmentOps = segments.map((segment) => (batch: FirebaseFirestore.WriteBatch) =>
+    batch.update(adminDb.collection(LESSONS).doc(lessonId).collection("segments").doc(segment.id), { status: "PUBLISHED", updatedAtMillis: now }),
+  );
+  if (segmentOps.length > 440) {
+    await commitChunked(segmentOps);
+    const finalBatch = adminDb.batch();
+    finalBatch.update(adminDb.collection(LESSONS).doc(lessonId), { status: "PUBLISHED", publishedAtMillis: now, updatedAtMillis: now, updatedByUid: uid, updatedAt: FieldValue.serverTimestamp() });
+    updateDictationCatalog(finalBatch, lessonId, toCard({ ...lesson, publishedAtMillis: now }));
+    await finalBatch.commit();
+  } else {
+    const batch = adminDb.batch();
+    batch.update(adminDb.collection(LESSONS).doc(lessonId), { status: "PUBLISHED", publishedAtMillis: now, updatedAtMillis: now, updatedByUid: uid, updatedAt: FieldValue.serverTimestamp() });
+    segmentOps.forEach((op) => op(batch));
+    updateDictationCatalog(batch, lessonId, toCard({ ...lesson, publishedAtMillis: now }));
+    await batch.commit();
+  }
   invalidateDictationCatalog();
   await audit("PUBLISH", lessonId, uid);
   return { ...lesson, status: "PUBLISHED", publishedAtMillis: now, updatedAtMillis: now };
@@ -407,11 +435,22 @@ export async function archiveLesson(lessonId: string, uid: string): Promise<Dict
   const lesson = await getLesson(lessonId);
   const segments = await getSegments(lessonId, false);
   const now = Date.now();
-  const batch = adminDb.batch();
-  batch.update(adminDb.collection(LESSONS).doc(lessonId), { status: "ARCHIVED", updatedAtMillis: now, updatedByUid: uid, updatedAt: FieldValue.serverTimestamp() });
-  segments.forEach((segment) => batch.update(adminDb.collection(LESSONS).doc(lessonId).collection("segments").doc(segment.id), { status: "ARCHIVED", updatedAtMillis: now }));
-  updateDictationCatalog(batch, lessonId, null);
-  await batch.commit();
+  const segmentOps = segments.map((segment) => (batch: FirebaseFirestore.WriteBatch) =>
+    batch.update(adminDb.collection(LESSONS).doc(lessonId).collection("segments").doc(segment.id), { status: "ARCHIVED", updatedAtMillis: now }),
+  );
+  if (segmentOps.length > 440) {
+    await commitChunked(segmentOps);
+    const finalBatch = adminDb.batch();
+    finalBatch.update(adminDb.collection(LESSONS).doc(lessonId), { status: "ARCHIVED", updatedAtMillis: now, updatedByUid: uid, updatedAt: FieldValue.serverTimestamp() });
+    updateDictationCatalog(finalBatch, lessonId, null);
+    await finalBatch.commit();
+  } else {
+    const batch = adminDb.batch();
+    batch.update(adminDb.collection(LESSONS).doc(lessonId), { status: "ARCHIVED", updatedAtMillis: now, updatedByUid: uid, updatedAt: FieldValue.serverTimestamp() });
+    segmentOps.forEach((op) => op(batch));
+    updateDictationCatalog(batch, lessonId, null);
+    await batch.commit();
+  }
   invalidateDictationCatalog();
   await audit("ARCHIVE", lessonId, uid);
   return { ...lesson, status: "ARCHIVED", updatedAtMillis: now };
@@ -434,10 +473,11 @@ export async function verifyLessonRights(lessonId: string, uid: string): Promise
 export async function resetLessonProgress(uid: string, lessonId: string): Promise<void> {
   const ref = userLessonRef(uid, lessonId);
   const segments = await ref.collection("segments").get();
-  const batch = adminDb.batch();
-  batch.delete(ref);
-  segments.docs.forEach((doc) => batch.delete(doc.ref));
-  await batch.commit();
+  const ops: Array<(batch: FirebaseFirestore.WriteBatch) => void> = [
+    (batch) => batch.delete(ref),
+    ...segments.docs.map((doc) => (batch: FirebaseFirestore.WriteBatch) => batch.delete(doc.ref)),
+  ];
+  await commitChunked(ops);
 }
 
 async function saveProgress(uid: string, lesson: DictationLesson, segment: DictationSegment, request: DictationAttemptRequest, answer: string, score: number, passed: boolean, masteredNow: boolean, mask: MaskPercent) {
@@ -446,14 +486,16 @@ async function saveProgress(uid: string, lesson: DictationLesson, segment: Dicta
   const recordedCompletion = await adminDb.runTransaction(async (tx) => {
     const [summarySnap, segmentSnap] = await Promise.all([tx.get(summaryRef), tx.get(segmentRef)]);
     const summaryData = summarySnap.data();
-    const existingMarkers: DictationProgressMarker[] = summaryData?.segmentMarkersVersion === 1 && Array.isArray(summaryData.segmentMarkers)
-      ? summaryData.segmentMarkers
-      : (await tx.get((() => {
-        const segments = summaryRef.collection("segments");
-        return typeof (segments as { select?: unknown }).select === "function"
-          ? (segments as typeof segments & { select: (...fields: string[]) => typeof segments }).select("completedAtMillis", "masteredAtMillis")
-          : segments;
-      })())).docs?.map(doc => progressMarker(doc.id, doc.data())).filter(isProgressMarker) ?? [];
+    const existingMarkers: DictationProgressMarker[] = !summarySnap.exists
+      ? []
+      : summaryData?.segmentMarkersVersion === 1 && Array.isArray(summaryData.segmentMarkers)
+        ? summaryData.segmentMarkers
+        : (await tx.get((() => {
+          const segments = summaryRef.collection("segments");
+          return typeof (segments as { select?: unknown }).select === "function"
+            ? (segments as typeof segments & { select: (...fields: string[]) => typeof segments }).select("completedAtMillis", "masteredAtMillis")
+            : segments;
+        })())).docs?.map(doc => progressMarker(doc.id, doc.data())).filter(isProgressMarker) ?? [];
     const old = segmentSnap.exists ? toSegmentProgress(lesson.id, segment.id, segmentSnap.data()) : null;
     const wasCompleted = Boolean(old?.completedAtMillis);
     const wasMastered = Boolean(old?.masteredAtMillis);

@@ -6,9 +6,9 @@ import { getCurrentUser } from "@/lib/auth/session";
 import { addComment, comments } from "@/lib/services/community";
 
 const schema = z.object({
-  content: z.string().min(1),
-  targetType: z.string().optional(),
-  targetId: z.coerce.number().optional(),
+  content: z.string().trim().min(1).max(2_000),
+  targetType: z.string().trim().regex(/^[A-Za-z0-9_-]{1,32}$/).optional(),
+  targetId: z.coerce.number().int().min(0).max(Number.MAX_SAFE_INTEGER).optional(),
 });
 
 export const GET = withErrorHandling(async () => {

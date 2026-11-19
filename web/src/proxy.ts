@@ -29,6 +29,7 @@ export async function proxy(request: NextRequest) {
   }
 
   const protectedPrefixes = [
+    "/hub",
     "/vocab",
     "/listen",
     "/read",
@@ -55,6 +56,7 @@ export async function proxy(request: NextRequest) {
 
 export const config = {
   matcher: [
+    "/api/:path*",
     "/((?!_next/static|_next/image|favicon.ico|.*\\..*).*)",
   ],
 };
@@ -106,6 +108,14 @@ function rateLimitPolicy(request: NextRequest): EdgeRateLimitPolicy {
   if (pathname === "/api/health") {
     group = "health";
     limit = envLimit("RATE_LIMIT_HEALTH_PER_MIN", 120);
+  } else if (pathname === "/api/payments/sepay/webhook" && request.method === "POST") {
+    // SePay delivers many customers' callbacks from a small set of IPs.
+    // Keep deliveries separate from learner writes; the route authenticates them.
+    group = "sepay-webhook";
+    limit = envLimit("RATE_LIMIT_SEPAY_WEBHOOK_PER_MIN", 600);
+  } else if (pathname === "/api/auth/session" || pathname === "/api/account/password") {
+    group = "auth";
+    limit = envLimit("RATE_LIMIT_AUTH_PER_MIN", 30);
   } else if (isAiOrExternalRoute(pathname)) {
     group = "ai-external";
     limit = envLimit("RATE_LIMIT_AI_PER_MIN", 20);
@@ -136,6 +146,7 @@ function rateLimitPolicy(request: NextRequest): EdgeRateLimitPolicy {
 
 function isAiOrExternalRoute(pathname: string): boolean {
   return pathname.startsWith("/api/ai/") ||
+    pathname === "/api/writing/attempts" ||
     pathname === "/api/vocab/dictionary" ||
     pathname.includes("/ai-words/preview") ||
     pathname === "/api/admin/generate";

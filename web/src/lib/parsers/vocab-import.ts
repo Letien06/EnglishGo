@@ -1,34 +1,33 @@
 /**
  * Vocabulary file import parsers.
- * Port of parsing logic from `VocabService.java` (parseDelimitedWords,
- * parseExcelWords, parseCsv, readTextFile, extractPdfText).
- *
- * Replaces Apache POI (Excel) with `xlsx` and PDFBox with `pdf-parse`.
+ * Supports CSV, TSV, TXT, XLSX (via ExcelJS), and PDF (via pdf-parse).
  */
 import type { AiVocabCandidate } from "@/types/vocab";
+
+const MAX_IMPORT_ROWS = 2_000;
+const MAX_IMPORT_TEXT_CHARS = 500_000;
 
 /* ------------------------------------------------------------------ */
 /*  Public API                                                         */
 /* ------------------------------------------------------------------ */
 
-/**
- * Parse a file buffer into vocab candidates.
- * Supports CSV, TSV, TXT, XLSX, XLS, PDF.
- */
 export async function parseImportFile(
   buffer: Buffer,
   filename: string,
 ): Promise<AiVocabCandidate[]> {
   const lower = filename.toLowerCase();
 
-  if (lower.endsWith(".xlsx") || lower.endsWith(".xls")) {
+  if (lower.endsWith(".xlsx")) {
     return parseExcelWords(buffer);
+  }
+  if (lower.endsWith(".xls")) {
+    throw new Error("Định dạng .xls cũ không còn được hỗ trợ vì lý do bảo mật. Vui lòng lưu file sang .xlsx hoặc .csv.");
   }
   if (lower.endsWith(".pdf")) {
     return parsePdfWords(buffer);
   }
   // CSV, TSV, TXT
-  const text = buffer.toString("utf-8");
+  const text = buffer.toString("utf-8").slice(0, MAX_IMPORT_TEXT_CHARS);
   return parseDelimitedWords(text);
 }
 
@@ -37,7 +36,11 @@ export async function parseImportFile(
 /* ------------------------------------------------------------------ */
 
 export function parseDelimitedWords(text: string): AiVocabCandidate[] {
-  const lines = text.split(/\r?\n/).filter((l) => l.trim().length > 0);
+  const lines = text
+    .slice(0, MAX_IMPORT_TEXT_CHARS)
+    .split(/\r?\n/)
+    .filter((l) => l.trim().length > 0)
+    .slice(0, MAX_IMPORT_ROWS + 1);
   const rows: string[][] = [];
 
   for (const line of lines) {
@@ -62,11 +65,9 @@ function parseDelimitedLine(line: string): string[] {
   if (line.includes(";")) {
     return line.split(";").map((s) => s.trim());
   }
-  // For comma: only split if there's no quoted content
   if (line.includes(",")) {
     return parseCsvLine(line);
   }
-  // Single field
   return [line.trim()];
 }
 
@@ -96,27 +97,48 @@ function parseCsvLine(line: string): string[] {
 }
 
 /* ------------------------------------------------------------------ */
-/*  Excel (XLSX/XLS)                                                   */
+/*  Excel (XLSX via ExcelJS)                                           */
 /* ------------------------------------------------------------------ */
 
 async function parseExcelWords(buffer: Buffer): Promise<AiVocabCandidate[]> {
-  // Dynamic import to avoid bundling xlsx on every page
-  const XLSX = await import("xlsx");
-  const workbook = XLSX.read(buffer, { type: "buffer" });
-  const sheetName = workbook.SheetNames[0];
-  if (!sheetName) return [];
+  const ExcelJS = await import("exceljs");
+  const workbook = new ExcelJS.Workbook();
+  const arrayBuffer = buffer.buffer.slice(buffer.byteOffset, buffer.byteOffset + buffer.byteLength) as ArrayBuffer;
+  await workbook.xlsx.load(arrayBuffer);
 
-  const sheet = workbook.Sheets[sheetName];
-  const jsonRows: unknown[][] = XLSX.utils.sheet_to_json(sheet, {
-    header: 1,
-    defval: "",
-  });
+  const sheet = workbook.worksheets[0];
+  if (!sheet) return [];
 
-  const rows: string[][] = jsonRows.map((row) =>
-    (row as unknown[]).map((cell) => String(cell ?? "").trim()),
-  );
+  const rows: string[][] = [];
+  const limit = Math.min(sheet.rowCount, MAX_IMPORT_ROWS + 1);
+  for (let rowIndex = 1; rowIndex <= limit; rowIndex++) {
+    const row = sheet.getRow(rowIndex);
+    const values: string[] = [];
+    const colLimit = Math.min(row.cellCount, 12);
+    for (let colIndex = 1; colIndex <= colLimit; colIndex++) {
+      values.push(cellToString(row.getCell(colIndex).value));
+    }
+    if (values.some((v) => v.length > 0)) {
+      rows.push(values);
+    }
+  }
 
   return rowsToCandidates(rows);
+}
+
+function cellToString(value: unknown): string {
+  if (value == null) return "";
+  if (typeof value === "string") return value.trim();
+  if (typeof value === "number" || typeof value === "boolean") return String(value).trim();
+  if (typeof value === "object") {
+    const obj = value as { text?: unknown; result?: unknown; richText?: Array<{ text?: string }> };
+    if (typeof obj.text === "string") return obj.text.trim();
+    if (obj.result != null) return String(obj.result).trim();
+    if (Array.isArray(obj.richText)) {
+      return obj.richText.map((part) => part.text ?? "").join("").trim();
+    }
+  }
+  return String(value).trim();
 }
 
 /* ------------------------------------------------------------------ */
@@ -126,19 +148,22 @@ async function parseExcelWords(buffer: Buffer): Promise<AiVocabCandidate[]> {
 async function parsePdfWords(buffer: Buffer): Promise<AiVocabCandidate[]> {
   const { PDFParse } = await import("pdf-parse");
   const parser = new PDFParse({ data: buffer });
-  const data = await parser.getText();
-  const text = data.text ?? "";
-  return parseDelimitedWords(text);
+  try {
+    const data = await parser.getText({ first: 1, last: 50 });
+    const text = (data.text ?? "").slice(0, MAX_IMPORT_TEXT_CHARS);
+    return parseDelimitedWords(text);
+  } finally {
+    await parser.destroy().catch(() => undefined);
+  }
 }
 
 /* ------------------------------------------------------------------ */
-/*  Rows → Candidates                                                  */
+/*  Rows -> Candidates                                                 */
 /* ------------------------------------------------------------------ */
 
 function rowsToCandidates(rows: string[][]): AiVocabCandidate[] {
   if (rows.length === 0) return [];
 
-  // Check if first row looks like a header
   let dataRows = rows;
   let headerMap: Record<string, number> | null = null;
 
@@ -149,7 +174,7 @@ function rowsToCandidates(rows: string[][]): AiVocabCandidate[] {
 
   const candidates: AiVocabCandidate[] = [];
 
-  for (const row of dataRows) {
+  for (const row of dataRows.slice(0, MAX_IMPORT_ROWS)) {
     const word = headerMap
       ? cellByHeader(row, headerMap, "word", "từ", "vocabulary", "english")
       : row[0] ?? "";
@@ -216,23 +241,43 @@ function looksLikePartOfSpeech(value: string): boolean {
   return /^(n|noun|v|verb|adj|adjective|adv|adverb|other)$/i.test(value.trim());
 }
 
+const EXACT_HEADER_TOKENS = new Set([
+  "word",
+  "words",
+  "từ",
+  "từvựng",
+  "vocabulary",
+  "english",
+  "meaning",
+  "meanings",
+  "nghĩa",
+  "tiếngviệt",
+  "vietnamese",
+  "definition",
+  "phonetic",
+  "ipa",
+  "pronunciation",
+  "phiênâm",
+  "partofspeech",
+  "pos",
+  "loạitừ",
+  "type",
+  "example",
+  "examples",
+  "vídụ",
+  "sentence",
+]);
+
 function looksLikeHeader(row: string[]): boolean {
-  const headerKeywords = [
-    "word",
-    "từ",
-    "vocabulary",
-    "english",
-    "meaning",
-    "nghĩa",
-    "definition",
-    "phonetic",
-    "ipa",
-    "example",
-  ];
-  const lowerRow = row.map((c) => c.toLowerCase().trim());
-  return lowerRow.some((cell) =>
-    headerKeywords.some((kw) => cell.includes(kw)),
-  );
+  let matches = 0;
+  for (const cell of row) {
+    const normalized = normalizeHeader(cell);
+    if (normalized && EXACT_HEADER_TOKENS.has(normalized)) {
+      matches++;
+    }
+  }
+  // Require at least 2 recognized header columns, or a single exact header column on 1-column input.
+  return matches >= 2 || (row.length === 1 && matches === 1);
 }
 
 function buildHeaderMap(headerRow: string[]): Record<string, number> {

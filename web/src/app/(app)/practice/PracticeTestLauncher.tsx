@@ -197,6 +197,7 @@ export default function PracticeTestLauncher({ tests, userUid }: Props) {
               </div>
               <button
                 type="button"
+                data-dialog-initial-focus
                 onClick={closeModal}
                 className="inline-flex h-9 w-9 items-center justify-center rounded-full text-xl text-muted hover:bg-surface-soft"
                 aria-label="Đóng"
@@ -309,7 +310,6 @@ export default function PracticeTestLauncher({ tests, userUid }: Props) {
                 </button>
                 <button
                   type="button"
-                  data-dialog-initial-focus
                   onClick={() => start(false)}
                   disabled={startDisabled || Boolean(startingLabel)}
                   className="rounded-lg bg-accent px-5 py-2 text-sm font-extrabold text-gold-ink disabled:cursor-not-allowed disabled:opacity-50"

@@ -10,107 +10,32 @@ service cloud.firestore {
       return signedIn() && request.auth.uid == uid;
     }
 
+    // All user profile and subcollection mutations go through Next.js API routes
+    // using Firebase Admin SDK. Denying client writes prevents self-privilege
+    // escalation (role), stat/streak/XP forgery, and anti-cheat bypasses.
     match /users/{uid} {
-      allow create, read, update: if isOwner(uid);
-      allow delete: if false;
+      allow read: if isOwner(uid);
+      allow write: if false;
 
-      match /{subcollection}/{docId} {
-        allow read: if isOwner(uid);
-        allow write: if isOwner(uid)
-          && !(subcollection in ['practiceAttempts', 'vocabStudyHistory', 'rateLimits', 'leaderboardBest', 'dictationLessonProgress', 'onlinePresence']);
-      }
-
-      match /practiceDrafts/{draftId} {
-        allow read, write: if isOwner(uid);
-      }
-
-      match /practiceAttempts/{attemptId} {
+      match /{subcollection=**} {
         allow read: if isOwner(uid);
         allow write: if false;
       }
-
-      match /leaderboardBest/{scopeId} {
-        allow read: if isOwner(uid);
-        allow write: if false;
-      }
-
-      match /vocabGameDrafts/{draftId} {
-        allow read, write: if isOwner(uid);
-      }
-
-      match /vocabStudyHistory/{historyId} {
-        allow read: if isOwner(uid);
-        allow write: if false;
-      }
-
-      match /rateLimits/{limitId} {
-        allow read: if isOwner(uid);
-        allow write: if false;
-      }
-
-      match /dictationLessonProgress/{lessonId} {
-        allow read: if isOwner(uid);
-        allow write: if false;
-
-        match /segments/{segmentId} {
-          allow read: if isOwner(uid);
-          allow write: if false;
-        }
-      }
     }
 
-    match /vocabSets/{setId} {
-      allow read: if resource.data.status == 'PUBLISHED';
-      allow write: if false;
-    }
-
-    match /vocabWords/{wordId} {
-      allow read: if true;
-      allow write: if false;
-    }
-
-    match /vocabFolders/{folderId} {
-      allow read: if resource.data.publicShared == true;
-      allow write: if false;
-    }
-
-    match /targets/{targetId}/comments/{commentId} {
-      allow read: if true;
-      allow write: if false;
-    }
-
-    match /leaderboards/{period}/entries/{uid} {
-      allow read: if true;
-      allow write: if false;
-    }
-
-    match /mediaAssets/{assetId} {
-      allow read: if true;
-      allow write: if false;
-    }
-
-    match /dictationLessons/{lessonId} {
-      allow read: if resource.data.status == 'PUBLISHED';
-      allow write: if false;
-
-      match /segments/{segmentId} {
-        // Segment documents include expectedText. Public clients must use the
-        // server DTO, which strips answers before an attempt is submitted.
-        allow read: if false;
-        allow write: if false;
-      }
-    }
-
+    // Active multiplayer rooms: allow direct document get by room code for
+    // realtime onSnapshot subscriptions of signed-in learners, but prevent
+    // unauthenticated access and room enumeration (list).
     match /gameRooms/{code} {
-      allow read: if true;
-      allow write: if false;
+      allow get: if signedIn();
+      allow list, write: if false;
 
       match /players/{uid} {
-        allow read: if true;
-        allow write: if false;
+        allow read, write: if false;
       }
     }
 
+    // Everything else is served via authenticated/public Next.js API routes.
     match /{document=**} {
       allow read, write: if false;
     }

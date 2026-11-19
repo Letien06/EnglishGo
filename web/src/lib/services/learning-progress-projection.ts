@@ -89,11 +89,17 @@ export async function readLearningProgressProjection(uid: string, progressCollec
     documentReads += Math.max(1, snapshot.docs.length);
     return snapshot;
   };
-  const initial = readyProjection(countQuery(await query.get()), part);
+  const initialSnapshot = countQuery(await query.get());
+  const initialMeta = initialSnapshot.docs.find((doc) => doc.id === `${part}-index`)?.data();
+  const initial = readyProjection(initialSnapshot, part);
   let result: ProgressRow[];
   if (initial && (initial.strategy === "inline" || !fitsInline(initial.rows))) {
     strategy = initial.strategy;
     result = initial.rows;
+  } else if (initialMeta?.schema === SCHEMA && initialMeta?.ready === false) {
+    strategy = "source-fallback";
+    const source = countQuery(await adminDb.collection("users").doc(uid).collection(progressCollection).where("part", "==", part).select("itemId", "questionId", "part", "level", "selectedAnswer", "correct", "completedAtMillis").get());
+    result = source.docs.flatMap((doc) => { const row = compact(doc.data()); return row ? [row] : []; });
   } else result = await adminDb.runTransaction(async (tx) => {
     transactionAttempts++;
     const metadata = collection.doc(`${part}-index`);

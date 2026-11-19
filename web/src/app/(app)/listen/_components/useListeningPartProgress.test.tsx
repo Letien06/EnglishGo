@@ -49,7 +49,7 @@ describe("background listening tab progress", () => {
   it("cancels both workers on unmount and never starts the remaining Part", async () => {
     setActiveLearnerId("cancel-overview");
     const pending: Array<() => void> = [];
-    const fetcher = vi.fn((_url: string, _options?: RequestInit) => new Promise((resolve) => {
+    const fetcher = vi.fn<(url: string, options?: RequestInit) => Promise<{ ok: boolean; json: () => Promise<{ success: boolean }> }>>(() => new Promise((resolve) => {
       pending.push(() => resolve({ ok: false, json: async () => ({ success: false }) }));
     }));
     vi.stubGlobal("fetch", fetcher);

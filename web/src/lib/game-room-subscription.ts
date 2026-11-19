@@ -1,5 +1,5 @@
 import { doc, onSnapshot } from "firebase/firestore";
-import { getClientDb } from "./firebase/client";
+import { getClientDb } from "./firebase/client-firestore";
 import { COLLECTIONS } from "./firestore/collections";
 
 type Handlers<Room, Player> = {
@@ -92,7 +92,10 @@ export function subscribeGameRoom<Room, Player>(code: string, handlers: Handlers
   const visibilityChanged = () => {
     generation++;
     detach();
-    if (!document.hidden) start();
+    if (!document.hidden) {
+      if (fallback) void poll();
+      else start();
+    }
   };
   document.addEventListener("visibilitychange", visibilityChanged);
   start();

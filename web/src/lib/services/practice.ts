@@ -541,9 +541,23 @@ export async function submit(
   } else {
     await Promise.all([attemptRef.set(attempt, { merge: true }), submittedDraftRef.delete()]);
   }
+  // Combine summary + weak-area user updates into one transaction, then record
+  // study activity sequentially to avoid 3 concurrent writes to `users/{uid}`.
   await Promise.all([
-    updatePracticeWeakAreas(user.uid, attempt).catch(() => undefined),
-    updatePracticeSummary(user.uid, score, submittedAtMillis).catch(() => undefined),
+    updatePracticeUserProfile(user.uid, score, attempt)
+      .then(() =>
+        recordStudyActivity(user.uid, {
+          module: "practice",
+          activityType: config.mode === "exam" ? "practice_exam_submit" : "practice_part_submit",
+          sourceId: attemptId,
+          occurredAtMillis: submittedAtMillis,
+          metric: "practice",
+          quantity: answerKey.questions.length - unansweredCount,
+          durationSeconds: numberValue(draftSnap.get("startedAtMillis")) != null && !expired
+            ? Math.floor(elapsedMillis / 1000) : null,
+        }),
+      )
+      .catch(() => undefined),
     recordContentQualityAttempt({
       testId,
       submittedAtMillis,
@@ -567,16 +581,6 @@ export async function submit(
       submittedAtMillis,
       ...leaderboardDecision,
     }).catch(() => undefined),
-    recordStudyActivity(user.uid, {
-      module: "practice",
-      activityType: config.mode === "exam" ? "practice_exam_submit" : "practice_part_submit",
-      sourceId: attemptId,
-      occurredAtMillis: submittedAtMillis,
-      metric: "practice",
-      quantity: answerKey.questions.length - unansweredCount,
-      durationSeconds: numberValue(draftSnap.get("startedAtMillis")) != null && !expired
-        ? Math.floor(elapsedMillis / 1000) : null,
-    }).catch(() => undefined),
   ]);
   invalidateProgressReportCache(user.uid);
   return {
@@ -594,32 +598,9 @@ export async function submit(
   };
 }
 
-async function updatePracticeSummary(
+async function updatePracticeUserProfile(
   uid: string,
   score: number,
-  submittedAtMillis: number,
-): Promise<void> {
-  const userRef = adminDb.collection("users").doc(uid);
-  await adminDb.runTransaction(async (tx) => {
-    const snap = await tx.get(userRef);
-    const currentCount = numberValue(snap.get("practiceCompletedTests")) ?? 0;
-    const currentTotal = numberValue(snap.get("practiceScoreTotal")) ?? 0;
-    const currentBest = numberValue(snap.get("practiceBestScore")) ?? 0;
-    const nextCount = currentCount + 1;
-    const nextTotal = currentTotal + score;
-    tx.set(userRef, {
-      practiceCompletedTests: FieldValue.increment(1),
-      practiceScoreTotal: FieldValue.increment(score),
-      practiceAverageScore: round2(nextTotal / nextCount),
-      practiceBestScore: Math.max(currentBest, score),
-      lastPracticeSubmittedAtMillis: submittedAtMillis,
-      updatedAtMillis: Date.now(),
-    }, { merge: true });
-  });
-}
-
-async function updatePracticeWeakAreas(
-  uid: string,
   attempt: {
     attemptId: number;
     testId: number;
@@ -635,27 +616,48 @@ async function updatePracticeWeakAreas(
     .filter((part) => part.total > 0)
     .sort((a, b) => a.percent - b.percent || b.total - a.total)
     .at(0);
-  if (!weakest) return;
+  const recommendation = weakest
+    ? {
+        type: "practice_part",
+        label: `Luyen tiep Part ${weakest.part}`,
+        href: `/practice/session/${attempt.testId}?mode=part&parts=${weakest.part}&time=${PART_DEFAULTS[weakest.part]?.suggestedMinutes ?? 20}`,
+        reason: `Part ${weakest.part} dat ${weakest.correct}/${weakest.total} cau dung (${weakest.percent}%).`,
+        updatedAtMillis: attempt.submittedAtMillis,
+      }
+    : null;
+  const weakTags = weakest ? buildWeakTagBreakdown(attempt.answers ?? []) : null;
 
-  const recommendation = {
-    type: "practice_part",
-    label: `Luyen tiep Part ${weakest.part}`,
-    href: `/practice/session/${attempt.testId}?mode=part&parts=${weakest.part}&time=${PART_DEFAULTS[weakest.part]?.suggestedMinutes ?? 20}`,
-    reason: `Part ${weakest.part} dat ${weakest.correct}/${weakest.total} cau dung (${weakest.percent}%).`,
-    updatedAtMillis: attempt.submittedAtMillis,
-  };
-
-  await adminDb.collection("users").doc(uid).set(
-    {
-      practiceWeakAreas: attempt.partBreakdown,
-      practiceWeakTags: buildWeakTagBreakdown(attempt.answers ?? []),
-      nextPracticeRecommendation: recommendation,
-      lastPracticeAttemptId: attempt.attemptId,
-      lastPracticeTitle: attempt.title,
-      updatedAtMillis: Date.now(),
-    },
-    { merge: true },
-  );
+  const userRef = adminDb.collection("users").doc(uid);
+  await adminDb.runTransaction(async (tx) => {
+    const snap = await tx.get(userRef);
+    const currentCount = numberValue(snap.get("practiceCompletedTests")) ?? 0;
+    const currentTotal = numberValue(snap.get("practiceScoreTotal")) ?? 0;
+    const currentBest = numberValue(snap.get("practiceBestScore")) ?? 0;
+    const nextCount = currentCount + 1;
+    const nextTotal = currentTotal + score;
+    const now = Date.now();
+    tx.set(
+      userRef,
+      {
+        practiceCompletedTests: FieldValue.increment(1),
+        practiceScoreTotal: FieldValue.increment(score),
+        practiceAverageScore: round2(nextTotal / nextCount),
+        practiceBestScore: Math.max(currentBest, score),
+        lastPracticeSubmittedAtMillis: attempt.submittedAtMillis,
+        ...(weakest
+          ? {
+              practiceWeakAreas: attempt.partBreakdown,
+              practiceWeakTags: weakTags,
+              nextPracticeRecommendation: recommendation,
+              lastPracticeAttemptId: attempt.attemptId,
+              lastPracticeTitle: attempt.title,
+            }
+          : {}),
+        updatedAtMillis: now,
+      },
+      { merge: true },
+    );
+  });
 }
 
 export async function getAttemptReview(
@@ -688,6 +690,27 @@ export async function getHistory(
     .doc(uid)
     .collection("practiceAttempts");
   let itemsQuery = baseQuery
+    .select(
+      "attemptId",
+      "testId",
+      "title",
+      "mode",
+      "parts",
+      "durationMinutes",
+      "score",
+      "correctCount",
+      "unansweredCount",
+      "questionCount",
+      "elapsedMillis",
+      "submittedAtMillis",
+      "expired",
+      "partBreakdown",
+      "scoreBreakdown",
+      "leaderboardScore",
+      "leaderboardMaxScore",
+      "leaderboardScope",
+      "leaderboardEligibility",
+    )
     .orderBy("submittedAtMillis", "desc")
     .orderBy(FieldPath.documentId(), "desc")
     .limit(safeSize);

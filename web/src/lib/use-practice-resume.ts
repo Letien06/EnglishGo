@@ -20,7 +20,7 @@ export function usePracticeResume({ skill, uid, part, level, testId, items, setA
   const interacted = useRef(false);
   const explicitPosition = useRef(typeof window !== "undefined" && new URLSearchParams(window.location.search).has("q"));
   const localAnswers = useRef<Record<string, string>>({});
-  const [hydrated, setHydrated] = useState(false);
+  const hydratedRef = useRef(Boolean(reviewRun));
   const storageKey = `englishgo:practice-position:${JSON.stringify([uid ?? "guest", skill, part, testId ?? level, items[0]?.id, reviewRun ?? null])}`;
   const pendingRef = useRef(pendingAnswers);
   useEffect(() => { pendingRef.current = pendingAnswers; }, [pendingAnswers]);
@@ -29,9 +29,8 @@ export function usePracticeResume({ skill, uid, part, level, testId, items, setA
 
   useEffect(() => {
     if (reviewRun) {
-      // Review sessions intentionally start blank; never rehydrate the learner's
-      // completed answers into an error-only or full replay session.
-      setHydrated(true);
+      // Review sessions intentionally start blank; never rehydrate completed answers.
+      hydratedRef.current = true;
       return;
     }
     try {
@@ -48,16 +47,16 @@ export function usePracticeResume({ skill, uid, part, level, testId, items, setA
         if (index >= 0 && !explicitPosition.current && !interacted.current) setIndex(index);
       }
     } catch { /* Server history and the durable queue remain available. */ }
-    // eslint-disable-next-line react-hooks/set-state-in-effect
-    setHydrated(true);
+    hydratedRef.current = true;
   }, [reviewRun, storageKey, items, setAnswers, setIndex]);
 
   useEffect(() => {
-    if (!hydrated || !currentAnswers || currentIndex === undefined) return;
+    // Do not leak unused localStorage entries for ephemeral reviewRun sessions.
+    if (reviewRun || !hydratedRef.current || !currentAnswers || currentIndex === undefined) return;
     try {
       localStorage.setItem(storageKey, JSON.stringify({ answers: currentAnswers, itemId: items[currentIndex]?.id }));
     } catch { /* The answer queue reports storage failures separately. */ }
-  }, [hydrated, currentAnswers, currentIndex, items, storageKey]);
+  }, [reviewRun, currentAnswers, currentIndex, items, storageKey]);
 
   useEffect(() => {
     if (!uid || reviewRun) return;

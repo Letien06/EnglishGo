@@ -3,7 +3,7 @@ import { withErrorHandling } from "@/lib/api/handler";
 import { parseBody } from "@/lib/api/validate";
 import { ok } from "@/lib/api/response";
 import { logInfo } from "@/lib/logging";
-import { requireRole } from "@/lib/auth/session";
+import { requireRole, requireUserForRead } from "@/lib/auth/session";
 
 const schema = z.object({ metrics: z.array(z.object({
   name: z.enum(["open", "transition", "sync"]), skill: z.enum(["reading", "listening", "vocab"]),
@@ -38,6 +38,7 @@ export const GET = withErrorHandling(async () => {
 });
 
 export const POST = withErrorHandling(async (request) => {
+  await requireUserForRead();
   const { metrics } = await parseBody(request, schema);
   for (const metric of metrics) {
     const key = `${metric.name}:${metric.skill}`;

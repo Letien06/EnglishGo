@@ -206,9 +206,17 @@ function planItems(value: unknown): string[] {
   return Object.values(record).filter((item): item is string => typeof item === "string" && Boolean(item.trim()));
 }
 
-export default function WritingPracticeClient({ promptId }: { promptId: string }) {
-  const [prompt, setPrompt] = useState<WritingPrompt | null>(null);
-  const [loading, setLoading] = useState(true);
+export default function WritingPracticeClient({
+  promptId,
+  uid = null,
+  initialPrompt = null,
+}: {
+  promptId: string;
+  uid?: string | null;
+  initialPrompt?: WritingPrompt | null;
+}) {
+  const [prompt, setPrompt] = useState<WritingPrompt | null>(initialPrompt);
+  const [loading, setLoading] = useState(!initialPrompt);
   const [error, setError] = useState<string | null>(null);
   const [answer, setAnswer] = useState("");
   const [elapsedSeconds, setElapsedSeconds] = useState(0);
@@ -219,7 +227,7 @@ export default function WritingPracticeClient({ promptId }: { promptId: string }
   const [submitError, setSubmitError] = useState<string | null>(null);
   const [draftStatus, setDraftStatus] = useState("");
   const startedAtRef = useRef<number | null>(null);
-  const draftKey = `englishgo:writing-draft:v1:${promptId}`;
+  const draftKey = `englishgo:writing-draft:v2:${uid ?? "guest"}:${promptId}`;
 
   const requestPrompt = useCallback(async () => {
     const response = await fetch(`/api/writing/prompts/${encodeURIComponent(promptId)}`);
@@ -232,27 +240,41 @@ export default function WritingPracticeClient({ promptId }: { promptId: string }
 
   useEffect(() => {
     let cancelled = false;
+    const hydrateDraft = (nextPrompt: WritingPrompt) => {
+      setPrompt(nextPrompt);
+      let draft = "";
+      try { draft = localStorage.getItem(draftKey) ?? ""; } catch { /* Continue without a local draft when storage is unavailable. */ }
+      setAnswer(draft);
+      setDraftStatus(draft ? "Đã khôi phục bản nháp trên thiết bị này." : "");
+      setAttempt(null);
+      setElapsedSeconds(0);
+      setRevealedHintCount(0);
+      setShowSample(false);
+      setError(null);
+      startedAtRef.current = Date.now();
+    };
+    if (initialPrompt && initialPrompt.id === promptId) {
+      const timer = window.setTimeout(() => {
+        if (!cancelled) {
+          hydrateDraft(initialPrompt);
+          setLoading(false);
+        }
+      }, 0);
+      return () => {
+        cancelled = true;
+        window.clearTimeout(timer);
+      };
+    }
     void requestPrompt()
       .then((nextPrompt) => {
-        if (cancelled) return;
-        setPrompt(nextPrompt);
-        let draft = "";
-        try { draft = localStorage.getItem(draftKey) ?? ""; } catch { /* Continue without a local draft when storage is unavailable. */ }
-        setAnswer(draft);
-        setDraftStatus(draft ? "Đã khôi phục bản nháp trên thiết bị này." : "");
-        setAttempt(null);
-        setElapsedSeconds(0);
-        setRevealedHintCount(0);
-        setShowSample(false);
-        setError(null);
-        startedAtRef.current = Date.now();
+        if (!cancelled) hydrateDraft(nextPrompt);
       })
       .catch((reason: unknown) => {
         if (!cancelled) setError(reason instanceof Error ? reason.message : "Không thể tải đề viết.");
       })
       .finally(() => { if (!cancelled) setLoading(false); });
     return () => { cancelled = true; };
-  }, [draftKey, requestPrompt]);
+  }, [draftKey, initialPrompt, promptId, requestPrompt]);
 
   useEffect(() => {
     if (!prompt || attempt) return;
@@ -443,13 +465,19 @@ function PictureTask({ prompt }: { prompt: WritingPrompt }) {
   return (
     <div className="p-5 sm:p-6">
       <div className="overflow-hidden rounded-2xl border border-line bg-surface-soft">
-        <div
-          className="relative aspect-[4/3] bg-surface-soft bg-cover bg-center"
-          role="img"
-          aria-label={prompt.imageAlt || prompt.title}
-          style={prompt.imageUrl ? { backgroundImage: `url("${prompt.imageUrl}")` } : undefined}
-        >
-          {!prompt.imageUrl && <div className="flex h-full items-center justify-center text-7xl text-primary" aria-hidden="true">▧</div>}
+        <div className="relative aspect-[4/3] bg-surface-soft">
+          {prompt.imageUrl ? (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img
+              src={prompt.imageUrl}
+              alt={prompt.imageAlt || prompt.title}
+              fetchPriority="high"
+              decoding="async"
+              className="h-full w-full object-cover"
+            />
+          ) : (
+            <div className="flex h-full items-center justify-center text-7xl text-primary" aria-hidden="true">▧</div>
+          )}
           <span className="absolute left-3 top-3 rounded-lg bg-black/55 px-2.5 py-1.5 text-xs font-bold text-white backdrop-blur-sm">
             Quan sát kỹ người, hành động và bối cảnh
           </span>

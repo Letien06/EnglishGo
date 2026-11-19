@@ -72,12 +72,17 @@ export default function ScratchPaper({
 
   useEffect(() => {
     if (!launcherSelector || typeof document === "undefined") return;
-    const findSlot = () => setLauncherSlot(document.querySelector<HTMLElement>(launcherSelector));
-    findSlot();
-    // Practice headers mount alongside the app shell; observe once so the
-    // trigger moves into the toolbar after a client navigation without a
-    // second launcher being left behind.
-    const observer = new MutationObserver(findSlot);
+    const findSlot = () => {
+      const found = document.querySelector<HTMLElement>(launcherSelector);
+      setLauncherSlot((previous) => (previous === found ? previous : found));
+      return found;
+    };
+    if (findSlot()) return;
+    // Observe until the slot mounts after client navigation, then disconnect so
+    // document.body mutations (1s timers, keystrokes) do not keep firing queries.
+    const observer = new MutationObserver(() => {
+      if (findSlot()) observer.disconnect();
+    });
     observer.observe(document.body, { childList: true, subtree: true });
     return () => observer.disconnect();
   }, [launcherSelector]);
@@ -86,14 +91,21 @@ export default function ScratchPaper({
   const text = textValue ?? internalText;
   const strokes = strokesValue ?? internalStrokes;
 
-  // Keep the floating tool out of the way of confirmation dialogs and other
-  // modal flows. Visibility is transient; the current draft and open state are
-  // intentionally preserved while the modal is mounted.
   useEffect(() => {
     if (typeof document === "undefined") return;
-    const readModalState = () => setExternalModalOpen(Boolean(document.querySelector('[aria-modal="true"]')));
+    const readModalState = () => {
+      const hasModal = Boolean(document.querySelector('[aria-modal="true"]'));
+      setExternalModalOpen((previous) => (previous === hasModal ? previous : hasModal));
+    };
     readModalState();
-    const observer = new MutationObserver(readModalState);
+    const observer = new MutationObserver((records) => {
+      // Only re-query when elements are added/removed or aria-modal changes;
+      // ignore characterData/other attribute noise.
+      const relevant = records.some(
+        (r) => r.type === "attributes" || r.addedNodes.length > 0 || r.removedNodes.length > 0,
+      );
+      if (relevant) readModalState();
+    });
     observer.observe(document.body, { childList: true, subtree: true, attributes: true, attributeFilter: ["aria-modal"] });
     return () => observer.disconnect();
   }, []);

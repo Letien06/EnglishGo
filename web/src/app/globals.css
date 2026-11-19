@@ -1753,7 +1753,7 @@ h1, h2, h3, h4, h5 {
 
 .hub-hero {
   overflow: hidden;
-  box-shadow: var(--elevation-3), inset 0 1px 0 color-mix(in srgb, white 30%, transparent);
+  box-shadow: var(--elevation-2), inset 0 1px 0 color-mix(in srgb, white 30%, transparent);
 }
 
 .hub-hero .premium-metric {
@@ -1796,7 +1796,7 @@ h1, h2, h3, h4, h5 {
   border-color: color-mix(in srgb, var(--line) 84%, var(--primary) 12%);
 }
 
-.vocab-hero { box-shadow: var(--elevation-3), inset 0 1px 0 color-mix(in srgb, white 30%, transparent); }
+.vocab-hero { box-shadow: var(--elevation-2), inset 0 1px 0 color-mix(in srgb, white 30%, transparent); }
 
 .vocab-tabs {
   border: 1px solid color-mix(in srgb, var(--line) 78%, var(--primary) 12%);
@@ -1819,7 +1819,7 @@ h1, h2, h3, h4, h5 {
 
 .skill-index-hero {
   overflow: hidden;
-  box-shadow: var(--elevation-3), inset 0 1px 0 color-mix(in srgb, white 30%, transparent);
+  box-shadow: var(--elevation-2), inset 0 1px 0 color-mix(in srgb, white 30%, transparent);
 }
 
 .skill-index-page--listen .skill-index-hero .premium-hero-icon,

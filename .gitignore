@@ -1,8 +1,3 @@
-# Maven
-target/
-.m2/
-logs/
-
 # IDE
 .idea/
 *.iml
@@ -11,19 +6,24 @@ logs/
 .project
 .classpath
 
-# Spring profiles with secrets
+# Env & secrets
 .env
-.env.local
-.env.vercel
-.env.railway
-src/main/resources/application-dev.yml
+.env.*
+!.env.example
+*.env
 firebase-service-account*.json
 serviceAccountKey.json
 *.service-account.json
 
-# Node (Tailwind build)
+# Node & build artifacts
 node_modules/
+logs/
+*.log
+.seed-tmp/
 web/.seed-tmp/
+web/test-results/
+web/playwright-output-auth/
 
-# OS
+# OS & deploy
 .DS_Store
+.vercel

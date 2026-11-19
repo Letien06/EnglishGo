@@ -53,7 +53,7 @@ export default async function PracticeHistoryPage({ searchParams }: Props) {
                         {eligibilityLabel(attempt.leaderboardEligibility)}
                       </span>
                     </td>
-                    <td className="p-3 text-muted">{formatElapsed(attempt.elapsedMillis)}</td>
+                    <td className="p-3 text-muted">{formatElapsed(attempt.elapsedMillis, attempt.durationMinutes, attempt.expired)}</td>
                     <td className="p-3 text-muted">{formatDate(attempt.submittedAtMillis)}</td>
                     <td className="p-3 text-right space-x-3">
                       <Link href={`/practice/review/${attempt.attemptId}`} className="text-accent font-semibold">
@@ -95,11 +95,14 @@ function scoreLabel(score: { totalProjectedScore: number | null; maxScore: numbe
   return `~${score.listening?.projectedScaledScore ?? score.reading?.projectedScaledScore ?? 5}/495 TOEIC`;
 }
 
-function formatElapsed(value: number) {
-  const totalSeconds = Math.max(0, Math.round(value / 1000));
+function formatElapsed(value: number, durationMinutes?: number, expired?: boolean) {
+  const maxMillis = durationMinutes && durationMinutes > 0 ? durationMinutes * 60_000 : null;
+  const clamped = maxMillis != null && value > maxMillis ? maxMillis : value;
+  const totalSeconds = Math.max(0, Math.round(clamped / 1000));
   const minutes = Math.floor(totalSeconds / 60);
   const seconds = totalSeconds % 60;
-  return `${minutes} phút ${seconds} giây`;
+  const overLimit = expired || (maxMillis != null && value > maxMillis);
+  return `${minutes} phút ${seconds} giây${overLimit ? " (hết giờ)" : ""}`;
 }
 
 function partLabel(parts: number[]) {

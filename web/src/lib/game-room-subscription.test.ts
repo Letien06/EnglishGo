@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 const mocks = vi.hoisted(() => ({ snapshot: vi.fn(), db: vi.fn() }));
 vi.mock("firebase/firestore", () => ({ doc: vi.fn(), collection: vi.fn(), onSnapshot: mocks.snapshot }));
-vi.mock("./firebase/client", () => ({ getClientDb: mocks.db }));
+vi.mock("./firebase/client-firestore", () => ({ getClientDb: mocks.db }));
 import { subscribeGameRoom } from "./game-room-subscription";
 
 let stop: (() => void) | undefined;

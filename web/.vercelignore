@@ -1,0 +1,9 @@
+.content/
+.next/
+.seed-tmp/
+node_modules/
+playwright-output-auth/
+test-results/
+*.log
+.env*
+!.env.example

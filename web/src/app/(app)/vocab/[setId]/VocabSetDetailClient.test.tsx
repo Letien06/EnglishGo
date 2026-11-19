@@ -19,7 +19,7 @@ afterEach(async () => { cleanup(); await tick(15_000); vi.useRealTimers(); vi.un
 
 it("updates mastery immediately and batches two clicks while the server is slow", async () => {
   let resolve!: (response: Response) => void;
-  const fetcher = vi.fn((_url: string, _options?: RequestInit) => new Promise<Response>((done) => { resolve = done; }));
+  const fetcher = vi.fn<(url: string, options?: RequestInit) => Promise<Response>>(() => new Promise<Response>((done) => { resolve = done; }));
   vi.stubGlobal("fetch", fetcher);
   render(<VocabSetDetailClient setId={1} words={words} isOwner={false} userUid="detail-batch" />);
   fireEvent.click(mark("apple"));

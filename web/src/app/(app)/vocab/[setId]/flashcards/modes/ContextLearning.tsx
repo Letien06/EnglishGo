@@ -42,13 +42,18 @@ function FallbackIllustration({ word }: { word: string }) {
   );
 }
 
+function escapeRegExp(value: string): string {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
 function renderHighlightedSentence(sentence: string, targetWord: string) {
   if (!sentence || !targetWord) return sentence;
-  const stem = targetWord.length > 4 ? targetWord.slice(0, 4) : targetWord;
-  const regex = new RegExp(`(\\b${stem}[a-z]*\\b)`, "gi");
-  const parts = sentence.split(regex);
+  const stem = escapeRegExp(targetWord.length > 4 ? targetWord.slice(0, 4) : targetWord);
+  const splitRegex = new RegExp(`(\\b${stem}[a-z]*\\b)`, "gi");
+  const matchRegex = new RegExp(`^\\b${stem}[a-z]*\\b$`, "i");
+  const parts = sentence.split(splitRegex);
   return parts.map((part, i) =>
-    regex.test(part) ? (
+    matchRegex.test(part) ? (
       <span
         key={i}
         className="text-cyan-300 underline decoration-dotted decoration-2 underline-offset-8 font-extrabold"

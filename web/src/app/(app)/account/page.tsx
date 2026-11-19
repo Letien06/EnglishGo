@@ -2,6 +2,7 @@ import LogoutButton from "@/components/LogoutButton";
 import { requireUserForRead } from "@/lib/auth/session";
 import { getSettings } from "@/lib/services/account";
 import AccountForms from "./AccountForms";
+import MembershipPanel from "./MembershipPanel";
 
 export const dynamic = "force-dynamic";
 
@@ -41,11 +42,16 @@ export default async function AccountPage() {
                 <span>▯</span>
                 Thiết bị
               </a>
+              <a className="flex items-center gap-3 rounded-lg px-4 py-3 font-extrabold text-ink2" href="#membership">
+                <span aria-hidden="true">◇</span>
+                Gói tài khoản
+              </a>
             </nav>
           </aside>
 
           <section className="account-content rounded-xl bg-white p-6 shadow-sm sm:p-8">
             <AccountForms settings={settings} />
+            <MembershipPanel />
           </section>
         </div>
       </div>

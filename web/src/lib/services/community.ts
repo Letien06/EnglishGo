@@ -7,6 +7,7 @@ import { readServerCache } from "../server-cache";
 
 const ALL_TIME = "ALL_TIME";
 const WEEKLY = "WEEKLY";
+const TARGET_TYPE_PATTERN = /^[A-Z0-9_-]{1,32}$/;
 
 export interface CommunityComment {
   id: string;
@@ -39,13 +40,14 @@ export async function comments(
   targetType = "GENERAL",
   targetId = 1,
 ): Promise<CommunityComment[]> {
-  const snap = await commentCollection(targetType, targetId)
+  const safeType = sanitizeTargetType(targetType);
+  const safeId = sanitizeTargetId(targetId);
+  const snap = await commentCollection(safeType, safeId)
     .where("deletedAtMillis", "==", null)
     .orderBy("createdAtMillis", "desc")
     .limit(30)
     .get();
-  return snap.docs
-    .map(toComment);
+  return snap.docs.map(toComment);
 }
 
 export async function addComment(
@@ -55,21 +57,37 @@ export async function addComment(
   targetId = 1,
 ): Promise<CommunityComment> {
   if (!user) throw Unauthorized("User not found");
-  if (!content.trim()) throw BadRequest("Comment content is required");
+  const trimmed = content.trim();
+  if (!trimmed) throw BadRequest("Comment content is required");
+  if (trimmed.length > 2_000) throw BadRequest("Comment is too long (max 2000 characters)");
+  const safeType = sanitizeTargetType(targetType);
+  const safeId = sanitizeTargetId(targetId);
   await enforceDailyActionLimit(user.uid, "community-comments", 30);
 
+  const now = Date.now();
+  const masked = maskEmail(user.email);
   const data = {
     uid: user.uid,
-    email: user.email,
+    email: masked,
     displayName: user.displayName,
-    targetType,
-    targetId,
-    content: content.trim(),
-    createdAtMillis: Date.now(),
+    targetType: safeType,
+    targetId: safeId,
+    content: trimmed,
+    deletedAtMillis: null,
+    createdAtMillis: now,
     createdAt: FieldValue.serverTimestamp(),
   };
-  const ref = await commentCollection(targetType, targetId).add(data);
-  return { id: ref.id, ...data };
+  const ref = await commentCollection(safeType, safeId).add(data);
+  return {
+    id: ref.id,
+    uid: user.uid,
+    email: masked,
+    displayName: user.displayName,
+    targetType: safeType,
+    targetId: safeId,
+    content: trimmed,
+    createdAtMillis: now,
+  };
 }
 
 export async function leaderboard(
@@ -77,8 +95,6 @@ export async function leaderboard(
 ): Promise<LeaderboardEntry[]> {
   const normalized = normalizePeriod(period);
   return readServerCache(async () => {
-    // Keep ranking work in Firestore so a growing community does not turn
-    // this public page into a full collection scan on every visit.
     const snap = await leaderboardCollection(normalized)
       .orderBy("score", "desc")
       .limit(20)
@@ -96,7 +112,7 @@ export async function addScore(user: Pick<AppUser, "uid" | "email" | "displayNam
   await ref.set(
     {
       uid: user.uid,
-      email: user.email,
+      email: maskEmail(user.email),
       displayName: user.displayName,
       score: FieldValue.increment(score),
       period: ALL_TIME,
@@ -128,14 +144,41 @@ export async function submitContribution(
     displayName: user.displayName,
     targetType: "COMMUNITY_CONTRIBUTION",
     action: "SUBMITTED",
-    title: title.trim(),
-    content: content.trim(),
-    sourceNote: sourceNote?.trim() || null,
+    title: title.trim().slice(0, 200),
+    content: content.trim().slice(0, 10_000),
+    sourceNote: sourceNote?.trim().slice(0, 500) || null,
     status: "PENDING",
     createdAtMillis: Date.now(),
     createdAt: FieldValue.serverTimestamp(),
   });
   return { id: ref.id };
+}
+
+function sanitizeTargetType(value: string): string {
+  const upper = value.trim().toUpperCase();
+  if (!TARGET_TYPE_PATTERN.test(upper)) {
+    throw BadRequest("Invalid comment target type");
+  }
+  return upper;
+}
+
+function sanitizeTargetId(value: number): number {
+  if (!Number.isInteger(value) || value < 0 || value > Number.MAX_SAFE_INTEGER) {
+    throw BadRequest("Invalid comment target ID");
+  }
+  return value;
+}
+
+function maskEmail(value: string | null | undefined): string | null {
+  if (!value) return null;
+  const trimmed = value.trim();
+  const at = trimmed.indexOf("@");
+  if (at <= 0) return null;
+  const local = trimmed.slice(0, at);
+  const domain = trimmed.slice(at + 1);
+  if (local.includes("*")) return trimmed;
+  const prefix = local.slice(0, Math.min(2, local.length));
+  return `${prefix}***@${domain}`;
 }
 
 function commentCollection(targetType: string, targetId: number) {
@@ -153,7 +196,7 @@ function toComment(doc: FirebaseFirestore.DocumentSnapshot): CommunityComment {
   return {
     id: doc.id,
     uid: stringValue(doc.get("uid")) ?? "",
-    email: stringValue(doc.get("email")),
+    email: maskEmail(stringValue(doc.get("email"))),
     displayName: stringValue(doc.get("displayName")),
     targetType: stringValue(doc.get("targetType")) ?? "GENERAL",
     targetId: numberValue(doc.get("targetId")) ?? 1,
@@ -168,7 +211,7 @@ function toLeaderboardEntry(
 ): LeaderboardEntry {
   return {
     uid: stringValue(doc.get("uid")) ?? doc.id,
-    email: stringValue(doc.get("email")),
+    email: maskEmail(stringValue(doc.get("email"))),
     displayName: stringValue(doc.get("displayName")),
     score: numberValue(doc.get("score")) ?? 0,
     period,

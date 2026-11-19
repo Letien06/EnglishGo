@@ -114,15 +114,31 @@ export async function enrichCandidatePronunciation(
 /*  Dictionary API                                                     */
 /* ------------------------------------------------------------------ */
 
+const dictionaryLookupCache = new Map<string, { expiresAt: number; entry: DictionaryEntry | null }>();
+const DICTIONARY_CACHE_TTL_MS = 15 * 60 * 1000;
+const DICTIONARY_CACHE_MAX_ENTRIES = 500;
+
 async function lookup(word: string): Promise<DictionaryEntry | null> {
+  const key = word.toLowerCase().trim();
+  if (!key) return null;
+  const cached = dictionaryLookupCache.get(key);
+  if (cached && cached.expiresAt > Date.now()) {
+    return cached.entry;
+  }
   try {
     const res = await fetch(
-      `https://api.dictionaryapi.dev/api/v2/entries/en/${encodeURIComponent(word.toLowerCase().trim())}`,
+      `https://api.dictionaryapi.dev/api/v2/entries/en/${encodeURIComponent(key)}`,
+      { signal: AbortSignal.timeout(5_000) },
     );
-    if (!res.ok) return null;
-    const json = await res.json();
-    if (!Array.isArray(json) || json.length === 0) return null;
-    return parseEntry(json[0]);
+    const resolved = res.ok
+      ? await res.json().then((json) => (Array.isArray(json) && json.length > 0 ? parseEntry(json[0]) : null))
+      : null;
+    if (dictionaryLookupCache.size >= DICTIONARY_CACHE_MAX_ENTRIES) {
+      const oldestKey = dictionaryLookupCache.keys().next().value;
+      if (oldestKey !== undefined) dictionaryLookupCache.delete(oldestKey);
+    }
+    dictionaryLookupCache.set(key, { expiresAt: Date.now() + DICTIONARY_CACHE_TTL_MS, entry: resolved });
+    return resolved;
   } catch {
     return null;
   }
