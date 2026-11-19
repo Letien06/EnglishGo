@@ -71,6 +71,7 @@ export default function PracticeSessionClient({ session, userUid }: { session: P
   const [submitting, setSubmitting] = useState(false);
   const [confirmSubmit, setConfirmSubmit] = useState(false);
   const [confirmExit, setConfirmExit] = useState(false);
+  const [navFilter, setNavFilter] = useState<"all" | "unanswered" | "marked">("all");
   const [activeQuestionId, setActiveQuestionId] = useState(() => {
     const index = Math.min(Math.max(initialDraft.currentQuestionIndex, 0), Math.max(session.questions.length - 1, 0));
     return session.questions[index]?.id ?? session.questions[0]?.id ?? 0;
@@ -122,6 +123,17 @@ export default function PracticeSessionClient({ session, userUid }: { session: P
   }, [session.questions]);
   const activeIndex = Math.max(0, questionIndexById.get(activeQuestionId) ?? 0);
   const activeQuestion = session.questions[activeIndex] ?? session.questions[0];
+  const groupQuestions = useMemo(() => {
+    if (!activeQuestion?.group) return [];
+    return session.questions.filter((q) => q.part === activeQuestion.part && q.group?.id === activeQuestion.group?.id);
+  }, [activeQuestion, session.questions]);
+  const nextUnansweredQuestion = useMemo(() => {
+    for (let offset = 1; offset <= session.questions.length; offset++) {
+      const candidate = session.questions[(activeIndex + offset) % session.questions.length];
+      if (candidate && !hasAnswer(answers[String(candidate.id)])) return candidate;
+    }
+    return null;
+  }, [activeIndex, answers, session.questions]);
   const currentAudioUrl = activeQuestion?.audioUrl || null;
   const hasListening = session.questions.some((question) => question.part <= 4);
   const timerClass = remaining <= 60 ? "bg-red-600 text-white" : remaining <= 300 ? "bg-amber-500 text-white" : "bg-accent text-gold-ink";
@@ -302,6 +314,49 @@ export default function PracticeSessionClient({ session, userUid }: { session: P
     return () => window.removeEventListener("beforeunload", onBeforeUnload);
   }, []);
 
+  useEffect(() => {
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (submittingRef.current || confirmSubmit || confirmExit) return;
+      if (event.ctrlKey || event.metaKey || event.altKey || event.shiftKey || event.repeat) return;
+      const target = event.target as HTMLElement | null;
+      if (target && (target.tagName === "INPUT" || target.tagName === "TEXTAREA" || target.tagName === "SELECT" || target.isContentEditable)) {
+        return;
+      }
+      if (event.key === "ArrowLeft") {
+        event.preventDefault();
+        goByOffset(-1);
+        return;
+      }
+      if (event.key === "ArrowRight") {
+        event.preventDefault();
+        goByOffset(1);
+        return;
+      }
+      if ((event.key === "m" || event.key === "M") && activeQuestion) {
+        event.preventDefault();
+        toggleMarked(activeQuestion.id);
+        return;
+      }
+      if (event.key === " " && currentAudioUrl && target?.tagName !== "BUTTON" && target?.tagName !== "A") {
+        event.preventDefault();
+        toggleAudio();
+        return;
+      }
+      const keyMap: Record<string, number> = { "1": 0, "2": 1, "3": 2, "4": 3, a: 0, b: 1, c: 2, d: 3, A: 0, B: 1, C: 2, D: 3 };
+      const optionIdx = keyMap[event.key];
+      if (optionIdx !== undefined && activeQuestion) {
+        const opts = session.optionsByQuestionId[String(activeQuestion.id)] ?? [];
+        const picked = opts[optionIdx];
+        if (picked) {
+          event.preventDefault();
+          setAnswer(activeQuestion.id, { selectedOptionId: picked.id });
+        }
+      }
+    };
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  });
+
 
   return (
     <main className="exam-workspace design-system min-h-[calc(100dvh-4rem)] bg-white">
@@ -361,6 +416,10 @@ export default function PracticeSessionClient({ session, userUid }: { session: P
                 key={activeQuestion.id}
                 question={activeQuestion}
                 index={activeIndex}
+                groupQuestions={groupQuestions.length > 1 ? groupQuestions : undefined}
+                questionIndexById={questionIndexById}
+                answers={answers}
+                onSelectQuestion={goToQuestion}
                 answer={answers[String(activeQuestion.id)] ?? { selectedOptionId: null, textResponse: null }}
                 marked={markedQuestionIds.has(activeQuestion.id)}
                 active
@@ -385,9 +444,42 @@ export default function PracticeSessionClient({ session, userUid }: { session: P
             <span role="status" className="text-xs font-bold text-muted">{status || draftQueue.error || (draftQueue.isSaving ? "Đang đồng bộ bản nháp…" : draftQueue.pendingCount ? `${draftQueue.pendingCount} bản nháp chờ đồng bộ` : draftQueue.lastSavedAt ? "Đã đồng bộ bản nháp" : "Bản nháp đã sẵn sàng")}</span>
             {draftQueue.pendingCount > 0 && <button type="button" disabled={submitting || draftQueue.isSaving} onClick={() => { draftQueue.retry(); void draftQueue.flush(); }} className="text-sm font-bold text-primary">Thử lưu lại</button>}
           </div>
+          <div className="mt-3 flex flex-wrap gap-1.5" role="group" aria-label="Bộ lọc câu hỏi">
+            {([
+              ["all", `Tất cả (${totalQuestions})`],
+              ["unanswered", `Chưa làm (${totalQuestions - answeredCount})`],
+              ["marked", `Đánh dấu (${markedQuestionIds.size})`],
+            ] as const).map(([key, label]) => (
+              <button
+                key={key}
+                type="button"
+                aria-pressed={navFilter === key}
+                onClick={() => setNavFilter(key)}
+                className={`rounded-lg border px-2.5 py-1 text-xs font-bold transition-colors ${
+                  navFilter === key ? "border-accent bg-accent/15 text-ink" : "border-line bg-surface-soft text-muted hover:text-ink"
+                }`}
+              >
+                {label}
+              </button>
+            ))}
+          </div>
+          {nextUnansweredQuestion && (
+            <button
+              type="button"
+              onClick={() => goToQuestion(nextUnansweredQuestion.id)}
+              className="mt-2.5 w-full rounded-lg border border-line bg-surface-soft px-3 py-1.5 text-xs font-bold text-ink hover:border-accent"
+            >
+              Tới câu chưa làm tiếp theo (#{(questionIndexById.get(nextUnansweredQuestion.id) ?? 0) + 1}) →
+            </button>
+          )}
           <div className="mt-4 space-y-4">
             {session.config.parts.map((part) => {
-              const questions = questionsByPart.get(part) ?? [];
+              const allPartQuestions = questionsByPart.get(part) ?? [];
+              const questions = allPartQuestions.filter((question) => {
+                if (navFilter === "unanswered") return !hasAnswer(answers[String(question.id)]);
+                if (navFilter === "marked") return markedQuestionIds.has(question.id);
+                return true;
+              });
               if (questions.length === 0) return null;
               return (
                 <section key={part}>
@@ -460,6 +552,10 @@ export default function PracticeSessionClient({ session, userUid }: { session: P
 function QuestionCard({
   question,
   index,
+  groupQuestions,
+  questionIndexById,
+  answers,
+  onSelectQuestion,
   answer,
   marked,
   active,
@@ -477,6 +573,10 @@ function QuestionCard({
 }: {
   question: PracticeQuestion;
   index: number;
+  groupQuestions?: PracticeQuestion[];
+  questionIndexById?: ReadonlyMap<number, number>;
+  answers?: PracticeAnswers;
+  onSelectQuestion?: (questionId: number) => void;
   answer: { selectedOptionId: number | null; textResponse: string | null };
   marked: boolean;
   active: boolean;
@@ -509,6 +609,32 @@ function QuestionCard({
           <p className="text-xs font-extrabold text-muted">Part {question.part}</p>
           <h2 className="text-lg font-extrabold text-ink">Question {index + 1}</h2>
         </div>
+        {groupQuestions && groupQuestions.length > 1 && (
+          <div className="flex flex-wrap items-center gap-1.5 rounded-lg border border-line bg-surface-soft px-2.5 py-1 text-xs" aria-label="Cụm câu cùng đoạn">
+            <span className="font-bold text-muted">Cùng cụm:</span>
+            {groupQuestions.map((sibling) => {
+              const sibNumber = (questionIndexById?.get(sibling.id) ?? 0) + 1;
+              const isCurrent = sibling.id === question.id;
+              const isDone = Boolean(answers && hasAnswer(answers[String(sibling.id)]));
+              return (
+                <button
+                  key={sibling.id}
+                  type="button"
+                  onClick={() => onSelectQuestion?.(sibling.id)}
+                  className={`rounded px-2 py-0.5 font-extrabold ${
+                    isCurrent
+                      ? "bg-accent text-gold-ink"
+                      : isDone
+                        ? "bg-emerald-100 text-emerald-800"
+                        : "bg-surface text-ink"
+                  }`}
+                >
+                  #{sibNumber}
+                </button>
+              );
+            })}
+          </div>
+        )}
         <div className="flex gap-2">
           {hasAnswer(answer) ? (
             <button type="button" onClick={onClear} disabled={disabled} className="rounded-lg border border-line px-3 py-2 text-xs font-bold text-muted disabled:opacity-60">

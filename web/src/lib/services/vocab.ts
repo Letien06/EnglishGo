@@ -1805,16 +1805,18 @@ export function applySm2(
   let status: VocabProgressStatus;
   let nextReviewAtMillis: number;
 
-  if (quality >= 3) {
+  if (quality >= 2) {
+    const isHard = quality <= 3;
+    const isEasy = quality >= 5;
     if (repetitions === 0) {
-      interval = quality >= 5 ? 3 : 1;
+      interval = isEasy ? 3 : 1;
     } else if (repetitions === 1) {
-      interval = quality === 3 ? 3 : quality >= 5 ? 8 : 6;
+      interval = isHard ? 3 : isEasy ? 8 : 6;
     } else {
       const base = Math.max(1, interval);
-      if (quality === 3) {
+      if (isHard) {
         interval = Math.max(base + 1, Math.round(base * 1.2));
-      } else if (quality >= 5) {
+      } else if (isEasy) {
         interval = Math.max(base + 2, Math.round(base * easeFactor * 1.3));
       } else {
         interval = Math.max(base + 1, Math.round(base * easeFactor));
@@ -1822,8 +1824,9 @@ export function applySm2(
     }
     interval = Math.min(MAX_SRS_INTERVAL_DAYS, interval);
     repetitions++;
+    const effectiveQuality = quality === 2 ? 3 : quality;
     easeFactor =
-      easeFactor + (0.1 - (5 - quality) * (0.08 + (5 - quality) * 0.02));
+      easeFactor + (0.1 - (5 - effectiveQuality) * (0.08 + (5 - effectiveQuality) * 0.02));
     if (easeFactor < 1.3) easeFactor = 1.3;
 
     if (quality >= 4 && repetitions >= 3) {

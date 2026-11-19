@@ -581,6 +581,7 @@ export async function submit(
       submittedAtMillis,
       ...leaderboardDecision,
     }).catch(() => undefined),
+    syncPracticeMistakesToLearningProgress(user.uid, answerKey.test.externalId, answerDocs, submittedAtMillis).catch(() => undefined),
   ]);
   invalidateProgressReportCache(user.uid);
   return {
@@ -598,6 +599,67 @@ export async function submit(
   };
 }
 
+async function syncPracticeMistakesToLearningProgress(
+  uid: string,
+  externalTestId: string,
+  answers: ReviewAnswer[],
+  submittedAtMillis: number,
+): Promise<void> {
+  if (!uid || !externalTestId) return;
+  const wrongByPart = new Map<number, ReviewAnswer[]>();
+  for (const answer of answers) {
+    if (!answer.selectedAnswer || answer.correct) continue;
+    const list = wrongByPart.get(answer.part) ?? [];
+    list.push(answer);
+    wrongByPart.set(answer.part, list);
+  }
+  if (wrongByPart.size === 0) return;
+
+  const userRef = adminDb.collection("users").doc(uid);
+  const batch = adminDb.batch();
+  let writes = 0;
+
+  for (const [part, wrongAnswers] of wrongByPart.entries()) {
+    const partContent = await dautoeic.getPart(externalTestId, part).catch(() => null);
+    if (!partContent) continue;
+    const byRouteId = new Map(partContent.questions.map((q) => [dautoeic.routeQuestionId(q.id), q]));
+    const collectionName = part <= 4 ? "listeningProgress" : "readingProgress";
+
+    for (const wrong of wrongAnswers) {
+      const externalQuestion = byRouteId.get(wrong.questionId);
+      if (!externalQuestion) continue;
+      const itemId = ![1, 2, 5].includes(part) && externalQuestion.passageId ? externalQuestion.passageId : externalQuestion.id;
+      const level = Math.max(1, Math.min(4, Math.trunc(externalQuestion.difficultyLevel ?? partContent.test.difficultyLevel ?? 1)));
+      const docRef = userRef.collection(collectionName).doc(externalQuestion.id);
+      batch.set(
+        docRef,
+        {
+          source: "DAUTOEIC",
+          part,
+          level,
+          sourceLevel: level,
+          testId: externalTestId,
+          itemId,
+          questionId: externalQuestion.id,
+          selectedAnswer: wrong.selectedAnswer,
+          correctAnswer: wrong.correctAnswer,
+          correct: false,
+          wrongCount: FieldValue.increment(1),
+          modeUsed: "normal",
+          completedAtMillis: submittedAtMillis,
+          updatedAt: FieldValue.serverTimestamp(),
+        },
+        { merge: true },
+      );
+      writes++;
+      if (writes >= 150) break;
+    }
+    if (writes >= 150) break;
+  }
+
+  if (writes > 0) await batch.commit();
+}
+
 async function updatePracticeUserProfile(
   uid: string,
   score: number,
@@ -608,6 +670,7 @@ async function updatePracticeUserProfile(
     mode: PracticeMode;
     parts: number[];
     partBreakdown: PracticePartBreakdown[];
+    scoreBreakdown?: PracticeScoreBreakdown;
     answers?: ReviewAnswer[];
     submittedAtMillis: number;
   },
@@ -619,13 +682,14 @@ async function updatePracticeUserProfile(
   const recommendation = weakest
     ? {
         type: "practice_part",
-        label: `Luyen tiep Part ${weakest.part}`,
+        label: `Luyện tiếp Part ${weakest.part}`,
         href: `/practice/session/${attempt.testId}?mode=part&parts=${weakest.part}&time=${PART_DEFAULTS[weakest.part]?.suggestedMinutes ?? 20}`,
-        reason: `Part ${weakest.part} dat ${weakest.correct}/${weakest.total} cau dung (${weakest.percent}%).`,
+        reason: `Part ${weakest.part} đạt ${weakest.correct}/${weakest.total} câu đúng (${weakest.percent}%).`,
         updatedAtMillis: attempt.submittedAtMillis,
       }
     : null;
   const weakTags = weakest ? buildWeakTagBreakdown(attempt.answers ?? []) : null;
+  const projectedTotal = attempt.mode === "exam" ? attempt.scoreBreakdown?.totalProjectedScore ?? null : null;
 
   const userRef = adminDb.collection("users").doc(uid);
   await adminDb.runTransaction(async (tx) => {
@@ -633,6 +697,7 @@ async function updatePracticeUserProfile(
     const currentCount = numberValue(snap.get("practiceCompletedTests")) ?? 0;
     const currentTotal = numberValue(snap.get("practiceScoreTotal")) ?? 0;
     const currentBest = numberValue(snap.get("practiceBestScore")) ?? 0;
+    const existingCurrentScore = numberValue(snap.get("currentScore"));
     const nextCount = currentCount + 1;
     const nextTotal = currentTotal + score;
     const now = Date.now();
@@ -644,6 +709,7 @@ async function updatePracticeUserProfile(
         practiceAverageScore: round2(nextTotal / nextCount),
         practiceBestScore: Math.max(currentBest, score),
         lastPracticeSubmittedAtMillis: attempt.submittedAtMillis,
+        ...(projectedTotal != null && existingCurrentScore == null ? { currentScore: projectedTotal } : {}),
         ...(weakest
           ? {
               practiceWeakAreas: attempt.partBreakdown,

@@ -870,7 +870,7 @@ export default function ContextLearning({
                       className={`${styles.dauSrsBtn} ${styles.dauSrsAgain}`}
                     >
                       <span>Học lại</span>
-                      <small>1m</small>
+                      <small>10 phút</small>
                     </button>
                     <button
                       aria-label="Khó"
@@ -878,7 +878,7 @@ export default function ContextLearning({
                       className={`${styles.dauSrsBtn} ${styles.dauSrsHard}`}
                     >
                       <span>Khó</span>
-                      <small>12h</small>
+                      <small>{isWordMastered(word) || studyIntent === "review" ? "3 ngày" : "1 ngày"}</small>
                     </button>
                     <button
                       aria-label="Tốt"
@@ -886,7 +886,7 @@ export default function ContextLearning({
                       className={`${styles.dauSrsBtn} ${styles.dauSrsGood}`}
                     >
                       <span>Tốt</span>
-                      <small>18h</small>
+                      <small>{isWordMastered(word) || studyIntent === "review" ? "6 ngày" : "1 ngày"}</small>
                     </button>
                     <button
                       aria-label="Dễ"
@@ -894,7 +894,7 @@ export default function ContextLearning({
                       className={`${styles.dauSrsBtn} ${styles.dauSrsEasy}`}
                     >
                       <span>Dễ</span>
-                      <small>1d</small>
+                      <small>{isWordMastered(word) || studyIntent === "review" ? "8 ngày" : "3 ngày"}</small>
                     </button>
                   </div>
                 </div>

@@ -76,12 +76,26 @@ export default function GrammarPracticeClient({ topic, metadata, learnerId, revi
     if (!reviewMode) {
       try { localStorage.setItem(storageKey, JSON.stringify(updated)); }
       catch { setStorageStatus("Không thể lưu tiến độ. Bạn vẫn có thể tiếp tục luyện tập."); }
+      if (learnerId && learnerId !== "guest" && typeof navigator !== "undefined" && typeof navigator.sendBeacon === "function") {
+        try {
+          const payload = JSON.stringify({
+            topicId: topic.topicId,
+            questionId: question.id,
+            selectedAnswer: letter,
+            correct: letter === question.answer,
+          });
+          navigator.sendBeacon("/api/grammar/progress", new Blob([payload], { type: "application/json" }));
+        } catch {
+          // Best-effort cloud sync must never block local grammar study.
+        }
+      }
     }
-  }, [loaded, question, selected, answers, reviewMode, questions.length, storageKey]);
+  }, [loaded, question, selected, answers, reviewMode, questions.length, storageKey, learnerId, topic.topicId]);
   useEffect(() => {
     const keydown = (event: KeyboardEvent) => {
       if (event.defaultPrevented || document.querySelector('[aria-modal="true"]') || event.ctrlKey || event.metaKey || event.altKey || event.shiftKey || event.repeat || (event.target instanceof HTMLElement && event.target.closest("input, textarea, select, [contenteditable='true']"))) return;
-      if (/^[1-4]$/.test(event.key)) { event.preventDefault(); answer(["A", "B", "C", "D"][Number(event.key) - 1]); }
+      if (/^[1-4]$/.test(event.key)) { event.preventDefault(); answer(["A", "B", "C", "D"][Number(event.key) - 1]); return; }
+      if (/^[a-dA-D]$/.test(event.key)) { event.preventDefault(); answer(event.key.toUpperCase()); return; }
       if (event.key === "ArrowLeft" && index > 0) { event.preventDefault(); setIndex(index - 1); }
       if (event.key === "ArrowRight" && index < questions.length - 1) { event.preventDefault(); setIndex(index + 1); }
     };

@@ -41,4 +41,16 @@ describe("exam draft UI", () => {
     expect(screen.getByRole("radio", { name: "Answer A" })).not.toBeChecked();
     expect(fetcher).not.toHaveBeenCalled();
   });
+
+  it("supports keyboard shortcuts (1-4 / A-D, M mark) and navigator filters", () => {
+    const fetcher = vi.fn().mockResolvedValue(new Response(JSON.stringify({ success: true })));
+    vi.stubGlobal("fetch", fetcher);
+    render(<PracticeSessionClient session={session} userUid="alice" />);
+    expect(screen.getByRole("button", { name: "Chưa làm (1)" })).toBeInTheDocument();
+    fireEvent.keyDown(window, { key: "m" });
+    expect(screen.getByRole("button", { name: "Đánh dấu (1)" })).toBeInTheDocument();
+    fireEvent.keyDown(window, { key: "b" });
+    expect(screen.getByRole("radio", { name: "Answer B" })).toBeChecked();
+    expect(screen.getByRole("button", { name: "Chưa làm (0)" })).toBeInTheDocument();
+  });
 });
