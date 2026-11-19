@@ -150,10 +150,23 @@ export function mapAuthorizedPracticeRows({ sets, tests, questions, passages, st
   return { materials, report: { sourceTests: visibleTests.length, sourceQuestions: mappedQuestions.length, sourcePassages: mappedPassages.length, retiredStats, omittedEmptyPracticePassages } };
 }
 
-/** Preserve every archived nonempty value; fill gaps without replacing stable identities. */
-export function fillArchived(old, incoming) {
+const LEGACY_PART1_IMAGE_RE = /\/storage\/v1\/object\/public\/mock-test-media\/dautoeic\/p1\//;
+
+/** Preserve every archived nonempty value; fill gaps without replacing stable identities,
+ * except when a legacy Part 1 image URL has been migrated upstream to a new path. */
+export function fillArchived(old, incoming, fieldName) {
   if (old == null || old === "") return incoming ?? old;
   if (incoming == null) return old;
+  if (
+    fieldName === "imageUrl"
+    && typeof old === "string"
+    && typeof incoming === "string"
+    && incoming !== ""
+    && incoming !== old
+    && LEGACY_PART1_IMAGE_RE.test(old)
+  ) {
+    return incoming;
+  }
   if (Array.isArray(old)) {
     if (!Array.isArray(incoming)) throw new Error("Archived payload type changed.");
     if (!old.length) return incoming;
@@ -162,7 +175,7 @@ export function fillArchived(old, incoming) {
   }
   if (typeof old === "object") {
     if (typeof incoming !== "object" || Array.isArray(incoming)) throw new Error("Archived payload type changed.");
-    return Object.fromEntries([...new Set([...Object.keys(old), ...Object.keys(incoming)])].map((field) => [field, fillArchived(old[field], incoming[field])]));
+    return Object.fromEntries([...new Set([...Object.keys(old), ...Object.keys(incoming)])].map((field) => [field, fillArchived(old[field], incoming[field], field)]));
   }
   return old;
 }

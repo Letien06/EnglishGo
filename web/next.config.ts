@@ -147,10 +147,19 @@ const nextConfig: NextConfig = {
           },
         ],
       },
-      // Versioned static assets under /writing/*-v1.webp and /_next/static can be
-      // cached immutably; keep unversioned root icons/OG images revalidatable.
+      // Versioned static assets under /writing/*-v1.webp, /media/dauenglish/*, and
+      // /_next/static can be cached immutably; keep unversioned root icons/OG images revalidatable.
       {
         source: "/writing/:path*-v1.webp",
+        headers: [
+          {
+            key: "Cache-Control",
+            value: "public, max-age=31536000, immutable",
+          },
+        ],
+      },
+      {
+        source: "/media/dauenglish/:path*",
         headers: [
           {
             key: "Cache-Control",

@@ -607,6 +607,20 @@ async function mirrorJsonFirst<T>(
   return fresh;
 }
 
+function normalizeSessionMedia(session: DauToeicDifficultySession): DauToeicDifficultySession {
+  return {
+    ...session,
+    items: (session.items ?? []).map((item) => ({
+      ...item,
+      imageUrl: normalizeDauToeicImageUrl(item.imageUrl),
+      questions: (item.questions ?? []).map((question) => ({
+        ...question,
+        imageUrl: normalizeDauToeicImageUrl(question.imageUrl),
+      })),
+    })),
+  };
+}
+
 async function mirrorSessionFirst(
   key: string,
   fetcher: () => Promise<DauToeicDifficultySession>,
@@ -614,7 +628,9 @@ async function mirrorSessionFirst(
   if (isDriveContentEnabled()) {
     const parts = key.split("__");
     const limit = parts.pop();
-    const session = await readDriveMaterial<DauToeicDifficultySession>([...parts, "all"].join("__"));
+    const session = normalizeSessionMedia(
+      await readDriveMaterial<DauToeicDifficultySession>([...parts, "all"].join("__")),
+    );
     const items = limit === "all" ? session.items : session.items.slice(0, Number(limit));
     return { ...session, items, total: items.length };
   }
@@ -623,8 +639,8 @@ async function mirrorSessionFirst(
   // session (for example when a sync ran while the upstream API was
   // temporarily unavailable). Treat that as a cache miss so the learner does
   // not get silently redirected back to the dashboard.
-  if (mirrored && mirrored.items.length > 0) return mirrored;
-  const fresh = await fetcher();
+  if (mirrored && mirrored.items.length > 0) return normalizeSessionMedia(mirrored);
+  const fresh = normalizeSessionMedia(await fetcher());
   await writeMirrorSession(key, fresh).catch(() => undefined);
   return fresh;
 }

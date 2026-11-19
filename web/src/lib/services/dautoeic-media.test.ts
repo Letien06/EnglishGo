@@ -7,9 +7,15 @@ describe("DauEnglish image URLs", () => {
       .toBe("https://odlnhfaygiotcyehuysw.supabase.co/storage/v1/object/public/mock-test-media/m/9b85c99167814ad2a47d1106303d8e96/1790571273990.jpg.w960.webp");
   });
 
-  it("leaves non-legacy media untouched", () => {
+  it("rewrites broken legacy Part 1 Test 8 objects to the local mirrored WebP asset", () => {
+    expect(normalizeDauToeicImageUrl("https://odlnhfaygiotcyehuysw.supabase.co/storage/v1/object/public/mock-test-media/dautoeic/p1/crackv1t8q5/1790579432060.jpg"))
+      .toBe("/media/dauenglish/80157f23923ff707.webp");
+  });
+
+  it("leaves non-legacy and already-mirrored media untouched", () => {
     const url = "https://example.com/question.jpg";
     expect(normalizeDauToeicImageUrl(url)).toBe(url);
+    expect(normalizeDauToeicImageUrl("/media/dauenglish/80157f23923ff707.webp")).toBe("/media/dauenglish/80157f23923ff707.webp");
     expect(normalizeDauToeicImageUrl(null)).toBeNull();
   });
 });

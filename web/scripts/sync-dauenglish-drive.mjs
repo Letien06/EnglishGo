@@ -7,6 +7,7 @@ import { buildDrivePackage, sha256 } from "./lib/drive-package.mjs";
 import { connectDrive } from "./lib/drive-connection.mjs";
 import { buildReuseCandidates, validateReuseSourceFolder, validateReuseMetadata, verifyReuseChunk } from "./lib/drive-upload-reuse.mjs";
 import { createAtomicCheckpointWriter, runChunkWorkers } from "./lib/drive-upload-workers.mjs";
+import { alignGoogleClock } from "./lib/google-clock.mjs";
 
 const [mode, input, ...options] = process.argv.slice(2);
 if (!["prepare", "connect", "upload", "verify"].includes(mode) || !input) throw new Error("Use prepare/upload/verify <materials.json> or connect <desktop-oauth-client.json>.");
@@ -34,6 +35,7 @@ if (mode === "connect") {
   if (mode === "prepare") {
     console.log(JSON.stringify({ prepared: true, ...prepared.counts, folder, firestoreWrites: 0, driveWrites: 0, next: "Connect your Drive account before uploading." }, null, 2));
   } else {
+    await alignGoogleClock();
     let credentials;
     try { credentials = JSON.parse(await readFile(credentialFile, "utf8")); } catch { throw new Error("Drive is not connected. Run connect with a Desktop OAuth client JSON first. Do not send passwords or tokens in chat."); }
     const client = createDriveClient(credentials);
