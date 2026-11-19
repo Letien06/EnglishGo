@@ -161,7 +161,7 @@ export default function DashboardClient({ initial, uid }: { initial: DashboardVi
   return <main className={`${styles.dashboard} ${styles.page} flex-1 overflow-y-auto`}>
     <div className={styles.container}>
       <section className={styles.hero}>
-        <div className={styles.heroCopy}><span className={styles.eyebrow}>✦ ENGLISHGO CÙNG BẠN</span><h1><span className={styles.heroName}>{initial.greetingName.trim()}</span>, luyện tiếp thôi!</h1><p>Mỗi ngày một chút, tiến gần hơn đến điểm số bạn mong muốn.</p></div>
+        <div className={styles.heroCopy}><span className={styles.eyebrow}>✦ ENGLISHGO CÙNG BẠN</span><h1><span className={styles.heroName}>{initial.greetingName.trim()},</span> luyện tiếp thôi!</h1><p>Mỗi ngày một chút, tiến gần hơn đến điểm số bạn mong muốn.</p></div>
         <div className={styles.companion}><StudyCompanion /></div>
         <CompanionEncouragement />
       </section>

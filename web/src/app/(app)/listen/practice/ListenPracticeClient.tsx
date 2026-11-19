@@ -89,6 +89,7 @@ export default function ListenPracticeClient({
   const [playbackRate, setPlaybackRate] = useState(1);
   const [favorite, setFavorite] = useState(false);
   const [toolStatus, setToolStatus] = useState("");
+  const [loadedImageUrl, setLoadedImageUrl] = useState<string | null>(null);
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const replayCountRef = useRef(0);
   const startedAtRef = useRef(0);
@@ -330,7 +331,7 @@ export default function ListenPracticeClient({
                 ref={audioRef}
                 src={item.audioUrl ?? currentQuestion?.audioUrl ?? undefined}
                 controls
-                preload="none"
+                preload="metadata"
                 className="w-full"
                 onLoadedMetadata={() => markLearningReady("audio")}
                 onPlay={() => {
@@ -380,15 +381,35 @@ export default function ListenPracticeClient({
 
           {(() => {
             const imageUrl = item.imageUrl ?? currentQuestion?.imageUrl;
+            const imageLoaded = Boolean(imageUrl && loadedImageUrl === imageUrl);
             return imageUrl ? (
-              <WorkspaceAnnotationAnchor target="source:image"><Image
-                src={imageUrl}
-                alt="Listening question"
-                width={1200}
-                height={800}
-                sizes="(max-width: 1024px) 100vw, 50vw"
-                className="practice-source-image mt-4 max-h-[62dvh] w-full object-contain"
-              /></WorkspaceAnnotationAnchor>
+              <WorkspaceAnnotationAnchor target="source:image">
+                <div className="relative mt-4 flex min-h-[240px] w-full items-center justify-center overflow-hidden rounded-[14px] bg-surface-soft/50 sm:min-h-[320px]">
+                  {!imageLoaded && (
+                    <div
+                      aria-hidden="true"
+                      className="absolute inset-0 animate-pulse rounded-[14px] bg-surface-soft/80"
+                    />
+                  )}
+                  <Image
+                    key={imageUrl}
+                    ref={(el) => {
+                      if (el?.complete && el.naturalWidth > 0 && loadedImageUrl !== imageUrl) {
+                        setLoadedImageUrl(imageUrl);
+                      }
+                    }}
+                    src={imageUrl}
+                    alt="Listening question"
+                    width={1200}
+                    height={800}
+                    priority
+                    sizes="(max-width: 1024px) 100vw, 50vw"
+                    onLoad={() => setLoadedImageUrl(imageUrl)}
+                    onError={() => setLoadedImageUrl(imageUrl)}
+                    className={`practice-source-image max-h-[62dvh] w-full object-contain transition-opacity duration-200 ${imageLoaded ? "opacity-100" : "opacity-0"}`}
+                  />
+                </div>
+              </WorkspaceAnnotationAnchor>
             ) : null;
           })()}
         </section>

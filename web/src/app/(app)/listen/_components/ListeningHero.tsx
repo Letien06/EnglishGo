@@ -40,7 +40,7 @@ export default function ListeningHero({ tests, part, skill = "listening", authen
     <dl className={styles.stats}>
       <div className={styles.stat} data-tone="teal"><dt><span className={styles.statIcon}><ListeningIcon name="check" /></span>Câu đã làm</dt><dd>{progressReady ? summary.done : "—"}<span> / {catalogLoading ? "—" : summary.total}</span></dd><p>Trong Part {part} đang chọn</p></div>
       <div className={styles.stat} data-tone="blue"><dt><span className={styles.statIcon}><ListeningIcon name="target" /></span>Độ chính xác</dt><dd>{progressReady && summary.accuracy !== null ? summary.accuracy : "—"}<span> %</span></dd><p>{progressReady && summary.accuracy !== null ? "Tính trên câu đã trả lời" : "Sẽ hiện khi có kết quả"}</p></div>
-      <div className={styles.stat} data-tone="gold"><dt><span className={styles.statIcon}><ListeningIcon name="flame" /></span>Chuỗi học</dt><dd>{streak ? streak.streakDays : "—"}<span> ngày</span></dd><p>{streak ? streak.studiedToday ? "Hôm nay đã học. Giữ nhịp nhé!" : "Học hôm nay để giữ chuỗi" : authenticated ? "Chưa có dữ liệu chuỗi học" : "Đăng nhập để giữ chuỗi"}</p></div>
+      <div className={styles.stat} data-tone="gold"><dt><span className={styles.statIcon}><ListeningIcon name="flame" /></span>Chuỗi học</dt><dd>{streak ? streak.streakDays : "—"}<span> ngày</span></dd><p>{streak ? streak.studiedToday ? "Hôm nay đã học. Giữ nhịp nhé!" : "Học hôm nay để giữ chuỗi" : authenticated ? "Chưa có dữ liệu chuỗi học" : !progressReady ? "Đang cập nhật chuỗi học…" : "Đăng nhập để giữ chuỗi"}</p></div>
     </dl>
   </section>;
 }

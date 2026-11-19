@@ -172,7 +172,7 @@ export default function AppShell({ children }: { children: ReactNode }) {
                 </nav>
 
                 <div className="ml-auto flex shrink-0 items-center gap-2 sm:gap-3">
-                  <MobileNavigationMenu wideHeader />
+                  <MobileNavigationMenu />
                   <PwaInstallPrompt />
                   {authenticated && <HeaderJoinRoomButton />}
                   <div className="inline-flex h-9 shrink-0 items-center gap-1.5 sm:min-w-44" data-streak-slot>

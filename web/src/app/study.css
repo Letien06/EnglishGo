@@ -100,7 +100,9 @@
 #question-annotation-launcher { margin-left: 0; }
 .scratch-paper-toolbar-launcher { min-height: 38px; padding: 0 11px; border-color: var(--teal-line); background: var(--teal-soft); color: var(--teal-ink); box-shadow: none; }
 .practice-desktop-controls { display: none; align-items: center; gap: 12px; }
-.practice-auto, .practice-assist { min-height: 38px; padding: 0 10px; border: 1px solid var(--line); border-radius: 8px; font-size: 12px; color: var(--ink3); background: var(--surface); }
+.practice-auto, .practice-assist { height: 38px; min-height: 38px; padding: 0 10px; border: 1px solid var(--line); border-radius: 8px; font-size: 12px; line-height: 1; color: var(--ink3); background: var(--surface); box-sizing: border-box; }
+.practice-auto { display: inline-flex; align-items: center; justify-content: center; }
+.practice-assist { line-height: 36px; vertical-align: middle; cursor: pointer; }
 .practice-auto[aria-pressed="true"] { color: var(--ink); background: var(--primary-soft); border-color: var(--primary); }
 .practice-timer { font-size: 12px; color: var(--ink3); font-variant-numeric: tabular-nums; }
 .practice-mobile-trigger { display: grid; place-items: center; min-width: 40px; height: 40px; border: 1px solid var(--line); border-radius: 10px; color: var(--ink); }
