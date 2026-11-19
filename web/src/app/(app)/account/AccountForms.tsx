@@ -12,6 +12,7 @@ export default function AccountForms({ settings }: { settings: AccountSettingsVi
   const router = useRouter();
   const [message, setMessage] = useState<string | null>(null);
   const [avatarUrl, setAvatarUrl] = useState(settings.form.avatarUrl ?? "");
+  const [targetScore, setTargetScore] = useState<number>(settings.form.targetScore ?? 650);
 
   async function post(url: string, payload: Record<string, unknown>) {
     const response = await fetch(url, {
@@ -125,6 +126,52 @@ export default function AccountForms({ settings }: { settings: AccountSettingsVi
             Lưu thay đổi
           </button>
         </form>
+      </section>
+
+      <section id="goals" className="border-t border-line pt-8 space-y-4">
+        <div>
+          <h2 className="text-xl font-extrabold text-ink">Mục tiêu điểm TOEIC</h2>
+          <p className="mt-1 text-sm text-muted">Đồng bộ trực tiếp với lộ trình và tiến độ trên bảng điều khiển trung tâm (/hub).</p>
+        </div>
+        <div className="flex flex-wrap gap-2">
+          {[450, 550, 650, 750, 850, 900, 990].map((scoreValue) => (
+            <button
+              key={scoreValue}
+              type="button"
+              onClick={() => setTargetScore(scoreValue)}
+              className={`rounded-xl px-4 py-2 text-sm font-extrabold transition ${
+                targetScore === scoreValue
+                  ? "bg-primary text-gold-ink"
+                  : "border border-control-line bg-surface-soft text-ink hover:border-primary"
+              }`}
+            >
+              {scoreValue} điểm
+            </button>
+          ))}
+        </div>
+        <div className="flex flex-wrap items-center gap-3">
+          <input
+            type="number"
+            min={10}
+            max={990}
+            step={5}
+            aria-label="Điểm TOEIC mục tiêu"
+            value={targetScore}
+            onChange={(event) => setTargetScore(Number(event.target.value))}
+            className="w-36 rounded-lg border border-control-line bg-surface px-4 py-2.5 text-base font-bold text-ink"
+          />
+          <button
+            type="button"
+            onClick={() => {
+              const clamped = Math.min(990, Math.max(10, Math.round(targetScore / 5) * 5));
+              setTargetScore(clamped);
+              void post("/api/dashboard/preferences", { targetScore: clamped });
+            }}
+            className="rounded-lg bg-primary px-5 py-2.5 text-sm font-extrabold text-gold-ink transition-opacity hover:opacity-90"
+          >
+            Lưu mục tiêu điểm
+          </button>
+        </div>
       </section>
 
       <section id="password" className="border-t border-line pt-8">

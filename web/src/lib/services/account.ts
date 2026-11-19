@@ -15,6 +15,7 @@ export interface AccountSettingsView {
   form: {
     displayName: string;
     avatarUrl: string | null;
+    targetScore?: number;
   };
 }
 
@@ -25,6 +26,7 @@ export function getSettings(user: AppUser): AccountSettingsView {
     form: {
       displayName: user.displayName || user.email,
       avatarUrl: user.avatarUrl,
+      targetScore: user.targetScore ?? 650,
     },
   };
 }

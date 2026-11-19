@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { DictationLessonView, DictationProgressView } from "@/lib/services/dictation";
 import type { DictationAttemptResult, DictationPrompt } from "@/types/dictation";
+import { useActiveStudyTimer } from "@/lib/use-active-study-timer";
 
 type Progress = DictationProgressView | null;
 type Mask = 30 | 50 | 100;
@@ -68,6 +69,7 @@ export default function DictationLessonClient({ lesson, initialProgress, isAuthe
   const pendingAutoplayRef = useRef(false);
   const autoAdvanceRef = useRef<number | null>(null);
   const active = lesson.segments[index];
+  const { consumeItemSeconds } = useActiveStudyTimer(active?.id ?? "");
   const loadingPrompt = !prompt || prompt.segmentId !== active?.id || prompt.maskPercent !== mask;
   const progressBySegment = useMemo(() => new Map((initialProgress?.segments ?? []).map((item) => [item.segmentId, item])), [initialProgress]);
   const [completedIds, setCompletedIds] = useState(() => serverCompletedIds);
@@ -222,7 +224,7 @@ export default function DictationLessonClient({ lesson, initialProgress, isAuthe
     setSubmitting(true);
     setActionError(null);
     try {
-      const data = await requestData<DictationAttemptResult>(`/api/dictation/lessons/${lesson.id}/segments/${active.id}/attempt`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ maskPercent: mask, blankAnswers: mask === 100 ? null : blankAnswers, fullAnswer: mask === 100 ? fullAnswer : null, replayCount: replays, hintCount: hints, elapsedSeconds: 0 }) });
+      const data = await requestData<DictationAttemptResult>(`/api/dictation/lessons/${lesson.id}/segments/${active.id}/attempt`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ maskPercent: mask, blankAnswers: mask === 100 ? null : blankAnswers, fullAnswer: mask === 100 ? fullAnswer : null, replayCount: replays, hintCount: hints, elapsedSeconds: consumeItemSeconds() }) });
       if (data.isCompleted) setCompletedIds((items) => new Set([...items, active.id]));
       if (data.isMastered) setMasteredIds((items) => new Set([...items, active.id]));
       if (generation === viewGeneration.current) {

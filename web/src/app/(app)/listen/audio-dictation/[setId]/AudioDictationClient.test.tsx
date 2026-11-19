@@ -38,4 +38,16 @@ describe("audio dictation practice", () => {
     fireEvent.click(screen.getByText("Câu tiếp →"));
     expect(screen.getByText("Kiểm tra")).toBeEnabled();
   });
+  it("provides word hints, sentence navigator buttons, and Enter submission in 100% mode", async () => {
+    render(<AudioDictationClient set={set} session={session} learnerId="learner" />);
+    await waitFor(() => expect(screen.getByText("Gợi ý")).toBeEnabled());
+    fireEvent.click(screen.getByText("Gợi ý"));
+    expect(screen.getByLabelText("Câu bạn nghe")).toHaveValue("Hello ");
+    fireEvent.click(screen.getByText("Gợi ý"));
+    expect(screen.getByLabelText("Câu bạn nghe")).toHaveValue("Hello world. ");
+    fireEvent.keyDown(screen.getByLabelText("Câu bạn nghe"), { key: "Enter" });
+    expect(screen.getByText("Chính xác!")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "#2" }));
+    expect(screen.getByText(/Câu 2\/2/)).toBeInTheDocument();
+  });
 });

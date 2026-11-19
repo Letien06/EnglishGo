@@ -24,7 +24,7 @@ export default async function CommunityPage() {
             {items.map((comment) => (
               <article key={comment.id} className="p-4 rounded-xl bg-surface border border-line">
                 <div className="flex items-center justify-between gap-3">
-                  <strong className="text-sm text-ink">{comment.displayName || comment.email || "Người học"}</strong>
+                  <strong className="text-sm text-ink">{publicLearnerName(comment.displayName, comment.email)}</strong>
                   <span className="text-xs text-muted">{formatDate(comment.createdAtMillis)}</span>
                 </div>
                 <p className="text-sm text-ink2 mt-2 whitespace-pre-wrap">{comment.content}</p>
@@ -36,12 +36,12 @@ export default async function CommunityPage() {
             <section className="p-5 rounded-xl bg-surface border border-line">
               <div className="flex items-center justify-between">
                 <h2 className="font-bold text-ink">Bảng xếp hạng</h2>
-                <Link href="/community/leaderboard" className="text-xs text-primary-ink font-semibold">Xem tất cả</Link>
+                <Link href="/leaderboard" className="text-xs text-primary-ink font-semibold">Xem tất cả</Link>
               </div>
               <div className="space-y-2 mt-4">
                 {leaders.slice(0, 8).map((entry) => (
                   <div key={entry.uid} className="flex items-center justify-between text-sm">
-                    <span className="text-ink">{entry.rankPosition}. {entry.displayName || entry.email || "Người học"}</span>
+                    <span className="text-ink">{entry.rankPosition}. {publicLearnerName(entry.displayName, entry.email)}</span>
                     <strong className="text-primary">{entry.score.toFixed(2)}</strong>
                   </div>
                 ))}
@@ -59,4 +59,17 @@ export default async function CommunityPage() {
 
 function formatDate(value: number | null) {
   return value ? new Date(value).toLocaleString() : "";
+}
+
+function maskEmail(value: string): string {
+  const [local, domain] = value.split("@");
+  if (!local || !domain) return value;
+  const prefix = local.slice(0, Math.min(2, local.length));
+  return `${prefix}***@${domain}`;
+}
+
+function publicLearnerName(displayName?: string | null, email?: string | null): string {
+  const raw = (displayName?.trim() || email?.trim() || "").trim();
+  if (!raw) return "Người học";
+  return raw.includes("@") ? maskEmail(raw) : raw;
 }

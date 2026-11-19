@@ -21,22 +21,75 @@ const PARTS = [
 const ALL_PARTS = PARTS.map((item) => item.part);
 const FULL_TEST_MINUTES = 120;
 
+export interface PracticeTestUserStat {
+  attemptCount: number;
+  bestScore: number;
+  bestProjectedScore: number | null;
+  maxScore: number;
+  latestAttemptId: number;
+}
+
 interface Props {
   tests: PracticeTestCard[];
   userUid: string | null;
+  testStatsByTestId?: Record<number, PracticeTestUserStat>;
 }
 
 type ModalTab = "exam" | "practice";
+type StatusFilter = "all" | "draft" | "done" | "new";
 
-export default function PracticeTestLauncher({ tests, userUid }: Props) {
+export default function PracticeTestLauncher({ tests, userUid, testStatsByTestId = {} }: Props) {
   const router = useRouter();
   const [selectedTest, setSelectedTest] = useState<PracticeTestCard | null>(null);
   const [tab, setTab] = useState<ModalTab>("exam");
   const [selectedParts, setSelectedParts] = useState<number[]>(ALL_PARTS);
   const [durationMinutes, setDurationMinutes] = useState(FULL_TEST_MINUTES);
   const [startingLabel, setStartingLabel] = useState("");
+  const [searchQuery, setSearchQuery] = useState("");
+  const [statusFilter, setStatusFilter] = useState<StatusFilter>("all");
+  const [draftTestIds, setDraftTestIds] = useState<Set<number>>(new Set());
   const lastWarmupKey = useRef("");
   const modalRef = useRef<HTMLElement>(null);
+
+  useEffect(() => {
+    if (!userUid || typeof window === "undefined") return;
+    try {
+      const found = new Set<number>();
+      for (const test of tests) {
+        const fullKey = practiceDraftKey(userUid, makeSessionKey(test.id, "exam", ALL_PARTS, FULL_TEST_MINUTES));
+        if (window.localStorage.getItem(fullKey) != null) {
+          found.add(test.id);
+          continue;
+        }
+        const prefix = `englishweb:practice-draft:v1:${userUid}:practice-${test.id}-`;
+        for (let i = 0; i < window.localStorage.length; i++) {
+          const key = window.localStorage.key(i);
+          if (key && key.startsWith(prefix)) {
+            found.add(test.id);
+            break;
+          }
+        }
+      }
+      // eslint-disable-next-line react-hooks/set-state-in-effect
+      setDraftTestIds(found);
+    } catch {
+      // Ignore storage access errors in private mode.
+    }
+  }, [tests, userUid]);
+
+  const filteredTests = useMemo(() => {
+    const q = searchQuery.trim().toLowerCase();
+    return tests.filter((test) => {
+      const hasDraft = draftTestIds.has(test.id);
+      const hasStat = Boolean(testStatsByTestId[test.id]);
+      if (statusFilter === "draft" && !hasDraft) return false;
+      if (statusFilter === "done" && !hasStat) return false;
+      if (statusFilter === "new" && (hasDraft || hasStat)) return false;
+      if (!q) return true;
+      const label = `${formatPracticeLabel(test.title)} ${formatPracticeLabel(test.type)}`.toLowerCase();
+      return label.includes(q);
+    });
+  }, [draftTestIds, searchQuery, statusFilter, testStatsByTestId, tests]);
 
   function openModal(test: PracticeTestCard, nextTab: ModalTab) {
     setSelectedTest(test);
@@ -144,44 +197,104 @@ export default function PracticeTestLauncher({ tests, userUid }: Props) {
 
   return (
     <>
+      {tests.length > 0 && (
+        <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-line bg-surface p-3.5">
+          <input
+            type="search"
+            value={searchQuery}
+            onChange={(event) => setSearchQuery(event.target.value)}
+            placeholder="Tìm đề thi theo tên hoặc bộ đề..."
+            aria-label="Tìm đề thi"
+            className="min-w-[220px] flex-1 rounded-lg border border-line bg-surface-soft px-3.5 py-2 text-sm text-ink outline-none focus:border-primary"
+          />
+          <div className="flex flex-wrap gap-1.5" role="group" aria-label="Lọc trạng thái đề thi">
+            {([
+              ["all", "Tất cả"],
+              ["draft", "Đang làm dở"],
+              ["done", "Đã làm"],
+              ["new", "Chưa làm"],
+            ] as const).map(([key, label]) => (
+              <button
+                key={key}
+                type="button"
+                onClick={() => setStatusFilter(key)}
+                className={`rounded-lg px-3 py-1.5 text-xs font-extrabold transition ${
+                  statusFilter === key
+                    ? "bg-primary text-gold-ink"
+                    : "border border-line bg-surface-soft text-muted hover:text-ink"
+                }`}
+              >
+                {label}
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
+
       <div className="practice-test-grid grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3">
-        {tests.map((test) => (
-          <article key={test.id} className="premium-card premium-card--interactive practice-test-card p-5">
-            <header className="space-y-1">
-              <h2 className="font-bold text-ink">{formatPracticeLabel(test.title)}</h2>
-              <p className="text-xs text-muted">
-                {formatPracticeLabel(test.type)} · {test.difficulty == null ? "Mọi mức độ" : `Độ khó ${test.difficulty}`}
-              </p>
-            </header>
-            <div className="mt-4 flex gap-3 text-sm text-muted">
-              <span>{test.totalQuestions} câu</span>
-              <span>{test.duration} phút</span>
-            </div>
-            <p className="mt-3 text-sm text-muted">Chưa luyện tập</p>
-            <div className="mt-5 flex gap-2">
-              <button
-                type="button"
-                onClick={() => openModal(test, "exam")}
-                className="premium-primary flex-1 px-4 py-2 text-sm"
-              >
-                Thi thử
-              </button>
-              <button
-                type="button"
-                onClick={() => openModal(test, "practice")}
-                className="premium-secondary flex-1 px-4 py-2 text-sm"
-              >
-                Luyện tập
-              </button>
-              <Link
-                href="/practice/history"
-                className="premium-secondary px-4 py-2 text-sm"
-              >
-                Lịch sử
-              </Link>
-            </div>
-          </article>
-        ))}
+        {filteredTests.map((test) => {
+          const stat = testStatsByTestId[test.id];
+          const hasDraft = draftTestIds.has(test.id);
+          return (
+            <article key={test.id} className="premium-card premium-card--interactive practice-test-card p-5">
+              <header className="space-y-1">
+                <div className="flex items-start justify-between gap-2">
+                  <h2 className="font-bold text-ink">{formatPracticeLabel(test.title)}</h2>
+                  {hasDraft ? (
+                    <span className="shrink-0 rounded-full bg-amber-100 px-2.5 py-0.5 text-[11px] font-extrabold text-amber-800">
+                      Đang làm dở
+                    </span>
+                  ) : stat ? (
+                    <span className="shrink-0 rounded-full bg-emerald-100 px-2.5 py-0.5 text-[11px] font-extrabold text-emerald-800">
+                      Đã làm {stat.attemptCount} lần
+                    </span>
+                  ) : null}
+                </div>
+                <p className="text-xs text-muted">
+                  {formatPracticeLabel(test.type)} · {test.difficulty == null ? "Mọi mức độ" : `Độ khó ${test.difficulty}`}
+                </p>
+              </header>
+              <div className="mt-4 flex gap-3 text-sm text-muted">
+                <span>{test.totalQuestions} câu</span>
+                <span>{test.duration} phút</span>
+              </div>
+              {stat ? (
+                <p className="mt-3 text-sm font-semibold text-teal-ink">
+                  Cao nhất:{" "}
+                  {stat.bestProjectedScore != null
+                    ? `~${stat.bestProjectedScore}/${stat.maxScore} TOEIC (${stat.bestScore}%)`
+                    : `${stat.bestScore}%`}
+                </p>
+              ) : hasDraft ? (
+                <p className="mt-3 text-sm font-semibold text-amber-700">Đã lưu nháp trên thiết bị</p>
+              ) : (
+                <p className="mt-3 text-sm text-muted">Chưa luyện tập</p>
+              )}
+              <div className="mt-5 flex gap-2">
+                <button
+                  type="button"
+                  onClick={() => openModal(test, "exam")}
+                  className="premium-primary flex-1 px-4 py-2 text-sm"
+                >
+                  {hasDraft ? "Làm tiếp" : "Thi thử"}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => openModal(test, "practice")}
+                  className="premium-secondary flex-1 px-4 py-2 text-sm"
+                >
+                  Luyện tập
+                </button>
+                <Link
+                  href={stat ? `/practice/review/${stat.latestAttemptId}` : "/practice/history"}
+                  className="premium-secondary px-4 py-2 text-sm"
+                >
+                  {stat ? "Xem lại" : "Lịch sử"}
+                </Link>
+              </div>
+            </article>
+          );
+        })}
       </div>
 
       {startingLabel ? <PracticeBusyOverlay title={startingLabel} description="Đang tải dữ liệu đề, audio và ảnh..." /> : null}

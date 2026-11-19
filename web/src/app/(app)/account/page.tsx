@@ -27,12 +27,16 @@ export default async function AccountPage() {
         </header>
 
         <div className="grid gap-6 lg:grid-cols-[290px_1fr]">
-          <aside className="account-side-nav h-fit rounded-xl bg-white p-4 shadow-sm">
+          <aside className="account-side-nav h-fit rounded-xl border border-line bg-surface p-4 shadow-sm">
             <h2 className="mb-4 px-2 text-base font-extrabold uppercase text-ink">Tài khoản</h2>
             <nav className="space-y-2">
               <a className="flex items-center gap-3 rounded-lg bg-primary/10 px-4 py-3 font-extrabold text-primary" href="#profile">
                 <span>♟</span>
                 Thông tin cá nhân
+              </a>
+              <a className="flex items-center gap-3 rounded-lg px-4 py-3 font-extrabold text-ink2" href="#goals">
+                <span>🎯</span>
+                Mục tiêu học tập
               </a>
               <a className="flex items-center gap-3 rounded-lg px-4 py-3 font-extrabold text-ink2" href="#password">
                 <span>🔒</span>
@@ -49,7 +53,7 @@ export default async function AccountPage() {
             </nav>
           </aside>
 
-          <section className="account-content rounded-xl bg-white p-6 shadow-sm sm:p-8">
+          <section className="account-content rounded-xl border border-line bg-surface p-6 shadow-sm sm:p-8">
             <AccountForms settings={settings} />
             <MembershipPanel />
           </section>
