@@ -152,4 +152,9 @@ describe("grammar device progress and feedback", () => {
     fireEvent(window, prevented);
     expect(localStorage.getItem("englishweb:grammar:v1:alice:1")).toBeNull();
   });
+  it("hydrates valid cloud answers into local storage on a new device", async () => {
+    render(<GrammarPracticeClient topic={topic} metadata={metadata} learnerId="alice" cloudAnswers={{ "20": "A" }} />);
+    await waitFor(() => expect(screen.getByText("Chính xác!")).toBeInTheDocument());
+    expect(JSON.parse(localStorage.getItem("englishweb:grammar:v1:alice:1")!)).toEqual({ "20": "A" });
+  });
 });

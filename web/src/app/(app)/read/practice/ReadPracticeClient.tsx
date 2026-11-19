@@ -256,6 +256,23 @@ export default function ReadPracticeClient({
         goTo(currentIndex + 1);
         return;
       }
+      if (event.key === "Enter" && item.questions.every((question) => Boolean(answeredMap[question.id]))) {
+        event.preventDefault();
+        goTo(currentIndex + 1);
+        return;
+      }
+      if ((event.key === "f" || event.key === "F") && firstQuestion) {
+        event.preventDefault();
+        setFavorite((value) => !value);
+        void postTool("/api/reading/favorites", {
+          part: partNum,
+          level,
+          itemId: item.id,
+          questionId: firstQuestion.id,
+          testId: session.testId,
+        }).then(() => setToolStatus("Đã cập nhật yêu thích."));
+        return;
+      }
       const keyMap: Record<string, string> = { "1": "A", "2": "B", "3": "C", "4": "D", a: "A", b: "B", c: "C", d: "D", A: "A", B: "B", C: "C", D: "D" };
       const answer = keyMap[event.key];
       if (!answer) return;
@@ -264,7 +281,7 @@ export default function ReadPracticeClient({
     };
     document.addEventListener("keydown", handleKeyDown);
     return () => document.removeEventListener("keydown", handleKeyDown);
-  }, [answeredMap, currentIndex, goTo, handleAnswer, item.questions]);
+  }, [answeredMap, currentIndex, firstQuestion, goTo, handleAnswer, item.id, item.questions, level, partNum, session.testId]);
 
   return (
     <main className="skill-workspace skill-workspace--read design-system min-h-dvh bg-surface" onPointerDownCapture={markInteraction} onKeyDownCapture={markInteraction}>
@@ -696,18 +713,31 @@ function VocabularyStudyBlock({
 
   const addSelected = async () => {
     const targets = entries.filter((entry) => selected.has(entry.id));
-    if (targets.length === 0 || !setId) return;
+    if (targets.length === 0) return;
     setSaving(true);
     setStatus("");
     try {
+      let targetSetId = setId;
+      let targetSetName = sets.find((set) => String(set.id) === setId)?.title ?? "bộ từ";
+      if (!targetSetId) {
+        const createdPayload = await postTool("/api/vocab/my-sets", {
+          title: "Từ vựng luyện đề TOEIC",
+          description: "Từ vựng lưu nhanh trong quá trình luyện đề Nghe & Đọc",
+        });
+        const createdSet = createdPayload?.data as MyVocabSet | undefined;
+        if (!createdSet?.id) throw new Error("Could not create set");
+        targetSetId = String(createdSet.id);
+        targetSetName = createdSet.title || "Từ vựng luyện đề TOEIC";
+        setSets((prev) => [createdSet, ...prev]);
+        setSetId(targetSetId);
+      }
       const rowsText = vocabularyRowsText(targets);
-      const payload = await postTool(`/api/vocab/my-sets/${setId}`, {
+      const payload = await postTool(`/api/vocab/my-sets/${targetSetId}`, {
         action: "manual",
         rowsText,
       });
       const count = payload?.data?.count;
-      const setName = sets.find((set) => String(set.id) === setId)?.title ?? "bộ từ";
-      setStatus(`Đã thêm ${typeof count === "number" ? count : targets.length} từ vào "${setName}".`);
+      setStatus(`Đã thêm ${typeof count === "number" ? count : targets.length} từ vào "${targetSetName}".`);
       setSelected(new Set());
     } catch {
       setStatus("Không thêm được từ vựng.");
@@ -755,12 +785,22 @@ function VocabularyStudyBlock({
           {loadingSets ? (
             <span className="text-sm font-bold text-warning-ink">Đang tải bộ từ...</span>
           ) : sets.length === 0 ? (
-            <Link
-              href="/vocab"
-              className="rounded-xl border border-warning-line bg-surface px-4 py-2 text-sm font-extrabold text-warning-ink"
-            >
-              Tạo bộ từ của tôi
-            </Link>
+            <>
+              <button
+                type="button"
+                onClick={addSelected}
+                disabled={selected.size === 0 || saving}
+                className="rounded-xl bg-primary px-4 py-2 text-sm font-extrabold text-gold-ink disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                {saving ? "Đang tạo & thêm..." : "Tạo nhanh bộ từ & Lưu"}
+              </button>
+              <Link
+                href="/vocab"
+                className="rounded-xl border border-warning-line bg-surface px-4 py-2 text-sm font-extrabold text-warning-ink"
+              >
+                Tạo bộ từ của tôi
+              </Link>
+            </>
           ) : (
             <>
               <select

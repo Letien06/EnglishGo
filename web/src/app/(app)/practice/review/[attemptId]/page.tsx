@@ -12,20 +12,36 @@ export const dynamic = "force-dynamic";
 
 interface Props {
   params: Promise<{ attemptId: string }>;
-  searchParams: Promise<{ filter?: string }>;
+  searchParams: Promise<{ filter?: string; part?: string }>;
 }
 
 export default async function PracticeReviewPage({ params, searchParams }: Props) {
   const user = await requireUserForRead();
   const { attemptId } = await params;
-  const { filter } = await searchParams;
+  const { filter, part } = await searchParams;
   const review = await getAttemptReview(user.uid, Number(attemptId));
   const attempt = review.attempt;
+  const selectedPart = part && /^[1-7]$/.test(part) ? Number(part) : null;
   const wrongAnswers = review.answers.filter((answer) => !answer.correct);
-  const filteredAnswers = filter === "wrong" ? wrongAnswers : review.answers;
+  const unansweredAnswers = review.answers.filter((answer) => !answer.correct && answer.selectedOptionId == null && !answer.selectedAnswer);
+  const statusFiltered = filter === "wrong"
+    ? wrongAnswers
+    : filter === "unanswered"
+      ? unansweredAnswers
+      : review.answers;
+  const filteredAnswers = selectedPart != null
+    ? statusFiltered.filter((answer) => answer.part === selectedPart)
+    : statusFiltered;
   const scoreBreakdown = attempt.scoreBreakdown;
   const accuracy = attempt.questionCount > 0 ? Math.round((attempt.correctCount * 100) / attempt.questionCount) : 0;
   const retryHref = `/practice/session/${attempt.testId}?mode=${attempt.mode}&parts=${attempt.parts.join(",")}&time=${attempt.durationMinutes}`;
+  const buildFilterHref = (nextFilter?: string | null, nextPart?: number | null) => {
+    const query = new URLSearchParams();
+    if (nextFilter) query.set("filter", nextFilter);
+    if (nextPart != null) query.set("part", String(nextPart));
+    const qs = query.toString();
+    return `/practice/review/${attempt.attemptId}${qs ? `?${qs}` : ""}#review-answers`;
+  };
 
   return (
     <>
@@ -123,30 +139,111 @@ export default async function PracticeReviewPage({ params, searchParams }: Props
           </section>
 
           <section id="review-answers" className="space-y-4">
-            <div className="flex flex-wrap items-center justify-between gap-2"><h2 className="text-lg font-extrabold text-ink">{filter === "wrong" ? `Câu sai cần ôn (${wrongAnswers.length})` : `Đáp án (${review.answers.length})`}</h2>{filter === "wrong" ? <Link href={`/practice/review/${attempt.attemptId}#review-answers`} className="text-sm font-bold text-primary">Xem tất cả câu</Link> : wrongAnswers.length > 0 ? <Link href={`/practice/review/${attempt.attemptId}?filter=wrong#review-answers`} className="text-sm font-bold text-primary">Chỉ xem câu sai</Link> : null}</div>
-            {filteredAnswers.map((answer, index) => (
-              <article key={`${answer.questionId}-${index}`} className="rounded-xl border border-line bg-surface p-5 shadow-sm">
-                <div className="flex flex-wrap items-center justify-between gap-2">
-                  <h2 className="font-bold text-ink">Câu {index + 1} <span className="text-xs text-muted">(Phần {answer.part})</span></h2>
-                  <p className={`text-sm font-bold ${answer.correct ? "text-green-600" : "text-red-600"}`}>
-                    {answer.correct ? "Đúng" : "Sai"}
-                  </p>
-                </div>
-                <p className="mt-2 text-xs font-semibold text-muted">Dạng lỗi: {answer.weakTag}</p>
-                <p className="mt-3 whitespace-pre-wrap text-sm text-ink">{answer.questionText}</p>
-                <ReportQuestionButton attemptId={attempt.attemptId} questionId={answer.questionId} />
-                <div className="mt-4 space-y-2">
-                  {answer.options.map((option) => (
-                    <div key={option.id} className={`rounded-lg p-3 text-sm ${answer.selectedOptionId === option.id ? "bg-accent/10 ring-1 ring-accent" : "bg-surface-soft"}`}>
-                      <span>{option.content}</span>
-                      {option.correct ? <span className="font-semibold text-green-600"> - đáp án đúng</span> : null}
-                      {answer.selectedOptionId === option.id ? <span className="text-muted"> - bạn chọn</span> : null}
-                    </div>
-                  ))}
-                </div>
-                {answer.explanation ? <p className="mt-4 whitespace-pre-wrap text-sm text-muted">{answer.explanation}</p> : null}
-              </article>
-            ))}
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <h2 className="text-lg font-extrabold text-ink">
+                {filter === "wrong"
+                  ? `Câu sai cần ôn (${filteredAnswers.length})`
+                  : filter === "unanswered"
+                    ? `Câu bỏ trống (${filteredAnswers.length})`
+                    : `Đáp án (${filteredAnswers.length})`}
+              </h2>
+              <div className="flex flex-wrap gap-1.5">
+                <Link
+                  href={buildFilterHref(null, selectedPart)}
+                  className={`rounded-lg px-3 py-1.5 text-xs font-extrabold ${!filter ? "bg-primary text-gold-ink" : "border border-line bg-surface text-ink"}`}
+                >
+                  Tất cả ({review.answers.length})
+                </Link>
+                <Link
+                  href={buildFilterHref("wrong", selectedPart)}
+                  className={`rounded-lg px-3 py-1.5 text-xs font-extrabold ${filter === "wrong" ? "bg-rose-600 text-white" : "border border-rose-200 bg-rose-50 text-rose-700"}`}
+                >
+                  Câu sai ({wrongAnswers.length})
+                </Link>
+                {unansweredAnswers.length > 0 && (
+                  <Link
+                    href={buildFilterHref("unanswered", selectedPart)}
+                    className={`rounded-lg px-3 py-1.5 text-xs font-extrabold ${filter === "unanswered" ? "bg-amber-600 text-white" : "border border-amber-200 bg-amber-50 text-amber-800"}`}
+                  >
+                    Bỏ trống ({unansweredAnswers.length})
+                  </Link>
+                )}
+              </div>
+            </div>
+
+            {attempt.parts.length > 1 && (
+              <div className="flex flex-wrap gap-1.5" aria-label="Lọc theo phần thi">
+                <Link
+                  href={buildFilterHref(filter ?? null, null)}
+                  className={`rounded-full px-3 py-1 text-xs font-bold ${selectedPart == null ? "bg-teal-soft text-teal-ink ring-1 ring-teal-line" : "border border-line bg-surface text-muted"}`}
+                >
+                  Tất cả phần
+                </Link>
+                {attempt.parts.map((partNum) => (
+                  <Link
+                    key={partNum}
+                    href={buildFilterHref(filter ?? null, partNum)}
+                    className={`rounded-full px-3 py-1 text-xs font-bold ${selectedPart === partNum ? "bg-teal-soft text-teal-ink ring-1 ring-teal-line" : "border border-line bg-surface text-muted"}`}
+                  >
+                    Phần {partNum}
+                  </Link>
+                ))}
+              </div>
+            )}
+
+            {filteredAnswers.length === 0 ? (
+              <div className="rounded-xl border border-line bg-surface p-8 text-center text-sm text-muted">
+                Không có câu hỏi nào khớp với bộ lọc hiện tại.
+              </div>
+            ) : null}
+
+            {filteredAnswers.map((answer, index) => {
+              const displayNumber = answer.orderIndex ?? index + 1;
+              const isUnanswered = !answer.correct && answer.selectedOptionId == null && !answer.selectedAnswer;
+              return (
+                <article key={`${answer.questionId}-${index}`} className="rounded-xl border border-line bg-surface p-5 shadow-sm">
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <h2 className="font-bold text-ink">Câu {displayNumber} <span className="text-xs text-muted">(Phần {answer.part})</span></h2>
+                    <p className={`text-sm font-bold ${answer.correct ? "text-green-600" : isUnanswered ? "text-amber-600" : "text-red-600"}`}>
+                      {answer.correct ? "Đúng" : isUnanswered ? "Bỏ trống" : "Sai"}
+                    </p>
+                  </div>
+                  <p className="mt-2 text-xs font-semibold text-muted">Dạng lỗi: {answer.weakTag}</p>
+                  {answer.audioUrl ? (
+                    <audio controls preload="metadata" src={answer.audioUrl} className="mt-3 w-full max-w-md">
+                      Trình duyệt không hỗ trợ phát âm thanh.
+                    </audio>
+                  ) : null}
+                  {answer.imageUrl ? (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img
+                      src={answer.imageUrl}
+                      alt={`Hình minh họa câu ${displayNumber}`}
+                      loading="lazy"
+                      className="mt-3 max-h-72 rounded-xl border border-line bg-surface-soft object-contain"
+                    />
+                  ) : null}
+                  {answer.passageText ? (
+                    <details className="mt-3 rounded-xl border border-line bg-surface-soft p-3 text-sm">
+                      <summary className="cursor-pointer font-bold text-ink">Xem đoạn văn / ngữ cảnh (Phần {answer.part})</summary>
+                      <p className="mt-2 whitespace-pre-wrap leading-relaxed text-ink2">{answer.passageText}</p>
+                    </details>
+                  ) : null}
+                  <p className="mt-3 whitespace-pre-wrap text-sm text-ink">{answer.questionText}</p>
+                  <ReportQuestionButton attemptId={attempt.attemptId} questionId={answer.questionId} />
+                  <div className="mt-4 space-y-2">
+                    {answer.options.map((option) => (
+                      <div key={option.id} className={`rounded-lg p-3 text-sm ${answer.selectedOptionId === option.id ? "bg-accent/10 ring-1 ring-accent" : "bg-surface-soft"}`}>
+                        <span>{option.content}</span>
+                        {option.correct ? <span className="font-semibold text-green-600"> - đáp án đúng</span> : null}
+                        {answer.selectedOptionId === option.id ? <span className="text-muted"> - bạn chọn</span> : null}
+                      </div>
+                    ))}
+                  </div>
+                  {answer.explanation ? <p className="mt-4 whitespace-pre-wrap text-sm text-muted">{answer.explanation}</p> : null}
+                </article>
+              );
+            })}
           </section>
         </div>
       </main>

@@ -164,10 +164,14 @@ export interface PracticeAttempt {
 
 export interface ReviewAnswer {
   questionId: number;
+  orderIndex?: number;
   part: number;
   weakTag: string;
   questionText: string;
   explanation: string | null;
+  audioUrl?: string | null;
+  imageUrl?: string | null;
+  passageText?: string | null;
   selectedOptionId: number | null;
   selectedAnswer: string | null;
   correctAnswer: string | null;
@@ -1024,16 +1028,25 @@ async function writeAnswerKeyCache(
 
 async function enrichReviewAnswers(attempt: PracticeAttempt, answers: ReviewAnswer[]): Promise<ReviewAnswer[]> {
   const content = await loadContent(attempt.testId, attempt.parts).catch(() => null);
-  if (!content) return answers;
+  if (!content) {
+    return answers.map((answer, index) => ({
+      ...answer,
+      orderIndex: answer.orderIndex ?? index + 1,
+    }));
+  }
   const questionById = new Map(content.questions.map((question) => [question.id, question]));
-  return answers.map((answer) => {
+  return answers.map((answer, index) => {
     const question = questionById.get(answer.questionId);
     return {
       ...answer,
+      orderIndex: answer.orderIndex ?? index + 1,
       part: question?.part ?? answer.part,
       questionText: answer.questionText || question?.content || `Question ${answer.questionId}`,
       weakTag: answer.weakTag || classifyPracticeWeakTag(question?.part ?? answer.part, question?.content ?? answer.questionText),
       explanation: answer.explanation || question?.explanation || null,
+      audioUrl: question?.audioUrl ?? answer.audioUrl ?? null,
+      imageUrl: question?.imageUrl ?? answer.imageUrl ?? null,
+      passageText: question?.group?.passageText ?? answer.passageText ?? null,
       options: answer.options.length > 0 ? answer.options : content.optionsByQuestionId[String(answer.questionId)] ?? [],
     };
   });

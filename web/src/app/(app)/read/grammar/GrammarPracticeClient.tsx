@@ -21,7 +21,19 @@ function SourceParagraphs({ text }: { text: string }) {
 }
 const button = "rounded-xl border border-line bg-surface px-4 py-2.5 text-sm font-bold text-ink transition-colors hover:bg-surface-soft focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-teal-ink disabled:opacity-40";
 
-export default function GrammarPracticeClient({ topic, metadata, learnerId, reviewMode = false }: { topic: GrammarTopic; metadata: GrammarCatalog["topics"][number]; learnerId: string; reviewMode?: boolean }) {
+export default function GrammarPracticeClient({
+  topic,
+  metadata,
+  learnerId,
+  reviewMode = false,
+  cloudAnswers,
+}: {
+  topic: GrammarTopic;
+  metadata: GrammarCatalog["topics"][number];
+  learnerId: string;
+  reviewMode?: boolean;
+  cloudAnswers?: GrammarAnswers;
+}) {
   const [subtopicId, setSubtopicId] = useState("all");
   const [index, setIndex] = useState(0);
   const [answers, setAnswers] = useState<GrammarAnswers>({});
@@ -40,10 +52,18 @@ export default function GrammarPracticeClient({ topic, metadata, learnerId, revi
     queueMicrotask(() => {
       if (cancelled) return;
       let valid: GrammarAnswers = {};
+      const cloudValid = cloudAnswers ? readGrammarAnswers(JSON.stringify(cloudAnswers), answerKey) : {};
       try {
-        valid = readGrammarAnswers(localStorage.getItem(storageKey), answerKey);
+        const localValid = readGrammarAnswers(localStorage.getItem(storageKey), answerKey);
+        valid = { ...cloudValid, ...localValid };
+        if (Object.keys(cloudValid).length > 0 && Object.keys(valid).length > Object.keys(localValid).length) {
+          localStorage.setItem(storageKey, JSON.stringify(valid));
+        }
         setProgressKnown(true);
-      } catch { setStorageStatus("Không thể đọc tiến độ trên thiết bị này."); }
+      } catch {
+        valid = cloudValid;
+        setStorageStatus("Không thể đọc tiến độ trên thiết bị này.");
+      }
       const wrongIds = topic.questions.filter((question) => valid[question.id] && valid[question.id] !== question.answer).map((question) => question.id);
       setReviewQuestionIds(wrongIds);
       const unanswered = topic.questions.findIndex((question) => !valid[question.id]);
@@ -56,7 +76,7 @@ export default function GrammarPracticeClient({ topic, metadata, learnerId, revi
       setLoaded(true);
     });
     return () => { cancelled = true; };
-  }, [reviewMode, storageKey, topic.questions, answerKey]);
+  }, [reviewMode, storageKey, topic.questions, answerKey, cloudAnswers]);
   const questions = useMemo(() => topic.questions.filter((question) => (!reviewMode || reviewQuestionIds.includes(question.id)) && (subtopicId === "all" || question.subtopicId === subtopicId)), [reviewMode, reviewQuestionIds, subtopicId, topic.questions]);
   const question = questions[index];
   const selected = question ? answers[question.id] : undefined;

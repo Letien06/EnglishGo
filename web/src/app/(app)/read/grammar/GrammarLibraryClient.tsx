@@ -15,7 +15,17 @@ function groupFor(topic: GrammarCatalog["topics"][number]): Group {
   return grammarTopicGroup(topic.bigTopic);
 }
 
-export default function GrammarLibraryClient({ catalog, learnerId, answerKeys }: { catalog: GrammarCatalog | null; learnerId: string; answerKeys: Record<string, GrammarAnswerKey> }) {
+export default function GrammarLibraryClient({
+  catalog,
+  learnerId,
+  answerKeys,
+  cloudAnswersByTopic,
+}: {
+  catalog: GrammarCatalog | null;
+  learnerId: string;
+  answerKeys: Record<string, GrammarAnswerKey>;
+  cloudAnswersByTopic?: Record<string, GrammarAnswers>;
+}) {
   const [filter, setFilter] = useState<Group | "all">("all");
   const [answersByTopic, setAnswersByTopic] = useState<Record<string, GrammarAnswers>>({});
   const [progressReady, setProgressReady] = useState(false);
@@ -26,7 +36,18 @@ export default function GrammarLibraryClient({ catalog, learnerId, answerKeys }:
     function refresh() {
       const answers: Record<string, GrammarAnswers> = {};
       try {
-        for (const topic of catalog?.topics ?? []) answers[topic.id] = readGrammarAnswers(localStorage.getItem(grammarStorageKey(learnerId, topic.id)), answerKeys[topic.id] ?? {});
+        for (const topic of catalog?.topics ?? []) {
+          const answerKey = answerKeys[topic.id] ?? {};
+          const cloudValid = cloudAnswersByTopic?.[topic.id]
+            ? readGrammarAnswers(JSON.stringify(cloudAnswersByTopic[topic.id]), answerKey)
+            : {};
+          const localValid = readGrammarAnswers(localStorage.getItem(grammarStorageKey(learnerId, topic.id)), answerKey);
+          const merged = { ...cloudValid, ...localValid };
+          if (Object.keys(cloudValid).length > 0 && Object.keys(merged).length > Object.keys(localValid).length) {
+            localStorage.setItem(grammarStorageKey(learnerId, topic.id), JSON.stringify(merged));
+          }
+          answers[topic.id] = merged;
+        }
         setStorageAvailable(true);
       } catch { setStorageAvailable(false); }
       setAnswersByTopic(answers);
@@ -38,7 +59,7 @@ export default function GrammarLibraryClient({ catalog, learnerId, answerKeys }:
     window.addEventListener("focus", refresh);
     window.addEventListener("storage", refresh);
     return () => { window.removeEventListener("pageshow", refresh); window.removeEventListener("focus", refresh); window.removeEventListener("storage", refresh); };
-  }, [answerKeys, catalog, learnerId]);
+  }, [answerKeys, catalog, cloudAnswersByTopic, learnerId]);
   return <main className={styles.dashboard}>
     <ReadingSectionNav selected="grammar" />
     <header className={styles.intro}>

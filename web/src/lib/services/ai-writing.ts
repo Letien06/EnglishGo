@@ -4,6 +4,25 @@ import { BadRequest, Unauthorized } from "@/lib/api/response";
 import type { AppUser } from "@/types";
 import { generateJson } from "./gemini";
 import { enforceDailyActionLimit } from "./rate-limit";
+import { recordStudyActivity } from "./study-activity";
+
+export interface AiWritingFeedbackIssue {
+  problem: string;
+  fix: string;
+  example?: string | null;
+}
+
+export interface AiWritingStructuredFeedback {
+  scoreEstimate: number | null;
+  taskFulfillment: string | null;
+  grammar: string | null;
+  vocabulary: string | null;
+  organization: string | null;
+  strengths: string[];
+  issues: AiWritingFeedbackIssue[];
+  rewrittenAnswer: string | null;
+  nextPrompt: string | null;
+}
 
 export interface AiWritingJob {
   id: string;
@@ -11,6 +30,7 @@ export interface AiWritingJob {
   responseText: string;
   status: string;
   feedback: string;
+  structuredFeedback?: AiWritingStructuredFeedback | null;
   createdAtMillis: number | null;
   completedAtMillis: number | null;
 }
@@ -66,7 +86,59 @@ export async function submit(
     .doc(user.uid)
     .collection("aiWritingJobs")
     .add(data);
-  return { id: ref.id, ...data };
+  await recordStudyActivity(user.uid, {
+    module: "writing",
+    activityType: "ai_writing",
+    sourceId: ref.id,
+    occurredAtMillis: now,
+    metric: "vocab",
+    quantity: 1,
+    durationSeconds: 60,
+  }).catch(() => undefined);
+  return {
+    id: ref.id,
+    ...data,
+    structuredFeedback: parseAiWritingFeedback(data.feedbackJson),
+  };
+}
+
+export function parseAiWritingFeedback(
+  rawJson: string | null | undefined,
+): AiWritingStructuredFeedback | null {
+  if (!rawJson?.trim()) return null;
+  try {
+    const parsed = JSON.parse(rawJson);
+    if (!parsed || typeof parsed !== "object") return null;
+    const data = parsed as Record<string, unknown>;
+    const strengths = arrayValue(data.strengths)
+      .map(String)
+      .map((item) => item.trim())
+      .filter(Boolean)
+      .slice(0, 4);
+    const issues = arrayValue(data.issues)
+      .map((issue) => (issue && typeof issue === "object" ? (issue as Record<string, unknown>) : null))
+      .filter((issue): issue is Record<string, unknown> => Boolean(issue))
+      .map((issue) => ({
+        problem: stringValue(issue.problem)?.trim() ?? "",
+        fix: stringValue(issue.fix)?.trim() ?? "",
+        example: stringValue(issue.example)?.trim() ?? null,
+      }))
+      .filter((issue) => Boolean(issue.problem || issue.fix))
+      .slice(0, 5);
+    return {
+      scoreEstimate: numberValue(data.scoreEstimate),
+      taskFulfillment: stringValue(data.taskFulfillment),
+      grammar: stringValue(data.grammar),
+      vocabulary: stringValue(data.vocabulary),
+      organization: stringValue(data.organization),
+      strengths,
+      issues,
+      rewrittenAnswer: stringValue(data.rewrittenAnswer),
+      nextPrompt: stringValue(data.nextPrompt),
+    };
+  } catch {
+    return null;
+  }
 }
 
 async function buildAiFeedback(prompt: string, responseText: string): Promise<{
@@ -134,12 +206,14 @@ function normalizeAiFeedback(value: unknown): string {
 }
 
 function toJob(doc: FirebaseFirestore.DocumentSnapshot): AiWritingJob {
+  const feedbackJson = stringValue(doc.get("feedbackJson"));
   return {
     id: doc.id,
     prompt: stringValue(doc.get("prompt")) ?? "",
     responseText: stringValue(doc.get("responseText")) ?? "",
     status: stringValue(doc.get("status")) ?? "COMPLETED",
     feedback: stringValue(doc.get("feedback")) ?? "",
+    structuredFeedback: parseAiWritingFeedback(feedbackJson),
     createdAtMillis: numberValue(doc.get("createdAtMillis")),
     completedAtMillis: numberValue(doc.get("completedAtMillis")),
   };
