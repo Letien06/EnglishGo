@@ -1793,22 +1793,34 @@ export async function reviewBatch(
 /*  SM-2 Algorithm                                                     */
 /* ------------------------------------------------------------------ */
 
-function applySm2(
+const MAX_SRS_INTERVAL_DAYS = 180;
+const FORGOT_RELEARN_MS = 10 * 60 * 1000;
+
+export function applySm2(
   progress: VocabProgressDoc,
   quality: number,
   now = Date.now(),
 ): VocabProgressDoc {
   let { easeFactor, interval, repetitions } = progress;
   let status: VocabProgressStatus;
+  let nextReviewAtMillis: number;
 
   if (quality >= 3) {
     if (repetitions === 0) {
-      interval = 1;
+      interval = quality >= 5 ? 3 : 1;
     } else if (repetitions === 1) {
-      interval = 6;
+      interval = quality === 3 ? 3 : quality >= 5 ? 8 : 6;
     } else {
-      interval = Math.round(interval * easeFactor);
+      const base = Math.max(1, interval);
+      if (quality === 3) {
+        interval = Math.max(base + 1, Math.round(base * 1.2));
+      } else if (quality >= 5) {
+        interval = Math.max(base + 2, Math.round(base * easeFactor * 1.3));
+      } else {
+        interval = Math.max(base + 1, Math.round(base * easeFactor));
+      }
     }
+    interval = Math.min(MAX_SRS_INTERVAL_DAYS, interval);
     repetitions++;
     easeFactor =
       easeFactor + (0.1 - (5 - quality) * (0.08 + (5 - quality) * 0.02));
@@ -1819,13 +1831,14 @@ function applySm2(
     } else {
       status = "REVIEWING";
     }
+    nextReviewAtMillis = now + interval * 24 * 60 * 60 * 1000;
   } else {
     repetitions = 0;
-    interval = 1;
+    interval = 0;
+    easeFactor = Math.max(1.3, easeFactor - 0.2);
     status = "LEARNING";
+    nextReviewAtMillis = now + FORGOT_RELEARN_MS;
   }
-
-  const nextReviewAtMillis = now + interval * 24 * 60 * 60 * 1000;
 
   return {
     ...progress,

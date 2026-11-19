@@ -21,6 +21,11 @@ export interface DashboardPreferences {
   examDate: string | null;
   dailyGoals: Record<GoalKey, { enabled: boolean; target: number }>;
 }
+export interface DashboardResumeDraft {
+  title: string;
+  href: string;
+  answeredCount: number;
+}
 export interface DashboardView {
   greetingName: string;
   todayDateKey: string;
@@ -31,6 +36,7 @@ export interface DashboardView {
   longestStreakDays: number | null;
   totalXp: number;
   dueVocabWords?: number;
+  resumeDraft?: DashboardResumeDraft | null;
 }
 export interface DashboardStats { metrics: DashboardMetrics; start: string; end: string; coverageFrom?: string | null; partialHistory?: boolean }
 

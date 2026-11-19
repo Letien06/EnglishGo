@@ -62,10 +62,10 @@ describe.each(["listening", "reading"] as const)("%s responsive practice", (skil
     render(skill === "listening" ? <ListenPracticeClient {...common} partId="part3" partNum={3} assist={30} /> : <ReadPracticeClient {...common} partId="part7" partNum={7} />);
     fireEvent.click(screen.getByRole("button", { name: "Tự chuyển" }));
     fireEvent.click(screen.getAllByLabelText("Đáp án A")[0]);
-    await act(async () => { vi.advanceTimersByTime(500); });
+    await act(async () => { vi.advanceTimersByTime(950); });
     expect(screen.getByText("#1/2")).toBeInTheDocument();
     fireEvent.click(screen.getAllByLabelText("Đáp án A")[1]);
-    await act(async () => { vi.advanceTimersByTime(500); });
+    await act(async () => { vi.advanceTimersByTime(950); });
     expect(screen.getByText("#2/2")).toBeInTheDocument();
     expect(fetch).toHaveBeenCalledTimes(1);
     expect(screen.getByRole("status")).toHaveTextContent("2 câu đang chờ lưu");

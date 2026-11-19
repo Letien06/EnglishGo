@@ -72,3 +72,14 @@ it.each(["fill", "flip"])("retains unmodified Tab reveal in %s mode", (mode) => 
   mount(mode);
   expect(fireEvent.keyDown(document, { key: "Tab" })).toBe(false);
 });
+
+it("supports Space play/pause, R rewind, and 1-4 answer shortcuts without breaking modifier chords", () => {
+  const { audio, play, container } = mount("normal");
+  fireEvent.keyDown(document, { key: " " });
+  expect(play).toHaveBeenCalledTimes(1);
+  fireEvent.keyDown(document, { key: "r" });
+  expect(audio.currentTime).toBe(7);
+  fireEvent.keyDown(document, { key: "1" });
+  const radioA = container.querySelector('input[type="radio"]') as HTMLInputElement;
+  expect(radioA.checked).toBe(true);
+});

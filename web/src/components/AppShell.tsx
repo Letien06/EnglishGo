@@ -231,7 +231,12 @@ export default function AppShell({ children }: { children: ReactNode }) {
                         Đăng ký
                       </Link>
                     </div>
-                  ) : null}
+                  ) : (
+                    <span
+                      aria-hidden="true"
+                      className="inline-flex h-11 w-11 shrink-0 rounded-xl border border-line bg-surface-soft opacity-50"
+                    />
+                  )}
                 </div>
               </div>
             </header>

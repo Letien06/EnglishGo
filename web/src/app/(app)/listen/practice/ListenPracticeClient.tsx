@@ -13,6 +13,7 @@ import PracticeSaveGuard from "@/components/PracticeSaveGuard";
 import PracticeHeader from "../../_components/PracticeHeader";
 import WorkspaceAnnotator, { WorkspaceAnnotationAnchor } from "@/components/WorkspaceAnnotator";
 import { usePracticeResume } from "@/lib/use-practice-resume";
+import { useActiveStudyTimer } from "@/lib/use-active-study-timer";
 import { practiceNavigationTarget, practiceWindowInfo, type PracticeWindowSession } from "@/lib/practice-window";
 import { setActiveLearnerId } from "@/lib/client-learning-progress-cache";
 import { useListeningProgressQueue } from "@/lib/reading-progress-queue";
@@ -84,21 +85,28 @@ export default function ListenPracticeClient({
   const [fillValues, setFillValues] = useState<Record<string, string>>({});
   const { markInteraction, resumeStatus } = usePracticeResume({ skill: "listening", uid: userUid, part: partNum, level, testId: session.testId, items, setAnswers: setAnsweredMap, setIndex: setCurrentIndex, pendingAnswers, currentAnswers: answeredMap, currentIndex, reviewRun });
   const [showNote, setShowNote] = useState(false);
+  const [showShortcuts, setShowShortcuts] = useState(false);
   const [auto, setAuto] = useState(initialAuto);
-  const [elapsed, setElapsed] = useState(0);
   const [playbackRate, setPlaybackRate] = useState(1);
   const [favorite, setFavorite] = useState(false);
   const [toolStatus, setToolStatus] = useState("");
   const [loadedImageUrl, setLoadedImageUrl] = useState<string | null>(null);
+  const [audioErrorUrl, setAudioErrorUrl] = useState<string | null>(null);
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const replayCountRef = useRef(0);
-  const startedAtRef = useRef(0);
   const autoAdvanceRef = useRef<number | null>(null);
   const item = items[currentIndex] ?? items[0];
-  const sessionQuestionIds = useMemo(() => items.flatMap((entry) => entry.questions.map((question) => question.id)), [items]);
-  const allVisibleQuestionsAnswered = sessionQuestionIds.length > 0 && sessionQuestionIds.every((questionId) => Boolean(answeredMap[questionId]));
+  const { elapsed, consumeItemSeconds } = useActiveStudyTimer(item.id);
+  const sessionQuestions = useMemo(() => items.flatMap((entry) => entry.questions), [items]);
+  const allVisibleQuestionsAnswered = sessionQuestions.length > 0 && sessionQuestions.every((question) => Boolean(answeredMap[question.id]));
+  const fixedMistakeCount = useMemo(
+    () => sessionQuestions.filter((question) => answeredMap[question.id] === normalizeAnswer(question.correctAnswer)).length,
+    [answeredMap, sessionQuestions],
+  );
   const reachedEnd = offset + currentIndex >= total - 1;
+  const isMistakeReview = Boolean(reviewRun && reviewRun !== "all");
   const showCompletion = !reviewRun && reachedEnd && allVisibleQuestionsAnswered;
+  const showMistakeCompletion = isMistakeReview && reachedEnd && allVisibleQuestionsAnswered;
   const reviewHref = `/review/practice?skill=listening&part=${partNum}&level=${level}${session.testId ? `&testId=${encodeURIComponent(session.testId)}` : ""}&run=listen-complete`;
   const startTransitionTiming = useStudyPerformance("listening", item.id);
 
@@ -164,14 +172,6 @@ export default function ListenPracticeClient({
   }, [activeAssist, updatePracticeUrl]);
 
 
-  useEffect(() => {
-    startedAtRef.current = Date.now();
-    const timer = window.setInterval(() => {
-      setElapsed(Math.max(0, Math.floor((Date.now() - startedAtRef.current) / 1000)));
-    }, 1000);
-    return () => window.clearInterval(timer);
-  }, []);
-
   // Mark this practice route as visited so re-opening it later this session
   // (e.g. tapping "Luyện ngay" again) does not flash the loading overlay.
   useEffect(() => {
@@ -190,6 +190,70 @@ export default function ListenPracticeClient({
     if (typeof window === "undefined") return;
     updatePracticeUrl({ q: currentIndex });
   }, [currentIndex, updatePracticeUrl]);
+
+  const goTo = useCallback((index: number, options: { play?: boolean } = {}) => {
+    const target = practiceNavigationTarget(session, index);
+    if (!target) return;
+    startTransitionTiming(target.reload);
+    if (autoAdvanceRef.current !== null) {
+      window.clearTimeout(autoAdvanceRef.current);
+      autoAdvanceRef.current = null;
+    }
+    audioRef.current?.pause();
+    if (target.reload) {
+      const url = new URL(window.location.href);
+      url.searchParams.set("part", partId);
+      url.searchParams.set("level", String(level));
+      url.searchParams.set("mode", activeMode);
+      url.searchParams.set("assist", String(activeAssist));
+      url.searchParams.set("q", String(target.absoluteIndex));
+      if (auto) url.searchParams.set("auto", "1");
+      else url.searchParams.delete("auto");
+      router.push(`${url.pathname}${url.search}`);
+      return;
+    }
+    setCurrentIndex(index);
+    setShowNote(false);
+    setFavorite(false);
+    setAudioErrorUrl(null);
+    replayCountRef.current = 0;
+    if (typeof window !== "undefined" && window.scrollY > 24) {
+      window.scrollTo({ top: 0, behavior: "auto" });
+    }
+    if (options.play) {
+      window.setTimeout(() => audioRef.current?.play().catch(() => undefined), 100);
+    }
+  }, [activeAssist, activeMode, auto, level, partId, router, session, startTransitionTiming]);
+
+  const handleAnswer = useCallback((question: DauToeicQuestion, selected: string) => {
+    if (answeredMap[question.id]) return;
+    const correctAnswer = normalizeAnswer(question.correctAnswer);
+    const selectedAnswer = normalizeAnswer(selected);
+    const correct = selectedAnswer === correctAnswer;
+    setAnsweredMap((prev) => ({ ...prev, [question.id]: selectedAnswer }));
+
+    if (correct && auto && offset + currentIndex < total - 1 && item.questions.every((entry) => entry.id === question.id || answeredMap[entry.id] === normalizeAnswer(entry.correctAnswer))) {
+      if (autoAdvanceRef.current !== null) window.clearTimeout(autoAdvanceRef.current);
+      autoAdvanceRef.current = window.setTimeout(() => {
+        autoAdvanceRef.current = null;
+        goTo(currentIndex + 1, { play: true });
+      }, 900);
+    }
+
+    if (reviewRun !== "all") enqueueProgress({
+      part: partNum,
+      level,
+      testId: session.testId,
+      itemId: item.id,
+      questionId: question.id,
+      selectedAnswer,
+      correctAnswer,
+      modeUsed: activeMode,
+      replayCount: replayCountRef.current,
+      assistPercent: activeAssist,
+      elapsedSeconds: consumeItemSeconds(),
+    });
+  }, [activeAssist, activeMode, answeredMap, auto, consumeItemSeconds, currentIndex, enqueueProgress, goTo, item.id, item.questions, level, offset, partNum, reviewRun, total, session.testId]);
 
   useEffect(() => {
     const modifierCandidates = new Set<string>();
@@ -211,7 +275,38 @@ export default function ListenPracticeClient({
         if (!firstQuestion) return;
         event.preventDefault();
         revealNextWords(firstQuestion, partNum, activeMode, activeAssist, revealedMap, setRevealedMap, 1);
+        return;
       }
+      if (event.key === "ArrowLeft") {
+        event.preventDefault();
+        goTo(currentIndex - 1);
+        return;
+      }
+      if (event.key === "ArrowRight") {
+        event.preventDefault();
+        goTo(currentIndex + 1);
+        return;
+      }
+      if (event.key === " " && audioRef.current) {
+        const tag = (event.target as HTMLElement | null)?.tagName;
+        if (tag !== "BUTTON" && tag !== "A" && tag !== "SELECT") {
+          event.preventDefault();
+          if (audioRef.current.paused) audioRef.current.play().catch(() => undefined);
+          else audioRef.current.pause();
+          return;
+        }
+      }
+      if ((event.key === "r" || event.key === "R") && audioRef.current) {
+        event.preventDefault();
+        rewindAudio(audioRef.current, 3);
+        replayCountRef.current += 1;
+        return;
+      }
+      const keyMap: Record<string, string> = { "1": "A", "2": "B", "3": "C", "4": "D", a: "A", b: "B", c: "C", d: "D", A: "A", B: "B", C: "C", D: "D" };
+      const answer = keyMap[event.key];
+      if (!answer || (partNum === 2 && answer === "D")) return;
+      const unanswered = item.questions.find((question) => !answeredMap[question.id]);
+      if (unanswered) handleAnswer(unanswered, answer);
     };
     const handleKeyUp = (event: KeyboardEvent) => {
       const standalone = modifierCandidates.delete(event.key);
@@ -238,70 +333,7 @@ export default function ListenPracticeClient({
       document.removeEventListener("keyup", handleKeyUp);
       window.removeEventListener("blur", clearCandidates);
     };
-  }, [activeAssist, activeMode, item, partNum, revealedMap]);
-
-  const goTo = useCallback((index: number, options: { play?: boolean } = {}) => {
-    const target = practiceNavigationTarget(session, index);
-    if (!target) return;
-    startTransitionTiming(target.reload);
-    if (autoAdvanceRef.current !== null) {
-      window.clearTimeout(autoAdvanceRef.current);
-      autoAdvanceRef.current = null;
-    }
-    audioRef.current?.pause();
-    if (target.reload) {
-      const url = new URL(window.location.href);
-      url.searchParams.set("part", partId);
-      url.searchParams.set("level", String(level));
-      url.searchParams.set("mode", activeMode);
-      url.searchParams.set("assist", String(activeAssist));
-      url.searchParams.set("q", String(target.absoluteIndex));
-      if (auto) url.searchParams.set("auto", "1");
-      else url.searchParams.delete("auto");
-      router.push(`${url.pathname}${url.search}`);
-      return;
-    }
-    setCurrentIndex(index);
-    setShowNote(false);
-    setFavorite(false);
-    replayCountRef.current = 0;
-    window.scrollTo({ top: 0, behavior: "smooth" });
-    if (options.play) {
-      window.setTimeout(() => audioRef.current?.play().catch(() => undefined), 100);
-    }
-  }, [activeAssist, activeMode, auto, level, partId, router, session, startTransitionTiming]);
-
-  const handleAnswer = useCallback((question: DauToeicQuestion, selected: string) => {
-    if (answeredMap[question.id]) return;
-    const correctAnswer = normalizeAnswer(question.correctAnswer);
-    const selectedAnswer = normalizeAnswer(selected);
-    const correct = selectedAnswer === correctAnswer;
-    setAnsweredMap((prev) => ({ ...prev, [question.id]: selectedAnswer }));
-
-    if (correct && auto && offset + currentIndex < total - 1 && item.questions.every((entry) => entry.id === question.id || answeredMap[entry.id] === normalizeAnswer(entry.correctAnswer))) {
-      if (autoAdvanceRef.current !== null) window.clearTimeout(autoAdvanceRef.current);
-      autoAdvanceRef.current = window.setTimeout(() => {
-        autoAdvanceRef.current = null;
-        goTo(currentIndex + 1, { play: true });
-      }, 450);
-    }
-
-    if (!reviewRun) enqueueProgress({
-      part: partNum,
-      level,
-      testId: session.testId,
-      itemId: item.id,
-      questionId: question.id,
-      selectedAnswer,
-      correctAnswer,
-      modeUsed: activeMode,
-      replayCount: replayCountRef.current,
-      assistPercent: activeAssist,
-      elapsedSeconds: elapsed,
-    });
-
-
-  }, [activeAssist, activeMode, answeredMap, auto, currentIndex, elapsed, enqueueProgress, goTo, item.id, item.questions, level, offset, partNum, reviewRun, total, session.testId]);
+  }, [activeAssist, activeMode, answeredMap, currentIndex, goTo, handleAnswer, item, partNum, revealedMap]);
 
   useEffect(() => () => {
     if (autoAdvanceRef.current !== null) window.clearTimeout(autoAdvanceRef.current);
@@ -326,22 +358,48 @@ export default function ListenPracticeClient({
           </p></WorkspaceAnnotationAnchor>
 
           <div data-annotation-anchor="source:audio" data-annotation-controls className="practice-audio-card rounded-2xl border border-line bg-surface p-4">
-            {(item.audioUrl || currentQuestion?.audioUrl) && (
-              <audio
-                ref={audioRef}
-                src={item.audioUrl ?? currentQuestion?.audioUrl ?? undefined}
-                controls
-                preload="metadata"
-                className="w-full"
-                onLoadedMetadata={() => markLearningReady("audio")}
-                onPlay={() => {
-                  replayCountRef.current += 1;
-                }}
-                onRateChange={(event) => {
-                  setPlaybackRate(event.currentTarget.playbackRate);
-                }}
-              />
-            )}
+            {(() => {
+              const currentAudioUrl = item.audioUrl ?? currentQuestion?.audioUrl ?? null;
+              return currentAudioUrl ? (
+                <>
+                  <audio
+                    ref={audioRef}
+                    src={currentAudioUrl}
+                    controls
+                    preload="metadata"
+                    className="w-full"
+                    onLoadedMetadata={() => {
+                      setAudioErrorUrl(null);
+                      markLearningReady("audio");
+                    }}
+                    onError={() => setAudioErrorUrl(currentAudioUrl)}
+                    onPlay={() => {
+                      setAudioErrorUrl(null);
+                      replayCountRef.current += 1;
+                    }}
+                    onRateChange={(event) => {
+                      setPlaybackRate(event.currentTarget.playbackRate);
+                    }}
+                  />
+                  {audioErrorUrl === currentAudioUrl && (
+                    <div className="mt-2 flex items-center justify-between gap-2 rounded-xl border border-danger-line bg-danger-soft px-3 py-2 text-xs text-danger-ink" role="alert">
+                      <span>Không tải được âm thanh. Kiểm tra mạng và thử lại.</span>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setAudioErrorUrl(null);
+                          audioRef.current?.load();
+                          audioRef.current?.play().catch(() => undefined);
+                        }}
+                        className="shrink-0 rounded-lg border border-danger-line bg-surface px-2.5 py-1 font-bold text-ink"
+                      >
+                        Thử tải lại
+                      </button>
+                    </div>
+                  )}
+                </>
+              ) : null;
+            })()}
             <div className="practice-audio-actions mt-3 flex gap-2">
               <button
                 type="button"
@@ -496,10 +554,34 @@ export default function ListenPracticeClient({
         <div className="mt-4 flex flex-wrap justify-center gap-2"><Link href={reviewHref} className="rounded-xl bg-primary px-4 py-2.5 text-sm font-extrabold text-gold-ink no-underline">Ôn câu sai</Link><button type="button" onClick={() => { const url = new URL(window.location.href); url.searchParams.set("q", "0"); url.searchParams.delete("review"); router.push(`${url.pathname}${url.search}`); }} className="rounded-xl border border-success-line bg-surface px-4 py-2.5 text-sm font-extrabold text-success-ink">Ôn lại từ đầu</button><Link href={`/listen?part=${partId}`} className="rounded-xl border border-success-line bg-surface px-4 py-2.5 text-sm font-extrabold text-success-ink no-underline">Về danh sách</Link></div>
       </section>}
 
+      {showMistakeCompletion && <section className="fixed inset-x-4 bottom-20 z-50 mx-auto max-w-xl rounded-2xl border border-success-line bg-success-soft p-5 text-center shadow-2xl" role="dialog" aria-modal="true" aria-labelledby="listen-mistake-complete-title">
+        <h2 id="listen-mistake-complete-title" className="text-xl font-extrabold text-success-ink">Hoàn thành phiên ôn câu sai</h2>
+        <p className="mt-2 text-sm text-success-ink">Bạn đã khắc phục được <strong>{fixedMistakeCount}/{sessionQuestions.length}</strong> câu. Các câu làm đúng đã được gỡ khỏi danh sách sai.</p>
+        <div className="mt-4 flex flex-wrap justify-center gap-2"><Link href="/vocab/review" className="rounded-xl bg-primary px-4 py-2.5 text-sm font-extrabold text-gold-ink no-underline">Quay lại Ôn hôm nay</Link><Link href={`/listen?part=${partId}`} className="rounded-xl border border-success-line bg-surface px-4 py-2.5 text-sm font-extrabold text-success-ink no-underline">Về danh sách bài nghe</Link></div>
+      </section>}
+
+      {showShortcuts && (
+        <aside className="fixed bottom-20 left-4 z-50 w-72 rounded-2xl border border-line bg-surface p-4 text-xs text-ink shadow-2xl" aria-label="Bảng phím tắt luyện nghe">
+          <div className="mb-2 flex items-center justify-between font-extrabold">
+            <span>Phím tắt luyện nghe</span>
+            <button type="button" onClick={() => setShowShortcuts(false)} aria-label="Đóng bảng phím tắt" className="rounded px-1.5 py-0.5 text-ink3 hover:text-ink">✕</button>
+          </div>
+          <ul className="space-y-1.5 text-ink2">
+            <li className="flex justify-between"><span>Phát / Tạm dừng</span><kbd className="rounded border border-line px-1.5 py-0.5 font-mono text-[11px]">Space</kbd></li>
+            <li className="flex justify-between"><span>Tua lại 3 giây</span><kbd className="rounded border border-line px-1.5 py-0.5 font-mono text-[11px]">R / Shift</kbd></li>
+            <li className="flex justify-between"><span>Chọn đáp án</span><kbd className="rounded border border-line px-1.5 py-0.5 font-mono text-[11px]">1–4 / A–D</kbd></li>
+            <li className="flex justify-between"><span>Câu trước / sau</span><kbd className="rounded border border-line px-1.5 py-0.5 font-mono text-[11px]">← / →</kbd></li>
+          </ul>
+        </aside>
+      )}
+
       <footer className="skill-workspace-footer sticky bottom-0 z-40 flex h-16 items-center justify-between gap-2 px-3 sm:px-7">
         <div className="flex gap-2 sm:gap-3">
           <button onClick={() => setShowNote((value) => !value)} className="rounded-xl bg-surface px-3 py-2 text-sm font-extrabold text-primary-ink sm:px-5" aria-label="Ghi chú">
             ✎<span className="hidden sm:inline"> Ghi chú</span>
+          </button>
+          <button type="button" onClick={() => setShowShortcuts((value) => !value)} className="hidden rounded-xl bg-surface px-3 py-2 text-sm font-extrabold text-ink3 sm:inline-flex" aria-label="Phím tắt" aria-expanded={showShortcuts}>
+            ⌨ Phím tắt
           </button>
         </div>
         <div className="flex items-center gap-2 sm:gap-3">

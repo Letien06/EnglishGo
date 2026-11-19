@@ -74,7 +74,7 @@ describe.each(["listening", "reading"] as const)("%s global practice navigation"
     mount(0, 24);
     fireEvent.click(screen.getByRole("button", { name: "Tự chuyển" }));
     fireEvent.click(screen.getByLabelText("Đáp án A"));
-    await act(async () => { await vi.advanceTimersByTimeAsync(500); });
+    await act(async () => { await vi.advanceTimersByTimeAsync(950); });
     expect(new URL(mocks.push.mock.calls[0][0], "http://localhost").searchParams.get("q")).toBe("25");
     expect(new URL(mocks.push.mock.calls[0][0], "http://localhost").searchParams.get("auto")).toBe("1");
   });
@@ -82,7 +82,7 @@ describe.each(["listening", "reading"] as const)("%s global practice navigation"
     mount(25, 0, 60, true);
     expect(screen.getByRole("button", { name: "Tự chuyển" })).toHaveAttribute("aria-pressed", "true");
     fireEvent.click(screen.getByLabelText("Đáp án A"));
-    await act(async () => { await vi.advanceTimersByTimeAsync(500); });
+    await act(async () => { await vi.advanceTimersByTimeAsync(950); });
     expect(screen.getByText("#27/60")).toBeInTheDocument();
     expect(new URL(window.location.href).searchParams.get("q")).toBe("26");
   });

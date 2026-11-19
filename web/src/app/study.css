@@ -117,7 +117,7 @@
 .practice-content > section > p:first-child { font-size: 14px; font-style: normal; color: var(--ink3); }
 .practice-content--single { max-width: 1060px; }
 .practice-content--single > section:first-child { display: none; }
-.practice-save-status { padding: 8px 24px; font-size: 12px; color: var(--ink3); background: var(--surface-soft); }
+.practice-save-status { box-shadow: var(--elevation-1); }
 .practice-source-pane { background: linear-gradient(155deg, var(--teal-soft), color-mix(in srgb, var(--info-soft) 28%, var(--bg))); }
 .practice-question-pane { background: radial-gradient(ellipse at top right, var(--primary-soft), transparent 34rem); }
 .practice-audio-card, .practice-question-card, .practice-passage { box-shadow: var(--elevation-1); }

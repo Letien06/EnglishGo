@@ -68,17 +68,65 @@ export function aggregateDashboardMetrics(rows: Record<string, unknown>[]): Dash
   return total;
 }
 
+async function latestResumeDraft(userRef: FirebaseFirestore.DocumentReference): Promise<DashboardView["resumeDraft"]> {
+  try {
+    const snap = await userRef.collection("practiceDrafts").orderBy("updatedAtMillis", "desc").limit(1).get();
+    const doc = snap?.docs?.[0];
+    if (!doc) return null;
+    const data = doc.data() ?? {};
+    const testId = number(data.testId);
+    if (testId == null) return null;
+    const mode = typeof data.mode === "string" && data.mode ? data.mode : "exam";
+    const duration = number(data.durationMinutes) ?? 120;
+    const parts = Array.isArray(data.parts)
+      ? data.parts.filter((part): part is number => typeof part === "number" && Number.isInteger(part) && part >= 1 && part <= 7)
+      : [];
+    let answeredCount = 0;
+    if (typeof data.payload === "string") {
+      try {
+        const parsed = JSON.parse(data.payload) as { answers?: Record<string, { selectedOptionId?: unknown; textResponse?: unknown }> };
+        answeredCount = Object.values(parsed.answers ?? {}).filter((entry) => entry?.selectedOptionId != null || Boolean(entry?.textResponse)).length;
+      } catch {
+        answeredCount = 0;
+      }
+    }
+    const params = new URLSearchParams({ mode, parts: parts.join(","), time: String(duration) });
+    return {
+      title: typeof data.title === "string" && data.title.trim() ? data.title.trim() : `Đề thi #${testId}`,
+      href: `/practice/session/${testId}?${params.toString()}`,
+      answeredCount,
+    };
+  } catch {
+    return null;
+  }
+}
+
 export async function getDashboardView(uid: string, greetingName?: string): Promise<DashboardView> {
   if (!uid?.trim()) throw Unauthorized("Authentication required");
   const todayDateKey = dashboardDateKey();
   return readServerCache(async () => {
     const userRef = adminDb.collection("users").doc(uid);
-    const [profileSnapshot, todaySnapshot] = await Promise.all([userRef.get(), userRef.collection("dailySummaries").doc(todayDateKey).get()]);
+    const [profileSnapshot, todaySnapshot, resumeDraft] = await Promise.all([
+      userRef.get(),
+      userRef.collection("dailySummaries").doc(todayDateKey).get(),
+      latestResumeDraft(userRef),
+    ]);
     const profile = profileSnapshot.data() ?? {};
     const today = metricsFromDailySummary(todaySnapshot.exists ? todaySnapshot.data() : undefined);
     const streak = coherentProfileStudyStreak(profile, todayDateKey) ?? await getStudyStreak(uid);
     const dueVocabWords = number(profile.vocabDueWords);
-    return { greetingName: greetingName || (typeof profile.displayName === "string" ? profile.displayName : "Bạn"), todayDateKey, preferences: preferencesFromProfile(profile), today, stats: today, streakDays: streak.streakDays, longestStreakDays: number(profile.studyLongestStreakDays), totalXp: number(profile.totalStudyXp) ?? 0, ...(dueVocabWords !== null ? { dueVocabWords } : {}) };
+    return {
+      greetingName: greetingName || (typeof profile.displayName === "string" ? profile.displayName : "Bạn"),
+      todayDateKey,
+      preferences: preferencesFromProfile(profile),
+      today,
+      stats: today,
+      streakDays: streak.streakDays,
+      longestStreakDays: number(profile.studyLongestStreakDays),
+      totalXp: number(profile.totalStudyXp) ?? 0,
+      ...(dueVocabWords !== null ? { dueVocabWords } : {}),
+      ...(resumeDraft ? { resumeDraft } : {}),
+    };
   }, ["dashboard-view", uid, todayDateKey, greetingName ?? ""], { revalidate: 60, tags: [dashboardCacheTag(uid)] });
 }
 

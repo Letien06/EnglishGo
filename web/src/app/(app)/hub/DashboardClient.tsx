@@ -166,6 +166,22 @@ export default function DashboardClient({ initial, uid }: { initial: DashboardVi
         <CompanionEncouragement />
       </section>
 
+      <nav className={styles.quickActions} aria-label="Hành động học nhanh">
+        <span className={styles.quickActionsLabel}>Bắt đầu nhanh</span>
+        {initial.resumeDraft && (
+          <Link href={initial.resumeDraft.href} className={`${styles.quickPill} ${styles.quickPillPrimary}`}>
+            Tiếp tục: {initial.resumeDraft.title}
+            {initial.resumeDraft.answeredCount > 0 && <span className={styles.quickPillBadge}>{initial.resumeDraft.answeredCount}</span>}
+          </Link>
+        )}
+        <Link href="/vocab/review" className={`${styles.quickPill} ${!initial.resumeDraft && (initial.dueVocabWords ?? 0) > 0 ? styles.quickPillPrimary : ""}`}>
+          {(initial.dueVocabWords ?? 0) > 0 ? <>Ôn từ đến hạn <span className={styles.quickPillBadge}>{initial.dueVocabWords}</span></> : "Ôn hôm nay & câu sai"}
+        </Link>
+        <Link href="/listen" className={styles.quickPill}>Luyện nghe</Link>
+        <Link href="/read" className={styles.quickPill}>Luyện đọc</Link>
+        <Link href="/practice" className={styles.quickPill}>Đề thi thử</Link>
+      </nav>
+
       <section className={styles.overview} aria-label="Mục tiêu TOEIC và động lực học">
         <article className={styles.overviewCard}><h2>Điểm số của bạn</h2>
           <form onSubmit={event => { event.preventDefault(); void savePreferences(scoreDraft, false); }}>

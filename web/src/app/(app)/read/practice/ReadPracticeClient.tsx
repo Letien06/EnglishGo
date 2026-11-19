@@ -14,6 +14,7 @@ import PracticeSaveGuard from "@/components/PracticeSaveGuard";
 import PracticeHeader from "../../_components/PracticeHeader";
 import WorkspaceAnnotator, { WorkspaceAnnotationAnchor } from "@/components/WorkspaceAnnotator";
 import { usePracticeResume } from "@/lib/use-practice-resume";
+import { useActiveStudyTimer } from "@/lib/use-active-study-timer";
 import { practiceNavigationTarget, practiceWindowInfo, type PracticeWindowSession } from "@/lib/practice-window";
 import { useReadingProgressQueue } from "@/lib/reading-progress-queue";
 import { parseReadingOptionTranslations } from "@/lib/reading-translations";
@@ -76,16 +77,21 @@ export default function ReadPracticeClient({
   const enqueueProgress = progressQueue.enqueue;
   const [showNote, setShowNote] = useState(false);
   const [auto, setAuto] = useState(initialAuto);
-  const [elapsed, setElapsed] = useState(0);
   const [favorite, setFavorite] = useState(false);
   const [toolStatus, setToolStatus] = useState("");
-  const startedAtRef = useRef(0);
   const autoAdvanceRef = useRef<number | null>(null);
   const item = items[currentIndex] ?? items[0];
-  const sessionQuestionIds = useMemo(() => items.flatMap((entry) => entry.questions.map((question) => question.id)), [items]);
-  const allVisibleQuestionsAnswered = sessionQuestionIds.length > 0 && sessionQuestionIds.every((questionId) => Boolean(answeredMap[questionId]));
+  const { elapsed, consumeItemSeconds } = useActiveStudyTimer(item.id);
+  const sessionQuestions = useMemo(() => items.flatMap((entry) => entry.questions), [items]);
+  const allVisibleQuestionsAnswered = sessionQuestions.length > 0 && sessionQuestions.every((question) => Boolean(answeredMap[question.id]));
+  const fixedMistakeCount = useMemo(
+    () => sessionQuestions.filter((question) => answeredMap[question.id] === normalizeAnswer(question.correctAnswer)).length,
+    [answeredMap, sessionQuestions],
+  );
   const reachedEnd = offset + currentIndex >= total - 1;
+  const isMistakeReview = Boolean(reviewRun && reviewRun !== "all");
   const showCompletion = !reviewRun && reachedEnd && allVisibleQuestionsAnswered;
+  const showMistakeCompletion = isMistakeReview && reachedEnd && allVisibleQuestionsAnswered;
   const reviewHref = `/review/practice?skill=reading&part=${partNum}&level=${level}${session.testId ? `&testId=${encodeURIComponent(session.testId)}` : ""}&run=read-complete`;
   const startTransitionTiming = useStudyPerformance("reading", item.id);
 
@@ -159,14 +165,6 @@ export default function ReadPracticeClient({
   }, [activeMode, updatePracticeUrl]);
 
 
-  useEffect(() => {
-    startedAtRef.current = Date.now();
-    const timer = window.setInterval(() => {
-      setElapsed(Math.max(0, Math.floor((Date.now() - startedAtRef.current) / 1000)));
-    }, 1000);
-    return () => window.clearInterval(timer);
-  }, []);
-
   // Mark this practice route as visited so re-opening it later this session
   // (e.g. tapping "Luyện ngay" again) does not flash the loading overlay.
   useEffect(() => {
@@ -206,7 +204,9 @@ export default function ReadPracticeClient({
     setCurrentIndex(index);
     setShowNote(false);
     setFavorite(false);
-    window.scrollTo({ top: 0, behavior: "smooth" });
+    if (typeof window !== "undefined" && window.scrollY > 24) {
+      window.scrollTo({ top: 0, behavior: "auto" });
+    }
   }, [activeMode, auto, level, partId, router, session, startTransitionTiming]);
 
   const handleAnswer = useCallback((question: DauToeicQuestion, selected: string) => {
@@ -221,10 +221,10 @@ export default function ReadPracticeClient({
       autoAdvanceRef.current = window.setTimeout(() => {
         autoAdvanceRef.current = null;
         goTo(currentIndex + 1);
-      }, 450);
+      }, 900);
     }
 
-    if (!reviewRun) enqueueProgress({
+    if (reviewRun !== "all") enqueueProgress({
       part: partNum,
       level,
       testId: session.testId,
@@ -234,11 +234,9 @@ export default function ReadPracticeClient({
       correctAnswer,
       modeUsed: activeMode,
       assistPercent: 0,
-      elapsedSeconds: elapsed,
+      elapsedSeconds: consumeItemSeconds(),
     });
-
-
-  }, [activeMode, answeredMap, auto, currentIndex, elapsed, enqueueProgress, goTo, item.id, item.questions, level, offset, partNum, reviewRun, session.testId, total]);
+  }, [activeMode, answeredMap, auto, consumeItemSeconds, currentIndex, enqueueProgress, goTo, item.id, item.questions, level, offset, partNum, reviewRun, session.testId, total]);
 
   useEffect(() => () => {
     if (autoAdvanceRef.current !== null) window.clearTimeout(autoAdvanceRef.current);
@@ -247,6 +245,7 @@ export default function ReadPracticeClient({
   useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent) => {
       if (isTypingTarget(event.target)) return;
+      if (event.ctrlKey || event.shiftKey || event.altKey || event.metaKey) return;
       if (event.key === "ArrowLeft") {
         event.preventDefault();
         goTo(currentIndex - 1);
@@ -257,7 +256,8 @@ export default function ReadPracticeClient({
         goTo(currentIndex + 1);
         return;
       }
-      const answer = ({ "1": "A", "2": "B", "3": "C", "4": "D" } as Record<string, string>)[event.key];
+      const keyMap: Record<string, string> = { "1": "A", "2": "B", "3": "C", "4": "D", a: "A", b: "B", c: "C", d: "D", A: "A", B: "B", C: "C", D: "D" };
+      const answer = keyMap[event.key];
       if (!answer) return;
       const unanswered = item.questions.find((question) => !answeredMap[question.id] && optionText(question, answer));
       if (unanswered) handleAnswer(unanswered, answer);
@@ -376,6 +376,12 @@ export default function ReadPracticeClient({
         <h2 id="read-complete-title" className="text-xl font-extrabold text-success-ink">Bạn đã hoàn thành bài Part {partNum}</h2>
         <p className="mt-2 text-sm text-success-ink">Tiến độ đã được ghi nhận. Hãy ôn lại câu sai để củng cố điểm yếu.</p>
         <div className="mt-4 flex flex-wrap justify-center gap-2"><Link href={reviewHref} className="rounded-xl bg-primary px-4 py-2.5 text-sm font-extrabold text-gold-ink no-underline">Ôn câu sai</Link><button type="button" onClick={() => { const url = new URL(window.location.href); url.searchParams.set("q", "0"); url.searchParams.delete("review"); router.push(`${url.pathname}${url.search}`); }} className="rounded-xl border border-success-line bg-surface px-4 py-2.5 text-sm font-extrabold text-success-ink">Ôn lại từ đầu</button><Link href={`/read?part=${partId}`} className="rounded-xl border border-success-line bg-surface px-4 py-2.5 text-sm font-extrabold text-success-ink no-underline">Về danh sách</Link></div>
+      </section>}
+
+      {showMistakeCompletion && <section className="fixed inset-x-4 bottom-20 z-50 mx-auto max-w-xl rounded-2xl border border-success-line bg-success-soft p-5 text-center shadow-2xl" role="dialog" aria-modal="true" aria-labelledby="read-mistake-complete-title">
+        <h2 id="read-mistake-complete-title" className="text-xl font-extrabold text-success-ink">Hoàn thành phiên ôn câu sai</h2>
+        <p className="mt-2 text-sm text-success-ink">Bạn đã khắc phục được <strong>{fixedMistakeCount}/{sessionQuestions.length}</strong> câu. Các câu làm đúng đã được gỡ khỏi danh sách sai.</p>
+        <div className="mt-4 flex flex-wrap justify-center gap-2"><Link href="/vocab/review" className="rounded-xl bg-primary px-4 py-2.5 text-sm font-extrabold text-gold-ink no-underline">Quay lại Ôn hôm nay</Link><Link href={`/read?part=${partId}`} className="rounded-xl border border-success-line bg-surface px-4 py-2.5 text-sm font-extrabold text-success-ink no-underline">Về danh sách bài đọc</Link></div>
       </section>}
 
       <footer className="skill-workspace-footer sticky bottom-0 z-40 flex h-16 items-center justify-between gap-2 px-3 sm:px-7">

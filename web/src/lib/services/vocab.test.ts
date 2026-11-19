@@ -97,3 +97,57 @@ describe("vocabDayStartForMillis", () => {
     );
   });
 });
+
+describe("applySm2", () => {
+  it("lowers easeFactor and schedules a 10-minute same-day relearn when forgotten", async () => {
+    const { applySm2 } = await import("./vocab");
+    const now = Date.parse("2026-11-19T12:00:00.000Z");
+    const base = {
+      uid: "u1",
+      wordId: 1,
+      setId: 1,
+      status: "REVIEWING" as const,
+      interval: 6,
+      easeFactor: 2.5,
+      repetitions: 2,
+      nextReviewAtMillis: now,
+      lastReviewedAtMillis: now - 86400000,
+    };
+
+    const forgotten = applySm2(base, 1, now);
+    expect(forgotten.status).toBe("LEARNING");
+    expect(forgotten.repetitions).toBe(0);
+    expect(forgotten.interval).toBe(0);
+    expect(forgotten.easeFactor).toBe(2.3);
+    expect(forgotten.nextReviewAtMillis).toBe(now + 10 * 60 * 1000);
+  });
+
+  it("differentiates Hard, Good, and Easy intervals and caps at 180 days", async () => {
+    const { applySm2 } = await import("./vocab");
+    const now = Date.parse("2026-11-19T12:00:00.000Z");
+    const reviewing = {
+      uid: "u1",
+      wordId: 2,
+      setId: 1,
+      status: "REVIEWING" as const,
+      interval: 10,
+      easeFactor: 2.5,
+      repetitions: 2,
+      nextReviewAtMillis: now,
+      lastReviewedAtMillis: now - 86400000,
+    };
+
+    const hard = applySm2(reviewing, 3, now);
+    const good = applySm2(reviewing, 4, now);
+    const easy = applySm2(reviewing, 5, now);
+
+    expect(hard.interval).toBe(12);
+    expect(good.interval).toBe(25);
+    expect(easy.interval).toBe(33);
+    expect(hard.interval).toBeLessThan(good.interval);
+    expect(good.interval).toBeLessThan(easy.interval);
+
+    const capped = applySm2({ ...reviewing, interval: 160, repetitions: 5 }, 5, now);
+    expect(capped.interval).toBe(180);
+  });
+});

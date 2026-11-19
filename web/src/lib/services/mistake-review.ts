@@ -3,7 +3,7 @@ import { FieldPath } from "firebase-admin/firestore";
 import { ApiError } from "../api/response";
 import { randomUUID } from "node:crypto";
 import { getTestPartSession } from "./test-part-practice";
-import { getDifficultySession, getReadingDifficultySession } from "./dautoeic";
+import { getDifficultySession, getReadingDifficultySession, listTests } from "./dautoeic";
 import type { DauToeicDifficultySession } from "@/types/dautoeic";
 
 export type Mistake = { questionId: string; itemId: string; part: number; level: number; testId?: string; wrongCount: number; lastAttempt: number };
@@ -11,7 +11,12 @@ export type MistakeGroup = { key: string; skill: "reading" | "listening"; label:
 export type MistakePage = { groups: MistakeGroup[]; hasMore: boolean; nextCursor?: string };
 const PAGE_SIZE = 60;
 
-export function groupMistakes(rows: Mistake[], skill: "reading" | "listening", run: string): MistakeGroup[] {
+export function groupMistakes(
+  rows: Mistake[],
+  skill: "reading" | "listening",
+  run: string,
+  testLabels?: ReadonlyMap<string, string>,
+): MistakeGroup[] {
   const groups = new Map<string, MistakeGroup>();
   for (const row of [...rows].sort((a, b) => b.wrongCount - a.wrongCount || a.lastAttempt - b.lastAttempt)) {
     const key = `${row.part}:${row.testId ?? `level-${row.level}`}`;
@@ -19,7 +24,8 @@ export function groupMistakes(rows: Mistake[], skill: "reading" | "listening", r
     if (!group) {
       const params = new URLSearchParams({ skill, part: String(row.part), level: String(row.level), run });
       if (row.testId) params.set("testId", row.testId);
-      group = { key, skill, label: `Part ${row.part} · ${row.testId ? `Đề ${row.testId}` : `Mức ${row.level}`}`, count: 0, href: `/review/practice?${params}`, mistakes: [] };
+      const testDisplay = row.testId ? (testLabels?.get(row.testId) ?? `Đề ${row.testId.slice(0, 8)}`) : `Mức ${row.level}`;
+      group = { key, skill, label: `Part ${row.part} · ${testDisplay}`, count: 0, href: `/review/practice?${params}`, mistakes: [] };
       groups.set(key, group);
     }
     group.mistakes.push(row); group.count++;
@@ -65,8 +71,19 @@ export async function getMistakeGroups(uid: string, skill: "reading" | "listenin
       testId: typeof data.testId === "string" && data.testId ? data.testId : undefined,
       wrongCount: Math.max(1, Number(data.wrongCount) || 1), lastAttempt: Number(data.completedAtMillis) || 0 }];
   });
+  const testLabels = new Map<string, string>();
+  if (rows.some((row) => row.testId)) {
+    const tests = await listTests().catch(() => []);
+    for (const test of tests) {
+      const name = test.name?.trim();
+      const setName = test.setName?.trim();
+      if (test.id && name) {
+        testLabels.set(test.id, setName ? `${setName} – ${name}` : name);
+      }
+    }
+  }
   return {
-    groups: groupMistakes(rows, skill, randomUUID()),
+    groups: groupMistakes(rows, skill, randomUUID(), testLabels),
     hasMore: snapshot.size > PAGE_SIZE,
     nextCursor: snapshot.size > PAGE_SIZE ? Buffer.from(JSON.stringify([pageDocs.at(-1)!.data().part, pageDocs.at(-1)!.data().completedAtMillis ?? 0, pageDocs.at(-1)!.id])).toString("base64url") : undefined,
   };
