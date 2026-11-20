@@ -11,6 +11,7 @@ import { useStudyPerformance } from "@/lib/use-study-performance";
 import StudySaveStatus from "@/components/StudySaveStatus";
 import PracticeSaveGuard from "@/components/PracticeSaveGuard";
 import PracticeHeader from "../../_components/PracticeHeader";
+import SelectionDictionary from "@/components/SelectionDictionary";
 import WorkspaceAnnotator, { WorkspaceAnnotationAnchor } from "@/components/WorkspaceAnnotator";
 import { usePracticeResume } from "@/lib/use-practice-resume";
 import { useActiveStudyTimer } from "@/lib/use-active-study-timer";
@@ -340,6 +341,10 @@ export default function ListenPracticeClient({
   }, []);
 
   const currentQuestion = item.questions[0];
+  const vocabularyPool = useMemo(
+    () => items.flatMap((entry) => [entry.vocabulary, ...entry.questions.map((question) => question.vocabulary)]),
+    [items],
+  );
   useEffect(() => { markLearningReady("first-question"); }, [item.id]);
 
   return (
@@ -349,6 +354,17 @@ export default function ListenPracticeClient({
       <StudySaveStatus {...progressQueue} pendingLabel="câu" message={resumeStatus} />
       <PracticeSaveGuard queue={progressQueue} backHref={reviewRun ? "/vocab/review" : `/listen?part=${partId}`} />
 
+      <SelectionDictionary
+        compact
+        learnerId={userUid ?? "guest"}
+        vocabulary={item.vocabulary ?? currentQuestion?.vocabulary ?? null}
+        vocabularyPool={vocabularyPool}
+        context={{
+          id: item.id,
+          title: `Luyện nghe · Part ${partNum}`,
+          sentence: cleanDisplayText(currentQuestion?.questionText ?? item.transcript ?? ""),
+        }}
+      >
       <WorkspaceAnnotator uid={userUid} context={{ surface: "listen", resourceId: `${session.testId ?? `${partId}:level:${level}`}:${item.id}`, questionKey: "workspace" }} legacyContexts={item.questions.map((question) => ({ surface: "listen", resourceId: `${session.testId ?? `${partId}:level:${level}`}:${item.id}`, questionKey: question.id }))} className="practice-content grid min-h-[calc(100dvh-8rem)] lg:grid-cols-[1fr_1fr]">
         <section data-annotation-anchor="source" className="practice-source-pane border-b border-line px-4 py-5 sm:px-6 lg:border-b-0 lg:border-r lg:px-10 lg:py-8">
           <WorkspaceAnnotationAnchor target="instruction"><p className="mb-5 text-lg italic text-ink sm:text-xl lg:mb-8">
@@ -547,6 +563,7 @@ export default function ListenPracticeClient({
           )}
         </section>
       </WorkspaceAnnotator>
+      </SelectionDictionary>
 
       {showCompletion && <section className="fixed inset-x-4 bottom-20 z-50 mx-auto max-w-xl rounded-2xl border border-success-line bg-success-soft p-5 text-center shadow-2xl" role="dialog" aria-modal="true" aria-labelledby="listen-complete-title">
         <h2 id="listen-complete-title" className="text-xl font-extrabold text-success-ink">Bạn đã hoàn thành bài {labelForCompletion(partNum)}</h2>

@@ -1,5 +1,6 @@
 import Link from "next/link";
 import AppTopbar from "@/components/AppTopbar";
+import SelectionDictionary from "@/components/SelectionDictionary";
 import { requireUserForRead } from "@/lib/auth/session";
 import { recentJobs, type AiWritingJob } from "@/lib/services/ai-writing";
 import AiWritingForm from "./AiWritingForm";
@@ -31,12 +32,20 @@ export default async function AiWritingPage() {
           <AiWritingForm />
         </section>
 
+        <SelectionDictionary
+          compact
+          learnerId={user.uid}
+          vocabulary={null}
+          vocabularyPool={[]}
+          context={{ id: "ai-writing", title: "Phản hồi bài viết AI", sentence: "" }}
+        >
         <section className="space-y-4">
           {jobs.map((job) => (
             <JobCard key={job.id} job={job} />
           ))}
           {jobs.length === 0 && <div className="p-8 text-center text-muted">Chưa có bài viết nào được gửi.</div>}
         </section>
+        </SelectionDictionary>
       </main>
     </>
   );

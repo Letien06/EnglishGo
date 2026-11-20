@@ -10,8 +10,9 @@ import { dictionaryFallbackEntry, lookupSelectionDictionary, normalizeSelectionW
 
 type Context = { id: string; title: string; sentence: string };
 type Result = { entry: SelectionDictionaryEntry; scope: "question" | "topic" | "library" | "dictionary" };
-type Props = { children: ReactNode; learnerId: string; vocabulary: unknown; vocabularyPool: readonly unknown[]; context: Context };
+type Props = { children: ReactNode; learnerId: string; vocabulary: unknown; vocabularyPool: readonly unknown[]; context: Context; compact?: boolean };
 const control = "min-h-10 rounded-xl border border-line bg-surface px-3 py-2 text-sm font-bold text-ink hover:bg-surface-soft focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-teal-ink disabled:opacity-50";
+const compactControl = "min-h-8 rounded-lg border border-line bg-surface px-2.5 py-1 text-xs font-bold text-ink hover:bg-surface-soft focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-teal-ink disabled:opacity-50";
 const validTerm = (value: string) => /^[A-Za-z][A-Za-z'’\- ]{0,78}$/.test(value) && value.split(/\s+/).length <= 5;
 
 function matchedEntry(match: ReturnType<typeof lookupSelectionDictionary>): SelectionDictionaryEntry | null {
@@ -20,7 +21,7 @@ function matchedEntry(match: ReturnType<typeof lookupSelectionDictionary>): Sele
   return { ...match.entry, word: match.matchedWord, meaning: match.family.meaning, partOfSpeech: match.family.partOfSpeech, phonetic: "", phoneticUs: "", phoneticUk: "", audioUrl: "", audioUsUrl: "", audioUkUrl: "", example: "", exampleTranslation: "", phrases: [], synonyms: [], antonyms: [] };
 }
 
-export default function SelectionDictionary({ children, learnerId, vocabulary, vocabularyPool, context }: Props) {
+export default function SelectionDictionary({ children, learnerId, vocabulary, vocabularyPool, context, compact = false }: Props) {
   const root = useRef<HTMLDivElement>(null);
   const dialog = useRef<HTMLDivElement>(null);
   const request = useRef<AbortController | null>(null);
@@ -109,7 +110,7 @@ export default function SelectionDictionary({ children, learnerId, vocabulary, v
       const selection = window.getSelection();
       if (!selection || selection.isCollapsed || selection.rangeCount !== 1 || !root.current?.contains(selection.anchorNode) || !root.current.contains(selection.focusNode)) return;
       const element = selection.anchorNode instanceof Element ? selection.anchorNode : selection.anchorNode?.parentElement;
-      if (element?.closest('input, textarea, select, [contenteditable="true"], [data-dictionary-ignore]')) return;
+      if (element?.closest('input, textarea, select, [contenteditable="true"], [data-dictionary-ignore], [data-annotation-active="true"]')) return;
       const word = selection.toString().trim().replace(/^[.,!?;:"“”()\s]+|[.,!?;:"“”()\s]+$/g, "").replace(/\s+/g, " ");
       if (validTerm(word)) { selection.removeAllRanges(); void lookup(word); }
     }
@@ -156,9 +157,16 @@ export default function SelectionDictionary({ children, learnerId, vocabulary, v
   }
 
   return <div ref={root}>
-    <div data-dictionary-ignore className="mx-auto flex w-full max-w-[1440px] flex-wrap items-center justify-between gap-3 px-4 pt-4 text-xs text-muted md:px-6">
+    <div
+      data-dictionary-ignore
+      className={
+        compact
+          ? "mx-auto flex w-full max-w-[1440px] flex-wrap items-center justify-between gap-2 border-b border-line bg-surface-soft/50 px-4 py-1.5 text-xs text-muted sm:px-6 lg:px-10"
+          : "mx-auto flex w-full max-w-[1440px] flex-wrap items-center justify-between gap-3 px-4 pt-4 text-xs text-muted md:px-6"
+      }
+    >
       <p>Bôi đen từ tiếng Anh để tra nghĩa và phát âm.</p>
-      <div className="flex gap-2"><button type="button" className={control} onClick={() => { setOpen(true); setTerm(""); setResult(null); setError(""); setNotice(""); setLoading(false); }}>Tra từ</button><DictionaryWordBasket learnerId={learnerId} /></div>
+      <div className="flex items-center gap-2"><button type="button" className={compact ? compactControl : control} onClick={() => { setOpen(true); setTerm(""); setResult(null); setError(""); setNotice(""); setLoading(false); }}>Tra từ</button><DictionaryWordBasket learnerId={learnerId} /></div>
     </div>
     {children}
     {open && createPortal(<div data-dictionary-ignore className="fixed inset-0 z-[1100] flex items-center justify-center bg-black/45 p-3 sm:p-6" onPointerDown={(event) => { if (event.target === event.currentTarget) close(); }}>

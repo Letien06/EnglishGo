@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import SelectionDictionary from "@/components/SelectionDictionary";
 import type { DictationLessonView, DictationProgressView } from "@/lib/services/dictation";
 import type { DictationAttemptResult, DictationPrompt } from "@/types/dictation";
 import { useActiveStudyTimer } from "@/lib/use-active-study-timer";
@@ -283,7 +284,13 @@ export default function DictationLessonClient({ lesson, initialProgress, isAuthe
     setMask(100);
     goTo(firstUnmasteredIndex);
   };
-  return <main className="min-h-[calc(100dvh-4rem)] bg-bg px-3 py-4 sm:px-6 lg:px-8">
+  return <SelectionDictionary
+    compact
+    learnerId={isAuthenticated ? "learner" : "guest"}
+    vocabulary={null}
+    vocabularyPool={[]}
+    context={{ id: `${lesson.id}:${active.id}`, title: `Nghe chép Video · ${lesson.title}`, sentence: result?.expectedText ?? "" }}
+  ><main className="min-h-[calc(100dvh-4rem)] bg-bg px-3 py-4 sm:px-6 lg:px-8">
     <section className="mx-auto max-w-7xl">
       <header className="mb-4 flex flex-wrap items-center gap-3"><Link href="/listen/dictation" className="rounded-xl border border-line bg-surface px-3 py-2 text-sm font-bold text-ink no-underline">← Thư viện</Link><span className="rounded-full bg-primary/10 px-3 py-1 text-xs font-extrabold text-primary">{lesson.level}</span><p className="min-w-0 flex-1 truncate text-sm font-bold text-muted">{lesson.sourceName}</p><a href={lesson.sourceUrl} target="_blank" rel="noreferrer" className="text-sm font-bold text-primary">Video gốc ↗</a></header>
       <div className="grid gap-5 lg:grid-cols-[minmax(0,1fr)_320px]">
@@ -300,7 +307,7 @@ export default function DictationLessonClient({ lesson, initialProgress, isAuthe
       {!finished && firstIncompleteIndex >= 0 && completedIds.size > 0 && <p className="mt-4 text-center text-xs text-muted">Còn {lesson.segments.length - completedIds.size} đoạn. Bạn có thể chọn bất kỳ đoạn nào trong danh sách để tiếp tục.</p>}
       <p className="mt-5 text-center text-xs text-muted">{lesson.publicAttribution}</p>
     </section>
-  </main>;
+  </main></SelectionDictionary>;
 }
 
 function Feedback({ result }: { result: DictationAttemptResult }) { return <div className={`mt-5 rounded-xl border p-4 ${result.isCompleted ? "border-success-line bg-success-soft" : "border-warning-line bg-warning-soft"}`}><p className="font-extrabold text-ink">{result.isCompleted ? "Chính xác!" : `Bạn đạt ${result.scorePercent}%`}{result.isMastered && " · Đã thành thạo"}</p><p className="mt-2 whitespace-pre-wrap text-sm text-ink"><b>Đáp án:</b> {result.expectedText}</p><div className="mt-3 flex flex-wrap gap-2">{result.feedbackTokens.map((token, index) => <span key={`${token.value}-${index}`} className={`rounded-md px-2 py-1 text-xs font-bold ${token.state === "CORRECT" ? "bg-success-soft text-success-ink" : token.state === "MISSING" ? "bg-warning-soft text-warning-ink" : "bg-danger-soft text-danger-ink"}`}>{token.value}</span>)}</div><p className="mt-4 text-sm font-bold text-muted">Bạn có thể bấm <span className="rounded bg-surface px-1.5 py-0.5">Nghe tiếp</span> để chuyển và phát đoạn kế.</p></div>; }

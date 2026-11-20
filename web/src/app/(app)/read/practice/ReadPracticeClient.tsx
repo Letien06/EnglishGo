@@ -12,6 +12,7 @@ import { useStudyPerformance } from "@/lib/use-study-performance";
 import StudySaveStatus from "@/components/StudySaveStatus";
 import PracticeSaveGuard from "@/components/PracticeSaveGuard";
 import PracticeHeader from "../../_components/PracticeHeader";
+import SelectionDictionary from "@/components/SelectionDictionary";
 import WorkspaceAnnotator, { WorkspaceAnnotationAnchor } from "@/components/WorkspaceAnnotator";
 import { usePracticeResume } from "@/lib/use-practice-resume";
 import { useActiveStudyTimer } from "@/lib/use-active-study-timer";
@@ -96,6 +97,10 @@ export default function ReadPracticeClient({
   const startTransitionTiming = useStudyPerformance("reading", item.id);
 
   const firstQuestion = item.questions[0];
+  const vocabularyPool = useMemo(
+    () => items.flatMap((entry) => [entry.vocabulary, ...entry.questions.map((question) => question.vocabulary)]),
+    [items],
+  );
   const passageTranslation = cleanDisplayText(item.translation);
   const showPassageTranslation = activeMode === "bilingual" || Boolean(passageTranslation && item.questions.some((question) => answeredMap[question.id]));
 
@@ -290,6 +295,17 @@ export default function ReadPracticeClient({
       <StudySaveStatus {...progressQueue} pendingLabel="câu" message={resumeStatus} />
       <PracticeSaveGuard queue={progressQueue} backHref={reviewRun ? "/vocab/review" : `/read?part=${partId}`} />
 
+      <SelectionDictionary
+        compact
+        learnerId={userUid ?? "guest"}
+        vocabulary={item.vocabulary ?? firstQuestion?.vocabulary ?? null}
+        vocabularyPool={vocabularyPool}
+        context={{
+          id: item.id,
+          title: `Luyện đọc · Part ${partNum}`,
+          sentence: cleanDisplayText(firstQuestion?.questionText ?? item.transcript ?? ""),
+        }}
+      >
       <WorkspaceAnnotator uid={userUid} context={{ surface: "read", resourceId: `${session.testId ?? `${partId}:level:${level}`}:${item.id}`, questionKey: "workspace" }} legacyContexts={item.questions.map((question) => ({ surface: "read", resourceId: `${session.testId ?? `${partId}:level:${level}`}:${item.id}`, questionKey: question.id }))} className={`practice-content grid min-h-[calc(100dvh-8rem)] lg:grid-cols-[1fr_1fr] ${partNum === 5 ? "practice-content--single" : ""}`}>
         <section data-annotation-anchor="source" className="practice-source-pane border-b border-line px-4 py-5 sm:px-6 lg:border-b-0 lg:border-r lg:px-10 lg:py-6">
           <WorkspaceAnnotationAnchor target="instruction"><p className="mb-5 text-lg italic text-ink sm:text-xl">{readingInstruction(partNum)}</p></WorkspaceAnnotationAnchor>
@@ -388,6 +404,7 @@ export default function ReadPracticeClient({
           )}
         </section>
       </WorkspaceAnnotator>
+      </SelectionDictionary>
 
       {showCompletion && <section className="fixed inset-x-4 bottom-20 z-50 mx-auto max-w-xl rounded-2xl border border-success-line bg-success-soft p-5 text-center shadow-2xl" role="dialog" aria-modal="true" aria-labelledby="read-complete-title">
         <h2 id="read-complete-title" className="text-xl font-extrabold text-success-ink">Bạn đã hoàn thành bài Part {partNum}</h2>
