@@ -1,10 +1,11 @@
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
-import { beforeEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import AudioDictationClient, { readAudioDictationProgress } from "./AudioDictationClient";
 import type { DictationSet } from "@/lib/storage/dictation-snapshot";
 const session: DictationSet = { version: 1, source: "https://dauenglish.com", accessScope: "provider-authorized", setId: "set", items: ["one", "two"].map(id => ({ id, setId: "set", orderIndex: 0, audioUrl: `https://example.com/${id}.mp3`, transcript: "Hello world.", translationVi: "Xin chào", hint: null, vocabulary: null, durationSeconds: null, groupId: null })) };
 const set = { id: "set", name: "Test", part: 1, accessLevel: "pro" as const, orderIndex: 0, collectionName: null, chapterName: null, subtitle: null, itemCount: 2 };
 beforeEach(() => localStorage.clear());
+afterEach(() => vi.unstubAllGlobals());
 describe("audio dictation practice", () => {
   it("grades, reveals translation, saves progress per learner, clears next answer", async () => {
     render(<AudioDictationClient set={set} session={session} learnerId="learner" />);
@@ -49,5 +50,16 @@ describe("audio dictation practice", () => {
     expect(screen.getByText("Chính xác!")).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "#2" }));
     expect(screen.getByText(/Câu 2\/2/)).toBeInTheDocument();
+  });
+  it("switches to automatic TTS speech fallback when the audio source fails", async () => {
+    const speak = vi.fn();
+    vi.stubGlobal("speechSynthesis", { speak, cancel: vi.fn(), getVoices: () => [] });
+    vi.stubGlobal("SpeechSynthesisUtterance", class { constructor(public text: string) {} });
+    const { container } = render(<AudioDictationClient set={set} session={session} learnerId="learner" />);
+    const audio = container.querySelector("audio")!;
+    fireEvent.error(audio);
+    expect(screen.getByText("Đang dùng giọng đọc tự động (US)")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "▶ Nghe giọng đọc" }));
+    expect(speak).toHaveBeenCalledTimes(1);
   });
 });

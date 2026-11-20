@@ -74,13 +74,13 @@ export default function HeaderJoinRoomButton() {
         type="button"
         data-testid="header-join-room-button"
         onClick={() => { setCode(""); setError(""); setLoading(false); setIsOpen(true); }}
-        className="inline-flex h-9 items-center gap-1.5 rounded-xl border border-indigo-200/80 bg-indigo-50/70 px-3 text-xs sm:text-sm font-extrabold text-indigo-700 transition-all hover:bg-indigo-100 hover:border-indigo-300 active:scale-95 dark:border-indigo-800/80 dark:bg-indigo-950/40 dark:text-indigo-300 dark:hover:bg-indigo-900/50 cursor-pointer shadow-sm shrink-0"
+        className="inline-flex h-9 items-center gap-1.5 rounded-xl border border-indigo-200/80 bg-indigo-50/70 px-2.5 sm:px-3 text-xs sm:text-sm font-extrabold text-indigo-700 transition-all hover:bg-indigo-100 hover:border-indigo-300 active:scale-95 dark:border-indigo-800/80 dark:bg-indigo-950/40 dark:text-indigo-300 dark:hover:bg-indigo-900/50 cursor-pointer shadow-sm shrink-0"
         title="Nhập mã phòng đấu đối kháng cùng bạn bè"
         aria-label="Nhập mã phòng đấu"
       >
         <span className="text-sm sm:text-base" aria-hidden="true">🔑</span>
         <span className="hidden md:inline">Nhập mã phòng</span>
-        <span className="md:hidden">Mã phòng</span>
+        <span className="hidden sm:inline md:hidden">Mã phòng</span>
       </button>
 
       {isOpen && typeof document !== "undefined" && createPortal(

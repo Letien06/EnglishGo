@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import SelectionDictionary from "@/components/SelectionDictionary";
+import { findBestEnglishVoice } from "@/lib/vocab-speech";
 import type { DictationCatalog, DictationSet } from "@/lib/storage/dictation-snapshot";
 import { buildPrompt, gradeDictationAttempt, type MaskPercent } from "@/lib/services/dictation-grading";
 
@@ -28,12 +29,44 @@ export default function AudioDictationClient({ set, session, learnerId }: { set:
   const [answer, setAnswer] = useState("");
   const [blanks, setBlanks] = useState<Record<string, string>>({});
   const [result, setResult] = useState<ReturnType<typeof gradeDictationAttempt> | null>(null);
+  const [audioFallbackItemId, setAudioFallbackItemId] = useState<string | null>(null);
+  const [speakingFallback, setSpeakingFallback] = useState(false);
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const item = session.items[progress.index];
   const vocabularyPool = useMemo(() => session.items.map((entry) => entry.vocabulary), [session.items]);
   const hasTranscript = !!item.transcript.trim();
+  const audioFailed = audioFallbackItemId === item.id;
   const availableCount = session.items.filter(item => item.transcript.trim()).length;
   const prompt = buildPrompt(item.id, item.transcript, mask);
+
+  const stopSpeech = useCallback(() => {
+    if (typeof window !== "undefined" && "speechSynthesis" in window) {
+      window.speechSynthesis.cancel();
+    }
+    setSpeakingFallback(false);
+  }, []);
+
+  const speakFallback = useCallback(() => {
+    if (!hasTranscript || typeof window === "undefined" || !("speechSynthesis" in window) || typeof SpeechSynthesisUtterance === "undefined") {
+      return;
+    }
+    window.speechSynthesis.cancel();
+    const utterance = new SpeechSynthesisUtterance(item.transcript);
+    utterance.lang = "en-US";
+    utterance.rate = playbackRate;
+    const voice = findBestEnglishVoice("us");
+    if (voice) utterance.voice = voice;
+    utterance.onstart = () => setSpeakingFallback(true);
+    utterance.onend = () => setSpeakingFallback(false);
+    utterance.onerror = () => setSpeakingFallback(false);
+    try {
+      window.speechSynthesis.speak(utterance);
+    } catch {
+      setSpeakingFallback(false);
+    }
+  }, [hasTranscript, item.transcript, playbackRate]);
+
+  useEffect(() => () => stopSpeech(), [stopSpeech]);
 
   useEffect(() => {
     // Hydrate browser-only progress after the server-rendered initial state.
@@ -50,12 +83,19 @@ export default function AudioDictationClient({ set, session, learnerId }: { set:
   }, [ready, progress, storageKey]);
 
   const replayAudio = useCallback(() => {
+    if (audioFailed) {
+      speakFallback();
+      return;
+    }
     const audio = audioRef.current;
     if (!audio) return;
     audio.currentTime = 0;
     audio.playbackRate = playbackRate;
-    void audio.play().catch(() => undefined);
-  }, [playbackRate]);
+    void audio.play().catch(() => {
+      setAudioFallbackItemId(item.id);
+      speakFallback();
+    });
+  }, [audioFailed, item.id, playbackRate, speakFallback]);
 
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
@@ -69,7 +109,7 @@ export default function AudioDictationClient({ set, session, learnerId }: { set:
   }, [replayAudio]);
 
   function clearAnswer() { setAnswer(""); setBlanks({}); setResult(null); }
-  function move(index: number) { clearAnswer(); setProgress(value => ({ ...value, index })); }
+  function move(index: number) { stopSpeech(); clearAnswer(); setProgress(value => ({ ...value, index })); }
   function check() {
     if (!hasTranscript) return;
     const graded = gradeDictationAttempt({ segmentId: item.id, expectedText: item.transcript, acceptedNormalizedAnswers: [], maskPercent: mask, blankAnswers: blanks, fullAnswer: answer });
@@ -136,15 +176,33 @@ export default function AudioDictationClient({ set, session, learnerId }: { set:
     )}
 
     <section className="mt-5 rounded-2xl border border-line bg-surface p-5 shadow-sm">
-      <audio
-        ref={audioRef}
-        key={item.id}
-        src={item.audioUrl}
-        controls
-        preload="metadata"
-        className="w-full"
-        aria-label={`Âm thanh câu ${progress.index + 1}`}
-      />
+      {!audioFailed ? (
+        <audio
+          ref={audioRef}
+          key={item.id}
+          src={item.audioUrl}
+          controls
+          preload="metadata"
+          onError={() => setAudioFallbackItemId(item.id)}
+          className="w-full"
+          aria-label={`Âm thanh câu ${progress.index + 1}`}
+        />
+      ) : (
+        <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-teal-line bg-teal-soft px-4 py-3 text-sm text-teal-ink">
+          <div>
+            <p className="font-extrabold">Đang dùng giọng đọc tự động (US)</p>
+            <p className="text-xs opacity-85">File âm thanh gốc từ nguồn tạm gián đoạn; bạn vẫn có thể nghe và luyện chép bình thường.</p>
+          </div>
+          <button
+            type="button"
+            onClick={speakingFallback ? stopSpeech : speakFallback}
+            disabled={!hasTranscript}
+            className="rounded-xl bg-primary px-4 py-2 text-xs font-extrabold text-gold-ink disabled:opacity-40"
+          >
+            {speakingFallback ? "❚❚ Dừng đọc" : "▶ Nghe giọng đọc"}
+          </button>
+        </div>
+      )}
       <div className="mt-3 flex flex-wrap items-center justify-between gap-2">
         <div className="flex flex-wrap items-center gap-2">
           <button type="button" onClick={replayAudio} className={button} title="Phím tắt: Ctrl + Space">
