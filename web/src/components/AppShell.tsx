@@ -12,6 +12,7 @@ import MobileNavigationMenu from "./MobileNavigationMenu";
 import PwaInstallPrompt from "./PwaInstallPrompt";
 import HeaderJoinRoomButton from "./HeaderJoinRoomButton";
 import StudyOnlineTracker from "./StudyOnlineTracker";
+import BackToTopButton from "./BackToTopButton";
 import { clearActiveLearnerCache, setActiveLearnerId } from "@/lib/client-learning-progress-cache";
 import { useVocabReviewQueue } from "@/lib/vocab-review-queue";
 import { useReadingProgressQueue, useListeningProgressQueue } from "@/lib/reading-progress-queue";
@@ -257,6 +258,7 @@ export default function AppShell({ children }: { children: ReactNode }) {
             {children}
             {scratchPaper}
             {authenticated && <StudyStreakCelebration />}
+            <BackToTopButton />
 
             <nav
               aria-label="Điều hướng di động nhanh"

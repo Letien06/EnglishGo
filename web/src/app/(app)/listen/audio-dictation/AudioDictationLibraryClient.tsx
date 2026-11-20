@@ -1,6 +1,6 @@
 "use client";
 
-import Link from "next/link";
+import Link from "@/components/IntentLink";
 import { useEffect, useMemo, useState } from "react";
 import type { DictationCatalog } from "@/lib/storage/dictation-snapshot";
 

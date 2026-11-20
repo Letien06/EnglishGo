@@ -1,4 +1,4 @@
-import Link from "next/link";
+import Link from "@/components/IntentLink";
 import PracticePageHeading from "../PracticePageHeading";
 import styles from "../../listen/_components/listening.module.css";
 import { requireUserForRead } from "@/lib/auth/session";

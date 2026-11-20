@@ -1,4 +1,4 @@
-import Link from "next/link";
+import Link from "@/components/IntentLink";
 import PracticePageHeading from "../../PracticePageHeading";
 import styles from "../../../listen/_components/listening.module.css";
 import { requireUserForRead } from "@/lib/auth/session";
@@ -7,6 +7,7 @@ import type { PracticeSkillBreakdown } from "@/lib/services/practice";
 import ReviewBackGuard from "../ReviewBackGuard";
 import ReportQuestionButton from "./ReportQuestionButton";
 import { formatPracticeLabel } from "@/lib/practice-label";
+import SelectionDictionary from "@/components/SelectionDictionary";
 
 export const dynamic = "force-dynamic";
 
@@ -138,6 +139,16 @@ export default async function PracticeReviewPage({ params, searchParams }: Props
             </Link>
           </section>
 
+          <SelectionDictionary
+            learnerId={user.uid}
+            vocabulary={null}
+            vocabularyPool={[]}
+            context={{
+              id: `attempt-${attempt.attemptId}`,
+              title: `Đề thi · ${formatPracticeLabel(attempt.title)}`,
+              sentence: "",
+            }}
+          >
           <section id="review-answers" className="space-y-4">
             <div className="flex flex-wrap items-center justify-between gap-2">
               <h2 className="text-lg font-extrabold text-ink">
@@ -201,7 +212,7 @@ export default async function PracticeReviewPage({ params, searchParams }: Props
               const displayNumber = answer.orderIndex ?? index + 1;
               const isUnanswered = !answer.correct && answer.selectedOptionId == null && !answer.selectedAnswer;
               return (
-                <article key={`${answer.questionId}-${index}`} className="rounded-xl border border-line bg-surface p-5 shadow-sm">
+                <article key={`${answer.questionId}-${index}`} className="cv-auto-card rounded-xl border border-line bg-surface p-5 shadow-sm">
                   <div className="flex flex-wrap items-center justify-between gap-2">
                     <h2 className="font-bold text-ink">Câu {displayNumber} <span className="text-xs text-muted">(Phần {answer.part})</span></h2>
                     <p className={`text-sm font-bold ${answer.correct ? "text-green-600" : isUnanswered ? "text-amber-600" : "text-red-600"}`}>
@@ -245,6 +256,7 @@ export default async function PracticeReviewPage({ params, searchParams }: Props
               );
             })}
           </section>
+          </SelectionDictionary>
         </div>
       </main>
     </>

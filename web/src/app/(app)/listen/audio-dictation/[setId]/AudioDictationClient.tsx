@@ -1,7 +1,8 @@
 "use client";
 
 import Link from "next/link";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import SelectionDictionary from "@/components/SelectionDictionary";
 import type { DictationCatalog, DictationSet } from "@/lib/storage/dictation-snapshot";
 import { buildPrompt, gradeDictationAttempt, type MaskPercent } from "@/lib/services/dictation-grading";
 
@@ -29,6 +30,7 @@ export default function AudioDictationClient({ set, session, learnerId }: { set:
   const [result, setResult] = useState<ReturnType<typeof gradeDictationAttempt> | null>(null);
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const item = session.items[progress.index];
+  const vocabularyPool = useMemo(() => session.items.map((entry) => entry.vocabulary), [session.items]);
   const hasTranscript = !!item.transcript.trim();
   const availableCount = session.items.filter(item => item.transcript.trim()).length;
   const prompt = buildPrompt(item.id, item.transcript, mask);
@@ -90,7 +92,16 @@ export default function AudioDictationClient({ set, session, learnerId }: { set:
       setBlanks((prev) => ({ ...prev, [nextBlank.blankId]: nextBlank.hint }));
     }
   }
-  return <main className="mx-auto max-w-3xl px-4 py-8">
+  return <SelectionDictionary
+    learnerId={learnerId}
+    vocabulary={item.vocabulary}
+    vocabularyPool={vocabularyPool}
+    context={{
+      id: item.id,
+      title: `Nghe chép · ${set.subtitle || set.name}`,
+      sentence: item.transcript,
+    }}
+  ><main className="mx-auto max-w-3xl px-4 py-8">
     <Link href="/listen/audio-dictation" className="text-sm font-bold text-primary">← Thư viện nghe chép</Link>
     <h1 className="mt-5 text-2xl font-extrabold text-ink">{set.subtitle || set.name}</h1>
     <p className="mt-2 text-sm text-muted">{set.collectionName} · {set.chapterName} · Câu {progress.index + 1}/{session.items.length}</p>
@@ -191,5 +202,5 @@ export default function AudioDictationClient({ set, session, learnerId }: { set:
     </section>
     <div className="mt-5 flex items-center justify-between gap-3"><button className={button} disabled={!ready || progress.index === 0} onClick={() => move(progress.index - 1)}>← Câu trước</button><button className={button} disabled={!ready || progress.index === session.items.length - 1} onClick={() => move(progress.index + 1)}>Câu tiếp →</button></div>
     {availableCount > 0 && progress.completed.length === availableCount && <p className="mt-5 rounded-xl bg-success-soft p-4 font-bold text-success-ink">Bạn đã chép đúng toàn bộ câu có bản chép trong bộ này.</p>}
-  </main>;
+  </main></SelectionDictionary>;
 }

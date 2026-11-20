@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
-import Link from "next/link";
+import Link from "@/components/IntentLink";
 import { useRouter } from "next/navigation";
 import type { PracticeTestCard } from "@/lib/services/practice";
 import useDialogFocus from "@/components/useDialogFocus";

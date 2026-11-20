@@ -1,4 +1,4 @@
-import Link from "next/link";
+import Link from "@/components/IntentLink";
 import { getCurrentUserForRead } from "@/lib/auth/session";
 import { getDictationCatalog } from "@/lib/services/dautoeic-dictation";
 import AudioDictationLibraryClient from "./AudioDictationLibraryClient";

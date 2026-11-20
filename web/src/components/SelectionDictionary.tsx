@@ -113,11 +113,11 @@ export default function SelectionDictionary({ children, learnerId, vocabulary, v
       const word = selection.toString().trim().replace(/^[.,!?;:"“”()\s]+|[.,!?;:"“”()\s]+$/g, "").replace(/\s+/g, " ");
       if (validTerm(word)) { selection.removeAllRanges(); void lookup(word); }
     }
-    function selectionChanged() { clearTimeout(timer); timer = setTimeout(readSelection, 450); }
+    function selectionChanged() { clearTimeout(timer); timer = setTimeout(readSelection, 260); }
     function pointerStart() { pointerDown = true; clearTimeout(timer); }
-    function pointerEnd() { pointerDown = false; clearTimeout(timer); timer = setTimeout(readSelection, 80); }
+    function pointerEnd() { pointerDown = false; clearTimeout(timer); timer = setTimeout(readSelection, 50); }
     function pointerCancel() { pointerDown = false; clearTimeout(timer); }
-    function keyboardEnd(event: KeyboardEvent) { if (event.key === "Shift" || event.shiftKey) { clearTimeout(timer); timer = setTimeout(readSelection, 80); } }
+    function keyboardEnd(event: KeyboardEvent) { if (event.key === "Shift" || event.shiftKey) { clearTimeout(timer); timer = setTimeout(readSelection, 50); } }
     document.addEventListener("selectionchange", selectionChanged);
     document.addEventListener("pointerdown", pointerStart);
     document.addEventListener("pointerup", pointerEnd);

@@ -6,7 +6,7 @@ import type { ComponentProps } from "react";
 
 const warmed = new Map<string, number>();
 
-export default function IntentLink({ onMouseEnter, onFocus, prefetch = false, ...props }: ComponentProps<typeof Link>) {
+export default function IntentLink({ onMouseEnter, onFocus, onTouchStart, prefetch = false, ...props }: ComponentProps<typeof Link>) {
   const router = useRouter();
   const warm = () => {
     if (typeof props.href !== "string" || !props.href.startsWith("/") || props.href.startsWith("//")) return;
@@ -17,5 +17,13 @@ export default function IntentLink({ onMouseEnter, onFocus, prefetch = false, ..
     warmed.set(props.href, Date.now());
     router.prefetch(props.href);
   };
-  return <Link {...props} prefetch={prefetch} onMouseEnter={(event) => { onMouseEnter?.(event); warm(); }} onFocus={(event) => { onFocus?.(event); warm(); }} />;
+  return (
+    <Link
+      {...props}
+      prefetch={prefetch}
+      onMouseEnter={(event) => { onMouseEnter?.(event); warm(); }}
+      onFocus={(event) => { onFocus?.(event); warm(); }}
+      onTouchStart={(event) => { onTouchStart?.(event); warm(); }}
+    />
+  );
 }
