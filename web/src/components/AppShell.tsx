@@ -34,6 +34,19 @@ const navItems = [
   color: string;
 }>;
 
+const mobileTabItems = [
+  { href: "/hub", icon: "home", label: "Trang chủ", color: "text-primary" },
+  { href: "/listen", icon: "listen", label: "Nghe", color: "text-plum" },
+  { href: "/read", icon: "read", label: "Đọc", color: "text-azure" },
+  { href: "/vocab", icon: "vocab", label: "Từ vựng", color: "text-jade" },
+  { href: "/practice", icon: "practice", label: "Đề thi", color: "text-terracotta" },
+] as const satisfies ReadonlyArray<{
+  href: string;
+  icon: NavIconName;
+  label: string;
+  color: string;
+}>;
+
 type AppBootstrap = {
   authenticated: boolean;
   user: { uid: string; email: string; displayName: string; avatarUrl?: string | null; role: string } | null;
@@ -137,7 +150,7 @@ export default function AppShell({ children }: { children: ReactNode }) {
         </AuthenticatedSessionProvider>
       ) : (
         <AuthenticatedSessionProvider authenticated={sessionAuthenticated || authenticated}>
-          <div className="app-shell design-system min-h-dvh text-ink">
+          <div className="app-shell design-system min-h-dvh pb-16 text-ink xl:pb-0">
             <header className="app-shell-header app-primary-nav sticky top-0 z-50 border-b bg-glass/90 backdrop-blur-xl">
               <div className="flex h-16 items-center justify-between gap-3 px-4 sm:px-6">
                 <Link href={authenticated ? "/hub" : "/"} className="app-brand flex shrink-0 items-center gap-3 no-underline">
@@ -244,6 +257,30 @@ export default function AppShell({ children }: { children: ReactNode }) {
             {children}
             {scratchPaper}
             {authenticated && <StudyStreakCelebration />}
+
+            <nav
+              aria-label="Điều hướng di động nhanh"
+              className="app-mobile-tabbar fixed inset-x-0 bottom-0 z-40 border-t backdrop-blur-xl xl:hidden"
+            >
+              <div className="mx-auto grid max-w-lg grid-cols-5 px-2 py-1">
+                {mobileTabItems.map((item) => {
+                  const active = item.href === "/hub" ? pathname === "/hub" : pathname.startsWith(item.href);
+                  return (
+                    <Link
+                      key={item.href}
+                      href={item.href}
+                      aria-current={active ? "page" : undefined}
+                      className={`flex flex-col items-center justify-center gap-0.5 rounded-xl py-1.5 text-[11px] font-extrabold no-underline transition-colors ${
+                        active ? "bg-primary/10 text-primary" : "text-ink3 hover:text-ink"
+                      }`}
+                    >
+                      <NavIcon name={item.icon} className={`h-4 w-4 shrink-0 ${active ? "text-primary" : item.color}`} />
+                      <span className="truncate">{item.label}</span>
+                    </Link>
+                  );
+                })}
+              </div>
+            </nav>
           </div>
         </AuthenticatedSessionProvider>
       )}

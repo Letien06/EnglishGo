@@ -166,3 +166,20 @@
   .study-part-tabs a:hover:not([aria-current]) { background: var(--surface-soft); }
   .study-extra-link:hover, .study-reset-button:hover { color: var(--ink); }
 }
+
+@media (prefers-reduced-motion: no-preference) {
+  .practice-question-card section[aria-label="Từ vựng nên học"],
+  .practice-question-card > div.mt-5 {
+    opacity: 1;
+    transform: translateY(0);
+    transition: opacity 160ms var(--ease-out), transform 160ms var(--ease-out);
+  }
+
+  @starting-style {
+    .practice-question-card section[aria-label="Từ vựng nên học"],
+    .practice-question-card > div.mt-5 {
+      opacity: 0;
+      transform: translateY(6px);
+    }
+  }
+}

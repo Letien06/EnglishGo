@@ -6,44 +6,50 @@ const features = [
   {
     icon: "▥",
     title: "Ngữ pháp",
-    desc: "Chinh phục Part 5 TOEIC với hệ thống bài học và luyện tập theo chủ đề.",
-    href: "/read",
+    desc: "Chinh phục 23 chuyên đề ngữ pháp TOEIC với giải thích song ngữ và đồng bộ đám mây.",
+    href: "/read/grammar",
   },
   {
     icon: "♪",
     title: "Luyện nghe",
-    desc: "Luyện nghe theo nhiều chế độ, bám sát các phần nghe TOEIC thường gặp.",
+    desc: "Luyện nghe Part 1–4 theo 4 chế độ (Thường, Chọn từ, Điền từ, Dịch nghĩa).",
     href: "/listen",
   },
   {
     icon: "A",
-    title: "Từ vựng",
-    desc: "Học từ vựng TOEIC theo chủ đề với flashcard và ôn tập lặp lại.",
+    title: "Từ vựng SM-2",
+    desc: "Học từ vựng TOEIC với Flashcard 3D, trò chơi tương tác và thuật toán lặp lại ngắt quãng SM-2.",
     href: "/vocab",
   },
   {
     icon: "▧",
-    title: "Luyện đề",
-    desc: "Làm đề TOEIC có chấm điểm, lưu bài làm và xem lại đáp án chi tiết.",
+    title: "Luyện đề 200 câu",
+    desc: "Thi thử Full Test 120 phút hoặc luyện theo Part, chấm điểm quy đổi 990 và xem giải thích chi tiết.",
     href: "/practice",
   },
   {
-    icon: "▤",
-    title: "Blog",
-    desc: "Mẹo làm bài, chiến lược học và kinh nghiệm luyện thi TOEIC.",
-    href: "/lessons",
+    icon: "✎",
+    title: "Luyện viết AI",
+    desc: "Luyện viết TOEIC Writing Part 1–3 hoặc chấm bài viết tự do với phản hồi Rubrics chi tiết từ AI.",
+    href: "/writing",
   },
   {
     icon: "▥",
     title: "Luyện đọc",
-    desc: "Luyện đọc TOEIC song ngữ Anh-Việt, tập trung hiểu nhanh ý chính.",
+    desc: "Luyện đọc Part 5–7 song ngữ Anh-Việt, tra từ tức thì và lưu nhanh từ mới vào bộ từ cá nhân.",
     href: "/read",
   },
   {
     icon: "▷",
-    title: "Video",
-    desc: "Lộ trình học TOEIC qua video bài viết, bài tập và giải thích ngắn gọn.",
-    href: "/lessons",
+    title: "Nghe chép Video",
+    desc: "Luyện nghe – chép chính tả qua video thực tế với 3 mức độ che từ 30%, 50% đến 100%.",
+    href: "/listen/dictation",
+  },
+  {
+    icon: "▤",
+    title: "Nghe chép theo câu",
+    desc: "Rèn phản xạ nghe từng câu TOEIC ngắn kèm gợi ý từ và tốc độ phát linh hoạt.",
+    href: "/listen/audio-dictation",
   },
 ];
 
@@ -185,7 +191,7 @@ export default async function HomePage() {
           <FooterNav
             title="Sản phẩm"
             links={[
-              ["Ngữ pháp", "/lessons"],
+              ["Ngữ pháp", "/read/grammar"],
               ["Luyện nghe", "/listen"],
               ["Từ vựng", "/vocab"],
               ["Đề thi thử", "/practice"],
@@ -194,9 +200,10 @@ export default async function HomePage() {
           <FooterNav
             title="Tài nguyên"
             links={[
-              ["Blog", "/lessons"],
+              ["Bản đồ bài học", "/lessons"],
+              ["Luyện viết AI", "/writing"],
               ["Lộ trình học", "/hub"],
-              ["Bảng xếp hạng", "/community"],
+              ["Bảng xếp hạng", "/leaderboard"],
             ]}
           />
           <FooterNav
